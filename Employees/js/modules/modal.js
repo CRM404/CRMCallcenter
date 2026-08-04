@@ -1,6 +1,14 @@
 // --- modal.js: модальное окно сотрудника (шаги, заполнение, сохранение) ---
 
-import { getEmployees, saveEmployees, incrementId, setEmployees } from './storage.js';
+import {
+    fetchEmployeeById,
+    fetchEmployeeDocuments,
+    fetchManagerList,
+    createEmployee,
+    updateEmployee,
+    uploadEmployeeDocument,
+    DOCUMENT_TYPE_MAP
+} from './storage.js';
 import { showToast } from './toast.js';
 import { validatePhone, validateEmail, formatPhone } from './validation.js';
 import { renderTable } from './render.js';
@@ -33,7 +41,7 @@ const statusSelect = document.getElementById('status');
 const middleNameInput = document.getElementById('middleName');
 const whatsappInput = document.getElementById('whatsapp');
 const telegramInput = document.getElementById('telegram');
-const managerInput = document.getElementById('manager');
+const managerSelect = document.getElementById('manager');
 const passwordInput = document.getElementById('password');
 
 const countrySelect = document.getElementById('country');
@@ -62,7 +70,7 @@ const FIELD_SCHEMA = [
     { key: 'telegram', input: telegramInput },
     { key: 'position', input: positionInput },
     { key: 'department', input: departmentInput },
-    { key: 'manager', input: managerInput },
+    { key: 'managerId', input: managerSelect },
     { key: 'hireDate', input: hireDateInput },
     { key: 'status', input: statusSelect },
     { key: 'password', input: passwordInput },
@@ -90,11 +98,42 @@ let editingId = null;
 let originalFormData = {};
 let currentStep = 1;
 
+// --- Наполняет <select> "Руководитель" активными сотрудниками (кроме самого редактируемого) ---
+async function populateManagerSelect(excludeId) {
+    managerSelect.innerHTML = '<option value="">Без руководителя</option>';
+    let managers = [];
+    try {
+        managers = await fetchManagerList(excludeId);
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+    managers.forEach(m => {
+        const opt = document.createElement('option');
+        opt.value = String(m.id);
+        opt.textContent = m.fullName;
+        managerSelect.appendChild(opt);
+    });
+}
+
 // --- Открытие модалки (новый или редактирование) ---
-export function openEmployeeModal(title, employee = null) {
+export async function openEmployeeModal(title, employee = null) {
     modal.style.display = 'flex';
     modalTitle.textContent = employee ? `${title} (ID: ${String(employee.id).padStart(4, '0')})` : title;
     goToStep(1);
+
+    // Файловые input'ы (и подписи с прошлого открытия модалки) могли сохранить выбор файла —
+    // очищаем, чтобы каждая сессия редактирования начиналась без "призрачного" выбора файла.
+    FILE_FIELD_SCHEMA.forEach(({ input }) => {
+        input.value = '';
+        const wrapper = input.closest('.file-upload-area');
+        if (!wrapper) return;
+        const nameSpan = wrapper.querySelector('.file-name');
+        const icon = wrapper.querySelector('.file-status-icon');
+        if (nameSpan) nameSpan.textContent = '';
+        if (icon) icon.style.display = 'none';
+    });
+
+    await populateManagerSelect(employee ? employee.id : null);
 
     if (employee) {
         fillForm(employee);
@@ -195,19 +234,21 @@ function readFileAsDataUrl(file) {
     });
 }
 
-// --- Собирает данные документов: новый выбранный файл (base64) либо ранее сохранённые данные ---
-async function collectFileFields(existingEmp) {
-    const result = {};
+// --- Загружает на сервер только реально изменившиеся (выбранные) документы ---
+async function uploadChangedDocuments(employeeId) {
+    const errors = [];
     for (const { key, input } of FILE_FIELD_SCHEMA) {
         if (input.files.length) {
             const file = input.files[0];
-            const data = await readFileAsDataUrl(file);
-            result[key] = { name: file.name, data };
-        } else {
-            result[key] = (existingEmp && existingEmp[key]) || '';
+            try {
+                const data = await readFileAsDataUrl(file);
+                await uploadEmployeeDocument(employeeId, DOCUMENT_TYPE_MAP[key], file.name, data);
+            } catch (err) {
+                errors.push(`${file.name}: ${err.message}`);
+            }
         }
     }
-    return result;
+    return errors;
 }
 
 // --- Переводит фокус на первое невалидное обязательное поле шага 1 ---
@@ -246,27 +287,6 @@ export async function handleEmployeeSubmit(e) {
         return;
     }
 
-    const phoneDigits = phone.replace(/\D/g, '');
-    const employees = getEmployees();
-    const duplicatePhone = employees.some(emp => {
-        const empPhoneDigits = emp.phone ? emp.phone.replace(/\D/g, '') : '';
-        return empPhoneDigits === phoneDigits && emp.id !== editingId;
-    });
-    if (duplicatePhone) {
-        showToast('Сотрудник с таким номером телефона уже существует', 'error');
-        return;
-    }
-    const duplicateEmail = employees.some(emp =>
-        (emp.email || '').toLowerCase() === email.toLowerCase() && emp.id !== editingId
-    );
-    if (duplicateEmail) {
-        showToast('Сотрудник с таким email уже существует', 'error');
-        return;
-    }
-
-    const existingEmp = editingId !== null ? employees.find(emp => emp.id === editingId) : null;
-    const fileData = await collectFileFields(existingEmp);
-
     const empData = {
         lastName,
         firstName,
@@ -277,7 +297,7 @@ export async function handleEmployeeSubmit(e) {
         telegram: telegramInput.value.trim(),
         position: positionInput.value.trim(),
         department: departmentInput.value.trim(),
-        manager: managerInput.value.trim(),
+        managerId: managerSelect.value ? Number(managerSelect.value) : null,
         hireDate: hireDateInput.value,
         status: statusSelect.value,
         password: passwordInput.value.trim(),
@@ -289,28 +309,28 @@ export async function handleEmployeeSubmit(e) {
         issueDate: issueDateInput.value,
         inn: innInput.value.trim(),
         bank: bankInput.value.trim(),
-        account: accountInput.value.trim(),
-        ...fileData
+        account: accountInput.value.trim()
     };
 
-    if (editingId !== null) {
-        const index = employees.findIndex(emp => emp.id === editingId);
-        if (index !== -1) {
-            employees[index] = { id: editingId, ...empData };
-            saveEmployees();
-            renderTable();
-            closeEmployeeModal(true);
-            showToast('Изменения сохранены', 'success');
-        } else {
-            showToast('Ошибка: сотрудник не найден', 'error');
-        }
+    let savedEmployee;
+    try {
+        savedEmployee = editingId !== null
+            ? await updateEmployee(editingId, empData)
+            : await createEmployee(empData);
+    } catch (err) {
+        showToast(err.message, 'error');
+        return;
+    }
+
+    const docErrors = await uploadChangedDocuments(savedEmployee.id);
+
+    await renderTable();
+    closeEmployeeModal(true);
+
+    if (docErrors.length > 0) {
+        showToast(`Сотрудник сохранён, но не удалось загрузить документы: ${docErrors.join('; ')}`, 'error');
     } else {
-        const newEmp = { id: incrementId(), ...empData };
-        employees.push(newEmp);
-        saveEmployees();
-        renderTable();
-        closeEmployeeModal(true);
-        showToast('Сотрудник добавлен', 'success');
+        showToast(editingId !== null ? 'Изменения сохранены' : 'Сотрудник добавлен', 'success');
     }
 }
 
@@ -398,9 +418,21 @@ export function initModal() {
 }
 
 // --- Открыть редактирование по ID (из таблицы) ---
-export function openEditEmployee(id) {
-    const employees = getEmployees();
-    const emp = employees.find(e => e.id === id);
-    if (!emp) return;
-    openEmployeeModal('Редактирование сотрудника', emp);
+export async function openEditEmployee(id) {
+    let emp, documents;
+    try {
+        emp = await fetchEmployeeById(id);
+        documents = await fetchEmployeeDocuments(id);
+    } catch (err) {
+        showToast(err.message, 'error');
+        return;
+    }
+
+    const docsByKey = {};
+    documents.forEach(doc => {
+        const key = Object.keys(DOCUMENT_TYPE_MAP).find(k => DOCUMENT_TYPE_MAP[k] === doc.documentType);
+        if (key) docsByKey[key] = { name: doc.fileName };
+    });
+
+    openEmployeeModal('Редактирование сотрудника', { ...emp, ...docsByKey });
 }

@@ -1,52 +1,89 @@
-// --- storage.js: загрузка / сохранение данных ---
+// --- storage.js: клиент REST API бэкенда (Node.js + Express + PostgreSQL) ---
 
-import { showToast } from './toast.js';
+// Базовый адрес API — единственное место, которое нужно поменять при переезде на боевой сервер.
+export const API_BASE_URL = 'http://localhost:3000/api';
 
-let employees = [];
-let currentId = 1;
+// Соответствие ключей полей формы (camelCase) типам документов в БД/API (snake_case).
+export const DOCUMENT_TYPE_MAP = {
+    passportFront: 'passport_front',
+    passportBack: 'passport_back',
+    patent: 'patent',
+    contract: 'contract',
+    additionalAgreement: 'additional_agreement'
+};
 
-// Загружает данные из localStorage или создаёт демо-сотрудников
-export function loadEmployees() {
-    const stored = localStorage.getItem('employees');
-    if (stored) {
-        try {
-            employees = JSON.parse(stored);
-            currentId = employees.length ? Math.max(...employees.map(e => e.id)) + 1 : 1;
-        } catch (e) {
-            employees = [];
-            currentId = 1;
-        }
-    } else {
-        // Демо-данные
-        employees = [
-            { id: currentId++, firstName: 'Анна', lastName: 'Смирнова', middleName: '', email: 'anna@company.ru', phone: '+7 900 111-22-33', whatsapp: '', telegram: '', position: 'Старший оператор', department: 'Поддержка', manager: '', hireDate: '2025-01-15', status: 'active', password: '', country: 'Российская Федерация', registration: '', passportSeries: '', passportNumber: '', issuedBy: '', issueDate: '', inn: '', bank: '', account: '' },
-            { id: currentId++, firstName: 'Максим', lastName: 'Иванов', middleName: '', email: 'maxim@company.ru', phone: '+7 900 222-33-44', whatsapp: '', telegram: '', position: 'Оператор', department: 'Продажи', manager: '', hireDate: '2025-02-20', status: 'inactive', password: '', country: 'Казахстан', registration: '', passportSeries: '', passportNumber: '', issuedBy: '', issueDate: '', inn: '', bank: '', account: '' }
-        ];
-        saveEmployees();
-    }
-    return employees;
-}
-
-export function saveEmployees() {
+async function request(path, options = {}) {
+    let response;
     try {
-        localStorage.setItem('employees', JSON.stringify(employees));
+        response = await fetch(`${API_BASE_URL}${path}`, {
+            headers: { 'Content-Type': 'application/json' },
+            ...options
+        });
     } catch (e) {
-        showToast('Не удалось сохранить данные (возможно, переполнено хранилище)', 'error');
+        throw new Error('Не удалось связаться с сервером. Проверьте подключение.');
     }
+
+    if (response.status === 204) return null;
+
+    let body = null;
+    try {
+        body = await response.json();
+    } catch (e) {
+        // тело может отсутствовать при некоторых ошибках — игнорируем
+    }
+
+    if (!response.ok) {
+        throw new Error((body && body.error) || 'Произошла ошибка на сервере');
+    }
+    return body;
 }
 
-export function getEmployees() {
-    return employees;
+function buildQuery(filters) {
+    const params = new URLSearchParams();
+    Object.entries(filters).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== '' && value !== false) {
+            params.set(key, value);
+        }
+    });
+    const query = params.toString();
+    return query ? `?${query}` : '';
 }
 
-export function getCurrentId() {
-    return currentId;
+// --- Сотрудники ---
+
+export function fetchEmployees(filters = {}) {
+    return request(`/employees${buildQuery(filters)}`);
 }
 
-export function incrementId() {
-    return currentId++;
+export function fetchEmployeeById(id) {
+    return request(`/employees/${id}`);
 }
 
-export function setEmployees(newData) {
-    employees = newData;
+export function fetchManagerList(excludeId) {
+    return request(`/employees/list-for-manager${buildQuery({ excludeId })}`);
+}
+
+export function createEmployee(data) {
+    return request('/employees', { method: 'POST', body: JSON.stringify(data) });
+}
+
+export function updateEmployee(id, data) {
+    return request(`/employees/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+}
+
+export function deleteEmployee(id) {
+    return request(`/employees/${id}`, { method: 'DELETE' });
+}
+
+// --- Документы сотрудника ---
+
+export function fetchEmployeeDocuments(employeeId) {
+    return request(`/employees/${employeeId}/documents`);
+}
+
+export function uploadEmployeeDocument(employeeId, documentType, fileName, fileData) {
+    return request(`/employees/${employeeId}/documents`, {
+        method: 'POST',
+        body: JSON.stringify({ documentType, fileName, fileData })
+    });
 }

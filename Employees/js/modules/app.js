@@ -1,19 +1,15 @@
 // --- app.js: инициализация приложения ---
 
-import { loadEmployees, getEmployees } from './storage.js';
 import { renderTable, initSorting, initTableActions } from './render.js';
 
 import { initModal } from './modal.js';
 import { initMassActions } from './massActions.js';
 import { initConfirmModals } from './confirmModal.js';
-import { showToast } from './toast.js';
 
-document.addEventListener('DOMContentLoaded', function() {
-    
+document.addEventListener('DOMContentLoaded', async function() {
 
     // 2. Данные и таблица
-    loadEmployees();
-    renderTable();
+    await renderTable();
 
     // 3. Сортировка
     initSorting();

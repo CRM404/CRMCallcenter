@@ -1,6 +1,6 @@
 // --- confirmModal.js: подтверждение удаления и закрытия ---
 
-import { getEmployees, saveEmployees, setEmployees } from './storage.js';
+import { deleteEmployee } from './storage.js';
 import { showToast } from './toast.js';
 import { renderTable } from './render.js';
 
@@ -31,14 +31,15 @@ export function showDeleteConfirm(id) {
     document.getElementById('deleteModal').style.display = 'flex';
 }
 
-function confirmDelete() {
+async function confirmDelete() {
     if (deleteTargetId !== null) {
-        let employees = getEmployees();
-        employees = employees.filter(emp => emp.id !== deleteTargetId);
-        setEmployees(employees);
-        saveEmployees();
-        renderTable();
-        showToast('Сотрудник успешно удален', 'success');
+        try {
+            await deleteEmployee(deleteTargetId);
+            await renderTable();
+            showToast('Сотрудник успешно удален', 'success');
+        } catch (err) {
+            showToast(err.message, 'error');
+        }
         document.getElementById('deleteModal').style.display = 'none';
         deleteTargetId = null;
     }
@@ -62,13 +63,23 @@ export function showMassDeleteConfirm(ids) {
             modal.removeEventListener('click', backdropHandler);
         };
 
-        const confirmHandler = function() {
-            let employees = getEmployees();
-            employees = employees.filter(emp => !ids.includes(emp.id));
-            setEmployees(employees);
-            saveEmployees();
-            renderTable();
-            showToast(`Удалено ${ids.length} сотрудников`, 'success');
+        const confirmHandler = async function() {
+            let deletedCount = 0;
+            let failedCount = 0;
+            for (const id of ids) {
+                try {
+                    await deleteEmployee(id);
+                    deletedCount++;
+                } catch (err) {
+                    failedCount++;
+                }
+            }
+            await renderTable();
+            if (failedCount === 0) {
+                showToast(`Удалено ${deletedCount} сотрудников`, 'success');
+            } else {
+                showToast(`Удалено ${deletedCount} из ${ids.length}, ${failedCount} не удалось удалить`, 'error');
+            }
             modal.style.display = 'none';
             cleanup();
             resolve(true);

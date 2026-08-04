@@ -1,6 +1,6 @@
 // --- massActions.js: массовые операции над выбранными сотрудниками ---
 
-import { getEmployees, saveEmployees } from './storage.js';
+import { fetchEmployeeById, updateEmployee } from './storage.js';
 import { showToast } from './toast.js';
 import { renderTable } from './render.js';
 
@@ -44,7 +44,7 @@ export function initMassActions() {
     });
 
     // Кнопка "Применить"
-    document.getElementById('massApplyBtn').addEventListener('click', function() {
+    document.getElementById('massApplyBtn').addEventListener('click', async function() {
         const action = document.getElementById('massActionSelect').value;
         if (!action) {
             showToast('Выберите действие', 'error');
@@ -56,23 +56,30 @@ export function initMassActions() {
         }
 
         if (action === 'inactive') {
-            // Массовое изменение статуса
-            const employees = getEmployees();
-            let changed = false;
-            employees.forEach(emp => {
-                if (selectedIds.has(emp.id) && emp.status !== 'inactive') {
-                    emp.status = 'inactive';
-                    changed = true;
+            // Массовое изменение статуса — по одному PUT-запросу на сотрудника
+            let changedCount = 0;
+            let failedCount = 0;
+            for (const id of selectedIds) {
+                try {
+                    const emp = await fetchEmployeeById(id);
+                    if (emp.status !== 'inactive') {
+                        await updateEmployee(id, { ...emp, status: 'inactive' });
+                        changedCount++;
+                    }
+                } catch (err) {
+                    failedCount++;
                 }
-            });
-            if (changed) {
-                saveEmployees();
-                renderTable();
-                showToast(`Статус обновлён для ${selectedIds.size} сотрудников`, 'success');
-                clearSelection();
-            } else {
+            }
+            await renderTable();
+            if (changedCount > 0) {
+                showToast(`Статус обновлён для ${changedCount} сотрудников`, 'success');
+            } else if (failedCount === 0) {
                 showToast('Нет сотрудников для изменения (уже неактивные)', 'info');
             }
+            if (failedCount > 0) {
+                showToast(`Не удалось обновить ${failedCount} сотрудников`, 'error');
+            }
+            clearSelection();
         } else if (action === 'delete') {
             // Массовое удаление с подтверждением
             import('./confirmModal.js').then(m => {

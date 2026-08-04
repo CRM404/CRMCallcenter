@@ -1,9 +1,10 @@
 // --- render.js: отрисовка таблицы, фильтры, сортировка, пагинация ---
 
-import { getEmployees } from './storage.js';
+import { fetchEmployees } from './storage.js';
 import { showDeleteConfirm } from './confirmModal.js';
 import { openEditEmployee } from './modal.js';
 import { updateSelectedCount } from './massActions.js';
+import { showToast } from './toast.js';
 
 let sortField = 'id';
 let sortDirection = 'asc';
@@ -14,14 +15,8 @@ const tbody = document.getElementById('employeeTableBody');
 const emptyMessage = document.getElementById('emptyMessage');
 const searchInput = document.getElementById('searchInput');
 
-export function renderTable() {
-    // Получаем данные из хранилища
-    const employees = getEmployees();
-    
-    // Заполняем выпадающие списки фильтров
-    populateFilterOptions(employees);
-
-    // Получаем значения фильтров
+export async function renderTable() {
+    // Значения фильтров — фильтрация теперь выполняется на сервере
     const filterText = searchInput.value;
     const status = document.getElementById('filterStatus')?.value || '';
     const department = document.getElementById('filterDepartment')?.value || '';
@@ -31,31 +26,26 @@ export function renderTable() {
     const hireDateFrom = document.getElementById('filterHireDateFrom')?.value || '';
     const hireDateTo = document.getElementById('filterHireDateTo')?.value || '';
 
-    // Фильтрация
-    let filtered = employees.filter(emp => {
-        let matchText = true;
-        if (filterText.trim()) {
-            const search = filterText.trim().toLowerCase();
-            const idStr = String(emp.id).padStart(4, '0');
-            matchText = idStr.includes(search) ||
-                String(emp.id).includes(search) ||
-                (emp.lastName && emp.lastName.toLowerCase().includes(search)) ||
-                (emp.firstName && emp.firstName.toLowerCase().includes(search)) ||
-                (emp.phone && emp.phone.includes(search)) ||
-                (emp.email && emp.email.toLowerCase().includes(search)) ||
-                (emp.position && emp.position.toLowerCase().includes(search)) ||
-                (emp.department && emp.department.toLowerCase().includes(search));
-        }
-        if (!matchText) return false;
-        if (status && emp.status !== status) return false;
-        if (department && emp.department !== department) return false;
-        if (position && emp.position !== position) return false;
-        if (hasWhatsapp && !emp.whatsapp) return false;
-        if (hasTelegram && !emp.telegram) return false;
-        if (hireDateFrom && emp.hireDate && emp.hireDate < hireDateFrom) return false;
-        if (hireDateTo && emp.hireDate && emp.hireDate > hireDateTo) return false;
-        return true;
-    });
+    let allEmployees, filtered;
+    try {
+        // Полный список (без фильтров) — только для наполнения выпадающих списков "Отдел"/"Должность"
+        allEmployees = await fetchEmployees();
+        filtered = await fetchEmployees({
+            search: filterText.trim(),
+            status,
+            department,
+            position,
+            hasWhatsapp,
+            hasTelegram,
+            hireDateFrom,
+            hireDateTo
+        });
+    } catch (err) {
+        showToast(err.message, 'error');
+        return;
+    }
+
+    populateFilterOptions(allEmployees);
 
     // Сортировка
     filtered.sort((a, b) => {
@@ -127,7 +117,7 @@ export function renderTable() {
                 <td>${escapeHtml(emp.telegram || '—')}</td>
                 <td>${escapeHtml(emp.position || '—')}</td>
                 <td>${escapeHtml(emp.department || '—')}</td>
-                <td>${escapeHtml(emp.manager || '—')}</td>
+                <td>${escapeHtml(emp.managerName || '—')}</td>
                 <td>${emp.hireDate ? formatDate(emp.hireDate) : '—'}</td>
                 <td><span class="status-badge ${statusClass}">${statusText}</span></td>
                 <td>
