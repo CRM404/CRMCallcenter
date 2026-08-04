@@ -66,9 +66,25 @@ function normalizeValue(key, value) {
     if (key === 'managerId') {
         return value === '' || value === undefined || value === null ? null : Number(value);
     }
+    if (key === 'status') {
+        return value === undefined || value === null || String(value).trim() === '' ? 'active' : value;
+    }
     if (value === undefined) return null;
-    if (typeof value === 'string' && value.trim() === '' && key !== 'status') return null;
+    if (typeof value === 'string' && value.trim() === '') return null;
     return value;
+}
+
+// Общий SELECT с LEFT JOIN на руководителя — используется и для GET, и как источник
+// ответа для POST/PUT (INSERT/UPDATE ... RETURNING * не знает про manager_name).
+async function fetchEmployeeWithManager(id) {
+    const result = await pool.query(
+        `SELECT e.*, CASE WHEN m.id IS NOT NULL THEN m.last_name || ' ' || m.first_name ELSE NULL END AS manager_name
+         FROM employees e
+         LEFT JOIN employees m ON e.manager_id = m.id
+         WHERE e.id = $1`,
+        [id]
+    );
+    return result.rows[0] || null;
 }
 
 function validateRequiredFields(body) {
@@ -183,17 +199,11 @@ router.get('/list-for-manager', async (req, res) => {
 // GET /api/employees/:id
 router.get('/:id', async (req, res) => {
     try {
-        const result = await pool.query(
-            `SELECT e.*, CASE WHEN m.id IS NOT NULL THEN m.last_name || ' ' || m.first_name ELSE NULL END AS manager_name
-             FROM employees e
-             LEFT JOIN employees m ON e.manager_id = m.id
-             WHERE e.id = $1`,
-            [req.params.id]
-        );
-        if (result.rows.length === 0) {
+        const row = await fetchEmployeeWithManager(req.params.id);
+        if (!row) {
             return res.status(404).json({ error: 'Сотрудник не найден' });
         }
-        res.json(rowToEmployee(result.rows[0]));
+        res.json(rowToEmployee(row));
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: 'Не удалось получить сотрудника' });
@@ -211,10 +221,11 @@ router.post('/', async (req, res) => {
         const columns = FIELD_COLUMNS.map(([, col]) => col);
         const placeholders = columns.map((_, i) => `$${i + 1}`);
         const result = await pool.query(
-            `INSERT INTO employees (${columns.join(', ')}) VALUES (${placeholders.join(', ')}) RETURNING *`,
+            `INSERT INTO employees (${columns.join(', ')}) VALUES (${placeholders.join(', ')}) RETURNING id`,
             values
         );
-        res.status(201).json(rowToEmployee(result.rows[0]));
+        const row = await fetchEmployeeWithManager(result.rows[0].id);
+        res.status(201).json(rowToEmployee(row));
     } catch (err) {
         if (handleUniqueViolation(err, res)) return;
         console.error(err);
@@ -233,13 +244,14 @@ router.put('/:id', async (req, res) => {
         const setClauses = FIELD_COLUMNS.map(([, col], i) => `${col} = $${i + 1}`);
         values.push(req.params.id);
         const result = await pool.query(
-            `UPDATE employees SET ${setClauses.join(', ')} WHERE id = $${values.length} RETURNING *`,
+            `UPDATE employees SET ${setClauses.join(', ')} WHERE id = $${values.length} RETURNING id`,
             values
         );
         if (result.rows.length === 0) {
             return res.status(404).json({ error: 'Сотрудник не найден' });
         }
-        res.json(rowToEmployee(result.rows[0]));
+        const row = await fetchEmployeeWithManager(result.rows[0].id);
+        res.json(rowToEmployee(row));
     } catch (err) {
         if (handleUniqueViolation(err, res)) return;
         console.error(err);
