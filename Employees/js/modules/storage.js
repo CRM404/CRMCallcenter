@@ -1,7 +1,8 @@
 // --- storage.js: клиент REST API бэкенда (Node.js + Express + PostgreSQL) ---
 
-// Базовый адрес API — единственное место, которое нужно поменять при переезде на боевой сервер.
-export const API_BASE_URL = 'https://crmcallcenter-production.up.railway.app/api';
+// Относительный путь — работает одинаково и локально (node server.js), и на Railway,
+// так как страницу теперь отдаёт тот же сервер, что и API (см. Backend/server.js).
+export const API_BASE_URL = '/api';
 
 // Соответствие ключей полей формы (camelCase) типам документов в БД/API (snake_case).
 export const DOCUMENT_TYPE_MAP = {
