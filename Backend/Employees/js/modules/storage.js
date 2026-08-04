@@ -88,3 +88,23 @@ export function uploadEmployeeDocument(employeeId, documentType, fileName, fileD
         body: JSON.stringify({ documentType, fileName, fileData })
     });
 }
+
+// --- Идентификация и настройки видимых колонок ---
+
+export function verifyEmployeeIdentity(employeeId, password) {
+    return request('/auth/verify-employee', {
+        method: 'POST',
+        body: JSON.stringify({ employeeId, password })
+    });
+}
+
+export function fetchColumnSettings(employeeId) {
+    return request(`/employees/column-settings/${employeeId}`);
+}
+
+export function saveColumnSettings(employeeId, hiddenColumns) {
+    return request(`/employees/column-settings/${employeeId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ hiddenColumns })
+    });
+}

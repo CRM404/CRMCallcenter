@@ -753,3 +753,30 @@ h1, h2, th, .status-badge {
 td, label, .form-group input, .form-group select {
     text-shadow: 0 1px 1px rgba(255,255,255,0.4);
 }
+
+/* ----- Настройка видимых колонок ----- */
+.column-checkbox-list {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px 16px;
+    margin: 15px 0;
+}
+.column-checkbox-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    color: #2c3e50;
+    cursor: pointer;
+}
+.column-checkbox-item input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    accent-color: #2563eb;
+    cursor: pointer;
+}
+@media (max-width: 500px) {
+    .column-checkbox-list {
+        grid-template-columns: 1fr;
+    }
+}

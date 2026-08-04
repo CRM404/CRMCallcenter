@@ -9,6 +9,8 @@ const cors = require('cors');
 const { runMigrations } = require('./migrate');
 const employeesRouter = require('./routes/employees');
 const documentsRouter = require('./routes/documents');
+const authRouter = require('./routes/auth');
+const columnSettingsRouter = require('./routes/columnSettings');
 
 const app = express();
 
@@ -21,6 +23,8 @@ app.get('/api/health', (req, res) => {
 
 app.use('/api/employees', employeesRouter);
 app.use('/api', documentsRouter);
+app.use('/api/auth', authRouter);
+app.use('/api', columnSettingsRouter);
 
 // Отдаём страницу "Сотрудники" тем же сервером — отдельный статический хостинг фронтенда не нужен.
 // Employees/ лежит внутри Backend/ (а не рядом), т.к. Railway собирает только содержимое Root Directory.

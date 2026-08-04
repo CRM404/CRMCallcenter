@@ -5,8 +5,12 @@ import { renderTable, initSorting, initTableActions } from './render.js';
 import { initModal } from './modal.js';
 import { initMassActions } from './massActions.js';
 import { initConfirmModals } from './confirmModal.js';
+import { initColumnSettings } from './columnSettings.js';
 
 document.addEventListener('DOMContentLoaded', async function() {
+
+    // 1b. Настройки видимых колонок (шестерёнка у таблицы)
+    initColumnSettings();
 
     // 2. Данные и таблица
     await renderTable();

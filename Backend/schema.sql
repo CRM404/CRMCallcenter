@@ -38,3 +38,13 @@ CREATE TABLE IF NOT EXISTS employee_documents (
     uploaded_at TIMESTAMP NOT NULL DEFAULT NOW(),
     UNIQUE (employee_id, document_type)
 );
+
+-- Персональные настройки видимых колонок таблицы списка сотрудников.
+-- hidden_columns — чёрный список: ключи СКРЫТЫХ колонок. Любой ключ, которого
+-- нет в массиве (включая колонки, добавленные в будущем), считается видимым —
+-- это и есть дефолт "по умолчанию видно всё", без отдельной логики на будущее.
+CREATE TABLE IF NOT EXISTS employee_column_settings (
+    employee_id INTEGER PRIMARY KEY REFERENCES employees(id) ON DELETE CASCADE,
+    hidden_columns JSONB NOT NULL DEFAULT '[]',
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);

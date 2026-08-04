@@ -5,6 +5,7 @@ import { showDeleteConfirm } from './confirmModal.js';
 import { openEditEmployee } from './modal.js';
 import { updateSelectedCount } from './massActions.js';
 import { showToast } from './toast.js';
+import { getHiddenColumns, CONFIGURABLE_COLUMNS } from './columnSettings.js';
 
 let sortField = 'id';
 let sortDirection = 'asc';
@@ -14,6 +15,39 @@ const pageSize = 20;
 const tbody = document.getElementById('employeeTableBody');
 const emptyMessage = document.getElementById('emptyMessage');
 const searchInput = document.getElementById('searchInput');
+const tableHeadRow = document.getElementById('tableHeadRow');
+const actionsHeader = document.getElementById('actionsHeader');
+
+// Рендер значения ячейки для каждой настраиваемой колонки — переиспользуется и в <td>, и нигде больше.
+const COLUMN_CELL_RENDERERS = {
+    lastName: (emp) => escapeHtml(emp.lastName),
+    firstName: (emp) => escapeHtml(emp.firstName),
+    middleName: (emp) => escapeHtml(emp.middleName || '—'),
+    email: (emp) => escapeHtml(emp.email),
+    phone: (emp) => escapeHtml(emp.phone),
+    whatsapp: (emp) => escapeHtml(emp.whatsapp || '—'),
+    telegram: (emp) => escapeHtml(emp.telegram || '—'),
+    position: (emp) => escapeHtml(emp.position || '—'),
+    department: (emp) => escapeHtml(emp.department || '—'),
+    managerName: (emp) => escapeHtml(emp.managerName || '—'),
+    hireDate: (emp) => (emp.hireDate ? formatDate(emp.hireDate) : '—'),
+    status: (emp) => {
+        const statusClass = emp.status === 'active' ? 'status-active' : 'status-inactive';
+        const statusText = emp.status === 'active' ? 'Активен' : 'Неактивен';
+        return `<span class="status-badge ${statusClass}">${statusText}</span>`;
+    }
+};
+
+function rebuildTableHead(visibleColumns) {
+    tableHeadRow.querySelectorAll('th[data-dynamic-column]').forEach((th) => th.remove());
+    visibleColumns.forEach((col) => {
+        const th = document.createElement('th');
+        th.dataset.field = col.key;
+        th.dataset.dynamicColumn = 'true';
+        th.textContent = col.label;
+        tableHeadRow.insertBefore(th, actionsHeader);
+    });
+}
 
 export async function renderTable() {
     // Значения фильтров — фильтрация теперь выполняется на сервере
@@ -46,6 +80,16 @@ export async function renderTable() {
     }
 
     populateFilterOptions(allEmployees);
+
+    const hiddenColumns = await getHiddenColumns();
+    const visibleColumns = CONFIGURABLE_COLUMNS.filter((col) => !hiddenColumns.has(col.key));
+    rebuildTableHead(visibleColumns);
+
+    // Колонка, по которой шла сортировка, скрыта — откатываем на дефолтную (по id)
+    if (sortField !== 'id' && !visibleColumns.some((col) => col.key === sortField)) {
+        sortField = 'id';
+        sortDirection = 'asc';
+    }
 
     // Сортировка
     filtered.sort((a, b) => {
@@ -101,25 +145,13 @@ export async function renderTable() {
     // Генерация строк с чекбоксами
     let html = '';
     pageItems.forEach(emp => {
-        const statusClass = emp.status === 'active' ? 'status-active' : 'status-inactive';
-        const statusText = emp.status === 'active' ? 'Активен' : 'Неактивен';
         const idFormatted = String(emp.id).padStart(4, '0');
+        const dataCells = visibleColumns.map((col) => `<td>${COLUMN_CELL_RENDERERS[col.key](emp)}</td>`).join('');
         html += `
             <tr>
                 <td><input type="checkbox" class="row-checkbox" data-id="${emp.id}"></td>
                 <td>${idFormatted}</td>
-                <td>${escapeHtml(emp.lastName)}</td>
-                <td>${escapeHtml(emp.firstName)}</td>
-                <td>${escapeHtml(emp.middleName || '—')}</td>
-                <td>${escapeHtml(emp.email)}</td>
-                <td>${escapeHtml(emp.phone)}</td>
-                <td>${escapeHtml(emp.whatsapp || '—')}</td>
-                <td>${escapeHtml(emp.telegram || '—')}</td>
-                <td>${escapeHtml(emp.position || '—')}</td>
-                <td>${escapeHtml(emp.department || '—')}</td>
-                <td>${escapeHtml(emp.managerName || '—')}</td>
-                <td>${emp.hireDate ? formatDate(emp.hireDate) : '—'}</td>
-                <td><span class="status-badge ${statusClass}">${statusText}</span></td>
+                ${dataCells}
                 <td>
                     <button class="action-btn btn-edit" data-id="${emp.id}" aria-label="Редактировать"><i class="fas fa-pencil-alt" aria-hidden="true"></i></button>
                     <button class="action-btn btn-delete" data-id="${emp.id}" aria-label="Удалить"><i class="fas fa-trash" aria-hidden="true"></i></button>
