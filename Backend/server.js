@@ -23,7 +23,8 @@ app.use('/api/employees', employeesRouter);
 app.use('/api', documentsRouter);
 
 // Отдаём страницу "Сотрудники" тем же сервером — отдельный статический хостинг фронтенда не нужен.
-const employeesDir = path.join(__dirname, '../Employees');
+// Employees/ лежит внутри Backend/ (а не рядом), т.к. Railway собирает только содержимое Root Directory.
+const employeesDir = path.join(__dirname, 'Employees');
 app.use(express.static(employeesDir));
 app.get('/', (req, res) => {
     res.redirect('/emploees.html');
