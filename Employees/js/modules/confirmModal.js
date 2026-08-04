@@ -1,0 +1,115 @@
+// --- confirmModal.js: подтверждение удаления и закрытия ---
+
+import { getEmployees, saveEmployees, setEmployees } from './storage.js';
+import { showToast } from './toast.js';
+import { renderTable } from './render.js';
+
+let closeConfirmResolve = null;
+let deleteTargetId = null;
+
+// --- Подтверждение закрытия с несохранёнными изменениями ---
+export function showCloseConfirm(message) {
+    return new Promise((resolve) => {
+        const modal = document.getElementById('closeConfirmModal');
+        document.getElementById('closeConfirmMessage').textContent = message || 'Есть несохранённые изменения. Закрыть без сохранения?';
+        modal.style.display = 'flex';
+        closeConfirmResolve = resolve;
+    });
+}
+
+function closeCloseConfirm(confirmed) {
+    document.getElementById('closeConfirmModal').style.display = 'none';
+    if (closeConfirmResolve) {
+        closeConfirmResolve(confirmed);
+        closeConfirmResolve = null;
+    }
+}
+
+// --- Подтверждение удаления одного сотрудника ---
+export function showDeleteConfirm(id) {
+    deleteTargetId = id;
+    document.getElementById('deleteModal').style.display = 'flex';
+}
+
+function confirmDelete() {
+    if (deleteTargetId !== null) {
+        let employees = getEmployees();
+        employees = employees.filter(emp => emp.id !== deleteTargetId);
+        setEmployees(employees);
+        saveEmployees();
+        renderTable();
+        showToast('Сотрудник успешно удален', 'success');
+        document.getElementById('deleteModal').style.display = 'none';
+        deleteTargetId = null;
+    }
+}
+
+// --- Подтверждение массового удаления ---
+export function showMassDeleteConfirm(ids) {
+    return new Promise((resolve) => {
+        const modal = document.getElementById('deleteModal');
+        const message = document.querySelector('#deleteModal p');
+        if (message) message.textContent = `Вы действительно хотите удалить ${ids.length} сотрудников? Действие необратимо.`;
+        const confirmBtn = document.getElementById('deleteConfirmBtn');
+        const cancelBtn = document.getElementById('deleteCancelBtn');
+        const closeBtn = document.getElementById('deleteModalCloseBtn');
+        modal.style.display = 'flex';
+
+        const cleanup = function() {
+            confirmBtn.removeEventListener('click', confirmHandler);
+            cancelBtn.removeEventListener('click', cancelHandler);
+            closeBtn.removeEventListener('click', cancelHandler);
+            modal.removeEventListener('click', backdropHandler);
+        };
+
+        const confirmHandler = function() {
+            let employees = getEmployees();
+            employees = employees.filter(emp => !ids.includes(emp.id));
+            setEmployees(employees);
+            saveEmployees();
+            renderTable();
+            showToast(`Удалено ${ids.length} сотрудников`, 'success');
+            modal.style.display = 'none';
+            cleanup();
+            resolve(true);
+        };
+        const cancelHandler = function() {
+            modal.style.display = 'none';
+            cleanup();
+            resolve(false);
+        };
+        const backdropHandler = function(e) {
+            if (e.target === modal) {
+                modal.style.display = 'none';
+                cleanup();
+                resolve(false);
+            }
+        };
+        confirmBtn.addEventListener('click', confirmHandler);
+        cancelBtn.addEventListener('click', cancelHandler);
+        closeBtn.addEventListener('click', cancelHandler);
+        modal.addEventListener('click', backdropHandler);
+    });
+}
+
+// --- Инициализация обработчиков модалок подтверждения ---
+export function initConfirmModals() {
+    // Закрытие с изменениями
+    document.getElementById('closeConfirmOkBtn').addEventListener('click', () => closeCloseConfirm(true));
+    document.getElementById('closeConfirmCancelBtn').addEventListener('click', () => closeCloseConfirm(false));
+    document.getElementById('closeConfirmCloseBtn').addEventListener('click', () => closeCloseConfirm(false));
+    document.getElementById('closeConfirmModal').addEventListener('click', (e) => {
+        if (e.target === e.currentTarget) closeCloseConfirm(false);
+    });
+
+    // Удаление
+    document.getElementById('deleteConfirmBtn').addEventListener('click', confirmDelete);
+    document.getElementById('deleteCancelBtn').addEventListener('click', () => {
+        document.getElementById('deleteModal').style.display = 'none';
+        deleteTargetId = null;
+    });
+    document.getElementById('deleteModalCloseBtn').addEventListener('click', () => {
+        document.getElementById('deleteModal').style.display = 'none';
+        deleteTargetId = null;
+    });
+}
