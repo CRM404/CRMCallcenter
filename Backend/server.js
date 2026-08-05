@@ -15,6 +15,7 @@ const operatorAuthRouter = require('./routes/operatorAuth');
 const leadsRouter = require('./routes/leads');
 const leadFunnelStatusesRouter = require('./routes/leadFunnelStatuses');
 const scriptsRouter = require('./routes/scripts');
+const scriptsAdminRouter = require('./routes/scriptsAdmin');
 
 const app = express();
 
@@ -33,16 +34,20 @@ app.use('/api/auth', operatorAuthRouter);
 app.use('/api/leads', leadsRouter);
 app.use('/api/lead-funnel-statuses', leadFunnelStatusesRouter);
 app.use('/api/scripts', scriptsRouter);
+app.use('/api/admin', scriptsAdminRouter);
 
-// Отдаём страницы "Сотрудники" и "Оператор" тем же сервером — отдельный статический
-// хостинг фронтенда не нужен. Обе папки лежат внутри Backend/ (а не рядом), т.к. Railway
-// собирает только содержимое Root Directory. Файлы внутри Operator/ названы с префиксом
-// operator*, чтобы не пересекаться по имени с одноимённой структурой Employees/ — оба
-// каталога монтируются в корень "/".
+// Отдаём страницы "Сотрудники", "Оператор" и "Скрипт (админ)" тем же сервером —
+// отдельный статический хостинг фронтенда не нужен. Все папки лежат внутри Backend/
+// (а не рядом), т.к. Railway собирает только содержимое Root Directory. Файлы внутри
+// Operator/ и ScriptsAdmin/ названы с префиксом operator*/scriptsAdmin*, чтобы не
+// пересекаться по имени с одноимённой структурой Employees/ — все три каталога
+// монтируются в корень "/".
 const employeesDir = path.join(__dirname, 'Employees');
 const operatorDir = path.join(__dirname, 'Operator');
+const scriptsAdminDir = path.join(__dirname, 'ScriptsAdmin');
 app.use(express.static(employeesDir));
 app.use(express.static(operatorDir));
+app.use(express.static(scriptsAdminDir));
 app.get('/', (req, res) => {
     res.redirect('/emploees.html');
 });

@@ -61,6 +61,14 @@ CREATE TABLE IF NOT EXISTS scripts (
     title VARCHAR NOT NULL
 );
 
+-- status/employee_id добавлены отдельно (не в исходном CREATE TABLE) — несколько
+-- скриптов-черновиков теперь могут существовать одновременно, но операторам
+-- показывается только один активный (см. routes/scripts.js). ADD COLUMN IF NOT
+-- EXISTS — тот же приём идемпотентности, что и весь этот файл (migrate.js
+-- прогоняет schema.sql при каждом старте сервера).
+ALTER TABLE scripts ADD COLUMN IF NOT EXISTS status VARCHAR NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'active'));
+ALTER TABLE scripts ADD COLUMN IF NOT EXISTS employee_id INTEGER REFERENCES employees(id) ON DELETE SET NULL;
+
 CREATE TABLE IF NOT EXISTS script_nodes (
     id SERIAL PRIMARY KEY,
     script_id INTEGER NOT NULL REFERENCES scripts(id) ON DELETE CASCADE,

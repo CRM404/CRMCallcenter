@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CRM – Управление скриптом звонка</title>
+    <link rel="stylesheet" href="./css/scripts-admin-light.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" integrity="sha512-Fo3rlrZj/k7ujTnHg4CGR2D7kSs0v4LLanw2qksYuRlEzO+tcaEPQogQ0KaoGN26/zrn20ImR1DfuLWnOo7aBA==" crossorigin="anonymous" referrerpolicy="no-referrer">
+</head>
+<body>
+    <div class="container">
+        <div>
+            <h1>Управление скриптом звонка</h1>
+        </div>
+
+        <section>
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+                <h2 style="margin:0;">Скрипты</h2>
+                <button type="button" class="btn btn-primary btn-sm" id="saNewScriptBtn">+ Новый скрипт</button>
+            </div>
+            <div id="saScriptList"></div>
+        </section>
+
+        <section id="saNodesSection" class="sa-nodes-section">
+            <h2 id="saNodesTitle">Узлы скрипта</h2>
+            <div class="sa-nodes-grid">
+                <div class="sa-panel" id="saNodeTree"></div>
+                <div class="sa-panel" id="saNodeFormContainer"></div>
+            </div>
+        </section>
+    </div>
+
+    <!-- Модалка создания скрипта -->
+    <div class="modal-overlay" id="newScriptModal" hidden>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Новый скрипт</h2>
+                <button type="button" class="modal-close" id="newScriptCloseBtn">&times;</button>
+            </div>
+            <form id="newScriptForm">
+                <div class="form-group">
+                    <label for="newScriptTitle">Название</label>
+                    <input type="text" id="newScriptTitle" name="title" required>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" id="newScriptCancelBtn">Отмена</button>
+                    <button type="submit" class="btn btn-primary">Создать</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Общая модалка подтверждения (удаление скрипта/узла) -->
+    <div class="modal-overlay" id="confirmModal" hidden>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Подтверждение</h2>
+                <button type="button" class="modal-close" id="confirmModalCloseBtn">&times;</button>
+            </div>
+            <p id="confirmModalMessage"></p>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-secondary" id="confirmModalCancelBtn">Отмена</button>
+                <button type="button" class="btn btn-danger" id="confirmModalOkBtn">Подтвердить</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toastContainer"></div>
+
+    <script type="module" src="./js/modules/scriptsAdminApp.js"></script>
+</body>
+</html>

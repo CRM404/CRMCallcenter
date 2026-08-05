@@ -1,16 +1,16 @@
-// --- routes/scripts.js: дерево скрипта звонка (только чтение) ---
-// Скрипт один, общий для всех операторов — эндпоинт без параметра ID,
-// отдаёт единственный существующий скрипт целиком (дерево строится на фронте по parentId).
+// --- routes/scripts.js: дерево скрипта звонка (только чтение, для страницы оператора) ---
+// Может существовать несколько скриптов-черновиков (см. routes/scriptsAdmin.js),
+// но оператору всегда отдаётся ровно один — со status='active'.
 
 const express = require('express');
 const { pool } = require('../db');
 
 const router = express.Router();
 
-// GET /api/scripts — единственный скрипт + все его узлы
+// GET /api/scripts — активный скрипт + все его узлы
 router.get('/', async (req, res) => {
     try {
-        const scriptResult = await pool.query('SELECT id, title FROM scripts ORDER BY id LIMIT 1');
+        const scriptResult = await pool.query("SELECT id, title FROM scripts WHERE status = 'active' LIMIT 1");
         if (scriptResult.rows.length === 0) {
             return res.status(404).json({ error: 'Скрипт не найден' });
         }
