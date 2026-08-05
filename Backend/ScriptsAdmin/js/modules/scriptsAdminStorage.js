@@ -34,8 +34,8 @@ export function fetchScripts() {
     return request('/admin/scripts');
 }
 
-export function createScript(title) {
-    return request('/admin/scripts', { method: 'POST', body: JSON.stringify({ title }) });
+export function createScript(data) {
+    return request('/admin/scripts', { method: 'POST', body: JSON.stringify(data) });
 }
 
 export function updateScript(id, data) {
@@ -60,4 +60,25 @@ export function updateScriptNode(nodeId, data) {
 
 export function deleteScriptNode(nodeId) {
     return request(`/admin/script-nodes/${nodeId}`, { method: 'DELETE' });
+}
+
+export function fetchOffers() {
+    return request('/admin/offers');
+}
+
+export function createOffer(name) {
+    return request('/admin/offers', { method: 'POST', body: JSON.stringify({ name }) });
+}
+
+// Список сотрудников для формы назначения — переиспользует прод-эндпоинт
+// GET /api/employees (он теперь отдаёт scriptId в каждой записи).
+export function fetchEmployees() {
+    return request('/employees');
+}
+
+export function assignScriptToEmployee(employeeId, scriptId) {
+    return request(`/admin/employees/${employeeId}/script`, {
+        method: 'PUT',
+        body: JSON.stringify({ scriptId })
+    });
 }

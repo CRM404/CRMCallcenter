@@ -241,6 +241,27 @@ h2 {
 }
 .sa-node-actions { display: flex; gap: 6px; flex-shrink: 0; }
 
+/* ----- Назначение операторов ----- */
+.sa-assign-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-height: 320px;
+    overflow-y: auto;
+}
+.sa-assign-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+}
+.sa-assign-row:hover { background: rgba(0, 0, 255, 0.05); }
+.sa-assign-row input { width: 16px; height: 16px; }
+.sa-assign-note { font-size: 12px; color: #b23a2e; }
+
 /* ----- Модалки ----- */
 .modal-overlay {
     position: fixed;

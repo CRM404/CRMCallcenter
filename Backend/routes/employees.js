@@ -47,6 +47,7 @@ function rowToEmployee(row) {
         department: row.department,
         managerId: row.manager_id,
         managerName: row.manager_name || null,
+        scriptId: row.script_id,
         hireDate: row.hire_date,
         status: row.status,
         password: row.password,

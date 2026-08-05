@@ -27,24 +27,36 @@
                 <div class="sa-panel" id="saNodeTree"></div>
                 <div class="sa-panel" id="saNodeFormContainer"></div>
             </div>
+            <div class="sa-panel" id="saAssignmentPanel" style="margin-top:24px;"></div>
         </section>
     </div>
 
-    <!-- Модалка создания скрипта -->
-    <div class="modal-overlay" id="newScriptModal" hidden>
+    <!-- Модалка создания/редактирования скрипта -->
+    <div class="modal-overlay" id="scriptModal" hidden>
         <div class="modal-content">
             <div class="modal-header">
-                <h2>Новый скрипт</h2>
-                <button type="button" class="modal-close" id="newScriptCloseBtn">&times;</button>
+                <h2 id="scriptModalTitle">Новый скрипт</h2>
+                <button type="button" class="modal-close" id="scriptModalCloseBtn">&times;</button>
             </div>
-            <form id="newScriptForm">
+            <form id="scriptForm">
                 <div class="form-group">
-                    <label for="newScriptTitle">Название</label>
-                    <input type="text" id="newScriptTitle" name="title" required>
+                    <label for="scriptFormTitle">Название</label>
+                    <input type="text" id="scriptFormTitle" name="title" required>
+                </div>
+                <div class="form-group">
+                    <label for="scriptFormOffer">Оффер</label>
+                    <select id="scriptFormOffer" name="offerId"></select>
+                </div>
+                <div class="form-group">
+                    <label for="scriptFormNewOfferName">Нет нужного оффера? Добавьте новый</label>
+                    <div style="display:flex; gap:8px;">
+                        <input type="text" id="scriptFormNewOfferName" placeholder="Название оффера">
+                        <button type="button" class="btn btn-secondary btn-sm" id="scriptFormAddOfferBtn" style="flex-shrink:0;">Добавить</button>
+                    </div>
                 </div>
                 <div class="modal-actions">
-                    <button type="button" class="btn btn-secondary" id="newScriptCancelBtn">Отмена</button>
-                    <button type="submit" class="btn btn-primary">Создать</button>
+                    <button type="button" class="btn btn-secondary" id="scriptModalCancelBtn">Отмена</button>
+                    <button type="submit" class="btn btn-primary" id="scriptFormSubmitBtn">Создать</button>
                 </div>
             </form>
         </div>

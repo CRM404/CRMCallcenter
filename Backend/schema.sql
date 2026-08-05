@@ -55,19 +55,34 @@ CREATE TABLE IF NOT EXISTS employee_column_settings (
 -- ============================================================
 
 -- Скрипты звонков: дерево узлов с ветвлением на возражения клиента.
--- Скрипт один, общий для всех операторов, на эту итерацию.
+-- Один скрипт может использоваться сразу несколькими операторами; у одного
+-- оператора в моменте — ровно один скрипт (см. employees.script_id ниже).
 CREATE TABLE IF NOT EXISTS scripts (
     id SERIAL PRIMARY KEY,
     title VARCHAR NOT NULL
 );
 
--- status/employee_id добавлены отдельно (не в исходном CREATE TABLE) — несколько
--- скриптов-черновиков теперь могут существовать одновременно, но операторам
--- показывается только один активный (см. routes/scripts.js). ADD COLUMN IF NOT
--- EXISTS — тот же приём идемпотентности, что и весь этот файл (migrate.js
+-- Минимальная заглушка "оффера" (объект/ЖК недвижимости) — только для связи
+-- 1 оффер : много скриптов. НЕ полная структура из database.drawio (Офферы_недвижимость
+-- со всеми полями) — та плановая структура появится отдельной будущей задачей.
+CREATE TABLE IF NOT EXISTS offers (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR NOT NULL
+);
+
+-- status/offer_id добавлены отдельно (не в исходном CREATE TABLE). status теперь
+-- значит не "показывается всем операторам", а "готов к назначению" — draft
+-- нельзя назначить оператору (см. routes/scriptsAdmin.js), но видимость
+-- оператору целиком определяется employees.script_id, не статусом. ADD COLUMN
+-- IF NOT EXISTS — та же идемпотентность, что и весь этот файл (migrate.js
 -- прогоняет schema.sql при каждом старте сервера).
 ALTER TABLE scripts ADD COLUMN IF NOT EXISTS status VARCHAR NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'active'));
-ALTER TABLE scripts ADD COLUMN IF NOT EXISTS employee_id INTEGER REFERENCES employees(id) ON DELETE SET NULL;
+ALTER TABLE scripts ADD COLUMN IF NOT EXISTS offer_id INTEGER REFERENCES offers(id) ON DELETE SET NULL;
+
+-- Назначение скрипта оператору — простая ссылка на employees (не таблица-связка):
+-- у сотрудника ровно один script_id, а на один scripts.id может ссылаться много
+-- сотрудников — этого достаточно для "1 скрипт : много операторов".
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS script_id INTEGER REFERENCES scripts(id) ON DELETE SET NULL;
 
 CREATE TABLE IF NOT EXISTS script_nodes (
     id SERIAL PRIMARY KEY,

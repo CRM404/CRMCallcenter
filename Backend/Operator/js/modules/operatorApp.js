@@ -45,7 +45,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     async function ensureScriptLoaded() {
         if (script) return script;
         try {
-            script = await fetchScript();
+            script = await fetchScript(identity.id);
         } catch (e) {
             if (e.status === 404) {
                 scriptPanel.innerHTML = '<p class="op-script-end">Скрипт не найден</p>';

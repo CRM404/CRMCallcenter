@@ -12,8 +12,9 @@ function rowToScript(row) {
         id: row.id,
         title: row.title,
         status: row.status,
-        employeeId: row.employee_id,
-        authorName: row.last_name ? `${row.last_name} ${row.first_name}` : null
+        offerId: row.offer_id,
+        offerName: row.offer_name || null,
+        assignedCount: row.assigned_count === undefined ? null : Number(row.assigned_count)
     };
 }
 
@@ -31,9 +32,9 @@ function rowToNode(row) {
 
 async function fetchScriptById(id) {
     const result = await pool.query(
-        `SELECT s.*, e.last_name, e.first_name
+        `SELECT s.*, o.name AS offer_name
          FROM scripts s
-         LEFT JOIN employees e ON s.employee_id = e.id
+         LEFT JOIN offers o ON s.offer_id = o.id
          WHERE s.id = $1`,
         [id]
     );
@@ -55,13 +56,14 @@ async function isDescendantChain(startNodeId, targetId) {
     return false;
 }
 
-// GET /api/admin/scripts — список всех скриптов (черновики + активный)
+// GET /api/admin/scripts — список всех скриптов (черновики + активные)
 router.get('/scripts', async (req, res) => {
     try {
         const result = await pool.query(
-            `SELECT s.*, e.last_name, e.first_name
+            `SELECT s.*, o.name AS offer_name,
+                    (SELECT count(*)::int FROM employees e WHERE e.script_id = s.id) AS assigned_count
              FROM scripts s
-             LEFT JOIN employees e ON s.employee_id = e.id
+             LEFT JOIN offers o ON s.offer_id = o.id
              ORDER BY s.id`
         );
         res.json(result.rows.map(rowToScript));
@@ -74,13 +76,13 @@ router.get('/scripts', async (req, res) => {
 // POST /api/admin/scripts — создать новый скрипт (черновик)
 router.post('/scripts', async (req, res) => {
     try {
-        const { title, employeeId } = req.body;
+        const { title, offerId } = req.body;
         if (!title || !String(title).trim()) {
             return res.status(400).json({ error: 'Укажите название скрипта' });
         }
         const result = await pool.query(
-            'INSERT INTO scripts (title, status, employee_id) VALUES ($1, $2, $3) RETURNING id',
-            [title.trim(), 'draft', employeeId || null]
+            'INSERT INTO scripts (title, status, offer_id) VALUES ($1, $2, $3) RETURNING id',
+            [title.trim(), 'draft', offerId || null]
         );
         const row = await fetchScriptById(result.rows[0].id);
         res.status(201).json(rowToScript(row));
@@ -90,11 +92,11 @@ router.post('/scripts', async (req, res) => {
     }
 });
 
-// PUT /api/admin/scripts/:id — изменить title/status/employeeId
-// Активация ('status' -> 'active'): предыдущий активный автоматически становится
-// draft, в одной транзакции — не должно быть момента с двумя активными или без него.
+// PUT /api/admin/scripts/:id — изменить title/status/offerId.
+// Несколько скриптов могут быть 'active' одновременно (каждый под своих
+// назначенных операторов) — здесь нет переключения других скриптов в draft.
 router.put('/scripts/:id', async (req, res) => {
-    const { title, status, employeeId } = req.body;
+    const { title, status, offerId } = req.body;
     if (!title || !String(title).trim()) {
         return res.status(400).json({ error: 'Укажите название скрипта' });
     }
@@ -102,57 +104,116 @@ router.put('/scripts/:id', async (req, res) => {
         return res.status(400).json({ error: 'Недопустимый статус' });
     }
 
-    const client = await pool.connect();
     try {
-        await client.query('BEGIN');
-
-        const existing = await client.query('SELECT id FROM scripts WHERE id = $1 FOR UPDATE', [req.params.id]);
+        const existing = await pool.query('SELECT id FROM scripts WHERE id = $1', [req.params.id]);
         if (existing.rows.length === 0) {
-            await client.query('ROLLBACK');
             return res.status(404).json({ error: 'Скрипт не найден' });
         }
 
         if (status === 'active') {
-            const nodeCount = await client.query('SELECT count(*)::int AS c FROM script_nodes WHERE script_id = $1', [req.params.id]);
+            const nodeCount = await pool.query('SELECT count(*)::int AS c FROM script_nodes WHERE script_id = $1', [req.params.id]);
             if (nodeCount.rows[0].c === 0) {
-                await client.query('ROLLBACK');
                 return res.status(400).json({ error: 'Нельзя активировать пустой скрипт — добавьте хотя бы один узел' });
             }
-            await client.query("UPDATE scripts SET status = 'draft' WHERE status = 'active' AND id <> $1", [req.params.id]);
         }
 
-        await client.query(
-            'UPDATE scripts SET title = $1, status = $2, employee_id = $3 WHERE id = $4',
-            [title.trim(), status, employeeId || null, req.params.id]
+        await pool.query(
+            'UPDATE scripts SET title = $1, status = $2, offer_id = $3 WHERE id = $4',
+            [title.trim(), status, offerId || null, req.params.id]
         );
 
-        await client.query('COMMIT');
         const row = await fetchScriptById(req.params.id);
         res.json(rowToScript(row));
     } catch (err) {
-        await client.query('ROLLBACK');
         console.error(err);
         res.status(500).json({ error: 'Не удалось сохранить скрипт' });
-    } finally {
-        client.release();
     }
 });
 
-// DELETE /api/admin/scripts/:id — удалить черновик целиком (каскадно удалит узлы)
+// DELETE /api/admin/scripts/:id — удалить скрипт целиком (каскадно удалит узлы).
+// Заблокировано, если скрипт сейчас назначен хотя бы одному оператору
+// (employees.script_id) — статус здесь ни при чём, важно только назначение.
 router.delete('/scripts/:id', async (req, res) => {
     try {
-        const existing = await pool.query('SELECT status FROM scripts WHERE id = $1', [req.params.id]);
+        const existing = await pool.query('SELECT id FROM scripts WHERE id = $1', [req.params.id]);
         if (existing.rows.length === 0) {
             return res.status(404).json({ error: 'Скрипт не найден' });
         }
-        if (existing.rows[0].status === 'active') {
-            return res.status(400).json({ error: 'Нельзя удалить активный скрипт, сначала активируйте другой' });
+        const assigned = await pool.query('SELECT count(*)::int AS c FROM employees WHERE script_id = $1', [req.params.id]);
+        if (assigned.rows[0].c > 0) {
+            return res.status(400).json({ error: 'Скрипт назначен операторам, снимите назначение' });
         }
         await pool.query('DELETE FROM scripts WHERE id = $1', [req.params.id]);
         res.status(204).send();
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: 'Не удалось удалить скрипт' });
+    }
+});
+
+// GET /api/admin/offers — список офферов (для выпадающего списка)
+router.get('/offers', async (req, res) => {
+    try {
+        const result = await pool.query('SELECT id, name FROM offers ORDER BY name');
+        res.json(result.rows.map((r) => ({ id: r.id, name: r.name })));
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Не удалось получить список офферов' });
+    }
+});
+
+// POST /api/admin/offers — создать оффер (справочник совсем новый и пустой)
+router.post('/offers', async (req, res) => {
+    try {
+        const { name } = req.body;
+        if (!name || !String(name).trim()) {
+            return res.status(400).json({ error: 'Укажите название оффера' });
+        }
+        const result = await pool.query('INSERT INTO offers (name) VALUES ($1) RETURNING id, name', [name.trim()]);
+        res.status(201).json({ id: result.rows[0].id, name: result.rows[0].name });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Не удалось создать оффер' });
+    }
+});
+
+// PUT /api/admin/employees/:employeeId/script — назначить/снять скрипт оператору.
+// { scriptId } или { scriptId: null } для снятия назначения. Нельзя назначить
+// черновик — только скрипт со status='active'.
+router.put('/employees/:employeeId/script', async (req, res) => {
+    try {
+        const { scriptId } = req.body;
+
+        if (scriptId === null || scriptId === undefined || scriptId === '') {
+            const result = await pool.query(
+                'UPDATE employees SET script_id = NULL WHERE id = $1 RETURNING id',
+                [req.params.employeeId]
+            );
+            if (result.rows.length === 0) {
+                return res.status(404).json({ error: 'Сотрудник не найден' });
+            }
+            return res.json({ employeeId: Number(req.params.employeeId), scriptId: null });
+        }
+
+        const script = await pool.query('SELECT status FROM scripts WHERE id = $1', [scriptId]);
+        if (script.rows.length === 0) {
+            return res.status(400).json({ error: 'Скрипт не найден' });
+        }
+        if (script.rows[0].status !== 'active') {
+            return res.status(400).json({ error: 'Нельзя назначить черновик — сначала активируйте скрипт' });
+        }
+
+        const result = await pool.query(
+            'UPDATE employees SET script_id = $1 WHERE id = $2 RETURNING id',
+            [scriptId, req.params.employeeId]
+        );
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Сотрудник не найден' });
+        }
+        res.json({ employeeId: Number(req.params.employeeId), scriptId: Number(scriptId) });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Не удалось назначить скрипт' });
     }
 });
 

@@ -67,6 +67,6 @@ export function fetchFunnelStatuses() {
     return request('/lead-funnel-statuses');
 }
 
-export function fetchScript() {
-    return request('/scripts');
+export function fetchScript(employeeId) {
+    return request(`/scripts${buildQuery({ employeeId })}`);
 }
