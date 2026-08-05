@@ -3,7 +3,7 @@
 import {
     fetchScripts, createScript, updateScript,
     fetchScriptNodes, createScriptNode, updateScriptNode, deleteScriptNode,
-    fetchOffers, createOffer,
+    fetchOffers, createOffer, fetchFunnelStatuses,
     fetchEmployees
 } from './scriptsAdminStorage.js';
 import { renderScriptList } from './scriptsAdminScriptList.js';
@@ -12,10 +12,12 @@ import { renderOffersList } from './scriptsAdminOffers.js';
 import { renderNodesPanel } from './scriptsAdminNodes.js';
 import { renderAssignmentPanel } from './scriptsAdminAssignment.js';
 import { initConfirmModal, confirmAction } from './scriptsAdminConfirm.js';
+import { initReassignModal } from './scriptsAdminReassignModal.js';
 import { showToast } from './scriptsAdminToast.js';
 
 document.addEventListener('DOMContentLoaded', function() {
     initConfirmModal();
+    initReassignModal();
 
     const scriptListEl = document.getElementById('saScriptList');
     const scriptListWrap = document.getElementById('saScriptListWrap');
@@ -24,6 +26,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const nodesTitle = document.getElementById('saNodesTitle');
     const nodesPanelEl = document.getElementById('saNodesPanel');
     const assignmentEl = document.getElementById('saAssignmentPanel');
+    const hideNodesBtn = document.getElementById('saHideNodesBtn');
 
     const newScriptBtn = document.getElementById('saNewScriptBtn');
 
@@ -34,6 +37,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const offerAddBtn = document.getElementById('saOfferAddBtn');
 
     let offers = [];
+    let funnelStatuses = [];
     let selectedScript = null;
     let currentNodes = [];
     let editingScript = null; // null = создание, объект = редактирование
@@ -42,6 +46,14 @@ document.addEventListener('DOMContentLoaded', function() {
     async function reloadOffers() {
         try {
             offers = await fetchOffers();
+        } catch (e) {
+            showToast(e.message, 'error');
+        }
+    }
+
+    async function reloadFunnelStatuses() {
+        try {
+            funnelStatuses = await fetchFunnelStatuses();
         } catch (e) {
             showToast(e.message, 'error');
         }
@@ -192,7 +204,7 @@ document.addEventListener('DOMContentLoaded', function() {
         editingScript = script || null;
         scriptListWrap.hidden = true;
         scriptFormPanel.hidden = false;
-        renderScriptForm(scriptFormPanel, { editingScript, offers }, handleScriptFormSave, closeScriptFormPanel);
+        renderScriptForm(scriptFormPanel, { editingScript, offers, funnelStatuses }, handleScriptFormSave, closeScriptFormPanel);
     }
 
     function closeScriptFormPanel() {
@@ -202,13 +214,13 @@ document.addEventListener('DOMContentLoaded', function() {
         editingScript = null;
     }
 
-    async function handleScriptFormSave({ title, offerId }) {
+    async function handleScriptFormSave({ title, offerId, funnelStatusId }) {
         try {
             if (editingScript) {
-                await updateScript(editingScript.id, { title, offerId, status: editingScript.status });
+                await updateScript(editingScript.id, { title, offerId, funnelStatusId, status: editingScript.status });
                 showToast('Скрипт сохранён', 'success');
             } else {
-                await createScript({ title, offerId });
+                await createScript({ title, offerId, funnelStatusId });
                 showToast('Скрипт создан', 'success');
             }
             closeScriptFormPanel();
@@ -219,6 +231,17 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     newScriptBtn.addEventListener('click', () => openScriptFormPanel(null));
+
+    // "Скрыть" — полностью убирает секцию узлов/операторов, возвращает к чистому
+    // виду "только таблица скриптов", без следов открытой панели.
+    hideNodesBtn.addEventListener('click', () => {
+        selectedScript = null;
+        currentNodes = [];
+        nodesUiState = { rootEditing: false, addingObjection: false, editingObjectionId: null };
+        nodesSection.classList.remove('visible');
+        nodesPanelEl.innerHTML = '';
+        assignmentEl.innerHTML = '';
+    });
 
     offersToggleBtn.addEventListener('click', () => {
         offersPanel.hidden = !offersPanel.hidden;
@@ -244,6 +267,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     (async () => {
         await reloadOffers();
+        await reloadFunnelStatuses();
         await reloadScripts();
     })();
 });

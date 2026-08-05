@@ -40,8 +40,12 @@ export function createScriptView(container, script) {
             `).join('')}</div>`
             : '<p class="op-script-end">Конец скрипта</p>';
 
+        // Исключение из "рендерит как есть": content корневого узла (nodeType==='statement')
+        // приходит уже санитизированным белым списком тегов с бэкенда (rich-text тулбар
+        // в scriptsAdminNodes.js) — вставляется как HTML. Возражения — как и раньше, plain text + escapeHtml.
+        const contentHtml = currentNode.nodeType === 'statement' ? currentNode.content : escapeHtml(currentNode.content);
         container.innerHTML = `
-            <div class="op-script-content">${escapeHtml(currentNode.content)}</div>
+            <div class="op-script-content">${contentHtml}</div>
             ${buttonsHtml}
         `;
 

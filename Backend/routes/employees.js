@@ -47,7 +47,7 @@ function rowToEmployee(row) {
         department: row.department,
         managerId: row.manager_id,
         managerName: row.manager_name || null,
-        scriptId: row.script_id,
+        scriptIds: row.script_ids || [],
         hireDate: row.hire_date,
         status: row.status,
         password: row.password,
@@ -79,7 +79,8 @@ function normalizeValue(key, value) {
 // ответа для POST/PUT (INSERT/UPDATE ... RETURNING * не знает про manager_name).
 async function fetchEmployeeWithManager(id) {
     const result = await pool.query(
-        `SELECT e.*, CASE WHEN m.id IS NOT NULL THEN m.last_name || ' ' || m.first_name ELSE NULL END AS manager_name
+        `SELECT e.*, CASE WHEN m.id IS NOT NULL THEN m.last_name || ' ' || m.first_name ELSE NULL END AS manager_name,
+                COALESCE((SELECT array_agg(es.script_id) FROM employee_scripts es WHERE es.employee_id = e.id), ARRAY[]::integer[]) AS script_ids
          FROM employees e
          LEFT JOIN employees m ON e.manager_id = m.id
          WHERE e.id = $1`,
@@ -162,7 +163,8 @@ router.get('/', async (req, res) => {
 
         const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
         const result = await pool.query(
-            `SELECT e.*, CASE WHEN m.id IS NOT NULL THEN m.last_name || ' ' || m.first_name ELSE NULL END AS manager_name
+            `SELECT e.*, CASE WHEN m.id IS NOT NULL THEN m.last_name || ' ' || m.first_name ELSE NULL END AS manager_name,
+                    COALESCE((SELECT array_agg(es.script_id) FROM employee_scripts es WHERE es.employee_id = e.id), ARRAY[]::integer[]) AS script_ids
              FROM employees e
              LEFT JOIN employees m ON e.manager_id = m.id
              ${whereClause}

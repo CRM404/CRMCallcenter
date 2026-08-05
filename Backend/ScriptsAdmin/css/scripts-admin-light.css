@@ -170,6 +170,7 @@ h2 {
 }
 .sa-script-table tr.sa-selected { background: rgba(0, 0, 255, 0.06); }
 .sa-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+#saScriptFormPanel .sa-actions { margin-top: 16px; }
 
 .badge {
     display: inline-block;
@@ -223,6 +224,37 @@ h2 {
     white-space: pre-wrap;
     overflow-wrap: anywhere;
 }
+.sa-node-content ul, .sa-node-content ol { padding-left: 20px; }
+
+/* ----- Тулбар форматирования основного текста (rich text, contenteditable) ----- */
+.sa-rte-toolbar {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 6px;
+}
+.sa-rte-toolbar .btn { padding: 4px 12px; }
+.sa-rte-editor {
+    padding: 8px 12px;
+    border: 1px solid #ccd7e6;
+    border-radius: 8px;
+    font-size: 14px;
+    background: #fff;
+    font-family: inherit;
+    min-height: 80px;
+    max-height: 480px;
+    overflow-y: auto;
+    resize: vertical;
+}
+.sa-rte-editor:focus {
+    border-color: #4a90d9;
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(0, 0, 255, 0.2);
+}
+.sa-rte-editor:empty:not(:focus)::before {
+    content: attr(data-placeholder);
+    color: #94a3b8;
+}
+.sa-rte-editor ul, .sa-rte-editor ol { padding-left: 20px; }
 
 /* ----- Офферы ----- */
 .sa-offers-list {

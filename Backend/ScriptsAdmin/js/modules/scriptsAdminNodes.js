@@ -5,6 +5,12 @@
 // возможен корень с "неправильным" node_type от старой формы; сохранение через
 // эту панель всегда принудительно проставляет node_type='statement' корню, само
 // исправляя такие записи.
+//
+// Текст корня — rich text (contenteditable + execCommand: жирный/курсив/список),
+// сервер санитизирует его белым списком тегов при сохранении (routes/scriptsAdmin.js) —
+// здесь при отображении (read-режим и при заполнении формы редактирования)
+// content корня вставляется как HTML, БЕЗ escapeHtml, ему уже можно доверять.
+// Возражения остаются обычным plain-text textarea + escapeHtml, как раньше.
 
 function escapeHtml(value) {
     if (value === null || value === undefined) return '';
@@ -14,6 +20,44 @@ function escapeHtml(value) {
         .replace(/>/g, '&gt;');
 }
 
+function autoGrow(el) {
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight}px`;
+}
+
+function isRichTextEmpty(el) {
+    return !el.textContent.trim();
+}
+
+function initRichTextEditor(el) {
+    el.addEventListener('focus', () => {
+        try { document.execCommand('defaultParagraphSeparator', false, 'br'); } catch (e) { /* старый браузер — переживём и без этого */ }
+    });
+    el.addEventListener('input', () => autoGrow(el));
+    autoGrow(el);
+}
+
+function attachRichTextToolbar(container, editorEl) {
+    container.querySelectorAll('[data-rte-cmd]').forEach((btn) => {
+        btn.addEventListener('mousedown', (e) => e.preventDefault()); // не терять фокус/выделение в редакторе
+        btn.addEventListener('click', () => {
+            editorEl.focus();
+            document.execCommand(btn.dataset.rteCmd, false, null);
+            autoGrow(editorEl);
+        });
+    });
+}
+
+function renderRichTextToolbar() {
+    return `
+        <div class="sa-rte-toolbar">
+            <button type="button" class="btn btn-secondary btn-sm" data-rte-cmd="bold" title="Жирный"><b>Ж</b></button>
+            <button type="button" class="btn btn-secondary btn-sm" data-rte-cmd="italic" title="Курсив"><i>К</i></button>
+            <button type="button" class="btn btn-secondary btn-sm" data-rte-cmd="insertUnorderedList" title="Список">☰ Список</button>
+        </div>
+    `;
+}
+
 function renderRootBlock(root, editing) {
     if (!root) {
         return `
@@ -21,8 +65,11 @@ function renderRootBlock(root, editing) {
                 <h3>Основной текст</h3>
                 <div class="sa-empty-state">У скрипта пока нет основного текста.</div>
                 <div class="form-group">
-                    <label for="saRootNewContent">Текст</label>
-                    <textarea id="saRootNewContent" rows="4" placeholder="Текст, который видит оператор"></textarea>
+                    <label>Текст</label>
+                    <div class="sa-rte">
+                        ${renderRichTextToolbar()}
+                        <div class="sa-rte-editor" contenteditable="true" id="saRootNewContent" data-placeholder="Текст, который видит оператор"></div>
+                    </div>
                 </div>
                 <div class="sa-actions">
                     <button type="button" class="btn btn-primary btn-sm" id="saRootCreateBtn">Создать основной текст</button>
@@ -35,8 +82,11 @@ function renderRootBlock(root, editing) {
             <div class="sa-root-box">
                 <h3>Основной текст</h3>
                 <div class="form-group">
-                    <label for="saRootEditContent">Текст</label>
-                    <textarea id="saRootEditContent" rows="4">${escapeHtml(root.content)}</textarea>
+                    <label>Текст</label>
+                    <div class="sa-rte">
+                        ${renderRichTextToolbar()}
+                        <div class="sa-rte-editor" contenteditable="true" id="saRootEditContent" data-placeholder="Текст, который видит оператор">${root.content}</div>
+                    </div>
                 </div>
                 <div class="sa-actions">
                     <button type="button" class="btn btn-primary btn-sm" id="saRootSaveBtn">Сохранить</button>
@@ -48,7 +98,7 @@ function renderRootBlock(root, editing) {
     return `
         <div class="sa-root-box">
             <h3>Основной текст</h3>
-            <div class="sa-node-content">${escapeHtml(root.content)}</div>
+            <div class="sa-node-content">${root.content}</div>
             <div class="sa-actions" style="margin-top:10px;">
                 <button type="button" class="btn btn-secondary btn-sm" id="saRootEditBtn">Изменить</button>
             </div>
@@ -119,7 +169,7 @@ function renderObjectionsBlock(objections, uiState) {
 }
 
 // uiState = { rootEditing, addingObjection, editingObjectionId }
-// handlers = { onEditRootStart, onCancelRootEdit, onCreateRoot(content), onSaveRoot(root, content),
+// handlers = { onEditRootStart, onCancelRootEdit, onCreateRoot(html), onSaveRoot(root, html),
 //              onAddObjectionStart, onAddObjectionCancel, onCreateObjection({label, content}),
 //              onEditObjectionStart(id), onEditObjectionCancel, onSaveObjection(node, {label, content}),
 //              onDeleteObjection(id) }
@@ -130,17 +180,21 @@ export function renderNodesPanel(container, nodes, uiState, handlers) {
     container.innerHTML = renderRootBlock(root, uiState.rootEditing) + (root ? renderObjectionsBlock(objections, uiState) : '');
 
     if (!root) {
+        const editorEl = container.querySelector('#saRootNewContent');
+        initRichTextEditor(editorEl);
+        attachRichTextToolbar(container, editorEl);
         container.querySelector('#saRootCreateBtn').addEventListener('click', () => {
-            const content = container.querySelector('#saRootNewContent').value;
-            handlers.onCreateRoot(content);
+            handlers.onCreateRoot(isRichTextEmpty(editorEl) ? '' : editorEl.innerHTML);
         });
         return;
     }
 
     if (uiState.rootEditing) {
+        const editorEl = container.querySelector('#saRootEditContent');
+        initRichTextEditor(editorEl);
+        attachRichTextToolbar(container, editorEl);
         container.querySelector('#saRootSaveBtn').addEventListener('click', () => {
-            const content = container.querySelector('#saRootEditContent').value;
-            handlers.onSaveRoot(root, content);
+            handlers.onSaveRoot(root, isRichTextEmpty(editorEl) ? '' : editorEl.innerHTML);
         });
         container.querySelector('#saRootCancelBtn').addEventListener('click', handlers.onCancelRootEdit);
     } else {

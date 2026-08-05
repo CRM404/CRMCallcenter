@@ -36,7 +36,10 @@
         </section>
 
         <section id="saNodesSection" class="sa-nodes-section">
-            <h2 id="saNodesTitle">Узлы скрипта</h2>
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+                <h2 id="saNodesTitle" style="margin:0;">Узлы скрипта</h2>
+                <button type="button" class="btn btn-secondary btn-sm" id="saHideNodesBtn">Скрыть</button>
+            </div>
             <div class="sa-panel" id="saNodesPanel"></div>
             <div class="sa-panel" id="saAssignmentPanel" style="margin-top:24px;"></div>
         </section>
@@ -53,6 +56,22 @@
             <div class="modal-actions">
                 <button type="button" class="btn btn-secondary" id="confirmModalCancelBtn">Отмена</button>
                 <button type="button" class="btn btn-danger" id="confirmModalOkBtn">Подтвердить</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модалка выбора при назначении оператора, у которого уже есть другой скрипт -->
+    <div class="modal-overlay" id="reassignModal" hidden>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>У оператора уже есть скрипт</h2>
+                <button type="button" class="modal-close" id="reassignModalCloseBtn">&times;</button>
+            </div>
+            <p id="reassignModalMessage"></p>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-secondary" id="reassignModalCancelBtn">Отмена</button>
+                <button type="button" class="btn btn-secondary" id="reassignModalReplaceBtn">Переназначить</button>
+                <button type="button" class="btn btn-primary" id="reassignModalAddBtn">Добавить ещё</button>
             </div>
         </div>
     </div>
