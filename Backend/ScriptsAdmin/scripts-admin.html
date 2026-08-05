@@ -16,50 +16,30 @@
         <section>
             <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
                 <h2 style="margin:0;">Скрипты</h2>
-                <button type="button" class="btn btn-primary btn-sm" id="saNewScriptBtn">+ Новый скрипт</button>
+                <div style="display:flex; gap:8px;">
+                    <button type="button" class="btn btn-secondary btn-sm" id="saToggleOffersBtn">Офферы</button>
+                    <button type="button" class="btn btn-primary btn-sm" id="saNewScriptBtn">+ Новый скрипт</button>
+                </div>
             </div>
-            <div id="saScriptList"></div>
+            <div class="sa-panel" id="saOffersPanel" hidden>
+                <h2>Офферы</h2>
+                <div id="saOffersList"></div>
+                <div style="display:flex; gap:8px; margin-top:12px;">
+                    <input type="text" id="saOfferNameInput" placeholder="Название оффера">
+                    <button type="button" class="btn btn-secondary btn-sm" id="saOfferAddBtn" style="flex-shrink:0;">Добавить</button>
+                </div>
+            </div>
+            <div id="saScriptListWrap">
+                <div id="saScriptList"></div>
+            </div>
+            <div class="sa-panel" id="saScriptFormPanel" hidden></div>
         </section>
 
         <section id="saNodesSection" class="sa-nodes-section">
             <h2 id="saNodesTitle">Узлы скрипта</h2>
-            <div class="sa-nodes-grid">
-                <div class="sa-panel" id="saNodeTree"></div>
-                <div class="sa-panel" id="saNodeFormContainer"></div>
-            </div>
+            <div class="sa-panel" id="saNodesPanel"></div>
             <div class="sa-panel" id="saAssignmentPanel" style="margin-top:24px;"></div>
         </section>
-    </div>
-
-    <!-- Модалка создания/редактирования скрипта -->
-    <div class="modal-overlay" id="scriptModal" hidden>
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2 id="scriptModalTitle">Новый скрипт</h2>
-                <button type="button" class="modal-close" id="scriptModalCloseBtn">&times;</button>
-            </div>
-            <form id="scriptForm">
-                <div class="form-group">
-                    <label for="scriptFormTitle">Название</label>
-                    <input type="text" id="scriptFormTitle" name="title" required>
-                </div>
-                <div class="form-group">
-                    <label for="scriptFormOffer">Оффер</label>
-                    <select id="scriptFormOffer" name="offerId"></select>
-                </div>
-                <div class="form-group">
-                    <label for="scriptFormNewOfferName">Нет нужного оффера? Добавьте новый</label>
-                    <div style="display:flex; gap:8px;">
-                        <input type="text" id="scriptFormNewOfferName" placeholder="Название оффера">
-                        <button type="button" class="btn btn-secondary btn-sm" id="scriptFormAddOfferBtn" style="flex-shrink:0;">Добавить</button>
-                    </div>
-                </div>
-                <div class="modal-actions">
-                    <button type="button" class="btn btn-secondary" id="scriptModalCancelBtn">Отмена</button>
-                    <button type="submit" class="btn btn-primary" id="scriptFormSubmitBtn">Создать</button>
-                </div>
-            </form>
-        </div>
     </div>
 
     <!-- Общая модалка подтверждения (удаление скрипта/узла) -->
