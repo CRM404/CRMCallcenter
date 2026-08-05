@@ -1,16 +1,27 @@
-// --- routes/scripts.js: дерево скрипта звонка (только чтение) ---
-// Скрипт один, общий для всех операторов — эндпоинт без параметра ID,
-// отдаёт единственный существующий скрипт целиком (дерево строится на фронте по parentId).
+// --- routes/scripts.js: дерево скрипта звонка (только чтение, для страницы оператора) ---
+// Один скрипт может быть назначен сразу нескольким операторам (см. routes/scriptsAdmin.js) —
+// отдаётся ровно тот, что назначен конкретному оператору через employees.script_id.
+// Если оператору ничего не назначено — 404 (нет общего скрипта "по умолчанию").
 
 const express = require('express');
 const { pool } = require('../db');
 
 const router = express.Router();
 
-// GET /api/scripts — единственный скрипт + все его узлы
+// GET /api/scripts?employeeId=... — скрипт, назначенный оператору, + все его узлы
 router.get('/', async (req, res) => {
     try {
-        const scriptResult = await pool.query('SELECT id, title FROM scripts ORDER BY id LIMIT 1');
+        const { employeeId } = req.query;
+        if (!employeeId) {
+            return res.status(400).json({ error: 'Не передан employeeId' });
+        }
+        const scriptResult = await pool.query(
+            `SELECT s.id, s.title
+             FROM scripts s
+             JOIN employees e ON e.script_id = s.id
+             WHERE e.id = $1`,
+            [employeeId]
+        );
         if (scriptResult.rows.length === 0) {
             return res.status(404).json({ error: 'Скрипт не найден' });
         }
