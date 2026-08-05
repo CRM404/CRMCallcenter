@@ -1,29 +1,49 @@
-// --- routes/scripts.js: дерево скрипта звонка (только чтение, для страницы оператора) ---
-// Один скрипт может быть назначен сразу нескольким операторам (см. routes/scriptsAdmin.js) —
-// отдаётся ровно тот, что назначен конкретному оператору через employees.script_id.
-// Если оператору ничего не назначено — 404 (нет общего скрипта "по умолчанию").
+// --- routes/scripts.js: подбор скрипта звонка для карточки лида (страница оператора) ---
+// Скрипт больше не выбирается вручную оператором — он подбирается автоматически
+// по паре (оффер лида, статус воронки лида) среди скриптов, назначенных этому
+// оператору (employee_scripts). Совпадений может не быть — это нормальное
+// состояние ("для этого статуса скрипт не назначен"), не ошибка: тело ответа
+// в этом случае — null с кодом 200. 404 зарезервирован строго за случаем
+// "такого лида не существует" — это ошибка клиента, а не "скрипта нет".
 
 const express = require('express');
 const { pool } = require('../db');
 
 const router = express.Router();
 
-// GET /api/scripts?employeeId=... — скрипт, назначенный оператору, + все его узлы
+// GET /api/scripts?employeeId=&leadId= — скрипт для пары (оффер, статус) этого лида,
+// среди скриптов, назначенных employeeId, + все его узлы. null, если совпадения нет.
 router.get('/', async (req, res) => {
     try {
-        const { employeeId } = req.query;
+        const { employeeId, leadId } = req.query;
         if (!employeeId) {
             return res.status(400).json({ error: 'Не передан employeeId' });
         }
+        if (!leadId) {
+            return res.status(400).json({ error: 'Не передан leadId' });
+        }
+
+        const leadResult = await pool.query(
+            'SELECT offer_id, funnel_status_id FROM leads WHERE id = $1',
+            [leadId]
+        );
+        if (leadResult.rows.length === 0) {
+            return res.status(404).json({ error: 'Лид не найден' });
+        }
+        const lead = leadResult.rows[0];
+        if (lead.offer_id === null || lead.funnel_status_id === null) {
+            return res.json(null);
+        }
+
         const scriptResult = await pool.query(
             `SELECT s.id, s.title
              FROM scripts s
-             JOIN employees e ON e.script_id = s.id
-             WHERE e.id = $1`,
-            [employeeId]
+             JOIN employee_scripts es ON es.script_id = s.id
+             WHERE es.employee_id = $1 AND s.offer_id = $2 AND s.funnel_status_id = $3`,
+            [employeeId, lead.offer_id, lead.funnel_status_id]
         );
         if (scriptResult.rows.length === 0) {
-            return res.status(404).json({ error: 'Скрипт не найден' });
+            return res.json(null);
         }
         const script = scriptResult.rows[0];
 

@@ -67,6 +67,9 @@ export function fetchFunnelStatuses() {
     return request('/lead-funnel-statuses');
 }
 
-export function fetchScript(employeeId) {
-    return request(`/scripts${buildQuery({ employeeId })}`);
+// Скрипт подбирается по паре (оффер, статус воронки) лида — среди скриптов,
+// назначенных этому employeeId. null в ответе — нет подходящего скрипта, это
+// не ошибка (см. routes/scripts.js).
+export function fetchScript(employeeId, leadId) {
+    return request(`/scripts${buildQuery({ employeeId, leadId })}`);
 }

@@ -18,6 +18,7 @@ const EDITABLE_FIELD_COLUMNS = [
     ['phone', 'phone'],
     ['source', 'source'],
     ['funnelStatusId', 'funnel_status_id'],
+    ['offerId', 'offer_id'],
     ['propertyType', 'property_type'],
     ['propertyClass', 'property_class'],
     ['roomCount', 'room_count'],
@@ -37,7 +38,7 @@ const EDITABLE_FIELD_COLUMNS = [
     ['notes', 'notes']
 ];
 
-const NUMERIC_FIELDS = new Set(['funnelStatusId', 'priceFrom', 'priceTo', 'areaFrom', 'areaTo', 'downPaymentPercent']);
+const NUMERIC_FIELDS = new Set(['funnelStatusId', 'offerId', 'priceFrom', 'priceTo', 'areaFrom', 'areaTo', 'downPaymentPercent']);
 
 function rowToLead(row) {
     return {
@@ -49,6 +50,7 @@ function rowToLead(row) {
         source: row.source,
         employeeId: row.employee_id,
         funnelStatusId: row.funnel_status_id,
+        offerId: row.offer_id,
         propertyType: row.property_type,
         propertyClass: row.property_class,
         roomCount: row.room_count,
@@ -146,6 +148,9 @@ router.put('/:id', async (req, res) => {
         res.json(rowToLead(result.rows[0]));
     } catch (err) {
         if (err.code === '23503') {
+            if (err.constraint === 'leads_offer_id_fkey') {
+                return res.status(400).json({ error: 'Указан несуществующий оффер' });
+            }
             return res.status(400).json({ error: 'Указан несуществующий статус воронки' });
         }
         console.error(err);

@@ -22,7 +22,6 @@ document.addEventListener('DOMContentLoaded', async function() {
 
     let statuses = [];
     let statusesById = new Map();
-    let script = null;
 
     try {
         statuses = await fetchFunnelStatuses();
@@ -42,30 +41,28 @@ document.addEventListener('DOMContentLoaded', async function() {
         }
     }
 
-    async function ensureScriptLoaded() {
-        if (script) return script;
-        try {
-            script = await fetchScript(identity.id);
-        } catch (e) {
-            if (e.status === 404) {
-                scriptPanel.innerHTML = '<p class="op-script-end">Скрипт не найден</p>';
-            } else {
-                showToast(e.message, 'error');
-            }
-        }
-        return script;
-    }
-
     async function openLead(leadId) {
         try {
             const lead = await fetchLead(leadId, identity.id);
             listView.style.display = 'none';
             detailView.style.display = 'block';
 
-            const currentScript = await ensureScriptLoaded();
-            if (currentScript) {
+            // Скрипт зависит от пары (оффер, статус) КОНКРЕТНОГО лида — запрашивается
+            // заново при каждом открытии карточки, без кэша на весь сеанс страницы
+            // (кэш по employeeId был корректен, пока скрипт был один на оператора;
+            // с подбором по лиду его пришлось убрать — иначе после лида A показывался
+            // бы его скрипт и для лида B с другой парой оффер+статус).
+            try {
+                const currentScript = await fetchScript(identity.id, leadId);
                 scriptPanel.innerHTML = '';
-                createScriptView(scriptPanel, currentScript);
+                if (currentScript) {
+                    createScriptView(scriptPanel, currentScript);
+                } else {
+                    scriptPanel.innerHTML = '<p class="op-script-end">Для этого статуса скрипт не назначен</p>';
+                }
+            } catch (e) {
+                showToast(e.message, 'error');
+                scriptPanel.innerHTML = '';
             }
 
             renderLeadForm(cardPanel, lead, statuses, async (data) => {

@@ -38,6 +38,7 @@ export function renderScriptList(container, scripts, selectedId, onOpen, onEdit,
                 <td>${escapeHtml(script.title)}</td>
                 <td>${badge}</td>
                 <td>${escapeHtml(script.offerName) || '—'}</td>
+                <td>${escapeHtml(script.funnelStatusName) || '—'}</td>
                 <td>${script.assignedCount === null ? '—' : script.assignedCount}</td>
                 <td>
                     <div class="sa-actions">
@@ -54,7 +55,7 @@ export function renderScriptList(container, scripts, selectedId, onOpen, onEdit,
     container.innerHTML = `
         <table class="sa-script-table">
             <thead>
-                <tr><th>Название</th><th>Статус</th><th>Оффер</th><th>Операторов</th><th>Действия</th></tr>
+                <tr><th>Название</th><th>Статус</th><th>Оффер</th><th>Статус воронки</th><th>Операторов</th><th>Действия</th></tr>
             </thead>
             <tbody>${rows}</tbody>
         </table>

@@ -223,3 +223,77 @@ INSERT INTO lead_funnel_statuses (stage_number, stage_name, status_name, sort_or
     (6, 'Повторная передача лида', 'Лид переведен «ЯН»', 2),
     (6, 'Повторная передача лида', 'Лид переведен «МС»', 3)
 ON CONFLICT (stage_number, status_name) DO NOTHING;
+
+-- ============================================================
+-- Матрица скриптов (оффер × статус воронки) + операторы many-to-many.
+-- ============================================================
+
+-- Статус "Новый" — присваивается лиду по умолчанию при загрузке базы (загрузка
+-- лидов руководителем — отдельная будущая задача, здесь только сам статус).
+-- stage_number = 0, чтобы сортировался раньше "Первичного контакта" (stage 1).
+INSERT INTO lead_funnel_statuses (stage_number, stage_name, status_name, sort_order) VALUES
+(0, 'Новый', 'Новый', 1)
+ON CONFLICT (stage_number, status_name) DO NOTHING;
+
+-- offer_id у лида — для подбора скрипта по паре (оффер, статус). Заполняется
+-- будущей загрузкой базы лидов; на этой итерации может быть NULL у старых лидов.
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS offer_id INTEGER REFERENCES offers(id) ON DELETE SET NULL;
+
+-- Скрипт теперь однозначно определяется парой (оффер, статус воронки) — оба
+-- обязательны. Старое поведение "без оффера" (offer_id NULL) отменяется явно
+-- по решению владельца проекта (2026-08-05) — оффер был необязателен только
+-- пока не стал частью ключа подбора скрипта. Миграция написана "как для чистого
+-- случая" — ручная зачистка существующих строк scripts (offer_id/funnel_status_id
+-- IS NULL) на бою выполняется куратором вручную перед деплоем, отдельно от
+-- этого файла (см. dialog.md, раунд 2) — сюда автоматический бэкофилл не добавляем.
+ALTER TABLE scripts ALTER COLUMN offer_id SET NOT NULL;
+ALTER TABLE scripts ADD COLUMN IF NOT EXISTS funnel_status_id INTEGER REFERENCES lead_funnel_statuses(id);
+ALTER TABLE scripts ALTER COLUMN funnel_status_id SET NOT NULL;
+-- WHEN duplicate_object ловит повтор для большинства именованных объектов, но
+-- ADD CONSTRAINT ... UNIQUE неявно создаёт ещё и индекс с тем же именем — при
+-- повторном прогоне на уже смигрированной БД реально прилетает duplicate_table
+-- ("отношение ... уже существует"), проверено эмпирически на локальной dev-БД
+-- (голый WHEN duplicate_object ронял второй прогон migrate.js).
+DO $$ BEGIN
+    ALTER TABLE scripts ADD CONSTRAINT scripts_offer_status_unique UNIQUE (offer_id, funnel_status_id);
+EXCEPTION WHEN duplicate_object OR duplicate_table THEN NULL; END $$;
+
+-- Один оператор может работать сразу с несколькими скриптами (разными линиями:
+-- кто-то только новые, кто-то только повторные) — раньше было employees.script_id
+-- (ровно один скрипт на оператора), теперь связка. Паттерн — как у уже
+-- существующей knowledge_article_visibility (составной PK).
+CREATE TABLE IF NOT EXISTS employee_scripts (
+    employee_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+    script_id INTEGER NOT NULL REFERENCES scripts(id) ON DELETE CASCADE,
+    PRIMARY KEY (employee_id, script_id)
+);
+
+-- Перенос существующих назначений до дропа колонки. ВАЖНО (проверено эмпирически
+-- на локальной dev-БД, см. dialog.md раунд про идемпотентность): голый
+-- "INSERT ... SELECT script_id FROM employees ... ; ALTER TABLE employees DROP
+-- COLUMN script_id;" НЕ идемпотентен, если написать его как два обычных
+-- топ-уровневых стейтмента — на ПЕРВОМ прогоне после старта всё отрабатывает,
+-- но колонка правда исчезает, а на ВТОРОМ и последующих прогонах (сервер
+-- перезапускается, migrate.js гоняет этот файл заново) сам SELECT ... script_id
+-- падает с ошибкой "column does not exist" ещё на этапе разбора запроса —
+-- ошибка внутри multi-statement пакета обрывает весь прогон миграции и роняет
+-- старт сервера НАВСЕГДА после первого успешного деплоя. IF NOT EXISTS на самом
+-- DROP COLUMN тут не спасает, т.к. падает более ранний SELECT, а не DROP.
+-- Решение: обернуть перенос+дроп в DO-блок с динамическим EXECUTE — тогда текст
+-- с SELECT ... script_id лежит внутри строкового литерала и не разбирается
+-- парсером заранее, а выполняется только когда IF подтвердил, что колонка
+-- реально существует (проверено: второй прогон блока — чистый no-op, без ошибок).
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'employees' AND column_name = 'script_id'
+    ) THEN
+        EXECUTE '
+            INSERT INTO employee_scripts (employee_id, script_id)
+            SELECT id, script_id FROM employees WHERE script_id IS NOT NULL
+            ON CONFLICT DO NOTHING
+        ';
+        EXECUTE 'ALTER TABLE employees DROP COLUMN script_id';
+    END IF;
+END $$;
