@@ -188,19 +188,9 @@ h2 {
     font-size: 14px;
 }
 
-/* ----- Работа со скриптом: дерево + форма ----- */
+/* ----- Работа со скриптом: основной текст + возражения ----- */
 .sa-nodes-section { display: none; }
 .sa-nodes-section.visible { display: block; }
-
-.sa-nodes-grid {
-    display: grid;
-    grid-template-columns: minmax(260px, 1fr) minmax(320px, 1.2fr);
-    gap: 24px;
-    align-items: start;
-}
-@media (max-width: 900px) {
-    .sa-nodes-grid { grid-template-columns: 1fr; }
-}
 
 .sa-panel {
     background: rgba(255, 255, 255, 0.6);
@@ -209,29 +199,23 @@ h2 {
     padding: 20px;
 }
 
-.sa-tree ul { list-style: none; margin: 0; padding-left: 20px; }
-.sa-tree > ul { padding-left: 0; }
-.sa-tree li { margin: 6px 0; }
-.sa-node-row {
+.sa-root-box { margin-bottom: 24px; }
+.sa-root-box h3,
+.sa-objections-box h3 { font-size: 15px; color: #2c3e50; margin-bottom: 10px; }
+
+.sa-objections-list {
     display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
+    flex-direction: column;
     gap: 10px;
-    padding: 8px 10px;
-    border-radius: 8px;
+    margin-bottom: 16px;
+}
+.sa-objection-card {
     background: #fff;
     border: 1px solid #eef1f6;
+    border-radius: 8px;
+    padding: 12px 14px;
 }
-.sa-node-row.sa-node-selected { border-color: #0000FF; box-shadow: 0 0 0 2px rgba(0,0,255,0.15); }
-.sa-node-main { min-width: 0; }
-.sa-node-type {
-    font-size: 11px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: #64748b;
-}
-.sa-node-type.objection { color: #b23a2e; }
+
 .sa-node-label { font-weight: 600; font-size: 13px; color: #1e2a3a; margin: 2px 0; }
 .sa-node-content {
     font-size: 13px;
@@ -239,28 +223,42 @@ h2 {
     white-space: pre-wrap;
     overflow-wrap: anywhere;
 }
-.sa-node-actions { display: flex; gap: 6px; flex-shrink: 0; }
 
-/* ----- Назначение операторов ----- */
-.sa-assign-list {
+/* ----- Офферы ----- */
+.sa-offers-list {
+    list-style: none;
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 6px;
+    margin-bottom: 12px;
+}
+.sa-offers-list li {
+    padding: 6px 10px;
+    background: #fff;
+    border: 1px solid #eef1f6;
+    border-radius: 8px;
+    font-size: 14px;
+}
+
+/* ----- Назначение операторов ----- */
+.sa-assign-selected-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 14px;
     max-height: 320px;
     overflow-y: auto;
 }
-.sa-assign-row {
+.sa-selected-row {
     display: flex;
     align-items: center;
-    gap: 10px;
+    justify-content: space-between;
     padding: 8px 10px;
     border-radius: 8px;
-    cursor: pointer;
+    background: #fff;
+    border: 1px solid #eef1f6;
     font-size: 14px;
 }
-.sa-assign-row:hover { background: rgba(0, 0, 255, 0.05); }
-.sa-assign-row input { width: 16px; height: 16px; }
-.sa-assign-note { font-size: 12px; color: #b23a2e; }
 
 /* ----- Модалки ----- */
 .modal-overlay {
