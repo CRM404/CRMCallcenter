@@ -19,6 +19,8 @@ const scriptsAdminRouter = require('./routes/scriptsAdmin');
 const organizationRouter = require('./routes/organization');
 const cpaNetworksRouter = require('./routes/cpaNetworks');
 const departmentsRouter = require('./routes/departments');
+const realEstateOffersRouter = require('./routes/realEstateOffers');
+const adPlatformsRouter = require('./routes/adPlatforms');
 
 const app = express();
 
@@ -41,6 +43,8 @@ app.use('/api/admin', scriptsAdminRouter);
 app.use('/api/organization', organizationRouter);
 app.use('/api/cpa-networks', cpaNetworksRouter);
 app.use('/api/departments', departmentsRouter);
+app.use('/api/real-estate-offers', realEstateOffersRouter);
+app.use('/api/ad-platforms', adPlatformsRouter);
 
 // Отдаём страницы "Сотрудники", "Оператор", "Скрипт (админ)", "Главная" и
 // "CPA-сети" тем же сервером — отдельный статический хостинг фронтенда не

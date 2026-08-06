@@ -14,96 +14,329 @@
         <nav class="hub-nav" id="hubNav"></nav>
 
         <main class="hub-main">
-            <div class="container">
-                <div class="header-row">
-                    <h1>CPA-сети</h1>
-                    <button type="button" class="btn btn-primary" id="cpaAddBtn">Добавить</button>
+            <div class="canvas">
+
+                <div class="identity-strip">
+                    <div class="identity-copy">
+                        <div class="eyebrow">Партнёрские сети · офферы · площадки</div>
+                        <h1>CPA-сети</h1>
+                        <p>Офферы недвижимости с настройками и требованиями к клиенту, рекламные площадки — отдельной вкладкой</p>
+                    </div>
+                    <dl class="stat-chips">
+                        <div class="stat-chip"><dt>Офферов всего</dt><dd id="statTotal">0</dd></div>
+                        <div class="stat-chip ok"><dt>Активны</dt><dd id="statActive">0</dd></div>
+                        <div class="stat-chip draft"><dt>Черновики</dt><dd id="statDraft">0</dd></div>
+                    </dl>
                 </div>
 
-                <div class="empty-message" id="cpaLockedNote" hidden>
-                    Сначала заполните организацию в разделе <a href="/main.html">Реквизиты</a> — CPA-сеть привязывается к юрлицу.
+                <button type="button" class="btn btn-ghost btn-sm" id="viewSwitchBtn" style="width:fit-content">
+                    <i class="fas fa-bullhorn" aria-hidden="true"></i>Рекламные площадки
+                </button>
+
+                <!-- ================= ВКЛАДКА «ОФФЕРЫ» ================= -->
+                <div data-view="offers" class="active">
+
+                    <div class="network-bar">
+                        <div class="network-tabs" id="networkTabs"></div>
+                        <div class="network-meta" id="networkMeta"></div>
+                        <button type="button" class="btn btn-ghost btn-sm" id="manageNetworksBtn"><i class="fas fa-gear" aria-hidden="true"></i>Управление сетями</button>
+                    </div>
+
+                    <div class="toolbar">
+                        <div class="search-field">
+                            <i class="fas fa-magnifying-glass" aria-hidden="true"></i>
+                            <input type="text" id="searchInput" placeholder="Найти оффер по названию…">
+                        </div>
+                        <div class="status-filter" id="statusFilter">
+                            <button type="button" class="status-pill active" data-status="all">Все</button>
+                            <button type="button" class="status-pill" data-status="active">Активные</button>
+                            <button type="button" class="status-pill" data-status="paused">На паузе</button>
+                            <button type="button" class="status-pill" data-status="disabled">Отключённые</button>
+                            <button type="button" class="status-pill" data-status="draft">Черновики</button>
+                        </div>
+                        <button type="button" class="btn btn-primary" id="addOfferBtn"><i class="fas fa-plus" aria-hidden="true"></i>Добавить оффер</button>
+                    </div>
+
+                    <div class="table-card">
+                        <div class="table-scroll">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Оффер</th>
+                                        <th>Тип действия</th>
+                                        <th>Ставка</th>
+                                        <th>Период</th>
+                                        <th>Статус</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="offersBody"></tbody>
+                            </table>
+                        </div>
+                        <div class="empty-state" id="emptyState" hidden>В этой сети пока нет офферов, подходящих под фильтр.</div>
+                    </div>
+
                 </div>
 
-                <div class="table-wrapper" id="cpaTableWrapper" hidden>
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Название</th>
-                                <th>Юрлицо</th>
-                                <th>Статус</th>
-                                <th>Дата подключения</th>
-                                <th>Валюта выплаты</th>
-                                <th>Комиссия %</th>
-                                <th>Действия</th>
-                            </tr>
-                        </thead>
-                        <tbody id="cpaTableBody"></tbody>
-                    </table>
+                <!-- ================= ВКЛАДКА «РЕКЛАМНЫЕ ПЛОЩАДКИ» =================
+                     Самостоятельный справочник без FK на оффер (решение куратора,
+                     см. dialog.md) — отдельная вкладка той же страницы, а не часть
+                     формы оффера. -->
+                <div data-view="platforms">
+
+                    <div class="toolbar">
+                        <div class="search-field">
+                            <i class="fas fa-magnifying-glass" aria-hidden="true"></i>
+                            <input type="text" id="platformSearchInput" placeholder="Найти площадку по названию…">
+                        </div>
+                        <button type="button" class="btn btn-primary" id="addPlatformBtn"><i class="fas fa-plus" aria-hidden="true"></i>Добавить площадку</button>
+                    </div>
+
+                    <div class="table-card">
+                        <div class="table-scroll">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Площадка</th>
+                                        <th>Категория</th>
+                                        <th>Тип</th>
+                                        <th>Статус</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="platformsBody"></tbody>
+                            </table>
+                        </div>
+                        <div class="empty-state" id="platformsEmptyState" hidden>Пока нет ни одной площадки. Добавьте первую!</div>
+                    </div>
+
                 </div>
-                <div class="empty-message" id="cpaEmptyMessage" hidden>Пока нет ни одной CPA-сети. Добавьте первую!</div>
+
             </div>
         </main>
     </div>
 
-    <!-- Модалка создания/редактирования CPA-сети -->
-    <div class="modal-overlay" id="cpaModal" hidden>
-        <div class="modal-content">
+    <!-- Модалка оффера: основное + 4 блока настроек одним прокручиваемым телом -->
+    <div class="modal-overlay" id="offerModal" hidden>
+        <div class="modal-content wide">
             <div class="modal-header">
-                <h2 id="cpaModalTitle">Новая CPA-сеть</h2>
-                <button type="button" class="modal-close" id="cpaModalCloseBtn">&times;</button>
+                <div>
+                    <h2 id="offerModalTitle">Оффер</h2>
+                    <p class="modal-sub" id="offerModalSub"></p>
+                </div>
+                <button type="button" class="modal-close" id="offerModalClose"><i class="fas fa-xmark" aria-hidden="true"></i></button>
             </div>
-            <form id="cpaForm">
-                <div class="form-grid">
-                    <div class="form-group">
-                        <label for="cpaName">Название *</label>
-                        <input type="text" id="cpaName" placeholder="AdCombo">
+            <div class="modal-body">
+                <form id="offerForm">
+                    <div class="form-grid">
+                        <div class="form-group span-2"><label for="fName">Название *</label><input type="text" id="fName" placeholder="Название оффера"></div>
+                        <div class="form-group"><label for="fCategory">Категория</label>
+                            <select id="fCategory">
+                                <option value="">—</option>
+                                <option>Новостройка</option><option>Вторичка</option>
+                                <option>Загородная недвижимость</option><option>Коммерческая недвижимость</option>
+                            </select>
+                        </div>
+                        <div class="form-group"><label for="fStatus">Статус</label>
+                            <select id="fStatus"><option value="active">Активен</option><option value="paused">На паузе</option><option value="disabled">Отключён</option><option value="draft">Черновик</option></select>
+                        </div>
+                        <div class="form-group"><label>Период действия <span class="hint">пусто = бессрочно</span></label>
+                            <div class="range-pair"><input type="date" id="fDateStart"><span>—</span><input type="date" id="fDateEnd"></div>
+                        </div>
                     </div>
-                    <div class="form-group">
-                        <label for="cpaOrganizationId">Юрлицо *</label>
-                        <select id="cpaOrganizationId">
-                            <option value="">— Выберите организацию —</option>
-                        </select>
+
+                    <div class="section-divider">
+                        <div class="s-icon"><i class="fas fa-bullseye" aria-hidden="true"></i></div>
+                        <div><h3>Настройки оффера</h3><span>условия выплаты и критерии лида</span></div>
                     </div>
-                    <div class="form-group">
-                        <label for="cpaStatus">Статус *</label>
-                        <select id="cpaStatus">
-                            <option value="Активна">Активна</option>
-                            <option value="Приостановлена">Приостановлена</option>
-                            <option value="Отключена">Отключена</option>
-                        </select>
+                    <div class="form-grid">
+                        <div class="form-group span-2">
+                            <div class="compact-row">
+                                <div class="compact-field"><label for="fActionType">Тип действия</label>
+                                    <select id="fActionType"><option>Целевой лид</option><option>Лид</option><option>Заявка на показ</option></select>
+                                </div>
+                                <div class="compact-field"><label for="fRate">Ставка, ₽</label><input type="number" id="fRate" placeholder="1200"></div>
+                                <div class="compact-field"><label for="fHold">Hold, дней</label><input type="number" id="fHold" placeholder="14"></div>
+                                <div class="compact-field"><label for="fLeadCheck">Наличие проверки лидов</label>
+                                    <select id="fLeadCheck"><option>Да, ручная модерация</option><option>Да, автоматическая</option><option>Нет</option></select>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="form-group span-2"><label for="fTargetCriteria">Критерии целевого лида</label><textarea id="fTargetCriteria" placeholder="Например: подтверждённый номер, бюджет от…"></textarea></div>
+                        <div class="form-group span-2"><label for="fNonTargetCriteria">Критерии нецелевого лида</label><textarea id="fNonTargetCriteria" placeholder="Например: дубликат, невалидный номер…"></textarea></div>
                     </div>
-                    <div class="form-group">
-                        <label for="cpaConnectedAt">Дата подключения</label>
-                        <input type="date" id="cpaConnectedAt">
+
+                    <div class="section-divider">
+                        <div class="s-icon"><i class="fas fa-layer-group" aria-hidden="true"></i></div>
+                        <div><h3>Фильтр объектов</h3><span>какие объекты подходят под оффер</span></div>
                     </div>
-                    <div class="form-group">
-                        <label for="cpaPayoutCurrency">Валюта выплаты</label>
-                        <input type="text" id="cpaPayoutCurrency" placeholder="USD">
+                    <div class="form-grid">
+                        <div class="form-group span-2"><label>Тип объекта <span class="hint">можно выбрать несколько</span></label>
+                            <div class="chip-select" id="fObjType">
+                                <button type="button" class="chip-opt" data-v="Квартира">Квартира</button>
+                                <button type="button" class="chip-opt" data-v="Апартаменты">Апартаменты</button>
+                                <button type="button" class="chip-opt" data-v="Дом">Дом</button>
+                                <button type="button" class="chip-opt" data-v="Таунхаус">Таунхаус</button>
+                                <button type="button" class="chip-opt" data-v="Участок">Участок</button>
+                                <button type="button" class="chip-opt" data-v="Коммерция">Коммерция</button>
+                            </div>
+                        </div>
+                        <div class="form-group span-2"><label>Класс объекта <span class="hint">можно выбрать несколько</span></label>
+                            <div class="chip-select" id="fObjClass">
+                                <button type="button" class="chip-opt" data-v="Эконом">Эконом</button>
+                                <button type="button" class="chip-opt" data-v="Комфорт">Комфорт</button>
+                                <button type="button" class="chip-opt" data-v="Комфорт+">Комфорт+</button>
+                                <button type="button" class="chip-opt" data-v="Бизнес">Бизнес</button>
+                                <button type="button" class="chip-opt" data-v="Премиум">Премиум</button>
+                            </div>
+                        </div>
+                        <div class="form-group span-2"><label>Отделка <span class="hint">можно несколько, ничего не выбрано = любая</span></label>
+                            <div class="chip-select" id="fFinish">
+                                <button type="button" class="chip-opt" data-v="Без отделки">Без отделки</button>
+                                <button type="button" class="chip-opt" data-v="Черновая">Черновая</button>
+                                <button type="button" class="chip-opt" data-v="Чистовая">Чистовая</button>
+                            </div>
+                        </div>
+                        <div class="form-group"><label for="fDeveloper">Застройщик</label><input type="text" id="fDeveloper" placeholder="Например: ПИК, Самолет"></div>
+                        <div class="form-group"><label for="fDeadline">Срок сдачи</label><input type="text" id="fDeadline" placeholder="до 4 кв. 2027 / сдан"></div>
+                        <div class="form-group span-2"><label>Цена и площадь по сегментам <span class="hint">зависят от типа/класса — можно задать несколько диапазонов</span></label>
+                            <div class="repeat-rows" id="fSegments"></div>
+                            <button type="button" class="dashed-row" id="addSegmentBtn"><i class="fas fa-plus" aria-hidden="true"></i>Добавить сегмент</button>
+                        </div>
+                        <div class="form-group span-2"><label>Комнатность <span class="hint">справочник, значения условные</span></label>
+                            <div class="chip-select" id="fRooms">
+                                <button type="button" class="chip-opt" data-v="Студия">Студия</button>
+                                <button type="button" class="chip-opt" data-v="1">1к</button>
+                                <button type="button" class="chip-opt" data-v="2">2к</button>
+                                <button type="button" class="chip-opt" data-v="3">3к</button>
+                                <button type="button" class="chip-opt" data-v="4+">4к+</button>
+                            </div>
+                        </div>
+                        <div class="form-group span-2"><label>География объекта <span class="hint">регион / город / район / нас. пункт — пустой уровень значит «любой», можно несколько строк</span></label>
+                            <div class="repeat-rows" id="fObjGeo"></div>
+                            <button type="button" class="dashed-row" id="addObjGeoBtn"><i class="fas fa-plus" aria-hidden="true"></i>Добавить географию</button>
+                        </div>
                     </div>
-                    <div class="form-group">
-                        <label for="cpaCommissionPercent">Комиссия %</label>
-                        <input type="number" step="any" id="cpaCommissionPercent" placeholder="15">
+
+                    <div class="section-divider">
+                        <div class="s-icon"><i class="fas fa-user" aria-hidden="true"></i></div>
+                        <div><h3>Требования к клиенту</h3><span>какой покупатель подходит под оффер</span></div>
                     </div>
-                </div>
-                <div class="modal-actions">
-                    <button type="button" class="btn btn-secondary" id="cpaModalCancelBtn">Отмена</button>
-                    <button type="submit" class="btn btn-primary" id="cpaModalSaveBtn">Сохранить</button>
-                </div>
-            </form>
+                    <div class="form-grid">
+                        <div class="form-group"><label for="fClientType">Тип клиента</label>
+                            <select id="fClientType">
+                                <option>Ипотечный заёмщик</option><option>Наличный покупатель</option>
+                                <option>Инвестор</option><option>Переезд по работе</option>
+                                <option>Улучшение жилищных условий</option>
+                            </select>
+                        </div>
+                        <div class="form-group"><label for="fPurchaseTerm">Срок покупки</label>
+                            <select id="fPurchaseTerm"><option>До 1 месяца</option><option>1–3 месяца</option><option>3–6 месяцев</option><option>Более 6 месяцев</option></select>
+                        </div>
+                        <div class="form-group"><label for="fDownPayment">Первоначальный взнос, ₽</label><input type="number" id="fDownPayment" placeholder="1 500 000"></div>
+                        <div class="form-group"><label for="fPaymentMethod">Способ покупки <span class="hint">каскад: вид ипотеки — только если тут «Ипотека»</span></label>
+                            <select id="fPaymentMethod">
+                                <option>Ипотека</option><option>Наличные</option>
+                                <option>Рассрочка от застройщика</option><option>Сертификат/субсидия</option>
+                                <option>Материнский капитал</option>
+                            </select>
+                        </div>
+                        <div class="form-group" id="fMortgageTypeGroup"><label for="fMortgageType">Вид ипотеки</label>
+                            <select id="fMortgageType">
+                                <option>Господдержка</option><option>Семейная</option><option>IT-ипотека</option>
+                                <option>Военная</option><option>От застройщика</option><option>Вторичная</option>
+                            </select>
+                        </div>
+                        <div class="form-group span-2"><label>География клиента <span class="hint">регион / город / район / нас. пункт — тот же принцип, что у объекта, но про самого покупателя</span></label>
+                            <div class="repeat-rows" id="fClientGeo"></div>
+                            <button type="button" class="dashed-row" id="addClientGeoBtn"><i class="fas fa-plus" aria-hidden="true"></i>Добавить географию</button>
+                        </div>
+                    </div>
+
+                    <div class="section-divider">
+                        <div class="s-icon"><i class="fas fa-shield" aria-hidden="true"></i></div>
+                        <div><h3>Настройки обработки</h3><span>приоритет и лимиты передачи лида</span></div>
+                    </div>
+                    <div class="form-grid">
+                        <div class="form-group"><label for="fPriority">Приоритет (1 — высший)</label><input type="number" id="fPriority" min="1" max="5" placeholder="1"></div>
+                        <div class="form-group"><label for="fTransferTime">Время для перевода</label><input type="text" id="fTransferTime" placeholder="до 15 минут"></div>
+                        <div class="form-group"><label for="fLeadLimit">Лимит лидов <span class="hint">на весь срок оффера</span></label><input type="number" id="fLeadLimit" placeholder="300"></div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-secondary" id="offerModalCancel">Отмена</button>
+                <button type="button" class="btn btn-primary" id="offerModalSave">Сохранить</button>
+            </div>
         </div>
     </div>
 
-    <!-- Общая модалка подтверждения удаления -->
-    <div class="modal-overlay" id="confirmModal" hidden>
+    <!-- Модалка «Управление сетями»: список + инлайн-форма (тот же паттерн, что «Отделы») -->
+    <div class="modal-overlay" id="networksModal" hidden>
         <div class="modal-content">
             <div class="modal-header">
+                <div><h2>Управление сетями</h2><p class="modal-sub">Название, юрлицо, условия подключения</p></div>
+                <button type="button" class="modal-close" id="networksModalClose"><i class="fas fa-xmark" aria-hidden="true"></i></button>
+            </div>
+            <div class="modal-body">
+                <div class="empty-state" id="networksLockedNote" hidden>Сначала заполните организацию в разделе <a href="/main.html">Реквизиты</a> — CPA-сеть привязывается к юрлицу.</div>
+                <div class="net-list" id="netList"></div>
+                <button type="button" class="dashed-row" id="addNetworkBtn" style="margin-top:10px"><i class="fas fa-plus" aria-hidden="true"></i>Добавить сеть</button>
+                <div class="inline-form" id="netInlineForm" hidden>
+                    <div class="form-grid">
+                        <div class="form-group span-2"><label for="nfName">Название *</label><input type="text" id="nfName" placeholder="AdCombo"></div>
+                        <div class="form-group span-2"><label for="nfOrg">Юрлицо *</label><select id="nfOrg"></select></div>
+                        <div class="form-group"><label for="nfStatus">Статус</label><select id="nfStatus"><option>Активна</option><option>Приостановлена</option><option>Отключена</option></select></div>
+                        <div class="form-group"><label for="nfDate">Дата подключения</label><input type="date" id="nfDate"></div>
+                        <div class="form-group"><label for="nfCurrency">Валюта выплаты</label><input type="text" id="nfCurrency" placeholder="RUB"></div>
+                        <div class="form-group"><label for="nfCommission">Комиссия %</label><input type="number" step="any" id="nfCommission" placeholder="15"></div>
+                    </div>
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-secondary btn-sm" id="netFormCancel">Отмена</button>
+                        <button type="button" class="btn btn-primary btn-sm" id="netFormSave">Сохранить</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модалка площадки -->
+    <div class="modal-overlay" id="platformModal" hidden>
+        <div class="modal-content" style="max-width:520px">
+            <div class="modal-header">
+                <h2 id="platformModalTitle">Площадка</h2>
+                <button type="button" class="modal-close" id="platformModalClose"><i class="fas fa-xmark" aria-hidden="true"></i></button>
+            </div>
+            <div class="modal-body">
+                <div class="form-grid">
+                    <div class="form-group span-2"><label for="pName">Наименование *</label><input type="text" id="pName" placeholder="Яндекс.Директ"></div>
+                    <div class="form-group"><label for="pCategory">Категория</label><input type="text" id="pCategory" placeholder="Поисковая реклама"></div>
+                    <div class="form-group"><label for="pType">Тип</label>
+                        <select id="pType"><option>Контекстная реклама</option><option>Соцсети</option><option>Таргетированная</option><option>Другое</option></select>
+                    </div>
+                    <div class="form-group span-2"><label for="pStatus">Статус</label>
+                        <select id="pStatus"><option>Активна</option><option>Приостановлена</option><option>Отключена</option></select>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-secondary" id="platformModalCancel">Отмена</button>
+                <button type="button" class="btn btn-primary" id="platformModalSave">Сохранить</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Общая модалка подтверждения удаления (сеть / оффер / площадка) -->
+    <div class="modal-overlay" id="confirmModal" hidden>
+        <div class="modal-content" style="max-width:420px">
+            <div class="modal-header">
                 <h2>Подтверждение</h2>
-                <button type="button" class="modal-close" id="confirmModalCloseBtn">&times;</button>
+                <button type="button" class="modal-close" id="confirmModalCloseBtn"><i class="fas fa-xmark" aria-hidden="true"></i></button>
             </div>
             <p id="confirmModalMessage"></p>
             <div class="modal-actions">
                 <button type="button" class="btn btn-secondary" id="confirmModalCancelBtn">Отмена</button>
-                <button type="button" class="btn btn-danger" id="confirmModalOkBtn">Подтвердить</button>
+                <button type="button" class="btn btn-danger" id="confirmModalOkBtn">Удалить</button>
             </div>
         </div>
     </div>

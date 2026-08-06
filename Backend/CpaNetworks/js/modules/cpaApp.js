@@ -1,48 +1,43 @@
-// --- cpaApp.js: страница "CPA-сети" — справочник партнёров, которым организация
-// передаёт лиды дальше. Обычный список + модалка (паттерн Employees), а не
-// инлайн-карточки, как в "Реквизиты" (там другой случай — вложенные под-сущности
-// одной организации).
+// --- cpaApp.js: страница "CPA-сети" — переключатель сетей (компактная модалка
+// "Управление сетями") + офферы недвижимости (основной объём страницы) +
+// рекламные площадки (независимая вкладка). report_2026-08-01.md, 07.08.2026.
+// Композиция/поля/поведение — из живого Artifact дизайн-сессии (см. dialog.md).
 
 import { initHubNav } from './cpaNav.js';
 import { showToast } from './cpaToast.js';
 import { initConfirmModal, confirmAction } from './cpaConfirm.js';
-import { fetchCpaNetworks, createCpaNetwork, updateCpaNetwork, deleteCpaNetwork, fetchOrganization } from './cpaStorage.js';
+import {
+    fetchCpaNetworks, createCpaNetwork, updateCpaNetwork, deleteCpaNetwork, fetchOrganization,
+    fetchRealEstateOffers, createRealEstateOffer, updateRealEstateOffer, deleteRealEstateOffer,
+    fetchAdPlatforms, createAdPlatform, updateAdPlatform, deleteAdPlatform
+} from './cpaStorage.js';
 
-const STATUS_BADGE_CLASS = {
-    'Активна': 'status-active',
-    'Приостановлена': 'status-paused',
-    'Отключена': 'status-disabled'
-};
+const STATUS_LABEL = { active: 'Активен', paused: 'На паузе', disabled: 'Отключён', draft: 'Черновик' };
+const PLATFORM_STATUS_CLASS = { 'Активна': 'active', 'Приостановлена': 'paused', 'Отключена': 'disabled' };
 
-const addBtn = document.getElementById('cpaAddBtn');
-const lockedNote = document.getElementById('cpaLockedNote');
-const tableWrapper = document.getElementById('cpaTableWrapper');
-const tableBody = document.getElementById('cpaTableBody');
-const emptyMessage = document.getElementById('cpaEmptyMessage');
+const $ = (s) => document.querySelector(s);
 
-const modal = document.getElementById('cpaModal');
-const modalTitle = document.getElementById('cpaModalTitle');
-const form = document.getElementById('cpaForm');
-const closeBtn = document.getElementById('cpaModalCloseBtn');
-const cancelBtn = document.getElementById('cpaModalCancelBtn');
-
-const nameInput = document.getElementById('cpaName');
-const organizationSelect = document.getElementById('cpaOrganizationId');
-const statusSelect = document.getElementById('cpaStatus');
-const connectedAtInput = document.getElementById('cpaConnectedAt');
-const payoutCurrencyInput = document.getElementById('cpaPayoutCurrency');
-const commissionPercentInput = document.getElementById('cpaCommissionPercent');
-
-let cpaNetworks = [];
+let networks = [];
+let offers = [];
+let platforms = [];
 let organization = null;
-let editingId = null;
+
+let activeNetworkId = null;
+let activeStatus = 'all';
+let searchQuery = '';
+let platformSearchQuery = '';
+
+let editingOfferId = null;
+let editingNetworkId = null;
+let editingPlatformId = null;
+
+let currentSegments = [];
+let currentObjGeo = [];
+let currentClientGeo = [];
 
 function escapeHtml(value) {
     if (value === null || value === undefined) return '';
-    return String(value)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;');
+    return String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
 function formatDate(dateStr) {
@@ -51,165 +46,554 @@ function formatDate(dateStr) {
     return `${parts[2]}.${parts[1]}.${parts[0]}`;
 }
 
-function renderTable() {
-    const hasOrganization = organization !== null;
-    lockedNote.hidden = hasOrganization;
-    addBtn.disabled = !hasOrganization;
-    tableWrapper.hidden = !hasOrganization || cpaNetworks.length === 0;
-    emptyMessage.hidden = !hasOrganization || cpaNetworks.length > 0;
+function formatMoney(n) {
+    if (n === null || n === undefined || n === '') return '—';
+    return Number(n).toLocaleString('ru-RU');
+}
 
-    if (!hasOrganization) {
-        tableBody.innerHTML = '';
-        return;
+// --- Переключение «Офферы» (по умолчанию) / «Рекламные площадки» одной
+// кнопкой, вместо пары табов (замечание владельца в дизайн-сессии). ---
+const viewSwitchBtn = $('#viewSwitchBtn');
+function setView(view) {
+    document.querySelectorAll('[data-view]').forEach((el) => el.classList.toggle('active', el.dataset.view === view));
+    if (view === 'platforms') {
+        viewSwitchBtn.dataset.target = 'offers';
+        viewSwitchBtn.innerHTML = '<i class="fas fa-bullseye" aria-hidden="true"></i>К офферам';
+    } else {
+        viewSwitchBtn.dataset.target = 'platforms';
+        viewSwitchBtn.innerHTML = '<i class="fas fa-bullhorn" aria-hidden="true"></i>Рекламные площадки';
     }
+}
 
-    tableBody.innerHTML = cpaNetworks.map((c) => `
-        <tr data-id="${c.id}">
-            <td>${escapeHtml(c.name)}</td>
-            <td>${escapeHtml(c.organizationName) || '—'}</td>
-            <td><span class="status-badge ${STATUS_BADGE_CLASS[c.status] || ''}">${escapeHtml(c.status)}</span></td>
-            <td>${formatDate(c.connectedAt) || '—'}</td>
-            <td>${escapeHtml(c.payoutCurrency) || '—'}</td>
-            <td>${c.commissionPercent !== null && c.commissionPercent !== undefined ? escapeHtml(c.commissionPercent) + '%' : '—'}</td>
-            <td>
-                <button type="button" class="action-btn btn-edit" data-id="${c.id}" aria-label="Редактировать" title="Изменить"><i class="fas fa-pencil-alt" aria-hidden="true"></i></button>
-                <button type="button" class="action-btn btn-delete" data-id="${c.id}" aria-label="Удалить" title="Удалить"><i class="fas fa-trash" aria-hidden="true"></i></button>
-            </td>
-        </tr>
-    `).join('');
+// --- Сети: переключатель-табы + компактная модалка "Управление сетями" ---
 
-    tableBody.querySelectorAll('.btn-edit').forEach((btn) => {
-        btn.addEventListener('click', () => openEditModal(Number(btn.dataset.id)));
-    });
-    tableBody.querySelectorAll('.btn-delete').forEach((btn) => {
-        btn.addEventListener('click', () => handleDelete(Number(btn.dataset.id)));
+function renderTabs() {
+    const wrap = $('#networkTabs');
+    wrap.innerHTML = networks.map((n) => {
+        const count = offers.filter((o) => o.networkId === n.id).length;
+        return `<button type="button" class="network-tab ${n.id === activeNetworkId ? 'active' : ''}" data-id="${n.id}">${escapeHtml(n.name)}<span class="count">${count}</span></button>`;
+    }).join('');
+    wrap.querySelectorAll('.network-tab').forEach((btn) => {
+        btn.addEventListener('click', () => {
+            activeNetworkId = Number(btn.dataset.id);
+            renderTabs();
+            renderMeta();
+            renderOffersTable();
+        });
     });
 }
 
-function populateOrganizationSelect() {
-    organizationSelect.innerHTML = '<option value="">— Выберите организацию —</option>';
+function renderMeta() {
+    const meta = $('#networkMeta');
+    const n = networks.find((x) => x.id === activeNetworkId);
+    if (!n) {
+        meta.innerHTML = '';
+        return;
+    }
+    meta.innerHTML = `<b>${escapeHtml(n.organizationName || '—')}</b>комиссия ${n.commissionPercent ?? '—'}% · выплата в ${escapeHtml(n.payoutCurrency || '—')}`;
+}
+
+function populateOrgSelect() {
+    const select = $('#nfOrg');
+    select.innerHTML = '';
     if (organization) {
         const opt = document.createElement('option');
         opt.value = organization.id;
         opt.textContent = organization.name;
-        organizationSelect.appendChild(opt);
+        select.appendChild(opt);
     }
 }
 
-function openCreateModal() {
-    editingId = null;
-    modalTitle.textContent = 'Новая CPA-сеть';
-    form.reset();
-    // "Юрлицо" остаётся на placeholder-опции даже когда доступна только одна
-    // организация — привязка всегда явная, не автоматическая (dialog.md, п.3).
-    organizationSelect.value = '';
-    statusSelect.value = 'Активна';
-    modal.hidden = false;
-    nameInput.focus();
+function renderNetList() {
+    const hasOrganization = organization !== null;
+    $('#networksLockedNote').hidden = hasOrganization;
+    $('#addNetworkBtn').style.display = hasOrganization ? '' : 'none';
+
+    $('#netList').innerHTML = networks.map((n) => `
+        <div class="net-row">
+            <div style="flex:1">
+                <div class="n-name">${escapeHtml(n.name)}</div>
+                <div class="n-meta">${escapeHtml(n.organizationName || '—')} · комиссия ${n.commissionPercent ?? '—'}% · ${escapeHtml(n.payoutCurrency || '—')}</div>
+            </div>
+            <button type="button" class="m-icon-btn" data-nedit="${n.id}" title="Изменить"><i class="fas fa-pencil-alt" aria-hidden="true"></i></button>
+            <button type="button" class="m-icon-btn danger" data-ndel="${n.id}" title="Удалить"><i class="fas fa-trash" aria-hidden="true"></i></button>
+        </div>`).join('');
+
+    $('#netList').querySelectorAll('[data-nedit]').forEach((b) => b.addEventListener('click', () => openNetForm(Number(b.dataset.nedit))));
+    $('#netList').querySelectorAll('[data-ndel]').forEach((b) => b.addEventListener('click', () => handleDeleteNetwork(Number(b.dataset.ndel))));
 }
 
-function openEditModal(id) {
-    const record = cpaNetworks.find((c) => c.id === id);
-    if (!record) return;
-    editingId = id;
-    modalTitle.textContent = 'Изменить CPA-сеть';
-    nameInput.value = record.name || '';
-    organizationSelect.value = record.organizationId != null ? String(record.organizationId) : '';
-    statusSelect.value = record.status || 'Активна';
-    connectedAtInput.value = record.connectedAt || '';
-    payoutCurrencyInput.value = record.payoutCurrency || '';
-    commissionPercentInput.value = record.commissionPercent ?? '';
-    modal.hidden = false;
-    nameInput.focus();
+function openNetForm(id) {
+    editingNetworkId = id || null;
+    const n = id ? networks.find((x) => x.id === id) : null;
+    $('#nfName').value = n?.name || '';
+    populateOrgSelect();
+    $('#nfOrg').value = organization ? String(organization.id) : '';
+    $('#nfStatus').value = n?.status || 'Активна';
+    $('#nfDate').value = n?.connectedAt || '';
+    $('#nfCurrency').value = n?.payoutCurrency || '';
+    $('#nfCommission').value = n?.commissionPercent ?? '';
+    $('#netInlineForm').hidden = false;
 }
 
-function closeModal() {
-    modal.hidden = true;
-    editingId = null;
-}
-
-// Валидация на фронте — то же, что бэк (routes/cpaNetworks.js), для мгновенной
-// обратной связи; бэк — источник истины (можно постучаться в API напрямую).
-function validateForm(data) {
-    if (!data.name || !data.name.trim()) return 'Заполните обязательное поле: Название';
-    if (!data.organizationId) return 'Заполните обязательное поле: Юрлицо';
-    if (data.commissionPercent !== '') {
-        const n = Number(data.commissionPercent);
-        if (!Number.isFinite(n) || n < 0 || n > 100) return 'Комиссия должна быть числом от 0 до 100';
-    }
-    return null;
-}
-
-async function handleFormSubmit(e) {
-    e.preventDefault();
+async function saveNetwork() {
     const data = {
-        name: nameInput.value.trim(),
-        organizationId: organizationSelect.value ? Number(organizationSelect.value) : null,
-        status: statusSelect.value,
-        connectedAt: connectedAtInput.value,
-        payoutCurrency: payoutCurrencyInput.value,
-        commissionPercent: commissionPercentInput.value
+        name: $('#nfName').value.trim(),
+        organizationId: organization ? organization.id : null,
+        status: $('#nfStatus').value,
+        connectedAt: $('#nfDate').value,
+        payoutCurrency: $('#nfCurrency').value,
+        commissionPercent: $('#nfCommission').value
     };
-    const error = validateForm(data);
-    if (error) {
-        showToast(error, 'error');
+    if (!data.name) {
+        showToast('Заполните обязательное поле: Название', 'error');
+        return;
+    }
+    if (!data.organizationId) {
+        showToast('Заполните обязательное поле: Юрлицо', 'error');
         return;
     }
     try {
-        if (editingId === null) {
+        if (editingNetworkId === null) {
             await createCpaNetwork(data);
-            showToast('CPA-сеть добавлена', 'success');
+            showToast('Сеть добавлена', 'success');
         } else {
-            await updateCpaNetwork(editingId, data);
+            await updateCpaNetwork(editingNetworkId, data);
             showToast('Изменения сохранены', 'success');
         }
-        closeModal();
-        await loadCpaNetworks();
     } catch (err) {
         showToast(err.message, 'error');
+        return;
     }
+    $('#netInlineForm').hidden = true;
+    await loadNetworks();
+    await loadOffers();
+    renderNetList();
+    renderTabs();
+    renderMeta();
+    renderOffersTable();
 }
 
-async function handleDelete(id) {
-    const record = cpaNetworks.find((c) => c.id === id);
-    const ok = await confirmAction(`Удалить CPA-сеть «${record ? record.name : ''}»?`);
+async function handleDeleteNetwork(id) {
+    const n = networks.find((x) => x.id === id);
+    if (!n) return;
+    const offerCount = offers.filter((o) => o.networkId === id).length;
+    const message = offerCount > 0
+        ? `Сеть «${n.name}» и связанные с ней офферы (${offerCount}) будут удалены без возможности восстановления.`
+        : `Удалить сеть «${n.name}»? Действие необратимо.`;
+    const ok = await confirmAction(message);
     if (!ok) return;
     try {
         await deleteCpaNetwork(id);
-        showToast('CPA-сеть удалена', 'success');
-        await loadCpaNetworks();
+        showToast('Сеть удалена', 'success');
+        await loadNetworks();
+        await loadOffers();
+        renderNetList();
+        renderTabs();
+        renderMeta();
+        renderOffersTable();
     } catch (err) {
         showToast(err.message, 'error');
     }
 }
 
-async function loadCpaNetworks() {
+// --- Офферы: таблица + модалка настроек ---
+
+function renderOffersTable() {
+    $('#addOfferBtn').disabled = activeNetworkId === null;
+    if (activeNetworkId === null) {
+        $('#offersBody').innerHTML = '';
+        $('#emptyState').textContent = 'Сначала добавьте сеть в «Управление сетями».';
+        $('#emptyState').hidden = false;
+        $('#statTotal').textContent = '0';
+        $('#statActive').textContent = '0';
+        $('#statDraft').textContent = '0';
+        return;
+    }
+    $('#emptyState').textContent = 'В этой сети пока нет офферов, подходящих под фильтр.';
+
+    let list = offers.filter((o) => o.networkId === activeNetworkId);
+    if (activeStatus !== 'all') list = list.filter((o) => o.status === activeStatus);
+    if (searchQuery) list = list.filter((o) => o.name.toLowerCase().includes(searchQuery));
+
+    $('#offersBody').innerHTML = list.map((o) => `
+        <tr data-id="${o.id}">
+            <td><div class="offer-name">${escapeHtml(o.name)}</div><div class="offer-cat">${escapeHtml(o.category || '—')}</div></td>
+            <td><span class="action-tag">${escapeHtml(o.actionType || '—')}</span></td>
+            <td><span class="rate-value">${formatMoney(o.rate)}</span>${o.rate !== null && o.rate !== undefined ? '<span class="rate-cur">₽</span>' : ''}</td>
+            <td><span class="period">${o.dateStart ? formatDate(o.dateStart) + ' – ' + (o.dateEnd ? formatDate(o.dateEnd) : 'бессрочно') : '—'}</span></td>
+            <td><span class="status-chip ${o.status}">${STATUS_LABEL[o.status]}</span></td>
+            <td>
+                <div class="row-actions">
+                    <button type="button" class="m-icon-btn" data-edit="${o.id}" title="Настроить"><i class="fas fa-pencil-alt" aria-hidden="true"></i></button>
+                    <button type="button" class="m-icon-btn danger" data-del="${o.id}" title="Удалить"><i class="fas fa-trash" aria-hidden="true"></i></button>
+                </div>
+            </td>
+        </tr>`).join('');
+
+    $('#emptyState').hidden = list.length > 0;
+
+    $('#offersBody').querySelectorAll('[data-edit]').forEach((b) => b.addEventListener('click', () => openOfferModal(Number(b.dataset.edit))));
+    $('#offersBody').querySelectorAll('[data-del]').forEach((b) => b.addEventListener('click', () => handleDeleteOffer(Number(b.dataset.del))));
+
+    const networkOffers = offers.filter((o) => o.networkId === activeNetworkId);
+    $('#statTotal').textContent = networkOffers.length;
+    $('#statActive').textContent = networkOffers.filter((o) => o.status === 'active').length;
+    $('#statDraft').textContent = networkOffers.filter((o) => o.status === 'draft').length;
+}
+
+function setChips(containerId, values) {
+    document.querySelectorAll(`#${containerId} .chip-opt`).forEach((c) => {
+        c.classList.toggle('on', values.includes(c.dataset.v));
+        c.onclick = () => c.classList.toggle('on');
+    });
+}
+
+function getChipValues(containerId) {
+    return Array.from(document.querySelectorAll(`#${containerId} .chip-opt.on`)).map((c) => c.dataset.v);
+}
+
+function renderSegments() {
+    $('#fSegments').innerHTML = currentSegments.map((s, i) => `
+        <div class="repeat-row segment-row" data-i="${i}">
+            <input class="seg-label" placeholder="Например: Комфорт, квартира" value="${escapeHtml(s.label || '')}">
+            <div class="range-pair"><input type="number" class="seg-price-min" placeholder="цена от" value="${s.priceMin ?? ''}"><span>—</span><input type="number" class="seg-price-max" placeholder="цена до" value="${s.priceMax ?? ''}"></div>
+            <div class="range-pair"><input type="number" class="seg-area-min" placeholder="S от" value="${s.areaMin ?? ''}"><span>—</span><input type="number" class="seg-area-max" placeholder="S до" value="${s.areaMax ?? ''}"></div>
+            <button type="button" class="m-icon-btn danger rr-remove" data-rm="${i}"><i class="fas fa-trash" aria-hidden="true"></i></button>
+        </div>`).join('') || '<div class="empty-state" style="padding:14px">Сегментов пока нет — по умолчанию действует общий фильтр по типу/классу выше.</div>';
+    $('#fSegments').querySelectorAll('[data-rm]').forEach((b) => b.addEventListener('click', () => { currentSegments.splice(Number(b.dataset.rm), 1); renderSegments(); }));
+}
+
+function gatherSegments() {
+    return Array.from(document.querySelectorAll('#fSegments .segment-row')).map((row) => ({
+        label: row.querySelector('.seg-label').value,
+        priceMin: row.querySelector('.seg-price-min').value,
+        priceMax: row.querySelector('.seg-price-max').value,
+        areaMin: row.querySelector('.seg-area-min').value,
+        areaMax: row.querySelector('.seg-area-max').value
+    }));
+}
+
+function renderGeoRows(containerId, store) {
+    $('#' + containerId).innerHTML = store.map((r, i) => `
+        <div class="repeat-row geo-row" data-i="${i}">
+            <input class="geo-region" placeholder="Регион" value="${escapeHtml(r.region || '')}">
+            <input class="geo-city" placeholder="Город" value="${escapeHtml(r.city || '')}">
+            <input class="geo-district" placeholder="Район" value="${escapeHtml(r.district || '')}">
+            <input class="geo-locality" placeholder="Нас. пункт" value="${escapeHtml(r.locality || '')}">
+            <button type="button" class="m-icon-btn danger rr-remove" data-rm="${i}"><i class="fas fa-trash" aria-hidden="true"></i></button>
+        </div>`).join('') || '<div class="empty-state" style="padding:14px">География не задана — оффер считается доступным по всей стране.</div>';
+    $('#' + containerId).querySelectorAll('[data-rm]').forEach((b) => b.addEventListener('click', () => { store.splice(Number(b.dataset.rm), 1); renderGeoRows(containerId, store); }));
+}
+
+function gatherGeoRows(containerId) {
+    return Array.from(document.querySelectorAll(`#${containerId} .geo-row`)).map((row) => ({
+        region: row.querySelector('.geo-region').value,
+        city: row.querySelector('.geo-city').value,
+        district: row.querySelector('.geo-district').value,
+        locality: row.querySelector('.geo-locality').value
+    }));
+}
+
+function toggleMortgageType() {
+    const isMortgage = $('#fPaymentMethod').value === 'Ипотека';
+    $('#fMortgageTypeGroup').style.display = isMortgage ? '' : 'none';
+}
+
+function openOfferModal(id) {
+    editingOfferId = id;
+    const o = id ? offers.find((x) => x.id === id) : null;
+    const net = networks.find((n) => n.id === activeNetworkId);
+    $('#offerModalTitle').textContent = o ? 'Настройка оффера' : 'Новый оффер';
+    $('#offerModalSub').textContent = net ? net.name : '';
+
+    $('#fName').value = o?.name || '';
+    $('#fCategory').value = o?.category || '';
+    $('#fStatus').value = o?.status || 'draft';
+    $('#fDateStart').value = o?.dateStart || '';
+    $('#fDateEnd').value = o?.dateEnd || '';
+    $('#fActionType').value = o?.actionType || 'Целевой лид';
+    $('#fRate').value = o?.rate ?? '';
+    $('#fHold').value = o?.holdDays ?? '';
+    $('#fLeadCheck').value = o?.leadCheck || 'Нет';
+    $('#fTargetCriteria').value = o?.targetCriteria || '';
+    $('#fNonTargetCriteria').value = o?.nonTargetCriteria || '';
+    $('#fDeveloper').value = o?.developer || '';
+    $('#fDeadline').value = o?.deadline || '';
+    $('#fClientType').value = o?.clientType || 'Ипотечный заёмщик';
+    $('#fPurchaseTerm').value = o?.purchaseTerm || 'До 1 месяца';
+    $('#fDownPayment').value = o?.downPayment ?? '';
+    $('#fPriority').value = o?.priority ?? '';
+    $('#fTransferTime').value = o?.transferTime || '';
+    $('#fLeadLimit').value = o?.leadLimit ?? '';
+
+    setChips('fObjType', o?.objTypes || []);
+    setChips('fObjClass', o?.objClasses || []);
+    setChips('fFinish', o?.finishes || []);
+    setChips('fRooms', o?.rooms || []);
+
+    $('#fPaymentMethod').value = o?.paymentMethod || 'Ипотека';
+    $('#fMortgageType').value = o?.mortgageType || 'Господдержка';
+    toggleMortgageType();
+
+    currentSegments = (o?.segments || []).map((s) => ({ ...s }));
+    currentObjGeo = (o?.objGeo || []).map((r) => ({ ...r }));
+    currentClientGeo = (o?.clientGeo || []).map((r) => ({ ...r }));
+    renderSegments();
+    renderGeoRows('fObjGeo', currentObjGeo);
+    renderGeoRows('fClientGeo', currentClientGeo);
+
+    $('#offerModal').hidden = false;
+}
+
+function gatherOfferData() {
+    return {
+        networkId: activeNetworkId,
+        name: $('#fName').value.trim(),
+        category: $('#fCategory').value,
+        status: $('#fStatus').value,
+        dateStart: $('#fDateStart').value,
+        dateEnd: $('#fDateEnd').value,
+        actionType: $('#fActionType').value,
+        rate: $('#fRate').value,
+        holdDays: $('#fHold').value,
+        leadCheck: $('#fLeadCheck').value,
+        targetCriteria: $('#fTargetCriteria').value,
+        nonTargetCriteria: $('#fNonTargetCriteria').value,
+        objTypes: getChipValues('fObjType'),
+        objClasses: getChipValues('fObjClass'),
+        finishes: getChipValues('fFinish'),
+        rooms: getChipValues('fRooms'),
+        developer: $('#fDeveloper').value,
+        deadline: $('#fDeadline').value,
+        clientType: $('#fClientType').value,
+        purchaseTerm: $('#fPurchaseTerm').value,
+        downPayment: $('#fDownPayment').value,
+        paymentMethod: $('#fPaymentMethod').value,
+        mortgageType: $('#fPaymentMethod').value === 'Ипотека' ? $('#fMortgageType').value : '',
+        priority: $('#fPriority').value,
+        transferTime: $('#fTransferTime').value,
+        leadLimit: $('#fLeadLimit').value,
+        segments: gatherSegments(),
+        objGeo: gatherGeoRows('fObjGeo'),
+        clientGeo: gatherGeoRows('fClientGeo')
+    };
+}
+
+async function saveOffer() {
+    const data = gatherOfferData();
+    if (!data.name) {
+        showToast('Заполните обязательное поле: Название', 'error');
+        return;
+    }
+    if (!data.networkId) {
+        showToast('Выберите сеть перед добавлением оффера', 'error');
+        return;
+    }
     try {
-        cpaNetworks = await fetchCpaNetworks();
+        if (editingOfferId === null) {
+            await createRealEstateOffer(data);
+            showToast('Оффер добавлен', 'success');
+        } else {
+            await updateRealEstateOffer(editingOfferId, data);
+            showToast('Изменения сохранены', 'success');
+        }
     } catch (err) {
         showToast(err.message, 'error');
-        cpaNetworks = [];
+        return;
     }
-    renderTable();
+    $('#offerModal').hidden = true;
+    await loadOffers();
+    renderTabs();
+    renderOffersTable();
+}
+
+async function handleDeleteOffer(id) {
+    const o = offers.find((x) => x.id === id);
+    if (!o) return;
+    const ok = await confirmAction(`Удалить оффер «${o.name}»? Действие необратимо.`);
+    if (!ok) return;
+    try {
+        await deleteRealEstateOffer(id);
+        showToast('Оффер удалён', 'success');
+        await loadOffers();
+        renderTabs();
+        renderOffersTable();
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+}
+
+// --- Рекламные площадки ---
+
+function renderPlatforms() {
+    let list = platforms;
+    if (platformSearchQuery) list = list.filter((p) => p.name.toLowerCase().includes(platformSearchQuery));
+
+    $('#platformsBody').innerHTML = list.map((p) => `
+        <tr>
+            <td><div class="platform-name"><span class="platform-badge"><i class="fas fa-bullhorn" aria-hidden="true"></i></span>${escapeHtml(p.name)}</div></td>
+            <td>${escapeHtml(p.category || '—')}</td>
+            <td><span class="action-tag">${escapeHtml(p.type || '—')}</span></td>
+            <td><span class="status-chip ${PLATFORM_STATUS_CLASS[p.status] || 'active'}">${escapeHtml(p.status)}</span></td>
+            <td>
+                <div class="row-actions">
+                    <button type="button" class="m-icon-btn" data-pedit="${p.id}" title="Изменить"><i class="fas fa-pencil-alt" aria-hidden="true"></i></button>
+                    <button type="button" class="m-icon-btn danger" data-pdel="${p.id}" title="Удалить"><i class="fas fa-trash" aria-hidden="true"></i></button>
+                </div>
+            </td>
+        </tr>`).join('');
+
+    $('#platformsEmptyState').hidden = list.length > 0;
+
+    $('#platformsBody').querySelectorAll('[data-pedit]').forEach((b) => b.addEventListener('click', () => openPlatformModal(Number(b.dataset.pedit))));
+    $('#platformsBody').querySelectorAll('[data-pdel]').forEach((b) => b.addEventListener('click', () => handleDeletePlatform(Number(b.dataset.pdel))));
+}
+
+function openPlatformModal(id) {
+    editingPlatformId = id || null;
+    const p = id ? platforms.find((x) => x.id === id) : null;
+    $('#platformModalTitle').textContent = p ? 'Изменить площадку' : 'Новая площадка';
+    $('#pName').value = p?.name || '';
+    $('#pCategory').value = p?.category || '';
+    $('#pType').value = p?.type || 'Контекстная реклама';
+    $('#pStatus').value = p?.status || 'Активна';
+    $('#platformModal').hidden = false;
+}
+
+async function savePlatform() {
+    const data = {
+        name: $('#pName').value.trim(),
+        category: $('#pCategory').value,
+        type: $('#pType').value,
+        status: $('#pStatus').value
+    };
+    if (!data.name) {
+        showToast('Заполните обязательное поле: Наименование', 'error');
+        return;
+    }
+    try {
+        if (editingPlatformId === null) {
+            await createAdPlatform(data);
+            showToast('Площадка добавлена', 'success');
+        } else {
+            await updateAdPlatform(editingPlatformId, data);
+            showToast('Изменения сохранены', 'success');
+        }
+    } catch (err) {
+        showToast(err.message, 'error');
+        return;
+    }
+    $('#platformModal').hidden = true;
+    await loadPlatforms();
+    renderPlatforms();
+}
+
+async function handleDeletePlatform(id) {
+    const p = platforms.find((x) => x.id === id);
+    if (!p) return;
+    const ok = await confirmAction(`Удалить площадку «${p.name}»? Действие необратимо.`);
+    if (!ok) return;
+    try {
+        await deleteAdPlatform(id);
+        showToast('Площадка удалена', 'success');
+        await loadPlatforms();
+        renderPlatforms();
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+}
+
+// --- Загрузка данных ---
+
+async function loadNetworks() {
+    try {
+        networks = await fetchCpaNetworks();
+    } catch (err) {
+        showToast(err.message, 'error');
+        networks = [];
+    }
+    if (!networks.find((n) => n.id === activeNetworkId)) {
+        activeNetworkId = networks.length > 0 ? networks[0].id : null;
+    }
+}
+
+async function loadOffers() {
+    try {
+        offers = await fetchRealEstateOffers();
+    } catch (err) {
+        showToast(err.message, 'error');
+        offers = [];
+    }
+}
+
+async function loadPlatforms() {
+    try {
+        platforms = await fetchAdPlatforms();
+    } catch (err) {
+        showToast(err.message, 'error');
+        platforms = [];
+    }
 }
 
 async function init() {
     initHubNav('cpa');
     initConfirmModal();
 
-    addBtn.addEventListener('click', openCreateModal);
-    closeBtn.addEventListener('click', closeModal);
-    cancelBtn.addEventListener('click', closeModal);
-    modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
-    form.addEventListener('submit', handleFormSubmit);
+    viewSwitchBtn.addEventListener('click', () => setView(viewSwitchBtn.dataset.target));
+
+    $('#manageNetworksBtn').addEventListener('click', () => { renderNetList(); $('#netInlineForm').hidden = true; $('#networksModal').hidden = false; });
+    $('#networksModalClose').addEventListener('click', () => { $('#networksModal').hidden = true; });
+    $('#addNetworkBtn').addEventListener('click', () => openNetForm(null));
+    $('#netFormCancel').addEventListener('click', () => { $('#netInlineForm').hidden = true; });
+    $('#netFormSave').addEventListener('click', saveNetwork);
+
+    $('#addOfferBtn').addEventListener('click', () => openOfferModal(null));
+    $('#offerModalClose').addEventListener('click', () => { $('#offerModal').hidden = true; });
+    $('#offerModalCancel').addEventListener('click', () => { $('#offerModal').hidden = true; });
+    $('#offerModalSave').addEventListener('click', saveOffer);
+    $('#fPaymentMethod').addEventListener('change', toggleMortgageType);
+    $('#addSegmentBtn').addEventListener('click', () => { currentSegments.push({ label: '', priceMin: '', priceMax: '', areaMin: '', areaMax: '' }); renderSegments(); });
+    $('#addObjGeoBtn').addEventListener('click', () => { currentObjGeo.push({ region: '', city: '', district: '', locality: '' }); renderGeoRows('fObjGeo', currentObjGeo); });
+    $('#addClientGeoBtn').addEventListener('click', () => { currentClientGeo.push({ region: '', city: '', district: '', locality: '' }); renderGeoRows('fClientGeo', currentClientGeo); });
+
+    $('#addPlatformBtn').addEventListener('click', () => openPlatformModal(null));
+    $('#platformModalClose').addEventListener('click', () => { $('#platformModal').hidden = true; });
+    $('#platformModalCancel').addEventListener('click', () => { $('#platformModal').hidden = true; });
+    $('#platformModalSave').addEventListener('click', savePlatform);
+
+    $('#searchInput').addEventListener('input', (e) => { searchQuery = e.target.value.trim().toLowerCase(); renderOffersTable(); });
+    $('#platformSearchInput').addEventListener('input', (e) => { platformSearchQuery = e.target.value.trim().toLowerCase(); renderPlatforms(); });
+    $('#statusFilter').addEventListener('click', (e) => {
+        const btn = e.target.closest('.status-pill');
+        if (!btn) return;
+        document.querySelectorAll('.status-pill').forEach((p) => p.classList.remove('active'));
+        btn.classList.add('active');
+        activeStatus = btn.dataset.status;
+        renderOffersTable();
+    });
+
+    document.querySelectorAll('.modal-overlay').forEach((ov) => {
+        ov.addEventListener('click', (e) => { if (e.target === ov) ov.hidden = true; });
+    });
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') document.querySelectorAll('.modal-overlay:not([hidden])').forEach((m) => { m.hidden = true; });
+    });
 
     try {
         organization = await fetchOrganization();
     } catch (err) {
         showToast(err.message, 'error');
     }
-    populateOrganizationSelect();
-    await loadCpaNetworks();
+
+    await loadNetworks();
+    await loadOffers();
+    await loadPlatforms();
+
+    renderTabs();
+    renderMeta();
+    renderOffersTable();
+    renderPlatforms();
 }
 
 init();

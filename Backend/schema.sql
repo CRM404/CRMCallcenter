@@ -362,3 +362,86 @@ CREATE TABLE IF NOT EXISTS departments (
     organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,
     name VARCHAR NOT NULL
 );
+
+-- ============================================================
+-- Офферы недвижимости + объединение с CPA-сетями + рекламные площадки
+-- (report_2026-08-01.md, 07.08.2026). Страница cpa-networks.html не меняет
+-- URL/пункт хаб-навигации — сети сворачиваются в переключатель+модалку,
+-- основной объём страницы теперь офферы. routes/cpaNetworks.js и cpa_networks
+-- не меняются, все 6 полей сети уже реализованы 1:1 с макетом.
+-- ============================================================
+
+-- Внимание: таблица offers уже существует (заглушка для скриптов звонков,
+-- id+name) — не путать и не переиспользовать, здесь отдельная сущность.
+-- ON DELETE CASCADE (не RESTRICT, как в исходном черновике брифа) — решение
+-- владельца по факту чтения макета (dialog.md, 07.08.2026): подтверждение
+-- удаления сети в макете прямо говорит "сеть и связанные с ней офферы будут
+-- удалены", т.е. удаление сети должно каскадно чистить её офферы, а не
+-- блокироваться существованием офферов.
+CREATE TABLE IF NOT EXISTS real_estate_offers (
+    id SERIAL PRIMARY KEY,
+    network_id INTEGER NOT NULL REFERENCES cpa_networks(id) ON DELETE CASCADE,
+    name VARCHAR NOT NULL,
+    category VARCHAR,
+    status VARCHAR NOT NULL DEFAULT 'draft' CHECK (status IN ('active', 'paused', 'disabled', 'draft')),
+    date_start DATE,
+    date_end DATE,
+    action_type VARCHAR,
+    rate NUMERIC,
+    hold_days INTEGER,
+    lead_check VARCHAR,
+    target_criteria TEXT,
+    non_target_criteria TEXT,
+    obj_types VARCHAR[] NOT NULL DEFAULT '{}',
+    obj_classes VARCHAR[] NOT NULL DEFAULT '{}',
+    finishes VARCHAR[] NOT NULL DEFAULT '{}',
+    rooms VARCHAR[] NOT NULL DEFAULT '{}',
+    developer VARCHAR,
+    deadline VARCHAR,
+    client_type VARCHAR,
+    purchase_term VARCHAR,
+    down_payment NUMERIC,
+    payment_method VARCHAR,
+    mortgage_type VARCHAR,
+    priority INTEGER,
+    transfer_time VARCHAR,
+    lead_limit INTEGER
+);
+
+-- Сегменты цена/площадь (произвольное число на оффер, т.к. диапазон зависит
+-- от сочетания типа+класса объекта — не один общий диапазон). Пересобирается
+-- целиком (delete+insert в транзакции) при каждом POST/PUT оффера — фронт
+-- держит список сегментов как единый массив в форме, отдельных CRUD-ручек
+-- на сегмент нет (см. routes/realEstateOffers.js).
+CREATE TABLE IF NOT EXISTS real_estate_offer_segments (
+    id SERIAL PRIMARY KEY,
+    offer_id INTEGER NOT NULL REFERENCES real_estate_offers(id) ON DELETE CASCADE,
+    label VARCHAR,
+    price_min NUMERIC,
+    price_max NUMERIC,
+    area_min NUMERIC,
+    area_max NUMERIC
+);
+
+-- География — произвольное число строк (Регион/Город/Район/Нас. пункт) на
+-- оффер, отдельно для объекта и для клиента (kind различает их) — тот же
+-- приём пересборки целиком, что и у сегментов выше.
+CREATE TABLE IF NOT EXISTS real_estate_offer_geo (
+    id SERIAL PRIMARY KEY,
+    offer_id INTEGER NOT NULL REFERENCES real_estate_offers(id) ON DELETE CASCADE,
+    kind VARCHAR NOT NULL CHECK (kind IN ('object', 'client')),
+    region VARCHAR,
+    city VARCHAR,
+    district VARCHAR,
+    locality VARCHAR
+);
+
+-- Рекламные площадки — самостоятельный справочник (решение куратора
+-- 06.08.2026: без FK на оффер, отдельная вкладка той же страницы).
+CREATE TABLE IF NOT EXISTS ad_platforms (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR NOT NULL,
+    category VARCHAR,
+    type VARCHAR,
+    status VARCHAR NOT NULL DEFAULT 'Активна'
+);
