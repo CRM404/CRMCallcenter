@@ -4,12 +4,14 @@
 
 import { initConfirmModal, confirmAction } from './mainConfirm.js';
 import { showToast } from './mainToast.js';
+import { initHubNav } from './mainNav.js';
 import {
     fetchOrganization, createOrganization, updateOrganization,
     createBankAccount, updateBankAccount, deleteBankAccount,
     createTax, updateTax, deleteTax
 } from './mainStorage.js';
 import { renderOrganizationForm, renderRecordsSection, BANK_ACCOUNT_FIELDS, TAX_FIELDS } from './mainRequisites.js';
+import { BANK_ACCOUNT_FIELD_VALIDATORS } from './mainValidation.js';
 
 const orgFormContainer = document.getElementById('mOrgFormContainer');
 const bankAccountsContainer = document.getElementById('mBankAccountsContainer');
@@ -41,6 +43,7 @@ function renderBankAccounts() {
         idPrefix: 'mBank',
         emptyText: 'Пока нет добавленных счетов.',
         addButtonLabel: '+ Добавить счёт',
+        validators: BANK_ACCOUNT_FIELD_VALIDATORS,
         handlers: {
             onAddStart: () => { bankUiState.adding = true; renderBankAccounts(); },
             onAddCancel: () => { bankUiState.adding = false; renderBankAccounts(); },
@@ -173,6 +176,7 @@ async function handleTaxDelete(id) {
 }
 
 async function init() {
+    initHubNav('requisites');
     initConfirmModal();
     try {
         organization = await fetchOrganization();
