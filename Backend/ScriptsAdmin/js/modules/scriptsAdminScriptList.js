@@ -81,7 +81,7 @@ export function renderScriptList(container, scripts, selectedId, onOpen, onEdit,
             const ok = await confirmAction(`Активировать скрипт «${script.title}»? После этого его можно будет назначать операторам.`);
             if (!ok) return;
             try {
-                await updateScript(script.id, { title: script.title, status: 'active', offerId: script.offerId });
+                await updateScript(script.id, { title: script.title, status: 'active', offerId: script.offerId, funnelStatusId: script.funnelStatusId });
                 showToast('Скрипт активирован', 'success');
                 onChanged();
             } catch (e) {
@@ -96,7 +96,7 @@ export function renderScriptList(container, scripts, selectedId, onOpen, onEdit,
             const ok = await confirmAction(`Вернуть скрипт «${script.title}» в черновик? Уже назначенные операторы продолжат его видеть — статус только запрещает НОВЫЕ назначения.`);
             if (!ok) return;
             try {
-                await updateScript(script.id, { title: script.title, status: 'draft', offerId: script.offerId });
+                await updateScript(script.id, { title: script.title, status: 'draft', offerId: script.offerId, funnelStatusId: script.funnelStatusId });
                 showToast('Скрипт переведён в черновик', 'success');
                 onChanged();
             } catch (e) {
