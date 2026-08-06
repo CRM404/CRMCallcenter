@@ -8,18 +8,79 @@ const { pool } = require('../db');
 const router = express.Router();
 
 // Белый список тегов для content корневого узла (rich-text тулбар в
-// scriptsAdminNodes.js, contenteditable + execCommand). Все атрибуты у ЛЮБОГО
-// тега (разрешённого или нет) отбрасываются, сами неразрешённые теги вырезаются
-// целиком (текст внутри остаётся) — этим же путём убираются <script> и любые
-// on*-обработчики, отдельная логика для них не нужна. Возражения (objection)
-// через этот путь не проходят — остаются как есть, plain text.
-const ALLOWED_RICH_TEXT_TAGS = new Set(['b', 'strong', 'i', 'em', 'ul', 'ol', 'li', 'br']);
+// scriptsAdminNodes.js). Для большинства тегов ВСЕ атрибуты отбрасываются —
+// неразрешённые теги вырезаются целиком (текст внутри остаётся), этим же путём
+// убираются <script> и любые on*-обработчики. Возражения (objection) через
+// этот путь не проходят — остаются как есть, plain text.
+//
+// Исключение — span: единственный тег, которому разрешён атрибут style, и то
+// только с двумя свойствами (font-family/font-size) из жёстко заданного
+// списка значений (шрифт/попиксельный размер текста, см. scriptsAdminNodes.js).
+// Само значение style ПЕРЕД сравнением со списком нормализуется (декодируются
+// HTML-сущности кавычек, схлопываются пробелы) — нельзя полагаться на то, что
+// фронт всегда пришлёт байты в одном виде: запрос может прийти напрямую в API,
+// в обход UI. Проверено эмпирически в реальном Chromium (не только на глаз):
+// span.style.fontFamily=... сериализуется браузером как
+// `font-family: &quot;SF Serif&quot;, Georgia, serif;` — с пробелом, `&quot;`
+// и `;`, что не совпадает буквально с "чистым" каноническим значением.
+const ALLOWED_RICH_TEXT_TAGS = new Set(['b', 'strong', 'i', 'em', 'ul', 'ol', 'li', 'br', 'span']);
+
+const ALLOWED_FONT_FAMILIES = new Set([
+    '"SF Serif", Georgia, serif',
+    '"Times New Roman", Times, serif',
+    'initial' // "По умолчанию" — явный сброс переопределения шрифта у родительских span
+]);
+const FONT_SIZE_PATTERN = /^\d{1,3}px$/;
+const MAX_FONT_SIZE_PX = 200;
+
+function decodeHtmlEntities(value) {
+    return value
+        .replace(/&quot;|&#34;/g, '"')
+        .replace(/&apos;|&#39;/g, "'")
+        .replace(/&amp;/g, '&');
+}
+
+// Разбирает style="..." на объявления, оставляет только разрешённые
+// font-family/font-size с разрешёнными значениями — всё остальное (любое
+// другое свойство, не прошедшее проверку значение, весь style у любого тега
+// кроме span) отбрасывается молча.
+function sanitizeStyleValue(rawStyle) {
+    const declarations = decodeHtmlEntities(rawStyle).split(';').map((d) => d.trim()).filter(Boolean);
+    const kept = [];
+    for (const decl of declarations) {
+        const sepIndex = decl.indexOf(':');
+        if (sepIndex === -1) continue;
+        const prop = decl.slice(0, sepIndex).trim().toLowerCase();
+        const value = decl.slice(sepIndex + 1).trim().replace(/\s*,\s*/g, ', ');
+
+        if (prop === 'font-family' && ALLOWED_FONT_FAMILIES.has(value)) {
+            kept.push(`font-family: ${value}`);
+        } else if (prop === 'font-size' && FONT_SIZE_PATTERN.test(value) && parseInt(value, 10) > 0 && parseInt(value, 10) <= MAX_FONT_SIZE_PX) {
+            kept.push(`font-size: ${value}`);
+        }
+    }
+    return kept.join('; ');
+}
 
 function sanitizeRichText(html) {
-    return String(html).replace(/<\/?([a-zA-Z0-9]+)[^>]*>/g, (match, tagName) => {
-        const tag = tagName.toLowerCase();
+    return String(html).replace(/<(\/?)([a-zA-Z0-9]+)([^>]*)>/g, (match, closingSlash, tagNameRaw, attrs) => {
+        const tag = tagNameRaw.toLowerCase();
         if (!ALLOWED_RICH_TEXT_TAGS.has(tag)) return '';
-        return match.startsWith('</') ? `</${tag}>` : `<${tag}>`;
+        if (closingSlash) return `</${tag}>`;
+        if (tag === 'span') {
+            const styleMatch = attrs.match(/style\s*=\s*"([^"]*)"/i) || attrs.match(/style\s*=\s*'([^']*)'/i);
+            if (styleMatch) {
+                const cleanStyle = sanitizeStyleValue(styleMatch[1]);
+                // Одинарные кавычки для АТРИБУТА, т.к. значения font-family (SF Serif,
+                // Times New Roman) сами содержат двойные кавычки — style="...""..." было
+                // бы невалидным HTML (браузер обрывает атрибут на первой внутренней "),
+                // ломая и рендер, и повторный парсинг при редактировании. Проверено
+                // эмпирически: без этого read-режим рендерил битую разметку.
+                return cleanStyle ? `<span style='${cleanStyle}'>` : '<span>';
+            }
+            return '<span>';
+        }
+        return `<${tag}>`;
     });
 }
 

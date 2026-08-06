@@ -12,12 +12,89 @@
 // content корня вставляется как HTML, БЕЗ escapeHtml, ему уже можно доверять.
 // Возражения остаются обычным plain-text textarea + escapeHtml, как раньше.
 
+import { showToast } from './scriptsAdminToast.js';
+
 function escapeHtml(value) {
     if (value === null || value === undefined) return '';
     return String(value)
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;');
+}
+
+// Значения строго совпадают с белым списком санитайзера в routes/scriptsAdmin.js
+// (ALLOWED_FONT_FAMILIES) — "По умолчанию" это реальное CSS-значение initial
+// (явно рвёт наследование от уже применённых родительских span), а не просто
+// отсутствие свойства (куратор, 2026-08-06: отсутствие свойства не сбрасывает
+// шрифт визуально, если текст уже вложен в span с другим шрифтом — initial сбрасывает).
+const FONT_FAMILY_OPTIONS = [
+    { value: 'initial', label: 'По умолчанию' },
+    { value: '"SF Serif", Georgia, serif', label: 'SF Serif' },
+    { value: '"Times New Roman", Times, serif', label: 'Times New Roman' }
+];
+const DEFAULT_FONT_SIZE_PX = 16;
+const MIN_FONT_SIZE_PX = 8;
+const MAX_FONT_SIZE_PX = 200;
+
+// Текущее выделение внутри editorEl — null, если оно пустое/схлопнуто или вне редактора.
+function getEditorSelectionRange(editorEl) {
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0) return null;
+    const range = selection.getRangeAt(0);
+    if (range.collapsed) return null;
+    if (!editorEl.contains(range.commonAncestorContainer)) return null;
+    return range;
+}
+
+// Оборачивает содержимое range в новый span с заданным style (или без style,
+// если styleText пустой). Вложение вместо поиска/мёржа существующего span —
+// принятое упрощение (куратор, бриф п.1): при повторном форматировании уже
+// отформатированного текста span'ы просто вкладываются друг в друга.
+function wrapRangeInSpan(range, styleText) {
+    const span = document.createElement('span');
+    if (styleText) span.setAttribute('style', styleText);
+    span.appendChild(range.extractContents());
+    range.insertNode(span);
+    const newRange = document.createRange();
+    newRange.selectNodeContents(span);
+    const selection = window.getSelection();
+    selection.removeAllRanges();
+    selection.addRange(newRange);
+}
+
+// Ближайший предок (внутри editorEl) с инлайновым font-size — иначе дефолт 16px.
+function findCurrentFontSizePx(range, editorEl) {
+    let node = range.commonAncestorContainer;
+    if (node.nodeType === Node.TEXT_NODE) node = node.parentElement;
+    while (node) {
+        if (node.style && node.style.fontSize) {
+            const match = /^(\d+)px$/.exec(node.style.fontSize);
+            if (match) return parseInt(match[1], 10);
+        }
+        if (node === editorEl) break;
+        node = node.parentElement;
+    }
+    return DEFAULT_FONT_SIZE_PX;
+}
+
+function applyFontFamily(editorEl, cssValue) {
+    const range = getEditorSelectionRange(editorEl);
+    if (!range) {
+        showToast('Выделите текст', 'error');
+        return;
+    }
+    wrapRangeInSpan(range, `font-family: ${cssValue}`);
+}
+
+function applyFontSizeDelta(editorEl, delta) {
+    const range = getEditorSelectionRange(editorEl);
+    if (!range) {
+        showToast('Выделите текст', 'error');
+        return;
+    }
+    const currentSize = findCurrentFontSizePx(range, editorEl);
+    const newSize = Math.max(MIN_FONT_SIZE_PX, Math.min(MAX_FONT_SIZE_PX, currentSize + delta));
+    wrapRangeInSpan(range, `font-size: ${newSize}px`);
 }
 
 function autoGrow(el) {
@@ -46,14 +123,41 @@ function attachRichTextToolbar(container, editorEl) {
             autoGrow(editorEl);
         });
     });
+
+    // Шрифт/размер — свой span-based механизм (не execCommand, см. scriptsAdminNodes.js
+    // шапку файла и бриф п.1), работает только пока выделение внутри editorEl.
+    container.querySelectorAll('[data-rte-size-delta]').forEach((btn) => {
+        btn.addEventListener('mousedown', (e) => e.preventDefault());
+        btn.addEventListener('click', () => {
+            applyFontSizeDelta(editorEl, Number(btn.dataset.rteSizeDelta));
+            autoGrow(editorEl);
+        });
+    });
+
+    const fontSelect = container.querySelector('[data-rte-font-select]');
+    if (fontSelect) {
+        fontSelect.addEventListener('mousedown', (e) => e.stopPropagation());
+        fontSelect.addEventListener('change', () => {
+            applyFontFamily(editorEl, fontSelect.value);
+            fontSelect.value = '';
+            autoGrow(editorEl);
+        });
+    }
 }
 
 function renderRichTextToolbar() {
+    const fontOptions = FONT_FAMILY_OPTIONS.map((o) => `<option value='${o.value}'>${escapeHtml(o.label)}</option>`).join('');
     return `
         <div class="sa-rte-toolbar">
             <button type="button" class="btn btn-secondary btn-sm" data-rte-cmd="bold" title="Жирный"><b>Ж</b></button>
             <button type="button" class="btn btn-secondary btn-sm" data-rte-cmd="italic" title="Курсив"><i>К</i></button>
             <button type="button" class="btn btn-secondary btn-sm" data-rte-cmd="insertUnorderedList" title="Список">☰ Список</button>
+            <select class="sa-rte-font-select" data-rte-font-select title="Шрифт">
+                <option value="" disabled selected>Шрифт…</option>
+                ${fontOptions}
+            </select>
+            <button type="button" class="btn btn-secondary btn-sm" data-rte-size-delta="-1" title="Уменьшить размер на 1px">A−</button>
+            <button type="button" class="btn btn-secondary btn-sm" data-rte-size-delta="1" title="Увеличить размер на 1px">A+</button>
         </div>
     `;
 }

@@ -16,18 +16,7 @@
         <section>
             <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
                 <h2 style="margin:0;">Скрипты</h2>
-                <div style="display:flex; gap:8px;">
-                    <button type="button" class="btn btn-secondary btn-sm" id="saToggleOffersBtn">Офферы</button>
-                    <button type="button" class="btn btn-primary btn-sm" id="saNewScriptBtn">+ Новый скрипт</button>
-                </div>
-            </div>
-            <div class="sa-panel" id="saOffersPanel" hidden>
-                <h2>Офферы</h2>
-                <div id="saOffersList"></div>
-                <div style="display:flex; gap:8px; margin-top:12px;">
-                    <input type="text" id="saOfferNameInput" placeholder="Название оффера">
-                    <button type="button" class="btn btn-secondary btn-sm" id="saOfferAddBtn" style="flex-shrink:0;">Добавить</button>
-                </div>
+                <button type="button" class="btn btn-primary btn-sm" id="saNewScriptBtn">+ Новый скрипт</button>
             </div>
             <div id="saScriptListWrap">
                 <div id="saScriptList"></div>
@@ -36,11 +25,11 @@
         </section>
 
         <section id="saNodesSection" class="sa-nodes-section">
-            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
-                <h2 id="saNodesTitle" style="margin:0;">Узлы скрипта</h2>
+            <div style="display:flex; justify-content:flex-end; margin-bottom:12px;">
                 <button type="button" class="btn btn-secondary btn-sm" id="saHideNodesBtn">Скрыть</button>
             </div>
-            <div class="sa-panel" id="saNodesPanel"></div>
+            <div class="sa-panel" id="saNodesMetaPanel"></div>
+            <div class="sa-panel" id="saNodesPanel" style="margin-top:24px;"></div>
             <div class="sa-panel" id="saAssignmentPanel" style="margin-top:24px;"></div>
         </section>
     </div>

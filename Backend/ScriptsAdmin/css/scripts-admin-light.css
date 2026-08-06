@@ -229,10 +229,20 @@ h2 {
 /* ----- Тулбар форматирования основного текста (rich text, contenteditable) ----- */
 .sa-rte-toolbar {
     display: flex;
+    align-items: center;
+    flex-wrap: wrap;
     gap: 6px;
     margin-bottom: 6px;
 }
 .sa-rte-toolbar .btn { padding: 4px 12px; }
+.sa-rte-font-select {
+    padding: 4px 8px;
+    border: 1px solid #ccd7e6;
+    border-radius: 8px;
+    font-size: 13px;
+    background: #fff;
+    font-family: inherit;
+}
 .sa-rte-editor {
     padding: 8px 12px;
     border: 1px solid #ccd7e6;
@@ -255,22 +265,6 @@ h2 {
     color: #94a3b8;
 }
 .sa-rte-editor ul, .sa-rte-editor ol { padding-left: 20px; }
-
-/* ----- Офферы ----- */
-.sa-offers-list {
-    list-style: none;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    margin-bottom: 12px;
-}
-.sa-offers-list li {
-    padding: 6px 10px;
-    background: #fff;
-    border: 1px solid #eef1f6;
-    border-radius: 8px;
-    font-size: 14px;
-}
 
 /* ----- Назначение операторов ----- */
 .sa-assign-selected-list {

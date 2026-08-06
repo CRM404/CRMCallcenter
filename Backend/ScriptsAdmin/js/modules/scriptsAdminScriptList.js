@@ -12,9 +12,9 @@ function escapeHtml(value) {
         .replace(/>/g, '&gt;');
 }
 
-// onOpen(script) — открыть работу с узлами/назначением; onEdit(script) — открыть форму
-// редактирования названия/оффера; onChanged() — перезагрузить список после действия.
-export function renderScriptList(container, scripts, selectedId, onOpen, onEdit, onChanged) {
+// onOpen(script) — открыть единую панель (метаданные + узлы + назначение);
+// onChanged() — перезагрузить список после действия.
+export function renderScriptList(container, scripts, selectedId, onOpen, onChanged) {
     if (!scripts.length) {
         container.innerHTML = '<div class="sa-empty-state">Пока нет ни одного скрипта — создайте первый.</div>';
         return;
@@ -43,7 +43,6 @@ export function renderScriptList(container, scripts, selectedId, onOpen, onEdit,
                 <td>
                     <div class="sa-actions">
                         <button type="button" class="btn btn-secondary btn-sm" data-action="open" data-id="${script.id}">Открыть</button>
-                        <button type="button" class="btn btn-secondary btn-sm" data-action="edit" data-id="${script.id}">Изменить</button>
                         ${statusToggleBtn}
                         ${deleteBtn}
                     </div>
@@ -65,13 +64,6 @@ export function renderScriptList(container, scripts, selectedId, onOpen, onEdit,
         btn.addEventListener('click', () => {
             const script = scripts.find((s) => s.id === Number(btn.dataset.id));
             onOpen(script);
-        });
-    });
-
-    container.querySelectorAll('[data-action="edit"]').forEach((btn) => {
-        btn.addEventListener('click', () => {
-            const script = scripts.find((s) => s.id === Number(btn.dataset.id));
-            onEdit(script);
         });
     });
 
