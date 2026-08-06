@@ -1,0 +1,35 @@
+// --- mainNav.js: вертикальная иконочная навигация хаба слева (паттерн operatorNav.js) ---
+// Ровно 4 пункта — 2 рабочих (переход между страницами хаба, обычные <a href>) и 2
+// заглушки на будущие разделы (клик — тост "скоро появится", как у оператора).
+// Без спейсера/кнопки выхода — в хабе нет логина (см. dialog.md, п.1).
+
+import { showToast } from './mainToast.js';
+
+const NAV_ITEMS = [
+    { key: 'requisites', label: 'Реквизиты', icon: 'fa-file-invoice', href: '/main.html' },
+    { key: 'employees', label: 'Сотрудники', icon: 'fa-users', href: '/emploees.html' },
+    { key: 'operator', label: 'Оператор', icon: 'fa-headset' },
+    { key: 'scripts', label: 'Управление скриптом', icon: 'fa-diagram-project' }
+];
+
+export function initHubNav(activeKey) {
+    const nav = document.getElementById('hubNav');
+    if (!nav) return;
+
+    NAV_ITEMS.forEach((item) => {
+        const el = document.createElement(item.href ? 'a' : 'button');
+        if (item.href) {
+            el.href = item.href;
+        } else {
+            el.type = 'button';
+        }
+        el.className = 'hub-nav-item' + (item.key === activeKey ? ' active' : '');
+        el.dataset.tooltip = item.label;
+        el.setAttribute('aria-label', item.label);
+        el.innerHTML = `<i class="fas ${item.icon}" aria-hidden="true"></i>`;
+        if (!item.href) {
+            el.addEventListener('click', () => showToast(`${item.label}: скоро появится`, 'info'));
+        }
+        nav.appendChild(el);
+    });
+}

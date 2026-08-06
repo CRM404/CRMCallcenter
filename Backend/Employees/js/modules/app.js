@@ -6,8 +6,12 @@ import { initModal } from './modal.js';
 import { initMassActions } from './massActions.js';
 import { initConfirmModals } from './confirmModal.js';
 import { initColumnSettings } from './columnSettings.js';
+import { initHubNav } from './employeesNav.js';
 
 document.addEventListener('DOMContentLoaded', async function() {
+
+    // 1a. Навигация хаба слева
+    initHubNav('employees');
 
     // 1b. Настройки видимых колонок (шестерёнка у таблицы)
     initColumnSettings();

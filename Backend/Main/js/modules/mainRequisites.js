@@ -5,6 +5,9 @@
 // type parser 1082) приходят строкой 'YYYY-MM-DD', поэтому значение можно
 // класть в <input type="date"> напрямую, без пересчёта.
 
+import { showToast } from './mainToast.js';
+import { ORG_FIELD_VALIDATORS, validateFields } from './mainValidation.js';
+
 function escapeHtml(value) {
     if (value === null || value === undefined) return '';
     return String(value)
@@ -13,13 +16,17 @@ function escapeHtml(value) {
         .replace(/>/g, '&gt;');
 }
 
+// "Общие данные" — фиксированная сетка (не auto-fill, см. dialog.md п.3): Название
+// на одном уровне с остальными короткими полями (не отдельной строкой, см. п.2),
+// ОПФ — короткая подпись + узкий инпут (значения вида "ООО"/"ИП"), Юридический
+// адрес — осознанно full-width отдельной строкой (длинное поле).
 const ORG_GENERAL_FIELDS = [
     { key: 'name', label: 'Название', type: 'text', required: true },
-    { key: 'legalForm', label: 'Организационно-правовая форма', type: 'text' },
+    { key: 'legalForm', label: 'ОПФ', type: 'text', narrow: true },
     { key: 'generalDirector', label: 'Генеральный директор', type: 'text' },
     { key: 'registrationCountry', label: 'Страна регистрации', type: 'text' },
     { key: 'registrationDate', label: 'Дата регистрации', type: 'date' },
-    { key: 'legalAddress', label: 'Юридический адрес', type: 'text' }
+    { key: 'legalAddress', label: 'Юридический адрес', type: 'text', fullWidth: true }
 ];
 
 const ORG_LEGAL_FIELDS = [
@@ -39,19 +46,43 @@ export const BANK_ACCOUNT_FIELDS = [
     { key: 'openedAt', label: 'Дата открытия', type: 'date' }
 ];
 
+// Периодичность — фиксированный список (dialog.md, п.4, отменяет прошлое решение
+// "свободный текст"), rate остаётся свободным текстом, это разные поля.
+const PERIODICITY_OPTIONS = ['Неделя', 'Месяц', 'Квартал', 'Год'];
+
 export const TAX_FIELDS = [
     { key: 'taxType', label: 'Вид налога', type: 'text', required: true },
     { key: 'rate', label: 'Ставка', type: 'text' },
-    { key: 'periodicity', label: 'Периодичность', type: 'text' }
+    { key: 'periodicity', label: 'Периодичность', type: 'select', options: PERIODICITY_OPTIONS }
 ];
 
 function renderFieldGroup(field, value, idAttr) {
+    const groupClass = 'form-group' + (field.fullWidth ? ' m-field-full' : '');
+    if (field.type === 'select') {
+        const options = field.options.map((opt) =>
+            `<option value="${escapeHtml(opt)}"${value === opt ? ' selected' : ''}>${escapeHtml(opt)}</option>`
+        ).join('');
+        return `
+            <div class="${groupClass}">
+                <label for="${idAttr}">${field.label}</label>
+                <select id="${idAttr}">
+                    <option value=""${!value ? ' selected' : ''}>Не указано</option>
+                    ${options}
+                </select>
+            </div>
+        `;
+    }
+    const inputClass = field.narrow ? ' class="m-input-narrow"' : '';
     return `
-        <div class="form-group">
+        <div class="${groupClass}">
             <label for="${idAttr}">${field.label}</label>
-            <input type="${field.type}" id="${idAttr}" value="${escapeHtml(value ?? '')}">
+            <input type="${field.type}" id="${idAttr}"${inputClass} value="${escapeHtml(value ?? '')}">
         </div>
     `;
+}
+
+function readFieldValue(container, idAttr) {
+    return container.querySelector(`#${idAttr}`).value;
 }
 
 // organization === null — организация ещё не создана: пустая форма + пустой стейт,
@@ -65,7 +96,7 @@ export function renderOrganizationForm(container, organization, handlers) {
         ${isNew ? '<div class="m-empty-state">Организация ещё не создана.</div>' : ''}
         <div class="m-org-section">
             <h3>Общие данные</h3>
-            <div class="form-grid">
+            <div class="m-org-grid">
                 ${ORG_GENERAL_FIELDS.map((f) => renderFieldGroup(f, org[f.key], `mOrg-${f.key}`)).join('')}
             </div>
         </div>
@@ -83,8 +114,13 @@ export function renderOrganizationForm(container, organization, handlers) {
     container.querySelector('#mOrgSaveBtn').addEventListener('click', () => {
         const data = {};
         [...ORG_GENERAL_FIELDS, ...ORG_LEGAL_FIELDS].forEach((f) => {
-            data[f.key] = container.querySelector(`#mOrg-${f.key}`).value;
+            data[f.key] = readFieldValue(container, `mOrg-${f.key}`);
         });
+        const error = validateFields(data, ORG_FIELD_VALIDATORS);
+        if (error) {
+            showToast(error, 'error');
+            return;
+        }
         handlers.onSave(data);
     });
 }
@@ -108,9 +144,9 @@ function renderRecordCard(record, fields, editing, idPrefix) {
             <div class="m-record-fields">
                 ${fields.map((f) => `<div class="m-record-field"><span class="m-record-label">${escapeHtml(f.label)}:</span> ${escapeHtml(record[f.key]) || '—'}</div>`).join('')}
             </div>
-            <div class="m-actions">
-                <button type="button" class="btn btn-secondary btn-sm" data-action="edit" data-id="${record.id}">Изменить</button>
-                <button type="button" class="btn btn-danger btn-sm" data-action="delete" data-id="${record.id}">Удалить</button>
+            <div class="m-actions m-actions-icons">
+                <button type="button" class="m-icon-btn" data-action="edit" data-id="${record.id}" title="Изменить" aria-label="Изменить"><i class="fas fa-pen" aria-hidden="true"></i></button>
+                <button type="button" class="m-icon-btn m-icon-btn-danger" data-action="delete" data-id="${record.id}" title="Удалить" aria-label="Удалить"><i class="fas fa-trash-can" aria-hidden="true"></i></button>
             </div>
         </div>
     `;
@@ -122,7 +158,7 @@ function renderRecordCard(record, fields, editing, idPrefix) {
 // uiState = { adding, editingId }
 // handlers = { onAddStart, onAddCancel, onCreate(data), onEditStart(id),
 //              onEditCancel, onSave(record, data), onDelete(id) }
-export function renderRecordsSection(container, { title, records, fields, uiState, idPrefix, emptyText, addButtonLabel, handlers }) {
+export function renderRecordsSection(container, { title, records, fields, uiState, idPrefix, emptyText, addButtonLabel, handlers, validators }) {
     const cards = records.map((r) => renderRecordCard(r, fields, uiState.editingId === r.id, idPrefix)).join('');
     const addForm = uiState.adding ? `
         <div class="m-record-card">
@@ -153,8 +189,13 @@ export function renderRecordsSection(container, { title, records, fields, uiStat
         createBtn.addEventListener('click', () => {
             const data = {};
             fields.forEach((f) => {
-                data[f.key] = container.querySelector(`#${idPrefix}New-${f.key}`).value;
+                data[f.key] = readFieldValue(container, `${idPrefix}New-${f.key}`);
             });
+            const error = validateFields(data, validators || {});
+            if (error) {
+                showToast(error, 'error');
+                return;
+            }
             handlers.onCreate(data);
         });
         container.querySelector(`#${idPrefix}CreateCancelBtn`).addEventListener('click', handlers.onAddCancel);
@@ -172,8 +213,13 @@ export function renderRecordsSection(container, { title, records, fields, uiStat
             const record = records.find((r) => r.id === id);
             const data = {};
             fields.forEach((f) => {
-                data[f.key] = container.querySelector(`#${idPrefix}Edit-${f.key}-${id}`).value;
+                data[f.key] = readFieldValue(container, `${idPrefix}Edit-${f.key}-${id}`);
             });
+            const error = validateFields(data, validators || {});
+            if (error) {
+                showToast(error, 'error');
+                return;
+            }
             handlers.onSave(record, data);
         });
     });

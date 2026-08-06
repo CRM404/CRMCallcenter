@@ -45,11 +45,10 @@
 <body>
 
  <div id="toastContainer" style="position: fixed; bottom: 20px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 10px; max-width: 350px;"></div>
-    <div class="container">
-        <nav class="app-tabs">
-            <a href="/main.html" class="app-tab">Реквизиты</a>
-            <a href="/emploees.html" class="app-tab active">Сотрудники</a>
-        </nav>
+    <div class="hub-shell">
+        <nav class="hub-nav" id="hubNav"></nav>
+        <main class="hub-main">
+        <div class="container">
         <div class="header-row">
             <h1>Управление сотрудниками</h1>
             <div style="display: flex; gap: 12px; align-items: center;">
@@ -92,6 +91,8 @@
             </div>
             <div id="emptyMessage" class="empty-message">Нет сотрудников. Добавьте первого!</div>
         </section>
+        </div>
+        </main>
     </div>
 
     <!-- Модальное окно -->

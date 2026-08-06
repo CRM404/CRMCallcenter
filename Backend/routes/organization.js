@@ -92,6 +92,36 @@ function validateRequired(body, field, label) {
     return null;
 }
 
+// Валидация по типу данных (dialog.md, п.7) — источник истины, дублирует
+// mainValidation.js на фронте (можно постучаться в API напрямую, мимо формы,
+// то же соображение, что для санитайзера rich-text в прошлой задаче). Поля
+// остаются опциональными — формат проверяется только когда значение непустое.
+function validateDigits(value, exactLengths, label) {
+    if (value === undefined || value === null || String(value).trim() === '') return null;
+    const str = String(value);
+    if (!exactLengths.some((len) => new RegExp(`^\\d{${len}}$`).test(str))) {
+        const lengths = exactLengths.join(' или ');
+        return `${label} должен содержать ${lengths} цифр`;
+    }
+    return null;
+}
+
+function validateAuthorizedCapital(value) {
+    if (value === undefined || value === null || String(value).trim() === '') return null;
+    const n = Number(value);
+    if (!Number.isFinite(n) || n < 0) {
+        return 'Уставный капитал должен быть неотрицательным числом';
+    }
+    return null;
+}
+
+function validateOrganizationFormats(body) {
+    return validateDigits(body.inn, [10, 12], 'ИНН')
+        || validateDigits(body.kpp, [9], 'КПП')
+        || validateDigits(body.ogrn, [13, 15], 'ОГРН')
+        || validateAuthorizedCapital(body.authorizedCapital);
+}
+
 // GET /api/organization — первая организация с вложенными bankAccounts/taxes,
 // либо null (телом ответа), если ни одной ещё не создано — это ожидаемое
 // состояние "ещё не заполнено", не ошибка.
@@ -121,7 +151,7 @@ router.get('/', async (req, res) => {
 
 // POST /api/organization — создание
 router.post('/', async (req, res) => {
-    const validationError = validateRequired(req.body, 'name', 'Название');
+    const validationError = validateRequired(req.body, 'name', 'Название') || validateOrganizationFormats(req.body);
     if (validationError) {
         return res.status(400).json({ error: validationError });
     }
@@ -144,7 +174,7 @@ router.post('/', async (req, res) => {
 // счетов/налогов) — тот же паттерн, что PUT /api/employees/:id: фронт всегда
 // шлёт все текущие значения формы, непереданное поле становится NULL.
 router.put('/:id', async (req, res) => {
-    const validationError = validateRequired(req.body, 'name', 'Название');
+    const validationError = validateRequired(req.body, 'name', 'Название') || validateOrganizationFormats(req.body);
     if (validationError) {
         return res.status(400).json({ error: validationError });
     }
@@ -168,7 +198,7 @@ router.put('/:id', async (req, res) => {
 
 // POST /api/organization/:id/bank-accounts
 router.post('/:id/bank-accounts', async (req, res) => {
-    const validationError = validateRequired(req.body, 'bankName', 'Название банка');
+    const validationError = validateRequired(req.body, 'bankName', 'Название банка') || validateDigits(req.body.bik, [9], 'БИК');
     if (validationError) {
         return res.status(400).json({ error: validationError });
     }
@@ -192,7 +222,7 @@ router.post('/:id/bank-accounts', async (req, res) => {
 
 // PUT /api/organization/:id/bank-accounts/:accountId
 router.put('/:id/bank-accounts/:accountId', async (req, res) => {
-    const validationError = validateRequired(req.body, 'bankName', 'Название банка');
+    const validationError = validateRequired(req.body, 'bankName', 'Название банка') || validateDigits(req.body.bik, [9], 'БИК');
     if (validationError) {
         return res.status(400).json({ error: validationError });
     }
