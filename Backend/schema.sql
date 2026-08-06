@@ -335,3 +335,19 @@ CREATE TABLE IF NOT EXISTS organization_taxes (
     rate VARCHAR,                -- строка, не число (ставки бывают вида "6%", "15% с разницы")
     periodicity VARCHAR          -- свободный текст, справочника периодов нет
 );
+
+-- CPA-сеть — партнёр, которому организация передаёт лиды дальше (не источник
+-- входящего трафика, а канал, куда лиды уходят от нас). Справочник из нескольких
+-- записей, без вложенных под-сущностей — ближе по духу к employees, чем к
+-- organizations. ON DELETE RESTRICT — не даём удалить организацию, пока к ней
+-- привязаны сети (у organizations сейчас всё равно нет DELETE-эндпоинта, но
+-- схема остаётся корректной сама по себе).
+CREATE TABLE IF NOT EXISTS cpa_networks (
+    id SERIAL PRIMARY KEY,
+    organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,
+    name VARCHAR NOT NULL,
+    status VARCHAR NOT NULL DEFAULT 'Активна',
+    connected_at DATE,
+    payout_currency VARCHAR,
+    commission_percent NUMERIC
+);

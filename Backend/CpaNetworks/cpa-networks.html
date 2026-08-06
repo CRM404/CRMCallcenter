@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CRM – CPA-сети</title>
+    <link rel="stylesheet" href="./css/cpa-networks-light.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" integrity="sha512-Fo3rlrZj/k7ujTnHg4CGR2D7kSs0v4LLanw2qksYuRlEzO+tcaEPQogQ0KaoGN26/zrn20ImR1DfuLWnOo7aBA==" crossorigin="anonymous" referrerpolicy="no-referrer">
+</head>
+<body>
+    <div id="toastContainer"></div>
+
+    <div class="hub-shell">
+        <nav class="hub-nav" id="hubNav"></nav>
+
+        <main class="hub-main">
+            <div class="container">
+                <div class="header-row">
+                    <h1>CPA-сети</h1>
+                    <button type="button" class="btn btn-primary" id="cpaAddBtn">Добавить</button>
+                </div>
+
+                <div class="empty-message" id="cpaLockedNote" hidden>
+                    Сначала заполните организацию в разделе <a href="/main.html">Реквизиты</a> — CPA-сеть привязывается к юрлицу.
+                </div>
+
+                <div class="table-wrapper" id="cpaTableWrapper" hidden>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Название</th>
+                                <th>Юрлицо</th>
+                                <th>Статус</th>
+                                <th>Дата подключения</th>
+                                <th>Валюта выплаты</th>
+                                <th>Комиссия %</th>
+                                <th>Действия</th>
+                            </tr>
+                        </thead>
+                        <tbody id="cpaTableBody"></tbody>
+                    </table>
+                </div>
+                <div class="empty-message" id="cpaEmptyMessage" hidden>Пока нет ни одной CPA-сети. Добавьте первую!</div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Модалка создания/редактирования CPA-сети -->
+    <div class="modal-overlay" id="cpaModal" hidden>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="cpaModalTitle">Новая CPA-сеть</h2>
+                <button type="button" class="modal-close" id="cpaModalCloseBtn">&times;</button>
+            </div>
+            <form id="cpaForm">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="cpaName">Название *</label>
+                        <input type="text" id="cpaName" placeholder="AdCombo">
+                    </div>
+                    <div class="form-group">
+                        <label for="cpaOrganizationId">Юрлицо *</label>
+                        <select id="cpaOrganizationId">
+                            <option value="">— Выберите организацию —</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="cpaStatus">Статус *</label>
+                        <select id="cpaStatus">
+                            <option value="Активна">Активна</option>
+                            <option value="Приостановлена">Приостановлена</option>
+                            <option value="Отключена">Отключена</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="cpaConnectedAt">Дата подключения</label>
+                        <input type="date" id="cpaConnectedAt">
+                    </div>
+                    <div class="form-group">
+                        <label for="cpaPayoutCurrency">Валюта выплаты</label>
+                        <input type="text" id="cpaPayoutCurrency" placeholder="USD">
+                    </div>
+                    <div class="form-group">
+                        <label for="cpaCommissionPercent">Комиссия %</label>
+                        <input type="number" step="any" id="cpaCommissionPercent" placeholder="15">
+                    </div>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" id="cpaModalCancelBtn">Отмена</button>
+                    <button type="submit" class="btn btn-primary" id="cpaModalSaveBtn">Сохранить</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Общая модалка подтверждения удаления -->
+    <div class="modal-overlay" id="confirmModal" hidden>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Подтверждение</h2>
+                <button type="button" class="modal-close" id="confirmModalCloseBtn">&times;</button>
+            </div>
+            <p id="confirmModalMessage"></p>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-secondary" id="confirmModalCancelBtn">Отмена</button>
+                <button type="button" class="btn btn-danger" id="confirmModalOkBtn">Подтвердить</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="./js/modules/cpaApp.js"></script>
+</body>
+</html>
