@@ -909,13 +909,83 @@ tr.row-selected td { background: rgba(0, 0, 255, .045); }
     color: #e74c3c;
 }
 
-/* Модалка удаления */
+/* Модалка удаления — переиспользуется и поверх модалки "Управление отделами"
+   (см. departments.js), z-index выше остальных .modal-overlay, чтобы не
+   провалиться под уже открытую модалку при одинаковом базовом z-index. */
+#deleteModal {
+    z-index: 1001;
+}
 #deleteModal .modal-content {
     max-width: 450px;
 }
 #deleteModal p {
     margin: 15px 0;
     font-size: 16px;
+}
+
+/* ----- Модалка "Управление отделами" (report_2026-08-01.md, п.1) ----- */
+.departments-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin: 15px 0;
+}
+.department-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 14px;
+    border: 1px solid var(--e-line);
+    border-radius: var(--e-radius-md);
+    background: rgba(255, 255, 255, .5);
+}
+.department-row-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+.department-row-name {
+    font-weight: 600;
+    color: var(--e-ink);
+}
+.department-row-org {
+    font-size: 12.5px;
+    color: var(--e-ink-faint);
+}
+.department-row-actions {
+    display: flex;
+    gap: 4px;
+    flex-shrink: 0;
+}
+.department-row-form {
+    display: block;
+    background: rgba(255, 255, 255, .7);
+}
+/* Пунктирная строка "+ Добавить отдел" — новый маленький паттерн, тот же
+   принцип, что у dashed-элементов в остальных частях интерфейса (Отчёт
+   Дизайн.md, "Сотрудники" → "Открыто", п.1). */
+.department-add-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    padding: 10px 14px;
+    border: 1.5px dashed var(--e-line-strong);
+    border-radius: var(--e-radius-md);
+    background: none;
+    color: var(--e-ink-faint);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+.department-add-row:hover {
+    color: var(--e-accent);
+    border-color: var(--e-accent);
+    background: rgba(0, 0, 255, .05);
 }
 
 /* Модалка фильтрации */

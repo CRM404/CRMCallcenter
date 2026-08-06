@@ -108,3 +108,29 @@ export function saveColumnSettings(employeeId, hiddenColumns) {
         body: JSON.stringify({ hiddenColumns })
     });
 }
+
+// --- Организация (для выпадающего списка "Юрлицо" в форме отдела — тот же
+// приём, что cpaApp.js: singleton-эндпоинт "Реквизиты", фронт показывает ровно
+// одну текущую организацию, см. dialog.md) ---
+
+export function fetchOrganization() {
+    return request('/organization');
+}
+
+// --- Отделы ---
+
+export function fetchDepartments() {
+    return request('/departments');
+}
+
+export function createDepartment(data) {
+    return request('/departments', { method: 'POST', body: JSON.stringify(data) });
+}
+
+export function updateDepartment(id, data) {
+    return request(`/departments/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+}
+
+export function deleteDepartment(id) {
+    return request(`/departments/${id}`, { method: 'DELETE' });
+}

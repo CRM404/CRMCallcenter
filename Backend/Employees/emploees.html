@@ -42,6 +42,7 @@
                         <span class="filter-badge" id="filterBadge" hidden>0</span>
                     </div>
                     <button class="btn btn-secondary btn-icon" id="columnSettingsBtn" aria-label="Настроить видимые колонки" title="Настроить видимые колонки"><i class="fas fa-table-columns" aria-hidden="true"></i></button>
+                    <button class="btn btn-secondary btn-icon" id="departmentsBtn" aria-label="Управление отделами" title="Управление отделами"><i class="fas fa-building" aria-hidden="true"></i></button>
                 </div>
             </div>
             <div class="table-wrapper">
@@ -211,7 +212,7 @@
             <!-- Добавленные поля загрузки документов (горизонтальные кнопки) -->
             <div class="form-group" style="grid-column: span 2;">
                 <label style="margin-bottom: 8px; display: block;">Документы</label>
-                <div style="display: grid; grid-template-columns: repeat(5, minmax(200px, 1fr)); gap: 16px;">
+                <div style="display: flex; flex-direction: column; gap: 10px;">
                     
                     <div class="file-upload-wrapper">
                         <label for="passportFront">Паспорт (лицевая сторона)</label>
@@ -408,6 +409,18 @@
                     <button type="button" class="btn btn-primary btn-sm" id="columnSettingsApplyBtn">Применить</button>
                 </div>
             </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно "Управление отделами" -->
+    <div id="departmentsModal" class="modal-overlay" style="display:none;">
+        <div class="modal-content" style="max-width: 520px;">
+            <div class="modal-header">
+                <h2>Управление отделами</h2>
+                <span class="modal-close" id="departmentsCloseBtn" aria-label="Закрыть"><i class="fas fa-xmark" aria-hidden="true"></i></span>
+            </div>
+            <div id="departmentsList" class="departments-list"></div>
+            <div id="departmentsEmptyMessage" class="empty-message">Пока нет отделов. Добавьте первый!</div>
         </div>
     </div>
 

@@ -1,6 +1,6 @@
 // --- confirmModal.js: подтверждение удаления и закрытия ---
 
-import { deleteEmployee } from './storage.js';
+import { deleteEmployee, deleteDepartment } from './storage.js';
 import { showToast } from './toast.js';
 import { renderTable } from './render.js';
 
@@ -91,6 +91,59 @@ export function showMassDeleteConfirm(ids) {
             modal.style.display = 'none';
             cleanup();
             resolve(true);
+        };
+        const cancelHandler = function() {
+            modal.style.display = 'none';
+            cleanup();
+            resolve(false);
+        };
+        const backdropHandler = function(e) {
+            if (e.target === modal) {
+                modal.style.display = 'none';
+                cleanup();
+                resolve(false);
+            }
+        };
+        confirmBtn.addEventListener('click', confirmHandler);
+        cancelBtn.addEventListener('click', cancelHandler);
+        closeBtn.addEventListener('click', cancelHandler);
+        modal.addEventListener('click', backdropHandler);
+    });
+}
+
+// --- Подтверждение удаления отдела (переиспользует общий #deleteModal, тот же
+// динамический attach/cleanup, что showMassDeleteConfirm выше, — общий
+// confirmDelete жёстко привязан к deleteEmployee/deleteTargetId и не подходит
+// напрямую, dialog.md п.6: текст персонализирован названием отдела) ---
+export function showDepartmentDeleteConfirm(id, name) {
+    return new Promise((resolve) => {
+        const modal = document.getElementById('deleteModal');
+        const message = document.querySelector('#deleteModal p');
+        if (message) message.textContent = `Удалить отдел «${name}»? Действие необратимо.`;
+        const confirmBtn = document.getElementById('deleteConfirmBtn');
+        const cancelBtn = document.getElementById('deleteCancelBtn');
+        const closeBtn = document.getElementById('deleteModalCloseBtn');
+        modal.style.display = 'flex';
+
+        const cleanup = function() {
+            confirmBtn.removeEventListener('click', confirmHandler);
+            cancelBtn.removeEventListener('click', cancelHandler);
+            closeBtn.removeEventListener('click', cancelHandler);
+            modal.removeEventListener('click', backdropHandler);
+        };
+
+        const confirmHandler = async function() {
+            try {
+                await deleteDepartment(id);
+                modal.style.display = 'none';
+                cleanup();
+                resolve(true);
+            } catch (err) {
+                showToast(err.message, 'error');
+                modal.style.display = 'none';
+                cleanup();
+                resolve(false);
+            }
         };
         const cancelHandler = function() {
             modal.style.display = 'none';

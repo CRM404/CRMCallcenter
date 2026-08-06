@@ -351,3 +351,14 @@ CREATE TABLE IF NOT EXISTS cpa_networks (
     payout_currency VARCHAR,
     commission_percent NUMERIC
 );
+
+-- Отделы — самостоятельный справочник, ведётся на странице "Сотрудники"
+-- (report_2026-08-01.md, п.1). employees.department остаётся свободным текстом
+-- без FK на эту таблицу — та же логика поэтапного внедрения, что у leads.source
+-- (задача CPA-сети). ON DELETE RESTRICT — не даём удалить организацию, пока к
+-- ней привязаны отделы, тот же принцип, что у cpa_networks выше.
+CREATE TABLE IF NOT EXISTS departments (
+    id SERIAL PRIMARY KEY,
+    organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,
+    name VARCHAR NOT NULL
+);

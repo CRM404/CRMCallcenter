@@ -7,6 +7,7 @@ import { initMassActions } from './massActions.js';
 import { initConfirmModals } from './confirmModal.js';
 import { initColumnSettings } from './columnSettings.js';
 import { initHubNav } from './employeesNav.js';
+import { initDepartments } from './departments.js';
 
 document.addEventListener('DOMContentLoaded', async function() {
 
@@ -15,6 +16,9 @@ document.addEventListener('DOMContentLoaded', async function() {
 
     // 1b. Настройки видимых колонок (шестерёнка у таблицы)
     initColumnSettings();
+
+    // 1c. Модалка "Управление отделами"
+    initDepartments();
 
     // 2. Данные и таблица
     await renderTable();

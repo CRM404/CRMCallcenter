@@ -10,8 +10,8 @@ const NAV_ITEMS = [
     { key: 'requisites', label: 'Реквизиты', icon: 'fa-file-invoice', href: '/main.html' },
     { key: 'employees', label: 'Сотрудники', icon: 'fa-users', href: '/emploees.html' },
     { key: 'cpa', label: 'CPA-сети', icon: 'fa-handshake', href: '/cpa-networks.html' },
-    { key: 'operator', label: 'Оператор', icon: 'fa-headset' },
-    { key: 'scripts', label: 'Управление скриптом', icon: 'fa-diagram-project' }
+    { key: 'operator', label: 'Оператор', icon: 'fa-headset', href: '/operator-login.html' },
+    { key: 'scripts', label: 'Управление скриптом', icon: 'fa-diagram-project', href: '/scripts-admin.html' }
 ];
 
 export function initHubNav(activeKey) {
