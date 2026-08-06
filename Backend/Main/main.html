@@ -14,16 +14,26 @@
         <nav class="hub-nav" id="hubNav"></nav>
 
         <main class="hub-main">
-            <div class="container">
-                <div>
-                    <h1>Реквизиты организации</h1>
+            <div class="m-wrap">
+                <div class="m-page-head">
+                    <div>
+                        <h1>Реквизиты организации</h1>
+                        <p class="m-page-sub">Эти данные подставляются в счета и договоры, которые CRM формирует автоматически — заполните их один раз.</p>
+                    </div>
+                    <div class="m-completion" id="mCompletion"></div>
                 </div>
 
-                <div class="sa-panel" id="mOrgFormContainer"></div>
+                <div class="m-layout">
+                    <div class="m-stack">
+                        <section class="m-card" id="mOrgFormContainer"></section>
 
-                <div class="m-empty-state" id="mSubRecordsLockedNote">Сначала заполните и сохраните данные организации выше — банковские счета и налоги привязываются к ней.</div>
-                <div class="sa-panel" id="mBankAccountsContainer" hidden></div>
-                <div class="sa-panel" id="mTaxesContainer" hidden></div>
+                        <div class="m-empty-state" id="mSubRecordsLockedNote">Сначала заполните и сохраните данные организации выше — банковские счета и налоги привязываются к ней.</div>
+                        <section class="m-card" id="mBankAccountsContainer" hidden></section>
+                        <section class="m-card" id="mTaxesContainer" hidden></section>
+                    </div>
+
+                    <aside class="m-preview" id="mPreview"></aside>
+                </div>
             </div>
         </main>
     </div>

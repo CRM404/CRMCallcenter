@@ -11,12 +11,15 @@ import {
     createTax, updateTax, deleteTax
 } from './mainStorage.js';
 import { renderOrganizationForm, renderRecordsSection, BANK_ACCOUNT_FIELDS, TAX_FIELDS } from './mainRequisites.js';
+import { renderCompletion, renderPreview } from './mainLetterhead.js';
 import { BANK_ACCOUNT_FIELD_VALIDATORS } from './mainValidation.js';
 
 const orgFormContainer = document.getElementById('mOrgFormContainer');
 const bankAccountsContainer = document.getElementById('mBankAccountsContainer');
 const taxesContainer = document.getElementById('mTaxesContainer');
 const lockedNote = document.getElementById('mSubRecordsLockedNote');
+const completionContainer = document.getElementById('mCompletion');
+const previewContainer = document.getElementById('mPreview');
 
 let organization = null;
 const bankUiState = { adding: false, editingId: null };
@@ -24,6 +27,11 @@ const taxUiState = { adding: false, editingId: null };
 
 function renderOrg() {
     renderOrganizationForm(orgFormContainer, organization, { onSave: handleOrgSave });
+    renderCompletion(completionContainer, organization);
+}
+
+function renderPreviewPanel() {
+    renderPreview(previewContainer, organization);
 }
 
 function renderSubRecordsVisibility() {
@@ -42,7 +50,8 @@ function renderBankAccounts() {
         uiState: bankUiState,
         idPrefix: 'mBank',
         emptyText: 'Пока нет добавленных счетов.',
-        addButtonLabel: '+ Добавить счёт',
+        addButtonLabel: 'Добавить счёт',
+        wordForms: ['счёт', 'счёта', 'счетов'],
         validators: BANK_ACCOUNT_FIELD_VALIDATORS,
         handlers: {
             onAddStart: () => { bankUiState.adding = true; renderBankAccounts(); },
@@ -65,7 +74,8 @@ function renderTaxes() {
         uiState: taxUiState,
         idPrefix: 'mTax',
         emptyText: 'Пока нет добавленных налоговых записей.',
-        addButtonLabel: '+ Добавить налог',
+        addButtonLabel: 'Добавить налог',
+        wordForms: ['запись', 'записи', 'записей'],
         handlers: {
             onAddStart: () => { taxUiState.adding = true; renderTaxes(); },
             onAddCancel: () => { taxUiState.adding = false; renderTaxes(); },
@@ -83,6 +93,7 @@ function renderAll() {
     renderSubRecordsVisibility();
     renderBankAccounts();
     renderTaxes();
+    renderPreviewPanel();
 }
 
 async function handleOrgSave(data) {
@@ -108,6 +119,7 @@ async function handleBankCreate(data) {
         bankUiState.adding = false;
         showToast('Счёт добавлен', 'success');
         renderBankAccounts();
+        renderPreviewPanel();
     } catch (err) {
         showToast(err.message, 'error');
     }
@@ -120,6 +132,7 @@ async function handleBankSave(record, data) {
         bankUiState.editingId = null;
         showToast('Изменения сохранены', 'success');
         renderBankAccounts();
+        renderPreviewPanel();
     } catch (err) {
         showToast(err.message, 'error');
     }
@@ -133,6 +146,7 @@ async function handleBankDelete(id) {
         organization.bankAccounts = organization.bankAccounts.filter((r) => r.id !== id);
         showToast('Счёт удалён', 'success');
         renderBankAccounts();
+        renderPreviewPanel();
     } catch (err) {
         showToast(err.message, 'error');
     }
