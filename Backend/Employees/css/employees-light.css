@@ -30,6 +30,39 @@
     --modal-bg: rgba(255, 255, 255, 0.8);
     --toast-bg: #1e293b;
     --toast-text: #f8fafc;
+
+    /* ----- Токены редизайна страницы "Сотрудники" (см. dialog.md, "Отчёт Дизайн.md") ----- */
+    --canvas-a: #e8edfb;
+    --canvas-b: #dce3f6;
+    --e-surface: rgba(255, 255, 255, .72);
+    --e-surface-modal: rgba(255, 255, 255, .86);
+    --e-line: rgba(96, 112, 148, .22);
+    --e-line-strong: rgba(96, 112, 148, .36);
+    --e-ink: #1a2433;
+    --e-ink-soft: #55637c;
+    --e-ink-faint: #8894a8;
+    --e-graphite: #696969;
+    --e-graphite-deep: #555555;
+    --e-slate: #6c757d;
+    --e-slate-deep: #5a6268;
+    --e-accent: #0000ff;
+    --e-accent-soft: #4a90d9;
+    --e-danger: #e74c3c;
+    --e-danger-deep: #c0392b;
+    --e-ok-ink: #146c43;
+    --e-ok-bg: #dcf3e6;
+    --e-off-ink: #9a2f27;
+    --e-off-bg: #f8e2e0;
+    --e-av-1: #5b6b83;
+    --e-av-2: #6b7f74;
+    --e-av-3: #7c6f8a;
+    --e-av-4: #8a6f63;
+    --e-radius-lg: 20px;
+    --e-radius-md: 12px;
+    --e-radius-sm: 8px;
+    --e-shadow-card: 0 10px 34px rgba(23, 32, 55, .14);
+    --e-shadow-pop: 0 22px 60px rgba(15, 22, 40, .28);
+    --e-font-ui: "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
 }
 
 /* ----- Общие стили (не зависят от темы) ----- */
@@ -41,6 +74,7 @@ body {
     background-repeat: no-repeat;
     background-attachment: fixed;
     color: #333;
+    font-variant-numeric: tabular-nums;
 }
 
 
@@ -117,12 +151,11 @@ body {
 }
 
 h1 {
-    font-size: 28px;
-    margin-bottom: 20px;
+    font-size: 26px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    margin-bottom: 0;
     color: #1e2a3a;
-    border-bottom: 3px solid #0000FF;
-    padding-bottom: 10px;
-    display: inline-block;
 }
 
 h2 {
@@ -156,6 +189,15 @@ h2 {
     gap: 16px !important;
     flex-wrap: nowrap !important;
     width: 100% !important;          /* занимает всю ширину колонки */
+    border: 1.5px dashed var(--e-line-strong);
+    border-radius: var(--e-radius-sm);
+    padding: 10px 12px !important;
+}
+
+.doc-file-icon {
+    color: var(--e-ink-faint);
+    font-size: 15px;
+    flex-shrink: 0;
 }
 
 .file-upload-area .file-trigger {
@@ -176,6 +218,11 @@ h2 {
     min-width: 0 !important;
     text-align: left !important;
 }
+.file-upload-area .file-name:empty::before {
+    content: 'Файл не выбран';
+    color: var(--e-ink-faint);
+    font-style: italic;
+}
 .file-upload-area .file-status-icon {
     font-size: 18px !important;
     margin-left: 4px !important;
@@ -183,7 +230,7 @@ h2 {
 }
 .step-indicator {
     font-size: 13px;
-    color: #64748b;
+    color: var(--e-accent);
     margin-bottom: 14px;
     font-weight: 600;
 }
@@ -316,34 +363,9 @@ h2 {
     background-color: #e74c3c;
 }
 
-/* Edit (жёлтый) */
-.btn-edit {
-    background-color: #f39c12;
-    margin-right: 6px;
-}
-.btn-edit:after {
-    background-color: #f39c12;
-}
-.btn-edit:before {
-    background-color: #d68910;
-}
-.btn-edit:hover {
-    background-color: #f39c12;
-}
-
-/* Delete (красный, аналогичен danger, но оставим отдельно для ясности) */
-.btn-delete {
-    background-color: #e74c3c;
-}
-.btn-delete:after {
-    background-color: #e74c3c;
-}
-.btn-delete:before {
-    background-color: #c0392b;
-}
-.btn-delete:hover {
-    background-color: #e74c3c;
-}
+/* .btn-edit/.btn-delete на кнопках-иконках в строках таблицы — см. .action-btn
+   ниже (неоновые оранжевый/красный сплошные кнопки заменены на нейтральные
+   иконки с подсветкой фона при наведении, Отчёт Дизайн.md 3.4). */
 
 /* Маленькая кнопка */
 .btn-sm {
@@ -363,6 +385,12 @@ h2 {
 /* ----- Список сотрудников ----- */
 .list-section {
     margin-top: 10px;
+    transition: padding-bottom .2s ease;
+}
+/* Резерв места под плавающую панель массовых операций, пока она видна —
+   иначе последняя строка таблицы/пагинация оказываются под ней (dialog.md, п.9). */
+.list-section.reserve-mass-actions-space {
+    padding-bottom: 74px;
 }
 
 .toolbar {
@@ -478,6 +506,27 @@ th[data-field] {
     cursor: pointer;
     user-select: none;
 }
+.sort-icon {
+    margin-left: 4px;
+    font-size: 11px;
+    color: var(--e-accent);
+}
+/* ----- Иконки-кнопки действий в строке (всегда видимые, не только на hover —
+   правка по фидбеку владельца, см. dialog.md/Отчёт Дизайн.md 3.4) ----- */
+.action-btn {
+    background: none;
+    border: none;
+    padding: 6px 8px;
+    font-size: 14px;
+    color: var(--e-slate);
+    cursor: pointer;
+    border-radius: 8px;
+    transition: color 0.15s, background 0.15s;
+}
+.action-btn:hover { color: var(--e-accent); background: rgba(0, 0, 255, .08); }
+.action-btn.btn-delete:hover { color: var(--e-danger); background: rgba(231, 76, 60, .1); }
+.action-btn i { pointer-events: none; }
+
 th[data-field]:hover {
     background: #e8edf5;
 }
@@ -490,27 +539,118 @@ th:last-child {
     min-width: 80px;
 }
 
-/* Телефон – без обрезания */
-td:nth-child(7) {
+/* ----- Строка, скрытая настройкой видимых колонок (Отдел/Руководитель/Дата
+   найма/Статус — единственные, что могут исчезать целиком; составные ячейки
+   Сотрудник/Контакты/Мессенджеры всегда присутствуют, см. dialog.md) ----- */
+.col-hidden { display: none !important; }
+
+/* ----- Составная ячейка "Сотрудник": аватар-инициалы + ФИО/должность ----- */
+.employee-cell {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 180px;
+}
+.avatar-initials {
+    flex-shrink: 0;
+    width: 36px;
+    height: 36px;
+    border-radius: 11px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-weight: 700;
+    font-size: 13px;
+}
+.avatar-initials.av-0 { background: var(--e-av-1); }
+.avatar-initials.av-1 { background: var(--e-av-2); }
+.avatar-initials.av-2 { background: var(--e-av-3); }
+.avatar-initials.av-3 { background: var(--e-av-4); }
+.employee-cell-text { min-width: 0; }
+.employee-name {
+    font-weight: 700;
+    color: var(--e-ink);
     white-space: nowrap;
-    min-width: 150px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.employee-position {
+    font-size: 12.5px;
+    color: var(--e-ink-soft);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
-/* ----- Статусы ----- */
-.status-badge {
+/* ----- Составная ячейка "Контакты": телефон + email ----- */
+.contact-cell { display: flex; flex-direction: column; gap: 3px; min-width: 160px; }
+.contact-line { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--e-ink-soft); white-space: nowrap; }
+.contact-line i { color: var(--e-ink-faint); font-size: 11px; width: 12px; text-align: center; }
+.contact-line.contact-phone { font-weight: 600; color: var(--e-ink); font-variant-numeric: tabular-nums; }
+
+/* ----- Составная ячейка "Мессенджеры": цветные чипы ----- */
+.messenger-cell { display: flex; gap: 6px; }
+.messenger-chip {
+    width: 26px;
+    height: 26px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-size: 13px;
+}
+.messenger-chip.chip-whatsapp { background: #25D366; }
+.messenger-chip.chip-telegram { background: #0088cc; }
+.messenger-empty { color: var(--e-ink-faint); }
+
+/* ----- Отдел — серая пилюля-тег вместо голого текста ----- */
+.department-tag {
     display: inline-block;
-    padding: 4px 12px;
+    padding: 3px 10px;
+    border-radius: 999px;
+    background: rgba(96, 112, 148, .12);
+    color: var(--e-ink-soft);
+    font-size: 12.5px;
+    font-weight: 600;
+}
+
+/* ----- Руководитель ----- */
+.manager-cell { display: flex; align-items: center; gap: 6px; color: var(--e-ink-soft); font-size: 13px; }
+.manager-cell i { color: var(--e-ink-faint); font-size: 11px; }
+.manager-cell.manager-empty { font-style: italic; color: var(--e-ink-faint); }
+
+/* ----- Выбранная строка (чекбокс отмечен) ----- */
+tr.row-selected td { background: rgba(0, 0, 255, .045); }
+
+/* ----- Статусы: пилюля с цветной точкой вместо сплошной плашки ----- */
+.status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px 4px 8px;
     border-radius: 30px;
     font-size: 12px;
     font-weight: 600;
 }
-.status-active {
-    background: #d4edda;
-    color: #155724;
+.status-badge::before {
+    content: '';
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    flex-shrink: 0;
 }
+.status-active {
+    background: var(--e-ok-bg);
+    color: var(--e-ok-ink);
+}
+.status-active::before { background: var(--e-ok-ink); }
 .status-inactive {
-    background: #f8d7da;
-    color: #721c24;
+    background: var(--e-off-bg);
+    color: var(--e-off-ink);
+}
+.status-inactive::before { background: var(--e-off-ink);
 }
 
 .empty-message {
@@ -524,18 +664,23 @@ td:nth-child(7) {
     display: block;
 }
 
-/* ----- Верхняя панель ----- */
+/* ----- Верхняя панель: "идентити-строка" (Отчёт Дизайн.md, 3.2) -----
+   Стеклянная карточка с тремя зонами: эйбрау+заголовок / стат-чипы / кнопка
+   "Добавить". Заменяет прежний голый <h1> в .header-row. */
 .header-row {
-    background: rgba(255, 255, 255, 0.4);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    padding: 12px 20px;
-    border-radius: 12px;
-    border: 1px solid rgba(255, 255, 255, 0.2);
+    background: var(--e-surface);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    padding: 18px 24px;
+    border-radius: var(--e-radius-lg);
+    border: 1px solid var(--e-line);
+    box-shadow: var(--e-shadow-card);
     margin-bottom: 20px;
     display: flex;
     justify-content: space-between;
     align-items: center;
+    gap: 20px;
+    flex-wrap: wrap;
 }
 .header-row h1 {
     border-bottom: none;
@@ -543,6 +688,94 @@ td:nth-child(7) {
     padding-bottom: 0;
     display: block;
 }
+.header-eyebrow {
+    font-size: 11.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .09em;
+    color: var(--e-ink-faint);
+    margin-bottom: 4px;
+}
+.header-identity { min-width: 0; }
+
+.stat-chips {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+.stat-chip {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: 8px 18px;
+    border-radius: var(--e-radius-md);
+    background: rgba(255, 255, 255, .55);
+    border: 1px solid var(--e-line);
+    min-width: 84px;
+}
+.stat-chip .stat-value {
+    font-size: 19px;
+    font-weight: 700;
+    color: var(--e-ink);
+    font-variant-numeric: tabular-nums;
+}
+.stat-chip.stat-active .stat-value { color: var(--e-ok-ink); }
+.stat-chip.stat-inactive .stat-value { color: var(--e-off-ink); }
+.stat-chip .stat-label {
+    font-size: 10.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    color: var(--e-ink-faint);
+}
+
+/* ----- Тулбар — отдельная стеклянная карточка (было: голый ряд) ----- */
+.toolbar-card {
+    background: var(--e-surface);
+    border: 1px solid var(--e-line);
+    border-radius: var(--e-radius-lg);
+    box-shadow: var(--e-shadow-card);
+    padding: 14px 18px;
+    margin-bottom: 18px;
+}
+.search-wrap {
+    position: relative;
+    flex: 1;
+    min-width: 200px;
+}
+.search-wrap .fa-magnifying-glass {
+    position: absolute;
+    left: 16px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--e-ink-faint);
+    font-size: 13px;
+    pointer-events: none;
+}
+.search-wrap #searchInput {
+    width: 100%;
+    padding-left: 38px;
+}
+.filter-btn-wrap { position: relative; display: inline-flex; }
+.filter-badge {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    background: var(--e-accent);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    min-width: 18px;
+    height: 18px;
+    border-radius: 999px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 4px;
+    box-shadow: 0 0 0 2px var(--e-surface-modal);
+}
+.filter-badge[hidden] { display: none; }
 
 /* ----- Пагинация ----- */
 /* ----- Стили для ячеек с документами (кнопки загрузки под значением) ----- */
@@ -802,12 +1035,47 @@ td:first-child, th:first-child {
     height: 16px;
     accent-color: #2563eb;
 }
+/* ----- Плавающая панель массовых операций (Отчёт Дизайн.md, 3.5) — было:
+   статичный блок в потоке, всегда видимый. Теперь: fixed-пилюля снизу по
+   центру, выезжает при первом выделенном чекбоксе. content-area резервирует
+   padding-bottom, пока панель видна (см. .has-mass-actions в render.js). ----- */
 #massActions {
-    background: rgba(255,255,255,0.6);
-    padding: 10px 16px;
-    border-radius: 10px;
-    backdrop-filter: blur(4px);
+    position: fixed;
+    left: 50%;
+    bottom: 22px;
+    transform: translate(-50%, 130%);
+    z-index: 900;
+    display: flex;
+    gap: 16px;
+    align-items: center;
+    flex-wrap: wrap;
+    background: rgba(26, 36, 52, .94);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    padding: 12px 20px;
+    border-radius: 999px;
+    box-shadow: var(--e-shadow-pop);
+    color: #f1f5f9;
+    transition: transform .25s ease;
 }
+#massActions.visible {
+    transform: translate(-50%, 0);
+}
+#massActions #selectedCount {
+    font-weight: 700;
+    font-size: 13.5px;
+    white-space: nowrap;
+}
+#massActions .mass-clear-btn {
+    background: none;
+    border: none;
+    color: #cbd5e1;
+    font-size: 14px;
+    cursor: pointer;
+    padding: 4px;
+    line-height: 1;
+}
+#massActions .mass-clear-btn:hover { color: #fff; }
 #massActionSelect {
     padding: 6px 12px;
     border-radius: 6px;

@@ -6,6 +6,9 @@ import { renderTable } from './render.js';
 
 let selectedIds = new Set();
 
+// Плавающая панель массовых операций (Отчёт Дизайн.md, 3.5) — выезжает при
+// первом выделенном чекбоксе, .list-section резервирует место снизу, пока
+// панель видна (dialog.md, п.9 — иначе последняя строка/пагинация под ней).
 export function updateSelectedCount() {
     const checkboxes = document.querySelectorAll('.row-checkbox:checked');
     selectedIds = new Set(Array.from(checkboxes).map(cb => parseInt(cb.dataset.id)));
@@ -16,6 +19,17 @@ export function updateSelectedCount() {
         const allCheckboxes = document.querySelectorAll('.row-checkbox');
         selectAll.checked = allCheckboxes.length > 0 && allCheckboxes.length === checkboxes.length;
     }
+
+    document.querySelectorAll('.row-checkbox').forEach((cb) => {
+        const row = cb.closest('tr');
+        if (row) row.classList.toggle('row-selected', cb.checked);
+    });
+
+    const massActionsEl = document.getElementById('massActions');
+    const listSection = document.getElementById('listSection');
+    const hasSelection = selectedIds.size > 0;
+    if (massActionsEl) massActionsEl.classList.toggle('visible', hasSelection);
+    if (listSection) listSection.classList.toggle('reserve-mass-actions-space', hasSelection);
 }
 
 function clearSelection() {
@@ -42,6 +56,12 @@ export function initMassActions() {
             updateSelectedCount();
         }
     });
+
+    // Крестик на плавающей панели — сброс выделения
+    const massClearBtn = document.getElementById('massClearBtn');
+    if (massClearBtn) {
+        massClearBtn.addEventListener('click', clearSelection);
+    }
 
     // Кнопка "Применить"
     document.getElementById('massApplyBtn').addEventListener('click', async function() {

@@ -1,11 +1,21 @@
 // --- render.js: отрисовка таблицы, фильтры, сортировка, пагинация ---
+//
+// Редизайн (см. Отчёт Дизайн.md / dialog.md): вместо 12 независимых колонок
+// таблица теперь строится вокруг составных ячеек "Сотрудник" (аватар+ФИО+
+// должность), "Контакты" (телефон+email) и "Мессенджеры" (чипы WhatsApp/
+// Telegram) — они структурные и присутствуют всегда, а "Отдел"/"Руководитель"/
+// "Дата найма"/"Статус" остаются независимо переключаемыми колонками, как и
+// раньше. Настройка видимых колонок (columnSettings.js) не менялась — 12
+// чекбоксов управляют тем же Set скрытых ключей, изменилось только то, как
+// composite-ячейки его учитывают (гранулярность внутри ячейки, не колонка
+// целиком — dialog.md, п.1, ответ владельца).
 
 import { fetchEmployees } from './storage.js';
 import { showDeleteConfirm } from './confirmModal.js';
 import { openEditEmployee } from './modal.js';
 import { updateSelectedCount } from './massActions.js';
 import { showToast } from './toast.js';
-import { getHiddenColumns, CONFIGURABLE_COLUMNS } from './columnSettings.js';
+import { getHiddenColumns } from './columnSettings.js';
 
 let sortField = 'id';
 let sortDirection = 'asc';
@@ -15,38 +25,107 @@ const pageSize = 20;
 const tbody = document.getElementById('employeeTableBody');
 const emptyMessage = document.getElementById('emptyMessage');
 const searchInput = document.getElementById('searchInput');
-const tableHeadRow = document.getElementById('tableHeadRow');
-const actionsHeader = document.getElementById('actionsHeader');
 
-// Рендер значения ячейки для каждой настраиваемой колонки — переиспользуется и в <td>, и нигде больше.
-const COLUMN_CELL_RENDERERS = {
-    lastName: (emp) => escapeHtml(emp.lastName),
-    firstName: (emp) => escapeHtml(emp.firstName),
-    middleName: (emp) => escapeHtml(emp.middleName || '—'),
-    email: (emp) => escapeHtml(emp.email),
-    phone: (emp) => escapeHtml(emp.phone),
-    whatsapp: (emp) => escapeHtml(emp.whatsapp || '—'),
-    telegram: (emp) => escapeHtml(emp.telegram || '—'),
-    position: (emp) => escapeHtml(emp.position || '—'),
-    department: (emp) => escapeHtml(emp.department || '—'),
-    managerName: (emp) => escapeHtml(emp.managerName || '—'),
-    hireDate: (emp) => (emp.hireDate ? formatDate(emp.hireDate) : '—'),
-    status: (emp) => {
-        const statusClass = emp.status === 'active' ? 'status-active' : 'status-inactive';
-        const statusText = emp.status === 'active' ? 'Активен' : 'Неактивен';
-        return `<span class="status-badge ${statusClass}">${statusText}</span>`;
-    }
+// Колонки, которые могут исчезать целиком (как и раньше) — их <th> статичны
+// в HTML (id ниже), просто получают/теряют класс .col-hidden.
+const STANDALONE_TH_IDS = {
+    department: 'thDepartment',
+    managerName: 'thManagerName',
+    hireDate: 'thHireDate',
+    status: 'thStatus'
 };
 
-function rebuildTableHead(visibleColumns) {
-    tableHeadRow.querySelectorAll('th[data-dynamic-column]').forEach((th) => th.remove());
-    visibleColumns.forEach((col) => {
-        const th = document.createElement('th');
-        th.dataset.field = col.key;
-        th.dataset.dynamicColumn = 'true';
-        th.textContent = col.label;
-        tableHeadRow.insertBefore(th, actionsHeader);
+function applyStandaloneColumnVisibility(hiddenColumns) {
+    Object.entries(STANDALONE_TH_IDS).forEach(([key, thId]) => {
+        const th = document.getElementById(thId);
+        if (th) th.classList.toggle('col-hidden', hiddenColumns.has(key));
     });
+}
+
+// Цвет аватара стабилен на сотрудника (id % 4), не зависит от позиции строки
+// в текущей отсортированной/отфильтрованной выдаче — dialog.md, п.5 (демо-
+// упрощение "по индексу строки" в макете для реализации не переносится).
+function renderAvatar(emp) {
+    const last = (emp.lastName || '').trim().charAt(0).toUpperCase();
+    const first = (emp.firstName || '').trim().charAt(0).toUpperCase();
+    const initials = `${last}${first}` || '?';
+    const colorIndex = Math.abs(Number(emp.id) || 0) % 4;
+    return `<span class="avatar-initials av-${colorIndex}">${escapeHtml(initials)}</span>`;
+}
+
+// "Сотрудник" — составная ячейка. Каждая часть учитывает свой ключ из
+// hiddenColumns независимо (гранулярность как и была, dialog.md п.1).
+function renderEmployeeCell(emp, hiddenColumns) {
+    const nameParts = [];
+    if (!hiddenColumns.has('lastName')) nameParts.push(emp.lastName);
+    if (!hiddenColumns.has('firstName')) nameParts.push(emp.firstName);
+    if (!hiddenColumns.has('middleName') && emp.middleName) nameParts.push(emp.middleName);
+    const fio = escapeHtml(nameParts.filter(Boolean).join(' '));
+    const showPosition = !hiddenColumns.has('position') && emp.position;
+    return `
+        <div class="employee-cell">
+            ${renderAvatar(emp)}
+            <div class="employee-cell-text">
+                <div class="employee-name">${fio}</div>
+                ${showPosition ? `<div class="employee-position">${escapeHtml(emp.position)}</div>` : ''}
+            </div>
+        </div>
+    `;
+}
+
+// "Контакты" — скрыт email → остаётся только телефон (и наоборот); скрыты
+// оба → ячейка пустая (dialog.md п.1, ответ владельца, буквально).
+function renderContactsCell(emp, hiddenColumns) {
+    const lines = [];
+    if (!hiddenColumns.has('phone') && emp.phone) {
+        lines.push(`<div class="contact-line contact-phone"><i class="fas fa-phone" aria-hidden="true"></i>${escapeHtml(emp.phone)}</div>`);
+    }
+    if (!hiddenColumns.has('email') && emp.email) {
+        lines.push(`<div class="contact-line"><i class="fas fa-envelope" aria-hidden="true"></i>${escapeHtml(emp.email)}</div>`);
+    }
+    return `<div class="contact-cell">${lines.join('')}</div>`;
+}
+
+// "Мессенджеры" — чип не показывается, если пусто поле у сотрудника ИЛИ
+// колонка скрыта в настройках (оба условия вместе, не взаимоисключающе);
+// если ни один чип не показан — тире (Отчёт Дизайн.md, п.6 ответов).
+function renderMessengersCell(emp, hiddenColumns) {
+    const chips = [];
+    if (!hiddenColumns.has('whatsapp') && emp.whatsapp) {
+        chips.push('<span class="messenger-chip chip-whatsapp" title="WhatsApp"><i class="fab fa-whatsapp" aria-hidden="true"></i></span>');
+    }
+    if (!hiddenColumns.has('telegram') && emp.telegram) {
+        chips.push('<span class="messenger-chip chip-telegram" title="Telegram"><i class="fab fa-telegram" aria-hidden="true"></i></span>');
+    }
+    if (chips.length === 0) {
+        return '<div class="messenger-cell messenger-empty">—</div>';
+    }
+    return `<div class="messenger-cell">${chips.join('')}</div>`;
+}
+
+function renderManagerCell(emp) {
+    if (!emp.managerName) {
+        return '<span class="manager-cell manager-empty">—</span>';
+    }
+    return `<span class="manager-cell"><i class="fas fa-share" aria-hidden="true"></i>${escapeHtml(emp.managerName)}</span>`;
+}
+
+function renderStatusBadge(emp) {
+    const statusClass = emp.status === 'active' ? 'status-active' : 'status-inactive';
+    const statusText = emp.status === 'active' ? 'Активен' : 'Неактивен';
+    return `<span class="status-badge ${statusClass}">${statusText}</span>`;
+}
+
+// Живой пересчёт стат-чипов шапки — по всему текущему отфильтрованному
+// набору (все страницы), не только по видимой странице пагинации
+// (dialog.md, п.8, ответ владельца).
+function renderStatChips(filtered) {
+    const total = filtered.length;
+    const active = filtered.filter((e) => e.status === 'active').length;
+    const inactive = total - active;
+    document.getElementById('statTotal').textContent = String(total);
+    document.getElementById('statActive').textContent = String(active);
+    document.getElementById('statInactive').textContent = String(inactive);
 }
 
 export async function renderTable() {
@@ -82,11 +161,16 @@ export async function renderTable() {
     populateFilterOptions(allEmployees);
 
     const hiddenColumns = await getHiddenColumns();
-    const visibleColumns = CONFIGURABLE_COLUMNS.filter((col) => !hiddenColumns.has(col.key));
-    rebuildTableHead(visibleColumns);
+    applyStandaloneColumnVisibility(hiddenColumns);
+    updateFilterBadge({ status, department, position, hasWhatsapp, hasTelegram, hireDateFrom, hireDateTo });
 
-    // Колонка, по которой шла сортировка, скрыта — откатываем на дефолтную (по id)
-    if (sortField !== 'id' && !visibleColumns.some((col) => col.key === sortField)) {
+    // Стат-чипы — по всему текущему отфильтрованному набору (все страницы),
+    // не только по видимой странице (dialog.md, п.8).
+    renderStatChips(filtered);
+
+    // Колонка, по которой шла сортировка, скрыта — откатываем на дефолтную (по id).
+    // "lastName" (заголовок "Сотрудник") и "id" никогда не скрываются целиком.
+    if (sortField in STANDALONE_TH_IDS && hiddenColumns.has(sortField)) {
         sortField = 'id';
         sortDirection = 'asc';
     }
@@ -142,37 +226,49 @@ export async function renderTable() {
         });
     });
 
-    // Генерация строк с чекбоксами
+    // Генерация строк — Сотрудник/Контакты/Мессенджеры всегда рендерятся
+    // (composite-ячейки), Отдел/Руководитель/Дата найма/Статус получают
+    // .col-hidden, если скрыты в настройках (та же логика, что и для их <th>).
     let html = '';
     pageItems.forEach(emp => {
         const idFormatted = String(emp.id).padStart(4, '0');
-        const dataCells = visibleColumns.map((col) => `<td>${COLUMN_CELL_RENDERERS[col.key](emp)}</td>`).join('');
+        const hiddenCls = (key) => (hiddenColumns.has(key) ? ' col-hidden' : '');
+        const fullName = `${emp.lastName || ''} ${emp.firstName || ''}`.trim();
         html += `
-            <tr>
+            <tr data-id="${emp.id}">
                 <td><input type="checkbox" class="row-checkbox" data-id="${emp.id}"></td>
                 <td>${idFormatted}</td>
-                ${dataCells}
+                <td>${renderEmployeeCell(emp, hiddenColumns)}</td>
+                <td class="department-cell${hiddenCls('department')}">${emp.department ? `<span class="department-tag">${escapeHtml(emp.department)}</span>` : '—'}</td>
+                <td>${renderContactsCell(emp, hiddenColumns)}</td>
+                <td>${renderMessengersCell(emp, hiddenColumns)}</td>
+                <td class="manager-td${hiddenCls('managerName')}">${renderManagerCell(emp)}</td>
+                <td class="hiredate-td${hiddenCls('hireDate')}">${emp.hireDate ? formatDate(emp.hireDate) : '—'}</td>
+                <td class="status-td${hiddenCls('status')}">${renderStatusBadge(emp)}</td>
                 <td>
-                    <button class="action-btn btn-edit" data-id="${emp.id}" aria-label="Редактировать"><i class="fas fa-pencil-alt" aria-hidden="true"></i></button>
-                    <button class="action-btn btn-delete" data-id="${emp.id}" aria-label="Удалить"><i class="fas fa-trash" aria-hidden="true"></i></button>
+                    <button class="action-btn btn-edit" data-id="${emp.id}" aria-label="Редактировать" title="Изменить"><i class="fas fa-pencil-alt" aria-hidden="true"></i></button>
+                    <button class="action-btn btn-delete" data-id="${emp.id}" data-name="${escapeHtml(fullName)}" aria-label="Удалить" title="Удалить"><i class="fas fa-trash" aria-hidden="true"></i></button>
                 </td>
             </tr>
         `;
     });
     tbody.innerHTML = html;
 
-    // Обновляем индикатор сортировки
+    // Обновляем индикатор сортировки — реальная FA-иконка вместо текстовых
+    // символов ▲/▼ (Отчёт Дизайн.md исправлен, dialog.md п.4: этого не было
+    // в текущей реализации, это новый элемент).
     document.querySelectorAll('thead th[data-field]').forEach(th => {
         const field = th.dataset.field;
         const icon = th.querySelector('.sort-icon');
         if (field === sortField) {
+            const iconClass = sortDirection === 'asc' ? 'fa-arrow-down-short-wide' : 'fa-arrow-down-wide-short';
             if (!icon) {
-                const span = document.createElement('span');
-                span.className = 'sort-icon';
-                span.textContent = sortDirection === 'asc' ? ' ▲' : ' ▼';
-                th.appendChild(span);
+                const i = document.createElement('i');
+                i.className = `fas ${iconClass} sort-icon`;
+                i.setAttribute('aria-hidden', 'true');
+                th.appendChild(i);
             } else {
-                icon.textContent = sortDirection === 'asc' ? ' ▲' : ' ▼';
+                icon.className = `fas ${iconClass} sort-icon`;
             }
         } else {
             if (icon) icon.remove();
@@ -180,6 +276,17 @@ export async function renderTable() {
     });
 
     updateSelectedCount();
+}
+
+// Бейдж числа активных фильтров на кнопке "Фильтры" — живой счётчик, не
+// демо-заглушка (в макете было жёстко "2" для иллюстрации).
+function updateFilterBadge({ status, department, position, hasWhatsapp, hasTelegram, hireDateFrom, hireDateTo }) {
+    const badge = document.getElementById('filterBadge');
+    if (!badge) return;
+    const activeCount = [status, department, position, hireDateFrom, hireDateTo].filter(Boolean).length
+        + (hasWhatsapp ? 1 : 0) + (hasTelegram ? 1 : 0);
+    badge.textContent = String(activeCount);
+    badge.hidden = activeCount === 0;
 }
 
 function populateFilterOptions(employees) {
@@ -253,7 +360,7 @@ export function initTableActions() {
         if (!target) return;
         if (target.classList.contains('btn-delete')) {
             const id = parseInt(target.dataset.id);
-            showDeleteConfirm(id);
+            showDeleteConfirm(id, target.dataset.name || '');
         } else if (target.classList.contains('btn-edit')) {
             const id = parseInt(target.dataset.id);
             openEditEmployee(id);

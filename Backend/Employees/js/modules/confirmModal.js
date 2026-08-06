@@ -26,8 +26,16 @@ function closeCloseConfirm(confirmed) {
 }
 
 // --- Подтверждение удаления одного сотрудника ---
-export function showDeleteConfirm(id) {
+// Текст персонализирован именем (Отчёт Дизайн.md, 3.7: «Удалить сотрудника
+// «Фамилия Имя»?» вместо обезличенного "этого сотрудника").
+export function showDeleteConfirm(id, name) {
     deleteTargetId = id;
+    const message = document.querySelector('#deleteModal p');
+    if (message) {
+        message.textContent = name
+            ? `Удалить сотрудника «${name}»? Действие необратимо.`
+            : 'Вы действительно хотите удалить этого сотрудника? Действие необратимо.';
+    }
     document.getElementById('deleteModal').style.display = 'flex';
 }
 

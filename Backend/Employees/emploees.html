@@ -7,40 +7,6 @@
     <link rel="stylesheet" href="./css/employees-light.css" />
 
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" integrity="sha512-Fo3rlrZj/k7ujTnHg4CGR2D7kSs0v4LLanw2qksYuRlEzO+tcaEPQogQ0KaoGN26/zrn20ImR1DfuLWnOo7aBA==" crossorigin="anonymous" referrerpolicy="no-referrer">
-    <style>
-        /* Стили для кнопок действий без фона */
-        .action-btn {
-            background: none !important;
-            border: none !important;
-            padding: 4px 6px !important;
-            font-size: 16px;
-            color: #6c757d;
-            cursor: pointer;
-            transition: color 0.2s;
-            border-radius: 4px;
-        }
-        .action-btn:hover {
-            color: #0000FF;
-        }
-        .action-btn.btn-delete:hover {
-            color: #e74c3c;
-        }
-        .action-btn i {
-            pointer-events: none;
-        }
-        /* Визуальный индикатор сортировки */
-        .sort-icon {
-            margin-left: 4px;
-            font-size: 12px;
-        }
-        th[data-field] {
-            cursor: pointer;
-            user-select: none;
-        }
-        th[data-field]:hover {
-            background: #e8edf5;
-        }
-    </style>
 </head>
 <body>
 
@@ -50,18 +16,33 @@
         <main class="hub-main">
         <div class="container">
         <div class="header-row">
-            <h1>Управление сотрудниками</h1>
+            <div class="header-identity">
+                <div class="header-eyebrow">CRM · Кадровый учёт</div>
+                <h1>Сотрудники</h1>
+            </div>
+            <div class="stat-chips">
+                <div class="stat-chip"><span class="stat-value" id="statTotal">0</span><span class="stat-label">Всего</span></div>
+                <div class="stat-chip stat-active"><span class="stat-value" id="statActive">0</span><span class="stat-label">Активны</span></div>
+                <div class="stat-chip stat-inactive"><span class="stat-value" id="statInactive">0</span><span class="stat-label">Неактивны</span></div>
+            </div>
             <div style="display: flex; gap: 12px; align-items: center;">
-                <button class="btn btn-primary" id="addEmployeeBtn">Добавить</button>
+                <button class="btn btn-primary" id="addEmployeeBtn"><i class="fas fa-user-plus" aria-hidden="true" style="margin-right:8px;"></i>Добавить сотрудника</button>
             </div>
         </div>
 
-        <section class="list-section">
-            <h2>Список сотрудников</h2>
-            <div class="toolbar">
-                <input type="text" id="searchInput" placeholder="Поиск по имени, телефону, email..." />
-                <button class="btn btn-primary" id="filterToggleBtn">Фильтр</button>
-                <button class="btn btn-secondary btn-icon" id="columnSettingsBtn" aria-label="Настроить видимые колонки" title="Настроить видимые колонки"><i class="fas fa-gear" aria-hidden="true"></i></button>
+        <section class="list-section" id="listSection">
+            <div class="toolbar-card">
+                <div class="toolbar">
+                    <div class="search-wrap">
+                        <i class="fas fa-magnifying-glass" aria-hidden="true"></i>
+                        <input type="text" id="searchInput" placeholder="Поиск по имени, телефону, email..." />
+                    </div>
+                    <div class="filter-btn-wrap">
+                        <button class="btn btn-primary" id="filterToggleBtn"><i class="fas fa-sliders" aria-hidden="true" style="margin-right:8px;"></i>Фильтры</button>
+                        <span class="filter-badge" id="filterBadge" hidden>0</span>
+                    </div>
+                    <button class="btn btn-secondary btn-icon" id="columnSettingsBtn" aria-label="Настроить видимые колонки" title="Настроить видимые колонки"><i class="fas fa-table-columns" aria-hidden="true"></i></button>
+                </div>
             </div>
             <div class="table-wrapper">
                 <table>
@@ -69,6 +50,13 @@
                         <tr id="tableHeadRow">
                             <th style="text-align:center; width:40px;"><input type="checkbox" id="selectAll" style="cursor:pointer; width:16px; height:16px; accent-color:#2563eb;"></th>
                             <th data-field="id">ID</th>
+                            <th data-field="lastName">Сотрудник</th>
+                            <th id="thDepartment" data-field="department">Отдел</th>
+                            <th>Контакты</th>
+                            <th>Мессенджеры</th>
+                            <th id="thManagerName" data-field="managerName">Руководитель</th>
+                            <th id="thHireDate" data-field="hireDate">Дата найма</th>
+                            <th id="thStatus" data-field="status">Статус</th>
                             <th id="actionsHeader">Действия</th>
                         </tr>
                     </thead>
@@ -80,17 +68,20 @@
             <div id="paginationControls" style="display: flex; justify-content: flex-end; align-items: center; margin-top: 15px; gap: 6px; flex-wrap: wrap;">
                 <!-- Номера страниц генерируются скриптом -->
             </div>
-            <div id="massActions" style="display: flex; gap: 16px; align-items: center; margin-top: 10px; flex-wrap: wrap; background: rgba(255,255,255,0.6); padding: 10px 16px; border-radius: 10px; backdrop-filter: blur(4px);">
-                <span id="selectedCount">Выбрано: 0</span>
-                <select id="massActionSelect" style="padding: 6px 12px; border-radius: 6px; border: 1px solid #ccd7e6;">
-                    <option value="">Выберите действие</option>
-                    <option value="inactive">Перевести в неактивные</option>
-                    <option value="delete">Удалить</option>
-                </select>
-                <button class="btn btn-primary" id="massApplyBtn">Применить</button>
-            </div>
             <div id="emptyMessage" class="empty-message">Нет сотрудников. Добавьте первого!</div>
         </section>
+
+        <!-- Плавающая панель массовых операций — вне .list-section, position:fixed (Отчёт Дизайн.md, 3.5) -->
+        <div id="massActions">
+            <span id="selectedCount">Выбрано: 0</span>
+            <select id="massActionSelect" style="padding: 6px 12px; border-radius: 6px; border: 1px solid #ccd7e6;">
+                <option value="">Выберите действие</option>
+                <option value="inactive">Перевести в неактивные</option>
+                <option value="delete">Удалить</option>
+            </select>
+            <button class="btn btn-primary btn-sm" id="massApplyBtn">Применить</button>
+            <button type="button" class="mass-clear-btn" id="massClearBtn" aria-label="Сбросить выделение" title="Сбросить выделение"><i class="fas fa-xmark" aria-hidden="true"></i></button>
+        </div>
         </div>
         </main>
     </div>
@@ -100,7 +91,7 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h2 id="modalTitle">Новый сотрудник</h2>
-                <span class="modal-close" id="modalCloseBtn" aria-label="Закрыть">&times;</span>
+                <span class="modal-close" id="modalCloseBtn" aria-label="Закрыть"><i class="fas fa-xmark" aria-hidden="true"></i></span>
             </div>
             <div id="stepIndicator" class="step-indicator">Шаг 1 из 2</div>
             <form id="employeeForm">
@@ -162,7 +153,7 @@
             <label for="password">Пароль</label>
             <div style="display: flex; gap: 8px;">
                 <input type="text" id="password" name="password" placeholder="Сгенерируйте пароль" readonly style="flex: 1;" />
-                <button type="button" class="btn btn-secondary" id="generatePasswordBtn">Сгенерировать</button>
+                <button type="button" class="btn btn-secondary" id="generatePasswordBtn"><i class="fas fa-dice" aria-hidden="true" style="margin-right:6px;"></i>Сгенерировать</button>
             </div>
         </div>
     </div>
@@ -170,7 +161,7 @@
     <div id="step1" class="form-step">
         <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 10px;">
             <button type="button" class="btn btn-secondary" id="modalCancelBtn">Отмена</button>
-            <button type="button" class="btn btn-primary" id="nextStepBtn">Далее</button>
+            <button type="button" class="btn btn-primary" id="nextStepBtn">Далее<i class="fas fa-arrow-right" aria-hidden="true" style="margin-left:8px;"></i></button>
         </div>
     </div>
     <!-- Шаг 2 -->
@@ -226,6 +217,7 @@
                         <label for="passportFront">Паспорт (лицевая сторона)</label>
                         <div class="file-upload-area">
                             <input type="file" id="passportFront" class="hidden-file-input" accept="image/*,.pdf" />
+                            <i class="fas fa-file doc-file-icon" aria-hidden="true"></i>
                             <button type="button" class="btn btn-secondary file-trigger">Выбрать файл</button>
                             <span class="file-name"></span>
                             <span class="file-status-icon" style="display: none; color: #22c55e;"><i class="fas fa-check-circle"></i></span>
@@ -236,6 +228,7 @@
                         <label for="passportBack">Паспорт (оборотная сторона)</label>
                         <div class="file-upload-area">
                             <input type="file" id="passportBack" class="hidden-file-input" accept="image/*,.pdf" />
+                            <i class="fas fa-file doc-file-icon" aria-hidden="true"></i>
                             <button type="button" class="btn btn-secondary file-trigger">Выбрать файл</button>
                             <span class="file-name"></span>
                             <span class="file-status-icon" style="display: none; color: #22c55e;"><i class="fas fa-check-circle"></i></span>
@@ -246,6 +239,7 @@
                         <label for="patent">Патент/Самозанятость</label>
                         <div class="file-upload-area">
                             <input type="file" id="patent" class="hidden-file-input" accept="image/*,.pdf" />
+                            <i class="fas fa-file doc-file-icon" aria-hidden="true"></i>
                             <button type="button" class="btn btn-secondary file-trigger">Выбрать файл</button>
                             <span class="file-name"></span>
                             <span class="file-status-icon" style="display: none; color: #22c55e;"><i class="fas fa-check-circle"></i></span>
@@ -256,6 +250,7 @@
                         <label for="contract">Договор</label>
                         <div class="file-upload-area">
                             <input type="file" id="contract" class="hidden-file-input" accept="image/*,.pdf" />
+                            <i class="fas fa-file doc-file-icon" aria-hidden="true"></i>
                             <button type="button" class="btn btn-secondary file-trigger">Выбрать файл</button>
                             <span class="file-name"></span>
                             <span class="file-status-icon" style="display: none; color: #22c55e;"><i class="fas fa-check-circle"></i></span>
@@ -266,6 +261,7 @@
                         <label for="additionalAgreement">Доп. соглашение</label>
                         <div class="file-upload-area">
                             <input type="file" id="additionalAgreement" class="hidden-file-input" accept="image/*,.pdf" />
+                            <i class="fas fa-file doc-file-icon" aria-hidden="true"></i>
                             <button type="button" class="btn btn-secondary file-trigger">Выбрать файл</button>
                             <span class="file-name"></span>
                             <span class="file-status-icon" style="display: none; color: #22c55e;"><i class="fas fa-check-circle"></i></span>
@@ -276,7 +272,7 @@
             </div>
         </div>
         <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 10px;">
-            <button type="button" class="btn btn-secondary" id="prevStepBtn">Назад</button>
+            <button type="button" class="btn btn-secondary" id="prevStepBtn"><i class="fas fa-arrow-left" aria-hidden="true" style="margin-right:8px;"></i>Назад</button>
             <button type="submit" class="btn btn-primary" id="submitBtn">Сохранить</button>
         </div>
     </div>
@@ -289,7 +285,7 @@
         <div class="modal-content" style="max-width: 450px;">
             <div class="modal-header">
                 <h2>Подтверждение закрытия</h2>
-                <span class="modal-close" id="closeConfirmCloseBtn" aria-label="Закрыть">&times;</span>
+                <span class="modal-close" id="closeConfirmCloseBtn" aria-label="Закрыть"><i class="fas fa-xmark" aria-hidden="true"></i></span>
             </div>
             <p style="margin: 15px 0; font-size: 16px;" id="closeConfirmMessage">Есть несохранённые изменения. Закрыть без сохранения?</p>
             <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 20px;">
@@ -302,7 +298,7 @@
         <div class="modal-content" style="max-width: 450px;">
             <div class="modal-header">
                 <h2>Подтверждение удаления</h2>
-                <span class="modal-close" id="deleteModalCloseBtn" aria-label="Закрыть">&times;</span>
+                <span class="modal-close" id="deleteModalCloseBtn" aria-label="Закрыть"><i class="fas fa-xmark" aria-hidden="true"></i></span>
             </div>
             <p style="margin: 15px 0; font-size: 16px;">Вы действительно хотите удалить этого сотрудника? Действие необратимо.</p>
             <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 20px;">
@@ -317,7 +313,7 @@
         <div class="modal-content" style="max-width: 600px;">
             <div class="modal-header">
                 <h2>Фильтры</h2>
-                <span class="modal-close" id="filterModalCloseBtn" aria-label="Закрыть">&times;</span>
+                <span class="modal-close" id="filterModalCloseBtn" aria-label="Закрыть"><i class="fas fa-xmark" aria-hidden="true"></i></span>
             </div>
             <div class="form-grid">
                 <div class="form-group">
@@ -372,7 +368,7 @@
         <div class="modal-content" style="max-width: 420px;">
             <div class="modal-header">
                 <h2>Подтвердите личность</h2>
-                <span class="modal-close" id="identityCloseBtn" aria-label="Закрыть">&times;</span>
+                <span class="modal-close" id="identityCloseBtn" aria-label="Закрыть"><i class="fas fa-xmark" aria-hidden="true"></i></span>
             </div>
             <form id="identityForm">
                 <div class="form-grid" style="grid-template-columns: 1fr;">
@@ -400,7 +396,7 @@
         <div class="modal-content" style="max-width: 480px;">
             <div class="modal-header">
                 <h2>Видимые колонки таблицы</h2>
-                <span class="modal-close" id="columnSettingsCloseBtn" aria-label="Закрыть">&times;</span>
+                <span class="modal-close" id="columnSettingsCloseBtn" aria-label="Закрыть"><i class="fas fa-xmark" aria-hidden="true"></i></span>
             </div>
             <div id="columnCheckboxList" class="column-checkbox-list">
                 <!-- Чекбоксы генерируются JS -->
