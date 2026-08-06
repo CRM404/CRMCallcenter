@@ -3,12 +3,11 @@
 import {
     fetchScripts, createScript, updateScript,
     fetchScriptNodes, createScriptNode, updateScriptNode, deleteScriptNode,
-    fetchOffers, createOffer, fetchFunnelStatuses,
+    fetchOffers, fetchFunnelStatuses,
     fetchEmployees
 } from './scriptsAdminStorage.js';
 import { renderScriptList } from './scriptsAdminScriptList.js';
 import { renderScriptForm } from './scriptsAdminScriptForm.js';
-import { renderOffersList } from './scriptsAdminOffers.js';
 import { renderNodesPanel } from './scriptsAdminNodes.js';
 import { renderAssignmentPanel } from './scriptsAdminAssignment.js';
 import { initConfirmModal, confirmAction } from './scriptsAdminConfirm.js';
@@ -23,24 +22,18 @@ document.addEventListener('DOMContentLoaded', function() {
     const scriptListWrap = document.getElementById('saScriptListWrap');
     const scriptFormPanel = document.getElementById('saScriptFormPanel');
     const nodesSection = document.getElementById('saNodesSection');
-    const nodesTitle = document.getElementById('saNodesTitle');
+    const nodesMetaPanel = document.getElementById('saNodesMetaPanel');
     const nodesPanelEl = document.getElementById('saNodesPanel');
     const assignmentEl = document.getElementById('saAssignmentPanel');
     const hideNodesBtn = document.getElementById('saHideNodesBtn');
 
     const newScriptBtn = document.getElementById('saNewScriptBtn');
 
-    const offersToggleBtn = document.getElementById('saToggleOffersBtn');
-    const offersPanel = document.getElementById('saOffersPanel');
-    const offersListEl = document.getElementById('saOffersList');
-    const offerNameInput = document.getElementById('saOfferNameInput');
-    const offerAddBtn = document.getElementById('saOfferAddBtn');
-
     let offers = [];
     let funnelStatuses = [];
     let selectedScript = null;
     let currentNodes = [];
-    let editingScript = null; // null = создание, объект = редактирование
+    let editingScript = null; // используется только формой создания нового скрипта
     let nodesUiState = { rootEditing: false, addingObjection: false, editingObjectionId: null };
 
     async function reloadOffers() {
@@ -62,17 +55,18 @@ document.addEventListener('DOMContentLoaded', function() {
     async function reloadScripts() {
         try {
             const scripts = await fetchScripts();
-            renderScriptList(scriptListEl, scripts, selectedScript ? selectedScript.id : null, openScript, openScriptFormPanel, async () => {
+            renderScriptList(scriptListEl, scripts, selectedScript ? selectedScript.id : null, openScript, async () => {
                 await reloadScripts();
             });
             if (selectedScript) {
                 const refreshed = scripts.find((s) => s.id === selectedScript.id);
                 if (!refreshed) {
                     selectedScript = null;
+                    currentNodes = [];
                     nodesSection.classList.remove('visible');
+                    scriptListWrap.hidden = false;
                 } else {
                     selectedScript = refreshed;
-                    nodesTitle.textContent = `Узлы скрипта: ${refreshed.title}`;
                     await reloadAssignment();
                 }
             }
@@ -98,6 +92,27 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         } catch (e) {
             showToast(e.message, 'error');
+        }
+    }
+
+    // Метаданные (Название/Оффер/Статус воронки) — та же форма, что раньше жила
+    // в отдельной панели редактирования, теперь встроена в верх открытой панели
+    // "Открыть" (кнопка "Изменить" убрана, см. бриф). "Отмена" здесь просто
+    // перерисовывает форму текущими сохранёнными значениями — не закрывает и не
+    // трогает узлы/операторы ниже (тот же паттерн, что у "Отмена" в редактировании
+    // основного текста узла).
+    function renderScriptMeta() {
+        renderScriptForm(nodesMetaPanel, { editingScript: selectedScript, offers, funnelStatuses }, handleMetaSave, renderScriptMeta);
+    }
+
+    async function handleMetaSave({ title, offerId, funnelStatusId }) {
+        try {
+            await updateScript(selectedScript.id, { title, offerId, funnelStatusId, status: selectedScript.status });
+            showToast('Скрипт сохранён', 'success');
+            await reloadScripts();
+            renderScriptMeta();
+        } catch (err) {
+            showToast(err.message, 'error');
         }
     }
 
@@ -190,11 +205,15 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    // "Открыть" — единая панель: метаданные (Название/Оффер/Статус воронки) +
+    // узлы + назначение операторов. Замещает список скриптов, как раньше делала
+    // отдельная форма редактирования (кнопка "Изменить" убрана, см. бриф).
     async function openScript(script) {
         selectedScript = script;
         nodesUiState = { rootEditing: false, addingObjection: false, editingObjectionId: null };
-        nodesTitle.textContent = `Узлы скрипта: ${script.title}`;
+        scriptListWrap.hidden = true;
         nodesSection.classList.add('visible');
+        renderScriptMeta();
         await reloadNodes();
         await reloadAssignment();
         nodesSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -232,37 +251,18 @@ document.addEventListener('DOMContentLoaded', function() {
 
     newScriptBtn.addEventListener('click', () => openScriptFormPanel(null));
 
-    // "Скрыть" — полностью убирает секцию узлов/операторов, возвращает к чистому
-    // виду "только таблица скриптов", без следов открытой панели.
-    hideNodesBtn.addEventListener('click', () => {
+    // "Скрыть" — полностью убирает объединённую панель (метаданные + узлы +
+    // операторы), возвращает к чистому виду "только таблица скриптов".
+    hideNodesBtn.addEventListener('click', async () => {
         selectedScript = null;
         currentNodes = [];
         nodesUiState = { rootEditing: false, addingObjection: false, editingObjectionId: null };
         nodesSection.classList.remove('visible');
+        nodesMetaPanel.innerHTML = '';
         nodesPanelEl.innerHTML = '';
         assignmentEl.innerHTML = '';
-    });
-
-    offersToggleBtn.addEventListener('click', () => {
-        offersPanel.hidden = !offersPanel.hidden;
-        if (!offersPanel.hidden) renderOffersList(offersListEl, offers);
-    });
-
-    offerAddBtn.addEventListener('click', async () => {
-        const name = offerNameInput.value;
-        if (!name || !name.trim()) {
-            showToast('Укажите название оффера', 'error');
-            return;
-        }
-        try {
-            await createOffer(name);
-            showToast('Оффер добавлен', 'success');
-            offerNameInput.value = '';
-            await reloadOffers();
-            renderOffersList(offersListEl, offers);
-        } catch (e) {
-            showToast(e.message, 'error');
-        }
+        scriptListWrap.hidden = false;
+        await reloadScripts();
     });
 
     (async () => {

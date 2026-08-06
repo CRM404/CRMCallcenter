@@ -62,12 +62,11 @@ export function deleteScriptNode(nodeId) {
     return request(`/admin/script-nodes/${nodeId}`, { method: 'DELETE' });
 }
 
+// Оффер по-прежнему обязателен при создании/редактировании скрипта (выпадающий
+// список ниже) — сам UI для добавления нового оффера с этой страницы убран
+// (см. бриф), эндпоинт оставлен рабочим на будущее.
 export function fetchOffers() {
     return request('/admin/offers');
-}
-
-export function createOffer(name) {
-    return request('/admin/offers', { method: 'POST', body: JSON.stringify({ name }) });
 }
 
 // Список сотрудников для формы назначения — переиспользует прод-эндпоинт
