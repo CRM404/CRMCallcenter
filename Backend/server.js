@@ -17,6 +17,7 @@ const leadFunnelStatusesRouter = require('./routes/leadFunnelStatuses');
 const scriptsRouter = require('./routes/scripts');
 const scriptsAdminRouter = require('./routes/scriptsAdmin');
 const organizationRouter = require('./routes/organization');
+const cpaNetworksRouter = require('./routes/cpaNetworks');
 
 const app = express();
 
@@ -37,21 +38,25 @@ app.use('/api/lead-funnel-statuses', leadFunnelStatusesRouter);
 app.use('/api/scripts', scriptsRouter);
 app.use('/api/admin', scriptsAdminRouter);
 app.use('/api/organization', organizationRouter);
+app.use('/api/cpa-networks', cpaNetworksRouter);
 
-// Отдаём страницы "Сотрудники", "Оператор", "Скрипт (админ)" и "Главная" тем же
-// сервером — отдельный статический хостинг фронтенда не нужен. Все папки лежат
-// внутри Backend/ (а не рядом), т.к. Railway собирает только содержимое Root
-// Directory. Файлы внутри Operator/, ScriptsAdmin/ и Main/ названы с префиксом
-// operator*/scriptsAdmin*/main*, чтобы не пересекаться по имени с одноимённой
-// структурой Employees/ — все четыре каталога монтируются в корень "/".
+// Отдаём страницы "Сотрудники", "Оператор", "Скрипт (админ)", "Главная" и
+// "CPA-сети" тем же сервером — отдельный статический хостинг фронтенда не
+// нужен. Все папки лежат внутри Backend/ (а не рядом), т.к. Railway собирает
+// только содержимое Root Directory. Файлы внутри Operator/, ScriptsAdmin/,
+// Main/ и CpaNetworks/ названы с префиксом operator*/scriptsAdmin*/main*/cpa*,
+// чтобы не пересекаться по имени с одноимённой структурой Employees/ — все
+// пять каталогов монтируются в корень "/".
 const employeesDir = path.join(__dirname, 'Employees');
 const operatorDir = path.join(__dirname, 'Operator');
 const scriptsAdminDir = path.join(__dirname, 'ScriptsAdmin');
 const mainDir = path.join(__dirname, 'Main');
+const cpaNetworksDir = path.join(__dirname, 'CpaNetworks');
 app.use(express.static(employeesDir));
 app.use(express.static(operatorDir));
 app.use(express.static(scriptsAdminDir));
 app.use(express.static(mainDir));
+app.use(express.static(cpaNetworksDir));
 app.get('/', (req, res) => {
     res.redirect('/main.html');
 });

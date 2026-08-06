@@ -1,14 +1,15 @@
 // --- employeesNav.js: вертикальная иконочная навигация хаба слева (паттерн operatorNav.js) ---
-// Дублирует mainNav.js — между статическими папками нет общего кода. Ровно 4
-// пункта — 2 рабочих (переход между страницами хаба, обычные <a href>) и 2
+// Дублирует mainNav.js — между статическими папками нет общего кода. 5
+// пунктов — 3 рабочих (переход между страницами хаба, обычные <a href>) и 2
 // заглушки на будущие разделы (клик — тост "скоро появится"). Без спейсера/кнопки
-// выхода — в хабе нет логина (см. dialog.md, п.1).
+// выхода — в хабе нет логина (см. dialog.md, задача про хаб).
 
 import { showToast } from './toast.js';
 
 const NAV_ITEMS = [
     { key: 'requisites', label: 'Реквизиты', icon: 'fa-file-invoice', href: '/main.html' },
     { key: 'employees', label: 'Сотрудники', icon: 'fa-users', href: '/emploees.html' },
+    { key: 'cpa', label: 'CPA-сети', icon: 'fa-handshake', href: '/cpa-networks.html' },
     { key: 'operator', label: 'Оператор', icon: 'fa-headset' },
     { key: 'scripts', label: 'Управление скриптом', icon: 'fa-diagram-project' }
 ];
