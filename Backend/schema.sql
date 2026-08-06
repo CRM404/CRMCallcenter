@@ -297,3 +297,41 @@ BEGIN
         EXECUTE 'ALTER TABLE employees DROP COLUMN script_id';
     END IF;
 END $$;
+
+-- Организация (юрлицо владельца CRM) — справочные данные для будущей генерации
+-- документов. Обычная таблица (не singleton) — на этой итерации фронт работает
+-- ровно с одной записью (создаёт, если её ещё нет; иначе редактирует), но схема
+-- не запрещает несколько строк на будущее (несколько юрлиц), решение куратора.
+CREATE TABLE IF NOT EXISTS organizations (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR NOT NULL,
+    legal_form VARCHAR,          -- Организационно-правовая форма (ООО, ИП и т.п.)
+    inn VARCHAR,
+    kpp VARCHAR,
+    ogrn VARCHAR,
+    okved VARCHAR,
+    authorized_capital NUMERIC,
+    registration_country VARCHAR,
+    general_director VARCHAR,
+    registration_date DATE,
+    legal_address VARCHAR
+);
+
+CREATE TABLE IF NOT EXISTS organization_bank_accounts (
+    id SERIAL PRIMARY KEY,
+    organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    bank_name VARCHAR NOT NULL,
+    checking_account VARCHAR,    -- Расчётный счёт
+    correspondent_account VARCHAR,
+    bik VARCHAR,
+    currency VARCHAR,
+    opened_at DATE
+);
+
+CREATE TABLE IF NOT EXISTS organization_taxes (
+    id SERIAL PRIMARY KEY,
+    organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    tax_type VARCHAR NOT NULL,   -- Вид налога — свободный текст, справочника нет
+    rate VARCHAR,                -- строка, не число (ставки бывают вида "6%", "15% с разницы")
+    periodicity VARCHAR          -- свободный текст, справочника периодов нет
+);

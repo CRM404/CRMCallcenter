@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CRM – Главная</title>
+    <link rel="stylesheet" href="./css/main-light.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" integrity="sha512-Fo3rlrZj/k7ujTnHg4CGR2D7kSs0v4LLanw2qksYuRlEzO+tcaEPQogQ0KaoGN26/zrn20ImR1DfuLWnOo7aBA==" crossorigin="anonymous" referrerpolicy="no-referrer">
+</head>
+<body>
+    <div id="toastContainer"></div>
+
+    <div class="container">
+        <nav class="app-tabs">
+            <a href="/main.html" class="app-tab active">Реквизиты</a>
+            <a href="/emploees.html" class="app-tab">Сотрудники</a>
+        </nav>
+
+        <div>
+            <h1>Реквизиты организации</h1>
+        </div>
+
+        <div class="sa-panel" id="mOrgFormContainer"></div>
+
+        <div class="m-empty-state" id="mSubRecordsLockedNote">Сначала заполните и сохраните данные организации выше — банковские счета и налоги привязываются к ней.</div>
+        <div class="sa-panel" id="mBankAccountsContainer" hidden></div>
+        <div class="sa-panel" id="mTaxesContainer" hidden></div>
+    </div>
+
+    <!-- Общая модалка подтверждения (удаление банковского счёта/налога) -->
+    <div class="modal-overlay" id="confirmModal" hidden>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Подтверждение</h2>
+                <button type="button" class="modal-close" id="confirmModalCloseBtn">&times;</button>
+            </div>
+            <p id="confirmModalMessage"></p>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-secondary" id="confirmModalCancelBtn">Отмена</button>
+                <button type="button" class="btn btn-danger" id="confirmModalOkBtn">Подтвердить</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="./js/modules/mainApp.js"></script>
+</body>
+</html>
