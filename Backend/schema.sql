@@ -457,3 +457,59 @@ CREATE TABLE IF NOT EXISTS ad_platforms (
     type VARCHAR,
     status VARCHAR NOT NULL DEFAULT 'Активна'
 );
+
+-- ============================================================
+-- Способ покупки / Вид ипотеки → M:N + «Настройка списков»
+-- (report_2026-08-01.md, 07.08.2026)
+-- ============================================================
+
+-- «Способ покупки» и «Виды ипотеки» стали множественным выбором в макете
+-- (chip-select, как у типа/класса объекта) — одиночные VARCHAR-колонки
+-- заменяются junction-таблицами, тот же паттерн delete+insert в транзакции,
+-- что уже есть у real_estate_offer_segments/geo. Офферов на бою на момент
+-- этой миграции 0 — переноса данных не требуется.
+CREATE TABLE IF NOT EXISTS real_estate_offer_payment_methods (
+    id SERIAL PRIMARY KEY,
+    offer_id INTEGER NOT NULL REFERENCES real_estate_offers(id) ON DELETE CASCADE,
+    value VARCHAR NOT NULL
+);
+CREATE TABLE IF NOT EXISTS real_estate_offer_mortgage_types (
+    id SERIAL PRIMARY KEY,
+    offer_id INTEGER NOT NULL REFERENCES real_estate_offers(id) ON DELETE CASCADE,
+    value VARCHAR NOT NULL
+);
+ALTER TABLE real_estate_offers DROP COLUMN IF EXISTS payment_method;
+ALTER TABLE real_estate_offers DROP COLUMN IF EXISTS mortgage_type;
+
+-- «Настройка списков» — 11 управляемых справочников формы оффера, ведутся
+-- прямо из модалки оффера (переключатель в шапке). Одна общая таблица на
+-- все списки (архитектурное решение куратора, report_2026-08-01.md) — все
+-- 11 списков структурно одинаковы (упорядоченный список строк без
+-- доп. метаданных), отдельные таблицы дали бы 11-кратный дублирующийся CRUD
+-- без пользы. «Статус» сюда намеренно не входит — от него зависит цвет
+-- бейджа/логика фильтра в таблице офферов, произвольные значения там
+-- сломают раскраску.
+CREATE TABLE IF NOT EXISTS param_lists (
+    id SERIAL PRIMARY KEY,
+    list_key VARCHAR NOT NULL,
+    value VARCHAR NOT NULL,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    UNIQUE (list_key, value)
+);
+
+-- Сидинг текущих значений (идемпотентно, как lead_funnel_statuses выше в
+-- файле) — переносит то, что раньше было хардкодом в HTML/JS, в БД как
+-- стартовые данные, дальше редактируется через панель "Настройка списков".
+INSERT INTO param_lists (list_key, value, sort_order) VALUES
+    ('category', 'Новостройка', 1), ('category', 'Вторичка', 2), ('category', 'Загородная недвижимость', 3), ('category', 'Коммерческая недвижимость', 4),
+    ('actionType', 'Целевой лид', 1), ('actionType', 'Лид', 2), ('actionType', 'Заявка на показ', 3),
+    ('leadCheck', 'Да, ручная модерация', 1), ('leadCheck', 'Да, автоматическая', 2), ('leadCheck', 'Нет', 3),
+    ('objType', 'Квартира', 1), ('objType', 'Апартаменты', 2), ('objType', 'Дом', 3), ('objType', 'Таунхаус', 4), ('objType', 'Участок', 5), ('objType', 'Коммерция', 6),
+    ('objClass', 'Эконом', 1), ('objClass', 'Комфорт', 2), ('objClass', 'Комфорт+', 3), ('objClass', 'Бизнес', 4), ('objClass', 'Премиум', 5),
+    ('finish', 'Без отделки', 1), ('finish', 'Черновая', 2), ('finish', 'Чистовая', 3),
+    ('rooms', 'Студия', 1), ('rooms', '1к', 2), ('rooms', '2к', 3), ('rooms', '3к', 4), ('rooms', '4к+', 5),
+    ('clientType', 'Ипотечный заёмщик', 1), ('clientType', 'Наличный покупатель', 2), ('clientType', 'Инвестор', 3), ('clientType', 'Переезд по работе', 4), ('clientType', 'Улучшение жилищных условий', 5), ('clientType', 'Пенсионер', 6),
+    ('purchaseTerm', 'До 1 месяца', 1), ('purchaseTerm', '1–3 месяца', 2), ('purchaseTerm', '3–6 месяцев', 3), ('purchaseTerm', 'Более 6 месяцев', 4),
+    ('paymentMethod', 'Ипотека', 1), ('paymentMethod', 'Наличные', 2), ('paymentMethod', 'Рассрочка от застройщика', 3), ('paymentMethod', 'Сертификат/субсидия', 4), ('paymentMethod', 'Материнский капитал', 5),
+    ('mortgageType', 'Господдержка', 1), ('mortgageType', 'Семейная', 2), ('mortgageType', 'IT-ипотека', 3), ('mortgageType', 'Военная', 4), ('mortgageType', 'От застройщика', 5), ('mortgageType', 'Вторичная', 6)
+ON CONFLICT (list_key, value) DO NOTHING;

@@ -30,8 +30,6 @@ const FIELD_COLUMNS = [
     ['otherBorrower', 'other_borrower'],
     ['purchaseTerm', 'purchase_term'],
     ['downPayment', 'down_payment'],
-    ['paymentMethod', 'payment_method'],
-    ['mortgageType', 'mortgage_type'],
     ['priority', 'priority'],
     ['transferTime', 'transfer_time'],
     ['leadLimit', 'lead_limit']
@@ -102,7 +100,7 @@ function rowToGeo(row) {
     };
 }
 
-function rowToOffer(row, segments, objGeo, clientGeo) {
+function rowToOffer(row, segments, objGeo, clientGeo, paymentMethods, mortgageTypes) {
     return {
         id: row.id,
         networkId: row.network_id,
@@ -126,26 +124,28 @@ function rowToOffer(row, segments, objGeo, clientGeo) {
         otherBorrower: row.other_borrower,
         purchaseTerm: row.purchase_term,
         downPayment: row.down_payment,
-        paymentMethod: row.payment_method,
-        mortgageType: row.mortgage_type,
         priority: row.priority,
         transferTime: row.transfer_time,
         leadLimit: row.lead_limit,
         segments: (segments || []).map(rowToSegment),
         objGeo: (objGeo || []).map(rowToGeo),
-        clientGeo: (clientGeo || []).map(rowToGeo)
+        clientGeo: (clientGeo || []).map(rowToGeo),
+        paymentMethods: (paymentMethods || []).map((r) => r.value),
+        mortgageTypes: (mortgageTypes || []).map((r) => r.value)
     };
 }
 
 async function fetchOfferFull(id) {
     const offerResult = await pool.query('SELECT * FROM real_estate_offers WHERE id = $1', [id]);
     if (offerResult.rows.length === 0) return null;
-    const [segmentsResult, objGeoResult, clientGeoResult] = await Promise.all([
+    const [segmentsResult, objGeoResult, clientGeoResult, paymentMethodsResult, mortgageTypesResult] = await Promise.all([
         pool.query('SELECT * FROM real_estate_offer_segments WHERE offer_id = $1 ORDER BY id', [id]),
         pool.query("SELECT * FROM real_estate_offer_geo WHERE offer_id = $1 AND kind = 'object' ORDER BY id", [id]),
-        pool.query("SELECT * FROM real_estate_offer_geo WHERE offer_id = $1 AND kind = 'client' ORDER BY id", [id])
+        pool.query("SELECT * FROM real_estate_offer_geo WHERE offer_id = $1 AND kind = 'client' ORDER BY id", [id]),
+        pool.query('SELECT * FROM real_estate_offer_payment_methods WHERE offer_id = $1 ORDER BY id', [id]),
+        pool.query('SELECT * FROM real_estate_offer_mortgage_types WHERE offer_id = $1 ORDER BY id', [id])
     ]);
-    return rowToOffer(offerResult.rows[0], segmentsResult.rows, objGeoResult.rows, clientGeoResult.rows);
+    return rowToOffer(offerResult.rows[0], segmentsResult.rows, objGeoResult.rows, clientGeoResult.rows, paymentMethodsResult.rows, mortgageTypesResult.rows);
 }
 
 async function replaceSegments(client, offerId, segments) {
@@ -185,6 +185,26 @@ async function replaceGeo(client, offerId, kind, rows) {
     }
 }
 
+async function replacePaymentMethods(client, offerId, values) {
+    await client.query('DELETE FROM real_estate_offer_payment_methods WHERE offer_id = $1', [offerId]);
+    for (const value of normalizeArray(values)) {
+        await client.query(
+            'INSERT INTO real_estate_offer_payment_methods (offer_id, value) VALUES ($1, $2)',
+            [offerId, value]
+        );
+    }
+}
+
+async function replaceMortgageTypes(client, offerId, values) {
+    await client.query('DELETE FROM real_estate_offer_mortgage_types WHERE offer_id = $1', [offerId]);
+    for (const value of normalizeArray(values)) {
+        await client.query(
+            'INSERT INTO real_estate_offer_mortgage_types (offer_id, value) VALUES ($1, $2)',
+            [offerId, value]
+        );
+    }
+}
+
 // GET /api/real-estate-offers?networkId= — список (все сети, если не передан
 // networkId), с вложенными segments/objGeo/clientGeo на каждый оффер.
 router.get('/', async (req, res) => {
@@ -197,15 +217,22 @@ router.get('/', async (req, res) => {
         if (offers.length === 0) return res.json([]);
 
         const ids = offers.map((o) => o.id);
-        const [segmentsResult, geoResult] = await Promise.all([
+        const [segmentsResult, geoResult, paymentMethodsResult, mortgageTypesResult] = await Promise.all([
             pool.query('SELECT * FROM real_estate_offer_segments WHERE offer_id = ANY($1) ORDER BY id', [ids]),
-            pool.query('SELECT * FROM real_estate_offer_geo WHERE offer_id = ANY($1) ORDER BY id', [ids])
+            pool.query('SELECT * FROM real_estate_offer_geo WHERE offer_id = ANY($1) ORDER BY id', [ids]),
+            pool.query('SELECT * FROM real_estate_offer_payment_methods WHERE offer_id = ANY($1) ORDER BY id', [ids]),
+            pool.query('SELECT * FROM real_estate_offer_mortgage_types WHERE offer_id = ANY($1) ORDER BY id', [ids])
         ]);
         const segmentsByOffer = groupBy(segmentsResult.rows, 'offer_id');
         const objGeoByOffer = groupBy(geoResult.rows.filter((r) => r.kind === 'object'), 'offer_id');
         const clientGeoByOffer = groupBy(geoResult.rows.filter((r) => r.kind === 'client'), 'offer_id');
+        const paymentMethodsByOffer = groupBy(paymentMethodsResult.rows, 'offer_id');
+        const mortgageTypesByOffer = groupBy(mortgageTypesResult.rows, 'offer_id');
 
-        res.json(offers.map((o) => rowToOffer(o, segmentsByOffer[o.id], objGeoByOffer[o.id], clientGeoByOffer[o.id])));
+        res.json(offers.map((o) => rowToOffer(
+            o, segmentsByOffer[o.id], objGeoByOffer[o.id], clientGeoByOffer[o.id],
+            paymentMethodsByOffer[o.id], mortgageTypesByOffer[o.id]
+        )));
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: 'Не удалось получить список офферов' });
@@ -237,6 +264,8 @@ router.post('/', async (req, res) => {
         await replaceSegments(client, offerId, req.body.segments);
         await replaceGeo(client, offerId, 'object', req.body.objGeo);
         await replaceGeo(client, offerId, 'client', req.body.clientGeo);
+        await replacePaymentMethods(client, offerId, req.body.paymentMethods);
+        await replaceMortgageTypes(client, offerId, req.body.mortgageTypes);
         await client.query('COMMIT');
 
         res.status(201).json(await fetchOfferFull(offerId));
@@ -282,6 +311,8 @@ router.put('/:id', async (req, res) => {
         await replaceSegments(client, offerId, req.body.segments);
         await replaceGeo(client, offerId, 'object', req.body.objGeo);
         await replaceGeo(client, offerId, 'client', req.body.clientGeo);
+        await replacePaymentMethods(client, offerId, req.body.paymentMethods);
+        await replaceMortgageTypes(client, offerId, req.body.mortgageTypes);
         await client.query('COMMIT');
 
         res.json(await fetchOfferFull(offerId));

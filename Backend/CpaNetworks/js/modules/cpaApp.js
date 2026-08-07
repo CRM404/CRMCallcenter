@@ -9,17 +9,36 @@ import { showToast } from './cpaToast.js';
 import { initConfirmModal, confirmAction } from './cpaConfirm.js';
 import {
     fetchCpaNetworks, createCpaNetwork, updateCpaNetwork, deleteCpaNetwork, fetchOrganization,
-    fetchRealEstateOffers, createRealEstateOffer, updateRealEstateOffer, deleteRealEstateOffer
+    fetchRealEstateOffers, createRealEstateOffer, updateRealEstateOffer, deleteRealEstateOffer,
+    fetchParamLists, addParamValue, deleteParamValue
 } from './cpaStorage.js';
 
 const STATUS_LABEL = { active: 'Активен', paused: 'На паузе', disabled: 'Отключён', draft: 'Черновик' };
-const OBJECT_CLASSES = ['Эконом', 'Комфорт', 'Комфорт+', 'Бизнес', 'Премиум'];
+
+// «Настройка списков» (report_2026-08-01.md, Фаза 2) — 11 управляемых
+// справочников формы оффера, значения приходят с бэкенда (paramLists),
+// PARAM_META описывает только КАК их применить к полю формы. «Статус»
+// сюда намеренно не входит — от него зависит цвет бейджа/логика фильтра.
+const PARAM_META = [
+    { key: 'category', label: 'Категория', target: 'fCategory', type: 'select' },
+    { key: 'actionType', label: 'Тип действия', target: 'fActionType', type: 'select' },
+    { key: 'leadCheck', label: 'Наличие проверки лидов', target: 'fLeadCheck', type: 'select' },
+    { key: 'objType', label: 'Тип объекта', target: 'fObjType', type: 'chips' },
+    { key: 'objClass', label: 'Класс объекта', target: 'fSegments', type: 'segments' },
+    { key: 'finish', label: 'Отделка', target: 'fFinish', type: 'chips' },
+    { key: 'rooms', label: 'Комнатность', target: 'fRooms', type: 'chips' },
+    { key: 'clientType', label: 'Тип клиента', target: 'fClientType', type: 'select' },
+    { key: 'purchaseTerm', label: 'Срок покупки', target: 'fPurchaseTerm', type: 'select' },
+    { key: 'paymentMethod', label: 'Способ покупки', target: 'fPaymentMethod', type: 'chips' },
+    { key: 'mortgageType', label: 'Виды ипотеки', target: 'fMortgageType', type: 'chips' }
+];
 
 const $ = (s) => document.querySelector(s);
 
 let networks = [];
 let offers = [];
 let organization = null;
+let paramLists = {};
 
 let activeNetworkId = null;
 let activeStatus = 'all';
@@ -225,10 +244,17 @@ function renderOffersTable() {
     $('#statDraft').textContent = networkOffers.filter((o) => o.status === 'draft').length;
 }
 
-function setChips(containerId, values) {
-    document.querySelectorAll(`#${containerId} .chip-opt`).forEach((c) => {
-        c.classList.toggle('on', values.includes(c.dataset.v));
-        c.onclick = () => c.classList.toggle('on');
+function renderSelectOptions(id, list, value) {
+    const el = document.getElementById(id);
+    el.innerHTML = (list || []).map((v) => `<option>${escapeHtml(v)}</option>`).join('');
+    el.value = value && (list || []).includes(value) ? value : ((list || [])[0] || '');
+}
+
+function renderChipOptions(id, list, selected, onToggle) {
+    const el = document.getElementById(id);
+    el.innerHTML = (list || []).map((v) => `<button type="button" class="chip-opt${(selected || []).includes(v) ? ' on' : ''}" data-v="${escapeHtml(v)}">${escapeHtml(v)}</button>`).join('');
+    el.querySelectorAll('.chip-opt').forEach((c) => {
+        c.onclick = () => { c.classList.toggle('on'); if (onToggle) onToggle(); };
     });
 }
 
@@ -241,7 +267,7 @@ function renderSegments() {
         <div class="repeat-row segment-row" data-i="${i}">
             <select class="seg-class">
                 <option value="">Класс объекта</option>
-                ${OBJECT_CLASSES.map((v) => `<option value="${v}"${s.objectClass === v ? ' selected' : ''}>${v}</option>`).join('')}
+                ${(paramLists.objClass || []).map((v) => `<option value="${escapeHtml(v)}"${s.objectClass === v ? ' selected' : ''}>${escapeHtml(v)}</option>`).join('')}
             </select>
             <div class="range-pair"><input type="number" class="seg-price-min" placeholder="цена от" value="${s.priceMin ?? ''}"><span>—</span><input type="number" class="seg-price-max" placeholder="цена до" value="${s.priceMax ?? ''}"></div>
             <div class="range-pair"><input type="number" class="seg-area-min" placeholder="S от" value="${s.areaMin ?? ''}"><span>—</span><input type="number" class="seg-area-max" placeholder="S до" value="${s.areaMax ?? ''}"></div>
@@ -281,9 +307,103 @@ function gatherGeoRows(containerId) {
     }));
 }
 
+// «Способ покупки» — множественный выбор; «Вид ипотеки» показываем, если
+// среди выбранных есть хоть один вариант со словом «ипотек» — нестрогое
+// совпадение на случай, если значение переименовано через «Настройку списков».
 function toggleMortgageType() {
-    const isMortgage = $('#fPaymentMethod').value === 'Ипотека';
+    const isMortgage = getChipValues('fPaymentMethod').some((v) => v.toLowerCase().includes('ипотек'));
     $('#fMortgageTypeGroup').style.display = isMortgage ? '' : 'none';
+}
+
+function refreshParamField(key) {
+    const meta = PARAM_META.find((m) => m.key === key);
+    if (!meta) return;
+    if (meta.type === 'select') {
+        renderSelectOptions(meta.target, paramLists[key], document.getElementById(meta.target).value);
+    } else if (meta.type === 'segments') {
+        renderSegments();
+    } else {
+        renderChipOptions(meta.target, paramLists[key], getChipValues(meta.target), key === 'paymentMethod' ? toggleMortgageType : null);
+    }
+}
+
+async function handleAddParamValue(key) {
+    const input = document.getElementById('padd-' + key);
+    const value = input.value.trim();
+    if (!value) return;
+    if (paramLists[key].some((v) => v.toLowerCase() === value.toLowerCase())) {
+        showToast('Такое значение уже есть в списке', 'error');
+        return;
+    }
+    try {
+        await addParamValue(key, value);
+    } catch (err) {
+        showToast(err.message, 'error');
+        return;
+    }
+    paramLists[key].push(value);
+    input.value = '';
+    renderParamTags(key);
+    refreshParamField(key);
+    $(`.param-card[data-key="${key}"] .count`).textContent = paramLists[key].length;
+}
+
+async function handleRemoveParamValue(key, index) {
+    const value = paramLists[key][index];
+    try {
+        await deleteParamValue(key, value);
+    } catch (err) {
+        showToast(err.message, 'error');
+        return;
+    }
+    paramLists[key].splice(index, 1);
+    renderParamTags(key);
+    refreshParamField(key);
+    $(`.param-card[data-key="${key}"] .count`).textContent = paramLists[key].length;
+}
+
+function renderParamTags(key) {
+    $('#ptags-' + key).innerHTML = paramLists[key].map((v, i) =>
+        `<span class="param-tag">${escapeHtml(v)}<button type="button" data-rm="${i}">&times;</button></span>`
+    ).join('') || '<span style="font-size:12.5px;color:var(--ink-faint)">Список пуст</span>';
+    $('#ptags-' + key).querySelectorAll('[data-rm]').forEach((b) => {
+        b.addEventListener('click', () => handleRemoveParamValue(key, Number(b.dataset.rm)));
+    });
+}
+
+function renderParamsPanel() {
+    $('#paramsList').innerHTML = PARAM_META.map((m) => `
+        <div class="param-card" data-key="${m.key}">
+            <button type="button" class="param-card-head" data-toggle="${m.key}">
+                <span>${m.label}</span><span class="count">${paramLists[m.key].length}</span>
+                <i class="fas fa-chevron-down chevron" aria-hidden="true"></i>
+            </button>
+            <div class="param-card-body" id="pcb-${m.key}" hidden>
+                <div class="param-tags" id="ptags-${m.key}"></div>
+                <div class="param-add-row">
+                    <input type="text" id="padd-${m.key}" placeholder="Новое значение…">
+                    <button type="button" class="btn btn-secondary btn-sm" data-add="${m.key}">Добавить</button>
+                </div>
+            </div>
+        </div>`).join('');
+
+    PARAM_META.forEach((m) => renderParamTags(m.key));
+
+    $('#paramsList').querySelectorAll('[data-toggle]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+            const body = document.getElementById('pcb-' + btn.dataset.toggle);
+            body.hidden = !body.hidden;
+            btn.classList.toggle('open', !body.hidden);
+        });
+    });
+    $('#paramsList').querySelectorAll('[data-add]').forEach((btn) => {
+        const key = btn.dataset.add;
+        const submit = () => handleAddParamValue(key);
+        btn.addEventListener('click', submit);
+        document.getElementById('padd-' + key).addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') { e.preventDefault(); submit(); }
+        });
+    });
 }
 
 // «Иной заёмщик» показывается только при «Тип клиента» = «Пенсионер» —
@@ -300,36 +420,43 @@ function openOfferModal(id) {
     const o = id ? offers.find((x) => x.id === id) : null;
     const net = networks.find((n) => n.id === activeNetworkId);
     $('#offerModalTitle').textContent = o ? 'Настройка оффера' : 'Новый оффер';
+
+    // Модалка всегда открывается в режиме формы, не в режиме "Настройка списков".
+    $('#paramsModeToggle').checked = false;
+    $('#offerForm').hidden = false;
+    $('#paramsPanel').hidden = true;
     $('#offerModalSub').textContent = net ? net.name : '';
+    $('#offerModalSave').hidden = false;
+    $('#offerModalCancel').textContent = 'Отмена';
 
     $('#fName').value = o?.name || '';
-    $('#fCategory').value = o?.category || '';
+    renderSelectOptions('fCategory', paramLists.category, o?.category);
     $('#fStatus').value = o?.status || 'draft';
     $('#fDateStart').value = o?.dateStart || '';
     $('#fDateEnd').value = o?.dateEnd || '';
-    $('#fActionType').value = o?.actionType || 'Целевой лид';
+    renderSelectOptions('fActionType', paramLists.actionType, o?.actionType);
     $('#fRate').value = o?.rate ?? '';
     $('#fHold').value = o?.holdDays ?? '';
-    $('#fLeadCheck').value = o?.leadCheck || 'Нет';
+    renderSelectOptions('fLeadCheck', paramLists.leadCheck, o?.leadCheck);
     $('#fTargetCriteria').value = o?.targetCriteria || '';
     $('#fNonTargetCriteria').value = o?.nonTargetCriteria || '';
     $('#fDeveloper').value = o?.developer || '';
     $('#fDeadline').value = o?.deadline || '';
-    $('#fClientType').value = o?.clientType || 'Ипотечный заёмщик';
+    renderSelectOptions('fClientType', paramLists.clientType, o?.clientType);
     $('#fOtherBorrower').checked = !!o?.otherBorrower;
     toggleOtherBorrower();
-    $('#fPurchaseTerm').value = o?.purchaseTerm || 'До 1 месяца';
+    renderSelectOptions('fPurchaseTerm', paramLists.purchaseTerm, o?.purchaseTerm);
     $('#fDownPayment').value = o?.downPayment ?? '';
     $('#fPriority').value = o?.priority ?? '';
     $('#fTransferTime').value = o?.transferTime || '';
     $('#fLeadLimit').value = o?.leadLimit ?? '';
 
-    setChips('fObjType', o?.objTypes || []);
-    setChips('fFinish', o?.finishes || []);
-    setChips('fRooms', o?.rooms || []);
+    renderChipOptions('fObjType', paramLists.objType, o?.objTypes || []);
+    renderChipOptions('fFinish', paramLists.finish, o?.finishes || []);
+    renderChipOptions('fRooms', paramLists.rooms, o?.rooms || []);
 
-    $('#fPaymentMethod').value = o?.paymentMethod || 'Ипотека';
-    $('#fMortgageType').value = o?.mortgageType || 'Господдержка';
+    renderChipOptions('fPaymentMethod', paramLists.paymentMethod, o?.paymentMethods || [], toggleMortgageType);
+    renderChipOptions('fMortgageType', paramLists.mortgageType, o?.mortgageTypes || []);
     toggleMortgageType();
 
     currentSegments = (o?.segments || []).map((s) => ({ ...s }));
@@ -365,8 +492,8 @@ function gatherOfferData() {
         otherBorrower: $('#fOtherBorrower').checked,
         purchaseTerm: $('#fPurchaseTerm').value,
         downPayment: $('#fDownPayment').value,
-        paymentMethod: $('#fPaymentMethod').value,
-        mortgageType: $('#fPaymentMethod').value === 'Ипотека' ? $('#fMortgageType').value : '',
+        paymentMethods: getChipValues('fPaymentMethod'),
+        mortgageTypes: getChipValues('fMortgageType'),
         priority: $('#fPriority').value,
         transferTime: $('#fTransferTime').value,
         leadLimit: $('#fLeadLimit').value,
@@ -457,8 +584,17 @@ async function init() {
     $('#offerModalClose').addEventListener('click', () => { $('#offerModal').hidden = true; });
     $('#offerModalCancel').addEventListener('click', () => { $('#offerModal').hidden = true; });
     $('#offerModalSave').addEventListener('click', saveOffer);
-    $('#fPaymentMethod').addEventListener('change', toggleMortgageType);
     $('#fClientType').addEventListener('change', toggleOtherBorrower);
+    $('#paramsModeToggle').addEventListener('change', (e) => {
+        const on = e.target.checked;
+        $('#offerForm').hidden = on;
+        $('#paramsPanel').hidden = !on;
+        const net = networks.find((n) => n.id === activeNetworkId);
+        $('#offerModalSub').textContent = on ? 'Настройка списков значений' : (net ? net.name : '');
+        $('#offerModalSave').hidden = on;
+        $('#offerModalCancel').textContent = on ? 'Готово' : 'Отмена';
+        if (on) renderParamsPanel();
+    });
     $('#addSegmentBtn').addEventListener('click', () => { currentSegments.push({ objectClass: '', priceMin: '', priceMax: '', areaMin: '', areaMax: '' }); renderSegments(); });
     $('#addObjGeoBtn').addEventListener('click', () => { currentObjGeo.push({ region: '', city: '', district: '', locality: '' }); renderGeoRows('fObjGeo', currentObjGeo); });
     $('#addClientGeoBtn').addEventListener('click', () => { currentClientGeo.push({ region: '', city: '', district: '', locality: '' }); renderGeoRows('fClientGeo', currentClientGeo); });
@@ -484,6 +620,12 @@ async function init() {
         organization = await fetchOrganization();
     } catch (err) {
         showToast(err.message, 'error');
+    }
+    try {
+        paramLists = await fetchParamLists();
+    } catch (err) {
+        showToast(err.message, 'error');
+        paramLists = {};
     }
 
     await loadNetworks();

@@ -86,18 +86,27 @@
                     <h2 id="offerModalTitle">Оффер</h2>
                     <p class="modal-sub" id="offerModalSub"></p>
                 </div>
-                <button type="button" class="modal-close" id="offerModalClose"><i class="fas fa-xmark" aria-hidden="true"></i></button>
+                <div class="modal-head-actions">
+                    <label class="mode-toggle">
+                        Настройка списков
+                        <span class="switch"><input type="checkbox" id="paramsModeToggle"><span class="switch-track"></span></span>
+                    </label>
+                    <button type="button" class="modal-close" id="offerModalClose"><i class="fas fa-xmark" aria-hidden="true"></i></button>
+                </div>
             </div>
             <div class="modal-body">
+                <!-- Панель управления значениями выпадающих списков — открывается
+                     ползунком в шапке вместо формы оффера, изменения сразу
+                     отражаются в самих полях формы (report_2026-08-01.md, Фаза 2). -->
+                <div class="params-panel" id="paramsPanel" hidden>
+                    <p class="params-intro">Значения списков ниже используются в полях формы оффера. Добавляйте/удаляйте варианты — изменения применяются сразу.</p>
+                    <div id="paramsList"></div>
+                </div>
                 <form id="offerForm">
                     <div class="form-grid">
                         <div class="form-group span-2"><label for="fName">Название *</label><input type="text" id="fName" placeholder="Название оффера"></div>
                         <div class="form-group"><label for="fCategory">Категория</label>
-                            <select id="fCategory">
-                                <option value="">—</option>
-                                <option>Новостройка</option><option>Вторичка</option>
-                                <option>Загородная недвижимость</option><option>Коммерческая недвижимость</option>
-                            </select>
+                            <select id="fCategory"></select>
                         </div>
                         <div class="form-group"><label for="fStatus">Статус</label>
                             <select id="fStatus"><option value="active">Активен</option><option value="paused">На паузе</option><option value="disabled">Отключён</option><option value="draft">Черновик</option></select>
@@ -115,12 +124,12 @@
                         <div class="form-group span-2">
                             <div class="compact-row">
                                 <div class="compact-field"><label for="fActionType">Тип действия</label>
-                                    <select id="fActionType"><option>Целевой лид</option><option>Лид</option><option>Заявка на показ</option></select>
+                                    <select id="fActionType"></select>
                                 </div>
                                 <div class="compact-field"><label for="fRate">Ставка, ₽</label><input type="number" id="fRate" placeholder="1200"></div>
                                 <div class="compact-field"><label for="fHold">Hold, дней</label><input type="number" id="fHold" placeholder="14"></div>
                                 <div class="compact-field"><label for="fLeadCheck">Наличие проверки лидов</label>
-                                    <select id="fLeadCheck"><option>Да, ручная модерация</option><option>Да, автоматическая</option><option>Нет</option></select>
+                                    <select id="fLeadCheck"></select>
                                 </div>
                             </div>
                         </div>
@@ -134,21 +143,10 @@
                     </div>
                     <div class="form-grid">
                         <div class="form-group span-2"><label>Тип объекта <span class="hint">можно выбрать несколько</span></label>
-                            <div class="chip-select" id="fObjType">
-                                <button type="button" class="chip-opt" data-v="Квартира">Квартира</button>
-                                <button type="button" class="chip-opt" data-v="Апартаменты">Апартаменты</button>
-                                <button type="button" class="chip-opt" data-v="Дом">Дом</button>
-                                <button type="button" class="chip-opt" data-v="Таунхаус">Таунхаус</button>
-                                <button type="button" class="chip-opt" data-v="Участок">Участок</button>
-                                <button type="button" class="chip-opt" data-v="Коммерция">Коммерция</button>
-                            </div>
+                            <div class="chip-select" id="fObjType"></div>
                         </div>
                         <div class="form-group span-2"><label>Отделка <span class="hint">можно несколько, ничего не выбрано = любая</span></label>
-                            <div class="chip-select" id="fFinish">
-                                <button type="button" class="chip-opt" data-v="Без отделки">Без отделки</button>
-                                <button type="button" class="chip-opt" data-v="Черновая">Черновая</button>
-                                <button type="button" class="chip-opt" data-v="Чистовая">Чистовая</button>
-                            </div>
+                            <div class="chip-select" id="fFinish"></div>
                         </div>
                         <div class="form-group"><label for="fDeveloper">Застройщик</label><input type="text" id="fDeveloper" placeholder="Например: ПИК, Самолет"></div>
                         <div class="form-group"><label for="fDeadline">Срок сдачи</label><input type="text" id="fDeadline" placeholder="до 4 кв. 2027 / сдан"></div>
@@ -157,13 +155,7 @@
                             <button type="button" class="dashed-row" id="addSegmentBtn"><i class="fas fa-plus" aria-hidden="true"></i>Добавить сегмент</button>
                         </div>
                         <div class="form-group span-2"><label>Комнатность <span class="hint">справочник, значения условные</span></label>
-                            <div class="chip-select" id="fRooms">
-                                <button type="button" class="chip-opt" data-v="Студия">Студия</button>
-                                <button type="button" class="chip-opt" data-v="1">1к</button>
-                                <button type="button" class="chip-opt" data-v="2">2к</button>
-                                <button type="button" class="chip-opt" data-v="3">3к</button>
-                                <button type="button" class="chip-opt" data-v="4+">4к+</button>
-                            </div>
+                            <div class="chip-select" id="fRooms"></div>
                         </div>
                         <div class="form-group span-2"><label>География объекта <span class="hint">регион / город / район / нас. пункт — пустой уровень значит «любой», можно несколько строк</span></label>
                             <div class="repeat-rows" id="fObjGeo"></div>
@@ -177,31 +169,20 @@
                     </div>
                     <div class="form-grid">
                         <div class="form-group"><label for="fClientType">Тип клиента</label>
-                            <select id="fClientType">
-                                <option>Ипотечный заёмщик</option><option>Наличный покупатель</option>
-                                <option>Инвестор</option><option>Переезд по работе</option>
-                                <option>Улучшение жилищных условий</option><option>Пенсионер</option>
-                            </select>
+                            <select id="fClientType"></select>
                         </div>
                         <div class="form-group" id="fOtherBorrowerGroup"><label>Иной заёмщик <span class="hint">если тип клиента — «Пенсионер»</span></label>
                             <label class="checkbox-row"><input type="checkbox" id="fOtherBorrower"><span>Заёмщик может быть другим человеком</span></label>
                         </div>
                         <div class="form-group"><label for="fPurchaseTerm">Срок покупки</label>
-                            <select id="fPurchaseTerm"><option>До 1 месяца</option><option>1–3 месяца</option><option>3–6 месяцев</option><option>Более 6 месяцев</option></select>
+                            <select id="fPurchaseTerm"></select>
                         </div>
                         <div class="form-group"><label for="fDownPayment">Первоначальный взнос, ₽</label><input type="number" id="fDownPayment" placeholder="1 500 000"></div>
-                        <div class="form-group"><label for="fPaymentMethod">Способ покупки <span class="hint">каскад: вид ипотеки — только если тут «Ипотека»</span></label>
-                            <select id="fPaymentMethod">
-                                <option>Ипотека</option><option>Наличные</option>
-                                <option>Рассрочка от застройщика</option><option>Сертификат/субсидия</option>
-                                <option>Материнский капитал</option>
-                            </select>
+                        <div class="form-group span-2"><label>Способ покупки <span class="hint">можно несколько; вид ипотеки — если среди них есть «Ипотека»</span></label>
+                            <div class="chip-select" id="fPaymentMethod"></div>
                         </div>
-                        <div class="form-group" id="fMortgageTypeGroup"><label for="fMortgageType">Вид ипотеки</label>
-                            <select id="fMortgageType">
-                                <option>Господдержка</option><option>Семейная</option><option>IT-ипотека</option>
-                                <option>Военная</option><option>От застройщика</option><option>Вторичная</option>
-                            </select>
+                        <div class="form-group span-2" id="fMortgageTypeGroup"><label>Виды ипотеки <span class="hint">можно выбрать несколько</span></label>
+                            <div class="chip-select" id="fMortgageType"></div>
                         </div>
                         <div class="form-group span-2"><label>География клиента <span class="hint">регион / город / район / нас. пункт — тот же принцип, что у объекта, но про самого покупателя</span></label>
                             <div class="repeat-rows" id="fClientGeo"></div>

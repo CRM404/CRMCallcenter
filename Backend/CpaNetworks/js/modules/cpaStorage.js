@@ -90,3 +90,17 @@ export function updateAdPlatform(id, data) {
 export function deleteAdPlatform(id) {
     return request(`/ad-platforms/${id}`, { method: 'DELETE' });
 }
+
+// --- Настройка списков (report_2026-08-01.md, Фаза 2) ---
+
+export function fetchParamLists() {
+    return request('/param-lists');
+}
+
+export function addParamValue(key, value) {
+    return request(`/param-lists/${encodeURIComponent(key)}`, { method: 'POST', body: JSON.stringify({ value }) });
+}
+
+export function deleteParamValue(key, value) {
+    return request(`/param-lists/${encodeURIComponent(key)}/${encodeURIComponent(value)}`, { method: 'DELETE' });
+}
