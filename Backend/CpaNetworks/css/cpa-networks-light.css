@@ -180,8 +180,6 @@ tbody tr:hover td { background: rgba(255, 255, 255, .4); }
 .m-icon-btn.danger:hover { background: rgba(231, 76, 60, .1); color: var(--danger); }
 .m-icon-btn i { pointer-events: none; }
 .empty-state { text-align: center; padding: 46px 20px; color: var(--ink-faint); font-size: 14px; }
-.platform-name { font-weight: 600; display: flex; align-items: center; gap: 9px; }
-.platform-badge { width: 26px; height: 26px; border-radius: 8px; background: rgba(0, 0, 255, .08); color: var(--accent); display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 12px; }
 
 /* ----- Модалки ----- */
 .modal-overlay { position: fixed; inset: 0; background: rgba(15, 22, 40, .42); backdrop-filter: blur(3px); display: flex; align-items: center; justify-content: center; padding: 24px; z-index: 1000; }
@@ -213,6 +211,10 @@ tbody tr:hover td { background: rgba(255, 255, 255, .4); }
 .range-pair { display: flex; align-items: center; gap: 8px; }
 .range-pair input { flex: 1; min-width: 0; }
 .range-pair span { font-size: 12px; color: var(--ink-faint); flex-shrink: 0; }
+
+.checkbox-row { display: flex; align-items: center; gap: 9px; padding: 9px 0; cursor: pointer; }
+.checkbox-row input[type="checkbox"] { width: 17px; height: 17px; accent-color: var(--accent); cursor: pointer; flex-shrink: 0; }
+.checkbox-row span { font-size: 13px; color: var(--ink); }
 
 .chip-select { display: flex; flex-wrap: wrap; gap: 7px; }
 .chip-opt { padding: 7px 14px; border-radius: 20px; border: 1px solid var(--line-strong); background: rgba(255, 255, 255, .6); font-size: 13px; color: var(--ink-soft); cursor: pointer; transition: .15s; }

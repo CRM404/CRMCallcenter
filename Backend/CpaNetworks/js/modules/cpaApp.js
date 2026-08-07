@@ -1,6 +1,7 @@
 // --- cpaApp.js: страница "CPA-сети" — переключатель сетей (компактная модалка
-// "Управление сетями") + офферы недвижимости (основной объём страницы) +
-// рекламные площадки (независимая вкладка). report_2026-08-01.md, 07.08.2026.
+// "Управление сетями") + офферы недвижимости (основной объём страницы).
+// Рекламные площадки временно скрыты (report_2026-08-01.md, п.2, 07.08.2026) —
+// уезжают на будущую страницу "Маркетинг"; backend/cpaStorage.js не трогаем.
 // Композиция/поля/поведение — из живого Artifact дизайн-сессии (см. dialog.md).
 
 import { initHubNav } from './cpaNav.js';
@@ -8,28 +9,24 @@ import { showToast } from './cpaToast.js';
 import { initConfirmModal, confirmAction } from './cpaConfirm.js';
 import {
     fetchCpaNetworks, createCpaNetwork, updateCpaNetwork, deleteCpaNetwork, fetchOrganization,
-    fetchRealEstateOffers, createRealEstateOffer, updateRealEstateOffer, deleteRealEstateOffer,
-    fetchAdPlatforms, createAdPlatform, updateAdPlatform, deleteAdPlatform
+    fetchRealEstateOffers, createRealEstateOffer, updateRealEstateOffer, deleteRealEstateOffer
 } from './cpaStorage.js';
 
 const STATUS_LABEL = { active: 'Активен', paused: 'На паузе', disabled: 'Отключён', draft: 'Черновик' };
-const PLATFORM_STATUS_CLASS = { 'Активна': 'active', 'Приостановлена': 'paused', 'Отключена': 'disabled' };
+const OBJECT_CLASSES = ['Эконом', 'Комфорт', 'Комфорт+', 'Бизнес', 'Премиум'];
 
 const $ = (s) => document.querySelector(s);
 
 let networks = [];
 let offers = [];
-let platforms = [];
 let organization = null;
 
 let activeNetworkId = null;
 let activeStatus = 'all';
 let searchQuery = '';
-let platformSearchQuery = '';
 
 let editingOfferId = null;
 let editingNetworkId = null;
-let editingPlatformId = null;
 
 let currentSegments = [];
 let currentObjGeo = [];
@@ -49,20 +46,6 @@ function formatDate(dateStr) {
 function formatMoney(n) {
     if (n === null || n === undefined || n === '') return '—';
     return Number(n).toLocaleString('ru-RU');
-}
-
-// --- Переключение «Офферы» (по умолчанию) / «Рекламные площадки» одной
-// кнопкой, вместо пары табов (замечание владельца в дизайн-сессии). ---
-const viewSwitchBtn = $('#viewSwitchBtn');
-function setView(view) {
-    document.querySelectorAll('[data-view]').forEach((el) => el.classList.toggle('active', el.dataset.view === view));
-    if (view === 'platforms') {
-        viewSwitchBtn.dataset.target = 'offers';
-        viewSwitchBtn.innerHTML = '<i class="fas fa-bullseye" aria-hidden="true"></i>К офферам';
-    } else {
-        viewSwitchBtn.dataset.target = 'platforms';
-        viewSwitchBtn.innerHTML = '<i class="fas fa-bullhorn" aria-hidden="true"></i>Рекламные площадки';
-    }
 }
 
 // --- Сети: переключатель-табы + компактная модалка "Управление сетями" ---
@@ -256,17 +239,20 @@ function getChipValues(containerId) {
 function renderSegments() {
     $('#fSegments').innerHTML = currentSegments.map((s, i) => `
         <div class="repeat-row segment-row" data-i="${i}">
-            <input class="seg-label" placeholder="Например: Комфорт, квартира" value="${escapeHtml(s.label || '')}">
+            <select class="seg-class">
+                <option value="">Класс объекта</option>
+                ${OBJECT_CLASSES.map((v) => `<option value="${v}"${s.objectClass === v ? ' selected' : ''}>${v}</option>`).join('')}
+            </select>
             <div class="range-pair"><input type="number" class="seg-price-min" placeholder="цена от" value="${s.priceMin ?? ''}"><span>—</span><input type="number" class="seg-price-max" placeholder="цена до" value="${s.priceMax ?? ''}"></div>
             <div class="range-pair"><input type="number" class="seg-area-min" placeholder="S от" value="${s.areaMin ?? ''}"><span>—</span><input type="number" class="seg-area-max" placeholder="S до" value="${s.areaMax ?? ''}"></div>
             <button type="button" class="m-icon-btn danger rr-remove" data-rm="${i}"><i class="fas fa-trash" aria-hidden="true"></i></button>
-        </div>`).join('') || '<div class="empty-state" style="padding:14px">Сегментов пока нет — по умолчанию действует общий фильтр по типу/классу выше.</div>';
+        </div>`).join('') || '<div class="empty-state" style="padding:14px">Сегментов пока нет — по умолчанию действует общий фильтр по типу выше.</div>';
     $('#fSegments').querySelectorAll('[data-rm]').forEach((b) => b.addEventListener('click', () => { currentSegments.splice(Number(b.dataset.rm), 1); renderSegments(); }));
 }
 
 function gatherSegments() {
     return Array.from(document.querySelectorAll('#fSegments .segment-row')).map((row) => ({
-        label: row.querySelector('.seg-label').value,
+        objectClass: row.querySelector('.seg-class').value,
         priceMin: row.querySelector('.seg-price-min').value,
         priceMax: row.querySelector('.seg-price-max').value,
         areaMin: row.querySelector('.seg-area-min').value,
@@ -300,6 +286,15 @@ function toggleMortgageType() {
     $('#fMortgageTypeGroup').style.display = isMortgage ? '' : 'none';
 }
 
+// «Иной заёмщик» показывается только при «Тип клиента» = «Пенсионер» —
+// при уходе от этого значения чекбокс явно сбрасывается (не сохраняем
+// значение на случай, если тип клиента снова станет «Пенсионер»).
+function toggleOtherBorrower() {
+    const isRetiree = $('#fClientType').value === 'Пенсионер';
+    $('#fOtherBorrowerGroup').style.display = isRetiree ? '' : 'none';
+    if (!isRetiree) $('#fOtherBorrower').checked = false;
+}
+
 function openOfferModal(id) {
     editingOfferId = id;
     const o = id ? offers.find((x) => x.id === id) : null;
@@ -321,6 +316,8 @@ function openOfferModal(id) {
     $('#fDeveloper').value = o?.developer || '';
     $('#fDeadline').value = o?.deadline || '';
     $('#fClientType').value = o?.clientType || 'Ипотечный заёмщик';
+    $('#fOtherBorrower').checked = !!o?.otherBorrower;
+    toggleOtherBorrower();
     $('#fPurchaseTerm').value = o?.purchaseTerm || 'До 1 месяца';
     $('#fDownPayment').value = o?.downPayment ?? '';
     $('#fPriority').value = o?.priority ?? '';
@@ -328,7 +325,6 @@ function openOfferModal(id) {
     $('#fLeadLimit').value = o?.leadLimit ?? '';
 
     setChips('fObjType', o?.objTypes || []);
-    setChips('fObjClass', o?.objClasses || []);
     setChips('fFinish', o?.finishes || []);
     setChips('fRooms', o?.rooms || []);
 
@@ -361,12 +357,12 @@ function gatherOfferData() {
         targetCriteria: $('#fTargetCriteria').value,
         nonTargetCriteria: $('#fNonTargetCriteria').value,
         objTypes: getChipValues('fObjType'),
-        objClasses: getChipValues('fObjClass'),
         finishes: getChipValues('fFinish'),
         rooms: getChipValues('fRooms'),
         developer: $('#fDeveloper').value,
         deadline: $('#fDeadline').value,
         clientType: $('#fClientType').value,
+        otherBorrower: $('#fOtherBorrower').checked,
         purchaseTerm: $('#fPurchaseTerm').value,
         downPayment: $('#fDownPayment').value,
         paymentMethod: $('#fPaymentMethod').value,
@@ -424,86 +420,6 @@ async function handleDeleteOffer(id) {
     }
 }
 
-// --- Рекламные площадки ---
-
-function renderPlatforms() {
-    let list = platforms;
-    if (platformSearchQuery) list = list.filter((p) => p.name.toLowerCase().includes(platformSearchQuery));
-
-    $('#platformsBody').innerHTML = list.map((p) => `
-        <tr>
-            <td><div class="platform-name"><span class="platform-badge"><i class="fas fa-bullhorn" aria-hidden="true"></i></span>${escapeHtml(p.name)}</div></td>
-            <td>${escapeHtml(p.category || '—')}</td>
-            <td><span class="action-tag">${escapeHtml(p.type || '—')}</span></td>
-            <td><span class="status-chip ${PLATFORM_STATUS_CLASS[p.status] || 'active'}">${escapeHtml(p.status)}</span></td>
-            <td>
-                <div class="row-actions">
-                    <button type="button" class="m-icon-btn" data-pedit="${p.id}" title="Изменить"><i class="fas fa-pencil-alt" aria-hidden="true"></i></button>
-                    <button type="button" class="m-icon-btn danger" data-pdel="${p.id}" title="Удалить"><i class="fas fa-trash" aria-hidden="true"></i></button>
-                </div>
-            </td>
-        </tr>`).join('');
-
-    $('#platformsEmptyState').hidden = list.length > 0;
-
-    $('#platformsBody').querySelectorAll('[data-pedit]').forEach((b) => b.addEventListener('click', () => openPlatformModal(Number(b.dataset.pedit))));
-    $('#platformsBody').querySelectorAll('[data-pdel]').forEach((b) => b.addEventListener('click', () => handleDeletePlatform(Number(b.dataset.pdel))));
-}
-
-function openPlatformModal(id) {
-    editingPlatformId = id || null;
-    const p = id ? platforms.find((x) => x.id === id) : null;
-    $('#platformModalTitle').textContent = p ? 'Изменить площадку' : 'Новая площадка';
-    $('#pName').value = p?.name || '';
-    $('#pCategory').value = p?.category || '';
-    $('#pType').value = p?.type || 'Контекстная реклама';
-    $('#pStatus').value = p?.status || 'Активна';
-    $('#platformModal').hidden = false;
-}
-
-async function savePlatform() {
-    const data = {
-        name: $('#pName').value.trim(),
-        category: $('#pCategory').value,
-        type: $('#pType').value,
-        status: $('#pStatus').value
-    };
-    if (!data.name) {
-        showToast('Заполните обязательное поле: Наименование', 'error');
-        return;
-    }
-    try {
-        if (editingPlatformId === null) {
-            await createAdPlatform(data);
-            showToast('Площадка добавлена', 'success');
-        } else {
-            await updateAdPlatform(editingPlatformId, data);
-            showToast('Изменения сохранены', 'success');
-        }
-    } catch (err) {
-        showToast(err.message, 'error');
-        return;
-    }
-    $('#platformModal').hidden = true;
-    await loadPlatforms();
-    renderPlatforms();
-}
-
-async function handleDeletePlatform(id) {
-    const p = platforms.find((x) => x.id === id);
-    if (!p) return;
-    const ok = await confirmAction(`Удалить площадку «${p.name}»? Действие необратимо.`);
-    if (!ok) return;
-    try {
-        await deleteAdPlatform(id);
-        showToast('Площадка удалена', 'success');
-        await loadPlatforms();
-        renderPlatforms();
-    } catch (err) {
-        showToast(err.message, 'error');
-    }
-}
-
 // --- Загрузка данных ---
 
 async function loadNetworks() {
@@ -527,20 +443,9 @@ async function loadOffers() {
     }
 }
 
-async function loadPlatforms() {
-    try {
-        platforms = await fetchAdPlatforms();
-    } catch (err) {
-        showToast(err.message, 'error');
-        platforms = [];
-    }
-}
-
 async function init() {
     initHubNav('cpa');
     initConfirmModal();
-
-    viewSwitchBtn.addEventListener('click', () => setView(viewSwitchBtn.dataset.target));
 
     $('#manageNetworksBtn').addEventListener('click', () => { renderNetList(); $('#netInlineForm').hidden = true; $('#networksModal').hidden = false; });
     $('#networksModalClose').addEventListener('click', () => { $('#networksModal').hidden = true; });
@@ -553,17 +458,12 @@ async function init() {
     $('#offerModalCancel').addEventListener('click', () => { $('#offerModal').hidden = true; });
     $('#offerModalSave').addEventListener('click', saveOffer);
     $('#fPaymentMethod').addEventListener('change', toggleMortgageType);
-    $('#addSegmentBtn').addEventListener('click', () => { currentSegments.push({ label: '', priceMin: '', priceMax: '', areaMin: '', areaMax: '' }); renderSegments(); });
+    $('#fClientType').addEventListener('change', toggleOtherBorrower);
+    $('#addSegmentBtn').addEventListener('click', () => { currentSegments.push({ objectClass: '', priceMin: '', priceMax: '', areaMin: '', areaMax: '' }); renderSegments(); });
     $('#addObjGeoBtn').addEventListener('click', () => { currentObjGeo.push({ region: '', city: '', district: '', locality: '' }); renderGeoRows('fObjGeo', currentObjGeo); });
     $('#addClientGeoBtn').addEventListener('click', () => { currentClientGeo.push({ region: '', city: '', district: '', locality: '' }); renderGeoRows('fClientGeo', currentClientGeo); });
 
-    $('#addPlatformBtn').addEventListener('click', () => openPlatformModal(null));
-    $('#platformModalClose').addEventListener('click', () => { $('#platformModal').hidden = true; });
-    $('#platformModalCancel').addEventListener('click', () => { $('#platformModal').hidden = true; });
-    $('#platformModalSave').addEventListener('click', savePlatform);
-
     $('#searchInput').addEventListener('input', (e) => { searchQuery = e.target.value.trim().toLowerCase(); renderOffersTable(); });
-    $('#platformSearchInput').addEventListener('input', (e) => { platformSearchQuery = e.target.value.trim().toLowerCase(); renderPlatforms(); });
     $('#statusFilter').addEventListener('click', (e) => {
         const btn = e.target.closest('.status-pill');
         if (!btn) return;
@@ -588,12 +488,10 @@ async function init() {
 
     await loadNetworks();
     await loadOffers();
-    await loadPlatforms();
 
     renderTabs();
     renderMeta();
     renderOffersTable();
-    renderPlatforms();
 }
 
 init();

@@ -27,6 +27,7 @@ const FIELD_COLUMNS = [
     ['developer', 'developer'],
     ['deadline', 'deadline'],
     ['clientType', 'client_type'],
+    ['otherBorrower', 'other_borrower'],
     ['purchaseTerm', 'purchase_term'],
     ['downPayment', 'down_payment'],
     ['paymentMethod', 'payment_method'],
@@ -38,7 +39,6 @@ const FIELD_COLUMNS = [
 
 const ARRAY_COLUMNS = [
     ['objTypes', 'obj_types'],
-    ['objClasses', 'obj_classes'],
     ['finishes', 'finishes'],
     ['rooms', 'rooms']
 ];
@@ -46,6 +46,9 @@ const ARRAY_COLUMNS = [
 function normalizeValue(key, value) {
     if (key === 'status') {
         return value === undefined || value === null || String(value).trim() === '' ? 'draft' : value;
+    }
+    if (key === 'otherBorrower') {
+        return value === true || value === 'true';
     }
     if (value === undefined) return null;
     if (typeof value === 'string' && value.trim() === '') return null;
@@ -81,6 +84,7 @@ function rowToSegment(row) {
     return {
         id: row.id,
         label: row.label,
+        objectClass: row.object_class,
         priceMin: row.price_min,
         priceMax: row.price_max,
         areaMin: row.area_min,
@@ -114,12 +118,12 @@ function rowToOffer(row, segments, objGeo, clientGeo) {
         targetCriteria: row.target_criteria,
         nonTargetCriteria: row.non_target_criteria,
         objTypes: row.obj_types || [],
-        objClasses: row.obj_classes || [],
         finishes: row.finishes || [],
         rooms: row.rooms || [],
         developer: row.developer,
         deadline: row.deadline,
         clientType: row.client_type,
+        otherBorrower: row.other_borrower,
         purchaseTerm: row.purchase_term,
         downPayment: row.down_payment,
         paymentMethod: row.payment_method,
@@ -148,11 +152,12 @@ async function replaceSegments(client, offerId, segments) {
     await client.query('DELETE FROM real_estate_offer_segments WHERE offer_id = $1', [offerId]);
     for (const s of normalizeArray(segments)) {
         await client.query(
-            `INSERT INTO real_estate_offer_segments (offer_id, label, price_min, price_max, area_min, area_max)
-             VALUES ($1, $2, $3, $4, $5, $6)`,
+            `INSERT INTO real_estate_offer_segments (offer_id, label, object_class, price_min, price_max, area_min, area_max)
+             VALUES ($1, $2, $3, $4, $5, $6, $7)`,
             [
                 offerId,
                 normalizeValue('label', s.label),
+                normalizeValue('objectClass', s.objectClass),
                 normalizeValue('priceMin', s.priceMin),
                 normalizeValue('priceMax', s.priceMax),
                 normalizeValue('areaMin', s.areaMin),

@@ -393,12 +393,12 @@ CREATE TABLE IF NOT EXISTS real_estate_offers (
     target_criteria TEXT,
     non_target_criteria TEXT,
     obj_types VARCHAR[] NOT NULL DEFAULT '{}',
-    obj_classes VARCHAR[] NOT NULL DEFAULT '{}',
     finishes VARCHAR[] NOT NULL DEFAULT '{}',
     rooms VARCHAR[] NOT NULL DEFAULT '{}',
     developer VARCHAR,
     deadline VARCHAR,
     client_type VARCHAR,
+    other_borrower BOOLEAN NOT NULL DEFAULT false,
     purchase_term VARCHAR,
     down_payment NUMERIC,
     payment_method VARCHAR,
@@ -407,6 +407,15 @@ CREATE TABLE IF NOT EXISTS real_estate_offers (
     transfer_time VARCHAR,
     lead_limit INTEGER
 );
+
+-- Класс объекта переехал с уровня оффера в строку сегмента (report_2026-08-01.md,
+-- п.1, 07.08.2026): цена/площадь и так уже зависят от класса, логичнее задавать
+-- вместе. Прежний общий obj_classes VARCHAR[] на real_estate_offers — удалён.
+ALTER TABLE real_estate_offers DROP COLUMN IF EXISTS obj_classes;
+
+-- «Иной заёмщик» (report_2026-08-01.md, п.3, 07.08.2026) — виден в форме только
+-- при «Тип клиента» = «Пенсионер», сбрасывается в false при уходе от этого значения.
+ALTER TABLE real_estate_offers ADD COLUMN IF NOT EXISTS other_borrower BOOLEAN NOT NULL DEFAULT false;
 
 -- Сегменты цена/площадь (произвольное число на оффер, т.к. диапазон зависит
 -- от сочетания типа+класса объекта — не один общий диапазон). Пересобирается
@@ -417,11 +426,14 @@ CREATE TABLE IF NOT EXISTS real_estate_offer_segments (
     id SERIAL PRIMARY KEY,
     offer_id INTEGER NOT NULL REFERENCES real_estate_offers(id) ON DELETE CASCADE,
     label VARCHAR,
+    object_class VARCHAR,
     price_min NUMERIC,
     price_max NUMERIC,
     area_min NUMERIC,
     area_max NUMERIC
 );
+
+ALTER TABLE real_estate_offer_segments ADD COLUMN IF NOT EXISTS object_class VARCHAR;
 
 -- География — произвольное число строк (Регион/Город/Район/Нас. пункт) на
 -- оффер, отдельно для объекта и для клиента (kind различает их) — тот же

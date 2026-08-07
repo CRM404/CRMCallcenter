@@ -18,9 +18,9 @@
 
                 <div class="identity-strip">
                     <div class="identity-copy">
-                        <div class="eyebrow">Партнёрские сети · офферы · площадки</div>
+                        <div class="eyebrow">Партнёрские сети · офферы</div>
                         <h1>CPA-сети</h1>
-                        <p>Офферы недвижимости с настройками и требованиями к клиенту, рекламные площадки — отдельной вкладкой</p>
+                        <p>Офферы недвижимости с настройками и требованиями к клиенту</p>
                     </div>
                     <dl class="stat-chips">
                         <div class="stat-chip"><dt>Офферов всего</dt><dd id="statTotal">0</dd></div>
@@ -28,10 +28,6 @@
                         <div class="stat-chip draft"><dt>Черновики</dt><dd id="statDraft">0</dd></div>
                     </dl>
                 </div>
-
-                <button type="button" class="btn btn-ghost btn-sm" id="viewSwitchBtn" data-target="platforms" style="width:fit-content">
-                    <i class="fas fa-bullhorn" aria-hidden="true"></i>Рекламные площадки
-                </button>
 
                 <!-- ================= ВКЛАДКА «ОФФЕРЫ» ================= -->
                 <div data-view="offers" class="active">
@@ -74,40 +70,6 @@
                             </table>
                         </div>
                         <div class="empty-state" id="emptyState" hidden>В этой сети пока нет офферов, подходящих под фильтр.</div>
-                    </div>
-
-                </div>
-
-                <!-- ================= ВКЛАДКА «РЕКЛАМНЫЕ ПЛОЩАДКИ» =================
-                     Самостоятельный справочник без FK на оффер (решение куратора,
-                     см. dialog.md) — отдельная вкладка той же страницы, а не часть
-                     формы оффера. -->
-                <div data-view="platforms">
-
-                    <div class="toolbar">
-                        <div class="search-field">
-                            <i class="fas fa-magnifying-glass" aria-hidden="true"></i>
-                            <input type="text" id="platformSearchInput" placeholder="Найти площадку по названию…">
-                        </div>
-                        <button type="button" class="btn btn-primary" id="addPlatformBtn"><i class="fas fa-plus" aria-hidden="true"></i>Добавить площадку</button>
-                    </div>
-
-                    <div class="table-card">
-                        <div class="table-scroll">
-                            <table>
-                                <thead>
-                                    <tr>
-                                        <th>Площадка</th>
-                                        <th>Категория</th>
-                                        <th>Тип</th>
-                                        <th>Статус</th>
-                                        <th></th>
-                                    </tr>
-                                </thead>
-                                <tbody id="platformsBody"></tbody>
-                            </table>
-                        </div>
-                        <div class="empty-state" id="platformsEmptyState" hidden>Пока нет ни одной площадки. Добавьте первую!</div>
                     </div>
 
                 </div>
@@ -181,15 +143,6 @@
                                 <button type="button" class="chip-opt" data-v="Коммерция">Коммерция</button>
                             </div>
                         </div>
-                        <div class="form-group span-2"><label>Класс объекта <span class="hint">можно выбрать несколько</span></label>
-                            <div class="chip-select" id="fObjClass">
-                                <button type="button" class="chip-opt" data-v="Эконом">Эконом</button>
-                                <button type="button" class="chip-opt" data-v="Комфорт">Комфорт</button>
-                                <button type="button" class="chip-opt" data-v="Комфорт+">Комфорт+</button>
-                                <button type="button" class="chip-opt" data-v="Бизнес">Бизнес</button>
-                                <button type="button" class="chip-opt" data-v="Премиум">Премиум</button>
-                            </div>
-                        </div>
                         <div class="form-group span-2"><label>Отделка <span class="hint">можно несколько, ничего не выбрано = любая</span></label>
                             <div class="chip-select" id="fFinish">
                                 <button type="button" class="chip-opt" data-v="Без отделки">Без отделки</button>
@@ -227,8 +180,11 @@
                             <select id="fClientType">
                                 <option>Ипотечный заёмщик</option><option>Наличный покупатель</option>
                                 <option>Инвестор</option><option>Переезд по работе</option>
-                                <option>Улучшение жилищных условий</option>
+                                <option>Улучшение жилищных условий</option><option>Пенсионер</option>
                             </select>
+                        </div>
+                        <div class="form-group" id="fOtherBorrowerGroup"><label>Иной заёмщик <span class="hint">если тип клиента — «Пенсионер»</span></label>
+                            <label class="checkbox-row"><input type="checkbox" id="fOtherBorrower"><span>Заёмщик может быть другим человеком</span></label>
                         </div>
                         <div class="form-group"><label for="fPurchaseTerm">Срок покупки</label>
                             <select id="fPurchaseTerm"><option>До 1 месяца</option><option>1–3 месяца</option><option>3–6 месяцев</option><option>Более 6 месяцев</option></select>
@@ -300,33 +256,7 @@
         </div>
     </div>
 
-    <!-- Модалка площадки -->
-    <div class="modal-overlay" id="platformModal" hidden>
-        <div class="modal-content" style="max-width:520px">
-            <div class="modal-header">
-                <h2 id="platformModalTitle">Площадка</h2>
-                <button type="button" class="modal-close" id="platformModalClose"><i class="fas fa-xmark" aria-hidden="true"></i></button>
-            </div>
-            <div class="modal-body">
-                <div class="form-grid">
-                    <div class="form-group span-2"><label for="pName">Наименование *</label><input type="text" id="pName" placeholder="Яндекс.Директ"></div>
-                    <div class="form-group"><label for="pCategory">Категория</label><input type="text" id="pCategory" placeholder="Поисковая реклама"></div>
-                    <div class="form-group"><label for="pType">Тип</label>
-                        <select id="pType"><option>Контекстная реклама</option><option>Соцсети</option><option>Таргетированная</option><option>Другое</option></select>
-                    </div>
-                    <div class="form-group span-2"><label for="pStatus">Статус</label>
-                        <select id="pStatus"><option>Активна</option><option>Приостановлена</option><option>Отключена</option></select>
-                    </div>
-                </div>
-            </div>
-            <div class="modal-actions">
-                <button type="button" class="btn btn-secondary" id="platformModalCancel">Отмена</button>
-                <button type="button" class="btn btn-primary" id="platformModalSave">Сохранить</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Общая модалка подтверждения удаления (сеть / оффер / площадка) -->
+    <!-- Общая модалка подтверждения удаления (сеть / оффер) -->
     <div class="modal-overlay" id="confirmModal" hidden>
         <div class="modal-content" style="max-width:420px">
             <div class="modal-header">
