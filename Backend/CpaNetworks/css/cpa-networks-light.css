@@ -130,6 +130,7 @@ body {
 
 /* ----- Кнопки ----- */
 .btn { position: relative; display: inline-flex; align-items: center; gap: 8px; justify-content: center; padding: 11px 22px; border: none; border-radius: 30px; font-size: 14.5px; font-weight: 600; cursor: pointer; color: #fff; white-space: nowrap; transition: transform .15s, box-shadow .15s, background .2s; text-decoration: none; }
+.btn[hidden] { display: none; }
 .btn:active { transform: scale(.97); }
 .btn-primary { background: var(--graphite); box-shadow: 0 6px 16px rgba(105, 105, 105, .28); }
 .btn-primary:hover { background: var(--graphite-deep); }
