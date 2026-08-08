@@ -263,7 +263,7 @@ tbody tr:hover td { background: rgba(255, 255, 255, .4); }
 .repeat-row input, .repeat-row select { padding: 7px 10px; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); font-size: 12.5px; color: var(--ink); background: rgba(255, 255, 255, .85); width: 100%; min-width: 0; font-family: inherit; }
 .repeat-row input:focus, .repeat-row select:focus { outline: none; border-color: var(--accent-soft); box-shadow: 0 0 0 3px rgba(0, 0, 255, .12); }
 .geo-row { grid-template-columns: 1fr 1fr 1fr 1fr auto; }
-.segment-row { grid-template-columns: 1.1fr 1fr 1fr auto; }
+.segment-row { grid-template-columns: 1fr .85fr 1fr 1fr auto; }
 .segment-row .range-pair { gap: 6px; }
 .segment-row .range-pair span { font-size: 11px; }
 

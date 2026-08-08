@@ -513,3 +513,45 @@ INSERT INTO param_lists (list_key, value, sort_order) VALUES
     ('paymentMethod', 'Ипотека', 1), ('paymentMethod', 'Наличные', 2), ('paymentMethod', 'Рассрочка от застройщика', 3), ('paymentMethod', 'Сертификат/субсидия', 4), ('paymentMethod', 'Материнский капитал', 5),
     ('mortgageType', 'Господдержка', 1), ('mortgageType', 'Семейная', 2), ('mortgageType', 'IT-ипотека', 3), ('mortgageType', 'Военная', 4), ('mortgageType', 'От застройщика', 5), ('mortgageType', 'Вторичная', 6)
 ON CONFLICT (list_key, value) DO NOTHING;
+
+-- ============================================================
+-- Корректировки формы оффера (report_2026-08-01.md, 08.08.2026)
+-- ============================================================
+
+-- 1. «Первоначальный взнос»: ₽ → % — переосмысление существующего поля,
+-- то же имя, что у leads.down_payment_percent. RENAME COLUMN не идемпотентен
+-- сам по себе (второй прогон падает "column does not exist", т.к. down_payment
+-- уже переименована) — тот же приём с DO-блоком и проверкой в
+-- information_schema.columns, что уже применён выше для employees.script_id.
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'real_estate_offers' AND column_name = 'down_payment'
+    ) THEN
+        ALTER TABLE real_estate_offers RENAME COLUMN down_payment TO down_payment_percent;
+    END IF;
+END $$;
+
+-- 2. «Тип клиента» → множественный выбор. Обычный VARCHAR[] прямо на
+-- real_estate_offers (тот же характер, что у obj_types/finishes — мультиселект
+-- без доп. атрибутов на значение), не junction-таблица, как у способа
+-- покупки/вида ипотеки — тот паттерн был нужен только под будущие атрибуты
+-- на значение, которых тут нет.
+ALTER TABLE real_estate_offers ADD COLUMN IF NOT EXISTS client_types VARCHAR[] NOT NULL DEFAULT '{}';
+ALTER TABLE real_estate_offers DROP COLUMN IF EXISTS client_type;
+
+-- other_borrower — теперь трёхзначное: NULL («Пенсионер» не выбран, поле
+-- неприменимо) / true / false (оба — «Пенсионер» выбран, чекбокс отмечен
+-- или нет). Раньше был boolean NOT NULL DEFAULT false — с одиночным
+-- client_type «неприменимо» и «false» были неразличимы, с массивом это
+-- уже реальная разница.
+ALTER TABLE real_estate_offers ALTER COLUMN other_borrower DROP NOT NULL;
+ALTER TABLE real_estate_offers ALTER COLUMN other_borrower DROP DEFAULT;
+
+-- 3. «Комнатность» — с уровня оффера в строку сегмента (тот же переезд, что
+-- уже проделан с «Класс объекта») — один сегмент = одна комнатность, скаляр,
+-- не массив: диапазон цена/площадь в сегменте относится к одной конкретной
+-- комнатности, множественный выбор снова смешивал бы разнородные диапазоны.
+ALTER TABLE real_estate_offers DROP COLUMN IF EXISTS rooms;
+ALTER TABLE real_estate_offer_segments ADD COLUMN IF NOT EXISTS room_count VARCHAR;

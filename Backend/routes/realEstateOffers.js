@@ -26,10 +26,9 @@ const FIELD_COLUMNS = [
     ['nonTargetCriteria', 'non_target_criteria'],
     ['developer', 'developer'],
     ['deadline', 'deadline'],
-    ['clientType', 'client_type'],
     ['otherBorrower', 'other_borrower'],
     ['purchaseTerm', 'purchase_term'],
-    ['downPayment', 'down_payment'],
+    ['downPaymentPercent', 'down_payment_percent'],
     ['priority', 'priority'],
     ['transferTime', 'transfer_time'],
     ['leadLimit', 'lead_limit']
@@ -38,14 +37,18 @@ const FIELD_COLUMNS = [
 const ARRAY_COLUMNS = [
     ['objTypes', 'obj_types'],
     ['finishes', 'finishes'],
-    ['rooms', 'rooms']
+    ['clientTypes', 'client_types']
 ];
 
 function normalizeValue(key, value) {
     if (key === 'status') {
         return value === undefined || value === null || String(value).trim() === '' ? 'draft' : value;
     }
+    // Трёхзначное поле: null означает "неприменимо" («Пенсионер» не выбран
+    // среди типов клиента) — не приводить к false, иначе теряется разница
+    // между "неприменимо" и "выбран, но чекбокс снят".
     if (key === 'otherBorrower') {
+        if (value === null || value === undefined) return null;
         return value === true || value === 'true';
     }
     if (value === undefined) return null;
@@ -83,6 +86,7 @@ function rowToSegment(row) {
         id: row.id,
         label: row.label,
         objectClass: row.object_class,
+        roomCount: row.room_count,
         priceMin: row.price_min,
         priceMax: row.price_max,
         areaMin: row.area_min,
@@ -117,13 +121,12 @@ function rowToOffer(row, segments, objGeo, clientGeo, paymentMethods, mortgageTy
         nonTargetCriteria: row.non_target_criteria,
         objTypes: row.obj_types || [],
         finishes: row.finishes || [],
-        rooms: row.rooms || [],
         developer: row.developer,
         deadline: row.deadline,
-        clientType: row.client_type,
+        clientTypes: row.client_types || [],
         otherBorrower: row.other_borrower,
         purchaseTerm: row.purchase_term,
-        downPayment: row.down_payment,
+        downPaymentPercent: row.down_payment_percent,
         priority: row.priority,
         transferTime: row.transfer_time,
         leadLimit: row.lead_limit,
@@ -152,12 +155,13 @@ async function replaceSegments(client, offerId, segments) {
     await client.query('DELETE FROM real_estate_offer_segments WHERE offer_id = $1', [offerId]);
     for (const s of normalizeArray(segments)) {
         await client.query(
-            `INSERT INTO real_estate_offer_segments (offer_id, label, object_class, price_min, price_max, area_min, area_max)
-             VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+            `INSERT INTO real_estate_offer_segments (offer_id, label, object_class, room_count, price_min, price_max, area_min, area_max)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
             [
                 offerId,
                 normalizeValue('label', s.label),
                 normalizeValue('objectClass', s.objectClass),
+                normalizeValue('roomCount', s.roomCount),
                 normalizeValue('priceMin', s.priceMin),
                 normalizeValue('priceMax', s.priceMax),
                 normalizeValue('areaMin', s.areaMin),

@@ -26,8 +26,8 @@ const PARAM_META = [
     { key: 'objType', label: 'Тип объекта', target: 'fObjType', type: 'chips' },
     { key: 'objClass', label: 'Класс объекта', target: 'fSegments', type: 'segments' },
     { key: 'finish', label: 'Отделка', target: 'fFinish', type: 'chips' },
-    { key: 'rooms', label: 'Комнатность', target: 'fRooms', type: 'chips' },
-    { key: 'clientType', label: 'Тип клиента', target: 'fClientType', type: 'select' },
+    { key: 'rooms', label: 'Комнатность', target: 'fSegments', type: 'segments' },
+    { key: 'clientType', label: 'Тип клиента', target: 'fClientType', type: 'chips' },
     { key: 'purchaseTerm', label: 'Срок покупки', target: 'fPurchaseTerm', type: 'select' },
     { key: 'paymentMethod', label: 'Способ покупки', target: 'fPaymentMethod', type: 'chips' },
     { key: 'mortgageType', label: 'Виды ипотеки', target: 'fMortgageType', type: 'chips' }
@@ -269,6 +269,10 @@ function renderSegments() {
                 <option value="">Класс объекта</option>
                 ${(paramLists.objClass || []).map((v) => `<option value="${escapeHtml(v)}"${s.objectClass === v ? ' selected' : ''}>${escapeHtml(v)}</option>`).join('')}
             </select>
+            <select class="seg-rooms">
+                <option value="">Комнатность</option>
+                ${(paramLists.rooms || []).map((v) => `<option value="${escapeHtml(v)}"${s.roomCount === v ? ' selected' : ''}>${escapeHtml(v)}</option>`).join('')}
+            </select>
             <div class="range-pair"><input type="number" class="seg-price-min" placeholder="цена от" value="${s.priceMin ?? ''}"><span>—</span><input type="number" class="seg-price-max" placeholder="цена до" value="${s.priceMax ?? ''}"></div>
             <div class="range-pair"><input type="number" class="seg-area-min" placeholder="S от" value="${s.areaMin ?? ''}"><span>—</span><input type="number" class="seg-area-max" placeholder="S до" value="${s.areaMax ?? ''}"></div>
             <button type="button" class="m-icon-btn danger rr-remove" data-rm="${i}"><i class="fas fa-trash" aria-hidden="true"></i></button>
@@ -279,6 +283,7 @@ function renderSegments() {
 function gatherSegments() {
     return Array.from(document.querySelectorAll('#fSegments .segment-row')).map((row) => ({
         objectClass: row.querySelector('.seg-class').value,
+        roomCount: row.querySelector('.seg-rooms').value,
         priceMin: row.querySelector('.seg-price-min').value,
         priceMax: row.querySelector('.seg-price-max').value,
         areaMin: row.querySelector('.seg-area-min').value,
@@ -323,7 +328,8 @@ function refreshParamField(key) {
     } else if (meta.type === 'segments') {
         renderSegments();
     } else {
-        renderChipOptions(meta.target, paramLists[key], getChipValues(meta.target), key === 'paymentMethod' ? toggleMortgageType : null);
+        const onToggle = key === 'paymentMethod' ? toggleMortgageType : key === 'clientType' ? toggleOtherBorrower : null;
+        renderChipOptions(meta.target, paramLists[key], getChipValues(meta.target), onToggle);
     }
 }
 
@@ -406,11 +412,13 @@ function renderParamsPanel() {
     });
 }
 
-// «Иной заёмщик» показывается только при «Тип клиента» = «Пенсионер» —
-// при уходе от этого значения чекбокс явно сбрасывается (не сохраняем
-// значение на случай, если тип клиента снова станет «Пенсионер»).
+// «Тип клиента» — множественный выбор; «Иной заёмщик» показываем, если
+// «Пенсионер» есть среди выбранных значений (точное вхождение — в отличие
+// от каскада «вид ипотеки», у «Пенсионер» нет вариантов написания). При
+// отсутствии «Пенсионер» среди выбранных — поле скрываем и явно сбрасываем
+// чекбокс (не сохраняем значение на случай возврата).
 function toggleOtherBorrower() {
-    const isRetiree = $('#fClientType').value === 'Пенсионер';
+    const isRetiree = getChipValues('fClientType').includes('Пенсионер');
     $('#fOtherBorrowerGroup').style.display = isRetiree ? '' : 'none';
     if (!isRetiree) $('#fOtherBorrower').checked = false;
 }
@@ -442,18 +450,17 @@ function openOfferModal(id) {
     $('#fNonTargetCriteria').value = o?.nonTargetCriteria || '';
     $('#fDeveloper').value = o?.developer || '';
     $('#fDeadline').value = o?.deadline || '';
-    renderSelectOptions('fClientType', paramLists.clientType, o?.clientType);
+    renderChipOptions('fClientType', paramLists.clientType, o?.clientTypes || [], toggleOtherBorrower);
     $('#fOtherBorrower').checked = !!o?.otherBorrower;
     toggleOtherBorrower();
     renderSelectOptions('fPurchaseTerm', paramLists.purchaseTerm, o?.purchaseTerm);
-    $('#fDownPayment').value = o?.downPayment ?? '';
+    $('#fDownPayment').value = o?.downPaymentPercent ?? '';
     $('#fPriority').value = o?.priority ?? '';
     $('#fTransferTime').value = o?.transferTime || '';
     $('#fLeadLimit').value = o?.leadLimit ?? '';
 
     renderChipOptions('fObjType', paramLists.objType, o?.objTypes || []);
     renderChipOptions('fFinish', paramLists.finish, o?.finishes || []);
-    renderChipOptions('fRooms', paramLists.rooms, o?.rooms || []);
 
     renderChipOptions('fPaymentMethod', paramLists.paymentMethod, o?.paymentMethods || [], toggleMortgageType);
     renderChipOptions('fMortgageType', paramLists.mortgageType, o?.mortgageTypes || []);
@@ -485,13 +492,12 @@ function gatherOfferData() {
         nonTargetCriteria: $('#fNonTargetCriteria').value,
         objTypes: getChipValues('fObjType'),
         finishes: getChipValues('fFinish'),
-        rooms: getChipValues('fRooms'),
         developer: $('#fDeveloper').value,
         deadline: $('#fDeadline').value,
-        clientType: $('#fClientType').value,
-        otherBorrower: $('#fOtherBorrower').checked,
+        clientTypes: getChipValues('fClientType'),
+        otherBorrower: getChipValues('fClientType').includes('Пенсионер') ? $('#fOtherBorrower').checked : null,
         purchaseTerm: $('#fPurchaseTerm').value,
-        downPayment: $('#fDownPayment').value,
+        downPaymentPercent: $('#fDownPayment').value,
         paymentMethods: getChipValues('fPaymentMethod'),
         mortgageTypes: getChipValues('fMortgageType'),
         priority: $('#fPriority').value,
@@ -584,7 +590,6 @@ async function init() {
     $('#offerModalClose').addEventListener('click', () => { $('#offerModal').hidden = true; });
     $('#offerModalCancel').addEventListener('click', () => { $('#offerModal').hidden = true; });
     $('#offerModalSave').addEventListener('click', saveOffer);
-    $('#fClientType').addEventListener('change', toggleOtherBorrower);
     $('#paramsModeToggle').addEventListener('change', (e) => {
         const on = e.target.checked;
         $('#offerForm').hidden = on;
@@ -595,7 +600,7 @@ async function init() {
         $('#offerModalCancel').textContent = on ? 'Готово' : 'Отмена';
         if (on) renderParamsPanel();
     });
-    $('#addSegmentBtn').addEventListener('click', () => { currentSegments.push({ objectClass: '', priceMin: '', priceMax: '', areaMin: '', areaMax: '' }); renderSegments(); });
+    $('#addSegmentBtn').addEventListener('click', () => { currentSegments.push({ objectClass: '', roomCount: '', priceMin: '', priceMax: '', areaMin: '', areaMax: '' }); renderSegments(); });
     $('#addObjGeoBtn').addEventListener('click', () => { currentObjGeo.push({ region: '', city: '', district: '', locality: '' }); renderGeoRows('fObjGeo', currentObjGeo); });
     $('#addClientGeoBtn').addEventListener('click', () => { currentClientGeo.push({ region: '', city: '', district: '', locality: '' }); renderGeoRows('fClientGeo', currentClientGeo); });
 

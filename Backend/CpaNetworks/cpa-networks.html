@@ -154,9 +154,6 @@
                             <div class="repeat-rows" id="fSegments"></div>
                             <button type="button" class="dashed-row" id="addSegmentBtn"><i class="fas fa-plus" aria-hidden="true"></i>Добавить сегмент</button>
                         </div>
-                        <div class="form-group span-2"><label>Комнатность <span class="hint">справочник, значения условные</span></label>
-                            <div class="chip-select" id="fRooms"></div>
-                        </div>
                         <div class="form-group span-2"><label>География объекта <span class="hint">регион / город / район / нас. пункт — пустой уровень значит «любой», можно несколько строк</span></label>
                             <div class="repeat-rows" id="fObjGeo"></div>
                             <button type="button" class="dashed-row" id="addObjGeoBtn"><i class="fas fa-plus" aria-hidden="true"></i>Добавить географию</button>
@@ -168,16 +165,16 @@
                         <div><h3>Требования к клиенту</h3><span>какой покупатель подходит под оффер</span></div>
                     </div>
                     <div class="form-grid">
-                        <div class="form-group"><label for="fClientType">Тип клиента</label>
-                            <select id="fClientType"></select>
+                        <div class="form-group span-2"><label>Тип клиента <span class="hint">можно выбрать несколько</span></label>
+                            <div class="chip-select" id="fClientType"></div>
                         </div>
-                        <div class="form-group" id="fOtherBorrowerGroup"><label>Иной заёмщик <span class="hint">если тип клиента — «Пенсионер»</span></label>
+                        <div class="form-group" id="fOtherBorrowerGroup"><label>Иной заёмщик <span class="hint">если среди типов клиента есть «Пенсионер»</span></label>
                             <label class="checkbox-row"><input type="checkbox" id="fOtherBorrower"><span>Заёмщик может быть другим человеком</span></label>
                         </div>
                         <div class="form-group"><label for="fPurchaseTerm">Срок покупки</label>
                             <select id="fPurchaseTerm"></select>
                         </div>
-                        <div class="form-group"><label for="fDownPayment">Первоначальный взнос, ₽</label><input type="number" id="fDownPayment" placeholder="1 500 000"></div>
+                        <div class="form-group"><label for="fDownPayment">Первоначальный взнос, %</label><input type="number" id="fDownPayment" placeholder="20"></div>
                         <div class="form-group span-2"><label>Способ покупки <span class="hint">можно несколько; вид ипотеки — если среди них есть «Ипотека»</span></label>
                             <div class="chip-select" id="fPaymentMethod"></div>
                         </div>
