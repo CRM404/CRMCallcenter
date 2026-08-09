@@ -577,3 +577,23 @@ ALTER TABLE real_estate_offer_segments ADD COLUMN IF NOT EXISTS room_count VARCH
 ALTER TABLE scripts DROP CONSTRAINT IF EXISTS scripts_offer_status_unique;
 ALTER TABLE scripts DROP COLUMN IF EXISTS offer_id;
 ALTER TABLE scripts DROP COLUMN IF EXISTS funnel_status_id;
+
+-- ============================================================
+-- leads.offer_id: перецепить с заглушки offers на реальные офферы
+-- CPA-сети (владелец, 09.08.2026)
+-- ============================================================
+
+-- Было offer_id -> offers(id) (заглушка id+name, заведена только под подбор
+-- скрипта по паре оффер+статус — та привязка убирается отдельной задачей).
+-- Смыслово лид приходит по конкретному объявлению CPA-сети — это
+-- real_estate_offers (ставка/гео/цена и т.п.), не двухколоночная заглушка.
+-- Заодно снимает путаницу: во всех остальных местах схемы (сегменты/гео/
+-- способы оплаты/ипотеки) offer_id уже означает real_estate_offers.id —
+-- теперь это верно и для leads.offer_id, единообразно по всей схеме.
+-- ON DELETE SET NULL сохраняю как было — удаление оффера не должно ронять
+-- лида, только снимать привязку. leads.offer_id сейчас практически всегда
+-- NULL (массовой загрузки базы лидов ещё не было) — конфликтов по данным
+-- при пересоздании constraint не ожидается.
+ALTER TABLE leads DROP CONSTRAINT IF EXISTS leads_offer_id_fkey;
+ALTER TABLE leads ADD CONSTRAINT leads_offer_id_fkey
+    FOREIGN KEY (offer_id) REFERENCES real_estate_offers(id) ON DELETE SET NULL;
