@@ -778,6 +778,9 @@ async function init() {
     });
 
     document.querySelectorAll('.modal-overlay').forEach((ov) => {
+        // Форма оффера длинная — клик мимо неё легко случаен, а закрытие роняет
+        // весь ввод без подтверждения, поэтому у неё одной клик по фону не закрывает.
+        if (ov.id === 'offerModal') return;
         ov.addEventListener('click', (e) => { if (e.target === ov) ov.hidden = true; });
     });
     document.addEventListener('keydown', (e) => {
