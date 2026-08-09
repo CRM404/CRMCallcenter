@@ -347,7 +347,8 @@ function geoSuggestionParts(data) {
 function geoSuggestionLabel(data) {
     const cityWithType = fullTypeText(data.city_with_type, data.city_type, data.city_type_full);
     const parts = geoSuggestionParts(data);
-    return [parts.region, cityWithType, parts.area, parts.settlement].filter(Boolean).join(', ');
+    const pieces = [parts.region, cityWithType, parts.area, parts.settlement].filter(Boolean);
+    return pieces.filter((p, i) => p !== pieces[i - 1]).join(', ');
 }
 
 function highlightMatch(text, q) {
