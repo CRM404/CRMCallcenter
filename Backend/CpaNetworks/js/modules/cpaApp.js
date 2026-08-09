@@ -10,7 +10,7 @@ import { initConfirmModal, confirmAction } from './cpaConfirm.js';
 import {
     fetchCpaNetworks, createCpaNetwork, updateCpaNetwork, deleteCpaNetwork, fetchOrganization,
     fetchRealEstateOffers, createRealEstateOffer, updateRealEstateOffer, deleteRealEstateOffer,
-    fetchParamLists, addParamValue, deleteParamValue
+    fetchParamLists, addParamValue, deleteParamValue, fetchGeoSuggest
 } from './cpaStorage.js';
 
 const STATUS_LABEL = { active: 'Активен', paused: 'На паузе', disabled: 'Отключён', draft: 'Черновик' };
@@ -46,6 +46,7 @@ let searchQuery = '';
 
 let editingOfferId = null;
 let editingNetworkId = null;
+let savingAsCopy = false;
 
 let currentSegments = [];
 let currentObjGeo = [];
@@ -228,6 +229,7 @@ function renderOffersTable() {
             <td>
                 <div class="row-actions">
                     <button type="button" class="m-icon-btn" data-edit="${o.id}" title="Настроить"><i class="fas fa-pencil-alt" aria-hidden="true"></i></button>
+                    <button type="button" class="m-icon-btn" data-copy="${o.id}" title="Скопировать"><i class="fas fa-copy" aria-hidden="true"></i></button>
                     <button type="button" class="m-icon-btn danger" data-del="${o.id}" title="Удалить"><i class="fas fa-trash" aria-hidden="true"></i></button>
                 </div>
             </td>
@@ -236,6 +238,7 @@ function renderOffersTable() {
     $('#emptyState').hidden = list.length > 0;
 
     $('#offersBody').querySelectorAll('[data-edit]').forEach((b) => b.addEventListener('click', () => openOfferModal(Number(b.dataset.edit))));
+    $('#offersBody').querySelectorAll('[data-copy]').forEach((b) => b.addEventListener('click', () => openOfferModal(Number(b.dataset.copy), { asCopy: true })));
     $('#offersBody').querySelectorAll('[data-del]').forEach((b) => b.addEventListener('click', () => handleDeleteOffer(Number(b.dataset.del))));
 
     const networkOffers = offers.filter((o) => o.networkId === activeNetworkId);
@@ -294,14 +297,117 @@ function gatherSegments() {
 function renderGeoRows(containerId, store) {
     $('#' + containerId).innerHTML = store.map((r, i) => `
         <div class="repeat-row geo-row" data-i="${i}">
-            <input class="geo-region" placeholder="Регион" value="${escapeHtml(r.region || '')}">
-            <input class="geo-city" placeholder="Город" value="${escapeHtml(r.city || '')}">
-            <input class="geo-district" placeholder="Район" value="${escapeHtml(r.district || '')}">
-            <input class="geo-locality" placeholder="Нас. пункт" value="${escapeHtml(r.locality || '')}">
+            <div class="geo-field"><input class="geo-region" placeholder="Регион" value="${escapeHtml(r.region || '')}"></div>
+            <div class="geo-field"><input class="geo-city" placeholder="Город" value="${escapeHtml(r.city || '')}"></div>
+            <div class="geo-field"><input class="geo-district" placeholder="Район" value="${escapeHtml(r.district || '')}"></div>
+            <div class="geo-field"><input class="geo-locality" placeholder="Нас. пункт" value="${escapeHtml(r.locality || '')}"></div>
             <button type="button" class="m-icon-btn danger rr-remove" data-rm="${i}"><i class="fas fa-trash" aria-hidden="true"></i></button>
         </div>`).join('') || '<div class="empty-state" style="padding:14px">География не задана — оффер считается доступным по всей стране.</div>';
     $('#' + containerId).querySelectorAll('[data-rm]').forEach((b) => b.addEventListener('click', () => { store.splice(Number(b.dataset.rm), 1); renderGeoRows(containerId, store); }));
+    attachGeoAutocomplete(containerId, store);
 }
+
+// --- Подсказки адреса (DaData), report_2026-08-01.md, 09.08.2026 ---
+
+const GEO_SUGGEST_DEBOUNCE_MS = 300;
+let geoSuggestTimer = null;
+let geoSuggestRequestId = 0;
+
+function closeGeoSuggest() {
+    document.querySelectorAll('.geo-suggest').forEach((el) => el.remove());
+}
+
+function escapeRegExp(s) {
+    return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// DaData отдаёт "<имя> <тип-аббревиатура>" или "<тип-аббревиатура> <имя>" в
+// зависимости от уровня (порядок слов у "область"/"край" и "район"/"посёлок"
+// разный, а у "республика" вообще наоборот — "респ Татарстан") — вместо того
+// чтобы угадывать порядок, берём уже готовый _with_type и точечно заменяем
+// аббревиатуру на полное слово, сохраняя позицию (без сокращений — dialog.md).
+function fullTypeText(withType, typeAbbr, typeFull) {
+    if (!withType) return '';
+    if (!typeAbbr || !typeFull || typeAbbr === typeFull) return withType;
+    return withType.replace(new RegExp(`(^|\\s)${escapeRegExp(typeAbbr)}(?=\\s|$)`), (m, p1) => `${p1}${typeFull}`);
+}
+
+// «Город» — только имя без типа (поле и так подписано «Город», «город Химки»
+// было бы избыточно); регион/район/нас. пункт — с полным словом типа, там тип
+// несёт смысл (область vs край, район vs городской округ, посёлок vs деревня).
+function geoSuggestionParts(data) {
+    return {
+        region: fullTypeText(data.region_with_type, data.region_type, data.region_type_full),
+        city: data.city || '',
+        area: fullTypeText(data.area_with_type, data.area_type, data.area_type_full),
+        settlement: fullTypeText(data.settlement_with_type, data.settlement_type, data.settlement_type_full)
+    };
+}
+
+function geoSuggestionLabel(data) {
+    const cityWithType = fullTypeText(data.city_with_type, data.city_type, data.city_type_full);
+    const parts = geoSuggestionParts(data);
+    return [parts.region, cityWithType, parts.area, parts.settlement].filter(Boolean).join(', ');
+}
+
+function highlightMatch(text, q) {
+    const idx = text.toLowerCase().indexOf(q.toLowerCase());
+    if (idx === -1) return escapeHtml(text);
+    return escapeHtml(text.slice(0, idx)) + '<b>' + escapeHtml(text.slice(idx, idx + q.length)) + '</b>' + escapeHtml(text.slice(idx + q.length));
+}
+
+function attachGeoAutocomplete(containerId, store) {
+    $('#' + containerId).querySelectorAll('.geo-field input').forEach((input) => {
+        input.addEventListener('input', () => {
+            const q = input.value.trim();
+            const field = input.closest('.geo-field');
+            const row = input.closest('.geo-row');
+            const i = Number(row.dataset.i);
+            closeGeoSuggest();
+            clearTimeout(geoSuggestTimer);
+            if (!q) return;
+
+            const requestId = ++geoSuggestRequestId;
+            geoSuggestTimer = setTimeout(async () => {
+                let suggestions;
+                try {
+                    const result = await fetchGeoSuggest(q);
+                    suggestions = result?.suggestions || [];
+                } catch (err) {
+                    showToast('Подсказки адреса недоступны — сервис не отвечает. Введите вручную.', 'error');
+                    return;
+                }
+                if (requestId !== geoSuggestRequestId) return;
+                if (input.value.trim() !== q) return;
+
+                const items = suggestions.slice(0, 5).map((s) => s.data);
+                const box = document.createElement('div');
+                box.className = 'geo-suggest';
+                box.innerHTML = items.length
+                    ? items.map((data, idx) => `<div class="geo-suggest-item" data-i="${idx}"><i class="fas fa-location-dot" aria-hidden="true"></i><span>${highlightMatch(geoSuggestionLabel(data), q)}</span></div>`).join('')
+                    : '<div class="geo-suggest-empty">Ничего не найдено</div>';
+                field.appendChild(box);
+
+                box.querySelectorAll('.geo-suggest-item').forEach((item) => {
+                    item.addEventListener('mousedown', (e) => {
+                        e.preventDefault();
+                        const data = items[Number(item.dataset.i)];
+                        if (!data) return;
+                        const parts = geoSuggestionParts(data);
+                        store[i].region = parts.region;
+                        store[i].city = parts.city;
+                        store[i].district = parts.area;
+                        store[i].locality = parts.settlement;
+                        renderGeoRows(containerId, store);
+                    });
+                });
+            }, GEO_SUGGEST_DEBOUNCE_MS);
+        });
+        input.addEventListener('blur', () => setTimeout(closeGeoSuggest, 120));
+    });
+}
+
+document.addEventListener('click', (e) => { if (!e.target.closest('.geo-field')) closeGeoSuggest(); });
 
 function gatherGeoRows(containerId) {
     return Array.from(document.querySelectorAll(`#${containerId} .geo-row`)).map((row) => ({
@@ -423,11 +529,13 @@ function toggleOtherBorrower() {
     if (!isRetiree) $('#fOtherBorrower').checked = false;
 }
 
-function openOfferModal(id) {
-    editingOfferId = id;
+function openOfferModal(id, opts = {}) {
+    const asCopy = !!opts.asCopy;
+    savingAsCopy = asCopy;
+    editingOfferId = asCopy ? null : id; // копия всегда уходит через create, не update — иначе перезапишет оригинал
     const o = id ? offers.find((x) => x.id === id) : null;
     const net = networks.find((n) => n.id === activeNetworkId);
-    $('#offerModalTitle').textContent = o ? 'Настройка оффера' : 'Новый оффер';
+    $('#offerModalTitle').textContent = asCopy ? 'Копия оффера' : (o ? 'Настройка оффера' : 'Новый оффер');
 
     // Модалка всегда открывается в режиме формы, не в режиме "Настройка списков".
     $('#paramsModeToggle').checked = false;
@@ -437,9 +545,9 @@ function openOfferModal(id) {
     $('#offerModalSave').hidden = false;
     $('#offerModalCancel').textContent = 'Отмена';
 
-    $('#fName').value = o?.name || '';
+    $('#fName').value = o?.name ? (asCopy ? o.name + ' (копия)' : o.name) : '';
     renderSelectOptions('fCategory', paramLists.category, o?.category);
-    $('#fStatus').value = o?.status || 'draft';
+    $('#fStatus').value = asCopy ? 'draft' : (o?.status || 'draft');
     $('#fDateStart').value = o?.dateStart || '';
     $('#fDateEnd').value = o?.dateEnd || '';
     renderSelectOptions('fActionType', paramLists.actionType, o?.actionType);
@@ -522,7 +630,7 @@ async function saveOffer() {
     try {
         if (editingOfferId === null) {
             await createRealEstateOffer(data);
-            showToast('Оффер добавлен', 'success');
+            showToast(savingAsCopy ? 'Копия оффера создана' : 'Оффер добавлен', 'success');
         } else {
             await updateRealEstateOffer(editingOfferId, data);
             showToast('Изменения сохранены', 'success');

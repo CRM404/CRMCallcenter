@@ -104,3 +104,9 @@ export function addParamValue(key, value) {
 export function deleteParamValue(key, value) {
     return request(`/param-lists/${encodeURIComponent(key)}/${encodeURIComponent(value)}`, { method: 'DELETE' });
 }
+
+// --- Подсказки адреса, DaData-прокси (report_2026-08-01.md, 09.08.2026) ---
+
+export function fetchGeoSuggest(query) {
+    return request(`/geo-suggest?q=${encodeURIComponent(query)}`);
+}

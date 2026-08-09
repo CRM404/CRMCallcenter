@@ -267,6 +267,15 @@ tbody tr:hover td { background: rgba(255, 255, 255, .4); }
 .segment-row .range-pair { gap: 6px; }
 .segment-row .range-pair span { font-size: 11px; }
 
+/* ----- Подсказки адреса (DaData) — report_2026-08-01.md, 09.08.2026 ----- */
+.geo-field { position: relative; min-width: 0; }
+.geo-suggest { position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 60; background: var(--surface-modal); backdrop-filter: blur(14px); border: 1px solid var(--line-strong); border-radius: var(--radius-sm); box-shadow: var(--shadow-pop); max-height: 230px; overflow-y: auto; }
+.geo-suggest-item { display: flex; align-items: flex-start; gap: 7px; padding: 8px 10px; font-size: 12.5px; line-height: 1.35; color: var(--ink); cursor: pointer; }
+.geo-suggest-item:hover { background: rgba(0, 0, 255, .07); }
+.geo-suggest-item i { color: var(--ink-faint); margin-top: 2px; }
+.geo-suggest-item b { font-weight: 700; }
+.geo-suggest-empty { padding: 9px 10px; font-size: 12px; color: var(--ink-faint); }
+
 /* ----- Модалка «Управление сетями» (тот же паттерн, что «Управление отделами») ----- */
 .net-list { display: flex; flex-direction: column; gap: 8px; }
 .net-row { display: flex; align-items: center; gap: 12px; padding: 11px 14px; border-radius: var(--radius-md); border: 1px solid var(--line); background: rgba(255, 255, 255, .5); }
