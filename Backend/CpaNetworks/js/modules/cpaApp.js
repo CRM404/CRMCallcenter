@@ -280,7 +280,7 @@ function renderSegments() {
             <div class="range-pair"><input type="number" class="seg-area-min" placeholder="S от" value="${s.areaMin ?? ''}"><span>—</span><input type="number" class="seg-area-max" placeholder="S до" value="${s.areaMax ?? ''}"></div>
             <button type="button" class="m-icon-btn danger rr-remove" data-rm="${i}"><i class="fas fa-trash" aria-hidden="true"></i></button>
         </div>`).join('') || '<div class="empty-state" style="padding:14px">Сегментов пока нет — по умолчанию действует общий фильтр по типу выше.</div>';
-    $('#fSegments').querySelectorAll('[data-rm]').forEach((b) => b.addEventListener('click', () => { currentSegments.splice(Number(b.dataset.rm), 1); renderSegments(); }));
+    $('#fSegments').querySelectorAll('[data-rm]').forEach((b) => b.addEventListener('click', () => { syncSegmentsFromDom(); currentSegments.splice(Number(b.dataset.rm), 1); renderSegments(); }));
 }
 
 function gatherSegments() {
@@ -294,6 +294,14 @@ function gatherSegments() {
     }));
 }
 
+// Поля строк сегмента не пишут значения в currentSegments по мере ввода (только
+// при сохранении оффера через gatherSegments) — без этой подстраховки перед
+// каждым push/splice+renderSegments() уже введённые, но не сохранённые значения
+// в других строках стирались бы новым рендером из устаревшего currentSegments.
+function syncSegmentsFromDom() {
+    gatherSegments().forEach((vals, i) => { if (currentSegments[i]) Object.assign(currentSegments[i], vals); });
+}
+
 function renderGeoRows(containerId, store) {
     $('#' + containerId).innerHTML = store.map((r, i) => `
         <div class="repeat-row geo-row" data-i="${i}">
@@ -303,7 +311,7 @@ function renderGeoRows(containerId, store) {
             <div class="geo-field"><input class="geo-locality" placeholder="Нас. пункт" value="${escapeHtml(r.locality || '')}"></div>
             <button type="button" class="m-icon-btn danger rr-remove" data-rm="${i}"><i class="fas fa-trash" aria-hidden="true"></i></button>
         </div>`).join('') || '<div class="empty-state" style="padding:14px">География не задана — оффер считается доступным по всей стране.</div>';
-    $('#' + containerId).querySelectorAll('[data-rm]').forEach((b) => b.addEventListener('click', () => { store.splice(Number(b.dataset.rm), 1); renderGeoRows(containerId, store); }));
+    $('#' + containerId).querySelectorAll('[data-rm]').forEach((b) => b.addEventListener('click', () => { syncGeoRowsFromDom(containerId, store); store.splice(Number(b.dataset.rm), 1); renderGeoRows(containerId, store); }));
     attachGeoAutocomplete(containerId, store);
 }
 
@@ -435,6 +443,14 @@ function gatherGeoRows(containerId) {
     }));
 }
 
+// Тот же приём, что и syncSegmentsFromDom — вручную набранный (не выбранный из
+// подсказки) текст адреса нигде не пишется в store до сохранения оффера, иначе
+// его стирало бы при push/splice+renderGeoRows(). Merge, а не замена store[i],
+// т.к. gatherGeoRows не возвращает regionFiasId/areaFiasId — их бы иначе потеряли.
+function syncGeoRowsFromDom(containerId, store) {
+    gatherGeoRows(containerId).forEach((vals, i) => { if (store[i]) Object.assign(store[i], vals); });
+}
+
 // «Способ покупки» — множественный выбор; «Вид ипотеки» показываем, если
 // среди выбранных есть хоть один вариант со словом «ипотек» — нестрогое
 // совпадение на случай, если значение переименовано через «Настройку списков».
@@ -449,6 +465,7 @@ function refreshParamField(key) {
     if (meta.type === 'select') {
         renderSelectOptions(meta.target, paramLists[key], document.getElementById(meta.target).value);
     } else if (meta.type === 'segments') {
+        syncSegmentsFromDom();
         renderSegments();
     } else {
         const onToggle = key === 'paymentMethod' ? toggleMortgageType : key === 'clientType' ? toggleOtherBorrower : null;
@@ -546,10 +563,22 @@ function toggleOtherBorrower() {
     if (!isRetiree) $('#fOtherBorrower').checked = false;
 }
 
-function openOfferModal(id, opts = {}) {
+async function openOfferModal(id, opts = {}) {
     const asCopy = !!opts.asCopy;
     savingAsCopy = asCopy;
     editingOfferId = asCopy ? null : id; // копия всегда уходит через create, не update — иначе перезапишет оригинал
+
+    // paramLists грузятся один раз при заходе на страницу (init) и живут в памяти
+    // вкладки — если другой пользователь тем временем изменил справочники через
+    // "Настройку списков", старая вкладка их не увидит без ручного F5. Перечитываем
+    // при каждом открытии модалки, чтобы форма/панель всегда показывали то, что
+    // реально лежит в БД сейчас, а не снимок на момент загрузки страницы.
+    try {
+        paramLists = await fetchParamLists();
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+
     const o = id ? offers.find((x) => x.id === id) : null;
     const net = networks.find((n) => n.id === activeNetworkId);
     $('#offerModalTitle').textContent = asCopy ? 'Копия оффера' : (o ? 'Настройка оффера' : 'Новый оффер');
@@ -715,7 +744,7 @@ async function init() {
     $('#offerModalClose').addEventListener('click', () => { $('#offerModal').hidden = true; });
     $('#offerModalCancel').addEventListener('click', () => { $('#offerModal').hidden = true; });
     $('#offerModalSave').addEventListener('click', saveOffer);
-    $('#paramsModeToggle').addEventListener('change', (e) => {
+    $('#paramsModeToggle').addEventListener('change', async (e) => {
         const on = e.target.checked;
         $('#offerForm').hidden = on;
         $('#paramsPanel').hidden = !on;
@@ -723,11 +752,20 @@ async function init() {
         $('#offerModalSub').textContent = on ? 'Настройка списков значений' : (net ? net.name : '');
         $('#offerModalSave').hidden = on;
         $('#offerModalCancel').textContent = on ? 'Готово' : 'Отмена';
-        if (on) renderParamsPanel();
+        if (on) {
+            // Модалка могла провисеть открытой какое-то время до переключения сюда —
+            // перечитываем справочники, чтобы не показать устаревший снимок (см. openOfferModal).
+            try {
+                paramLists = await fetchParamLists();
+            } catch (err) {
+                showToast(err.message, 'error');
+            }
+            renderParamsPanel();
+        }
     });
-    $('#addSegmentBtn').addEventListener('click', () => { currentSegments.push({ objectClass: '', roomCount: '', priceMin: '', priceMax: '', areaMin: '', areaMax: '' }); renderSegments(); });
-    $('#addObjGeoBtn').addEventListener('click', () => { currentObjGeo.push({ region: '', city: '', district: '', locality: '' }); renderGeoRows('fObjGeo', currentObjGeo); });
-    $('#addClientGeoBtn').addEventListener('click', () => { currentClientGeo.push({ region: '', city: '', district: '', locality: '' }); renderGeoRows('fClientGeo', currentClientGeo); });
+    $('#addSegmentBtn').addEventListener('click', () => { syncSegmentsFromDom(); currentSegments.push({ objectClass: '', roomCount: '', priceMin: '', priceMax: '', areaMin: '', areaMax: '' }); renderSegments(); });
+    $('#addObjGeoBtn').addEventListener('click', () => { syncGeoRowsFromDom('fObjGeo', currentObjGeo); currentObjGeo.push({ region: '', city: '', district: '', locality: '' }); renderGeoRows('fObjGeo', currentObjGeo); });
+    $('#addClientGeoBtn').addEventListener('click', () => { syncGeoRowsFromDom('fClientGeo', currentClientGeo); currentClientGeo.push({ region: '', city: '', district: '', locality: '' }); renderGeoRows('fClientGeo', currentClientGeo); });
 
     $('#searchInput').addEventListener('input', (e) => { searchQuery = e.target.value.trim().toLowerCase(); renderOffersTable(); });
     $('#statusFilter').addEventListener('click', (e) => {
