@@ -22,6 +22,7 @@ const departmentsRouter = require('./routes/departments');
 const realEstateOffersRouter = require('./routes/realEstateOffers');
 const adPlatformsRouter = require('./routes/adPlatforms');
 const paramListsRouter = require('./routes/paramLists');
+const geoSuggestRouter = require('./routes/geoSuggest');
 
 const app = express();
 
@@ -47,6 +48,7 @@ app.use('/api/departments', departmentsRouter);
 app.use('/api/real-estate-offers', realEstateOffersRouter);
 app.use('/api/ad-platforms', adPlatformsRouter);
 app.use('/api/param-lists', paramListsRouter);
+app.use('/api/geo-suggest', geoSuggestRouter);
 
 // Отдаём страницы "Сотрудники", "Оператор", "Скрипт (админ)", "Главная" и
 // "CPA-сети" тем же сервером — отдельный статический хостинг фронтенда не
