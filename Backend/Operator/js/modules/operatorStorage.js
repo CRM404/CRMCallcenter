@@ -67,8 +67,8 @@ export function fetchFunnelStatuses() {
     return request('/lead-funnel-statuses');
 }
 
-// Скрипт подбирается по паре (оффер, статус воронки) лида — среди скриптов,
-// назначенных этому employeeId. null в ответе — нет подходящего скрипта, это
+// Скрипт подбирается только по назначению оператору (employeeId), без учёта
+// оффера/статуса воронки лида. null в ответе — нет назначенного скрипта, это
 // не ошибка (см. routes/scripts.js).
 export function fetchScript(employeeId, leadId) {
     return request(`/scripts${buildQuery({ employeeId, leadId })}`);

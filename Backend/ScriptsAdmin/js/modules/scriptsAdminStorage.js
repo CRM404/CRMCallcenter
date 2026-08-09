@@ -62,13 +62,6 @@ export function deleteScriptNode(nodeId) {
     return request(`/admin/script-nodes/${nodeId}`, { method: 'DELETE' });
 }
 
-// Оффер по-прежнему обязателен при создании/редактировании скрипта (выпадающий
-// список ниже) — сам UI для добавления нового оффера с этой страницы убран
-// (см. бриф), эндпоинт оставлен рабочим на будущее.
-export function fetchOffers() {
-    return request('/admin/offers');
-}
-
 // Список сотрудников для формы назначения — переиспользует прод-эндпоинт
 // GET /api/employees (он теперь отдаёт scriptIds — массив id — в каждой записи).
 export function fetchEmployees() {
@@ -88,11 +81,4 @@ export function removeScriptFromEmployee(employeeId, scriptId) {
     return request(`/admin/employees/${employeeId}/scripts/${scriptId}`, {
         method: 'DELETE'
     });
-}
-
-// Справочник статусов воронки — эндпоинт уже существует и используется
-// страницей оператора/лидов, здесь просто свой storage-модуль страницы
-// (fetch только внутри storage-модуля — конвенция проекта).
-export function fetchFunnelStatuses() {
-    return request('/lead-funnel-statuses');
 }

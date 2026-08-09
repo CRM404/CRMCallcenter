@@ -28,8 +28,7 @@ function buildFunnelStatusOptions(statuses, selectedId) {
 const TEXT_FIELDS = [
     { key: 'lastName', label: 'Фамилия' },
     { key: 'firstName', label: 'Имя' },
-    { key: 'middleName', label: 'Отчество' },
-    { key: 'source', label: 'Источник' }
+    { key: 'middleName', label: 'Отчество' }
 ];
 
 const SEARCH_FIELDS = [

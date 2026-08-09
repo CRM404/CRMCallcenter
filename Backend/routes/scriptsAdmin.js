@@ -89,10 +89,6 @@ function rowToScript(row) {
         id: row.id,
         title: row.title,
         status: row.status,
-        offerId: row.offer_id,
-        offerName: row.offer_name || null,
-        funnelStatusId: row.funnel_status_id,
-        funnelStatusName: row.funnel_status_name || null,
         assignedCount: row.assigned_count === undefined ? null : Number(row.assigned_count)
     };
 }
@@ -110,14 +106,7 @@ function rowToNode(row) {
 }
 
 async function fetchScriptById(id) {
-    const result = await pool.query(
-        `SELECT s.*, o.name AS offer_name, fs.status_name AS funnel_status_name
-         FROM scripts s
-         LEFT JOIN offers o ON s.offer_id = o.id
-         LEFT JOIN lead_funnel_statuses fs ON s.funnel_status_id = fs.id
-         WHERE s.id = $1`,
-        [id]
-    );
+    const result = await pool.query('SELECT * FROM scripts WHERE id = $1', [id]);
     return result.rows[0] || null;
 }
 
@@ -136,23 +125,12 @@ async function isDescendantChain(startNodeId, targetId) {
     return false;
 }
 
-function handleOfferStatusConflict(err, res) {
-    if (err.code === '23505' && err.constraint === 'scripts_offer_status_unique') {
-        res.status(400).json({ error: 'Такая пара оффер+статус уже занята другим скриптом' });
-        return true;
-    }
-    return false;
-}
-
 // GET /api/admin/scripts — список всех скриптов (черновики + активные)
 router.get('/scripts', async (req, res) => {
     try {
         const result = await pool.query(
-            `SELECT s.*, o.name AS offer_name, fs.status_name AS funnel_status_name,
-                    (SELECT count(*)::int FROM employee_scripts es WHERE es.script_id = s.id) AS assigned_count
+            `SELECT s.*, (SELECT count(*)::int FROM employee_scripts es WHERE es.script_id = s.id) AS assigned_count
              FROM scripts s
-             LEFT JOIN offers o ON s.offer_id = o.id
-             LEFT JOIN lead_funnel_statuses fs ON s.funnel_status_id = fs.id
              ORDER BY s.id`
         );
         res.json(result.rows.map(rowToScript));
@@ -162,46 +140,32 @@ router.get('/scripts', async (req, res) => {
     }
 });
 
-// POST /api/admin/scripts — создать новый скрипт (черновик). Оффер и статус
-// воронки теперь обязательны — пара однозначно определяет скрипт (см. schema.sql).
+// POST /api/admin/scripts — создать новый скрипт (черновик)
 router.post('/scripts', async (req, res) => {
     try {
-        const { title, offerId, funnelStatusId } = req.body;
+        const { title } = req.body;
         if (!title || !String(title).trim()) {
             return res.status(400).json({ error: 'Укажите название скрипта' });
         }
-        if (!offerId) {
-            return res.status(400).json({ error: 'Укажите оффер' });
-        }
-        if (!funnelStatusId) {
-            return res.status(400).json({ error: 'Укажите статус воронки' });
-        }
         const result = await pool.query(
-            'INSERT INTO scripts (title, status, offer_id, funnel_status_id) VALUES ($1, $2, $3, $4) RETURNING id',
-            [title.trim(), 'draft', offerId, funnelStatusId]
+            'INSERT INTO scripts (title, status) VALUES ($1, $2) RETURNING id',
+            [title.trim(), 'draft']
         );
         const row = await fetchScriptById(result.rows[0].id);
         res.status(201).json(rowToScript(row));
     } catch (err) {
-        if (handleOfferStatusConflict(err, res)) return;
         console.error(err);
         res.status(500).json({ error: 'Не удалось создать скрипт' });
     }
 });
 
-// PUT /api/admin/scripts/:id — изменить title/status/offerId/funnelStatusId.
-// Несколько скриптов могут быть 'active' одновременно (каждый под своих
-// назначенных операторов) — здесь нет переключения других скриптов в draft.
+// PUT /api/admin/scripts/:id — изменить title/status. Несколько скриптов
+// могут быть 'active' одновременно (каждый под своих назначенных операторов)
+// — здесь нет переключения других скриптов в draft.
 router.put('/scripts/:id', async (req, res) => {
-    const { title, status, offerId, funnelStatusId } = req.body;
+    const { title, status } = req.body;
     if (!title || !String(title).trim()) {
         return res.status(400).json({ error: 'Укажите название скрипта' });
-    }
-    if (!offerId) {
-        return res.status(400).json({ error: 'Укажите оффер' });
-    }
-    if (!funnelStatusId) {
-        return res.status(400).json({ error: 'Укажите статус воронки' });
     }
     if (status !== 'draft' && status !== 'active') {
         return res.status(400).json({ error: 'Недопустимый статус' });
@@ -220,15 +184,11 @@ router.put('/scripts/:id', async (req, res) => {
             }
         }
 
-        await pool.query(
-            'UPDATE scripts SET title = $1, status = $2, offer_id = $3, funnel_status_id = $4 WHERE id = $5',
-            [title.trim(), status, offerId, funnelStatusId, req.params.id]
-        );
+        await pool.query('UPDATE scripts SET title = $1, status = $2 WHERE id = $3', [title.trim(), status, req.params.id]);
 
         const row = await fetchScriptById(req.params.id);
         res.json(rowToScript(row));
     } catch (err) {
-        if (handleOfferStatusConflict(err, res)) return;
         console.error(err);
         res.status(500).json({ error: 'Не удалось сохранить скрипт' });
     }

@@ -497,22 +497,32 @@ CREATE TABLE IF NOT EXISTS param_lists (
     UNIQUE (list_key, value)
 );
 
--- Сидинг текущих значений (идемпотентно, как lead_funnel_statuses выше в
--- файле) — переносит то, что раньше было хардкодом в HTML/JS, в БД как
--- стартовые данные, дальше редактируется через панель "Настройка списков".
-INSERT INTO param_lists (list_key, value, sort_order) VALUES
-    ('category', 'Новостройка', 1), ('category', 'Вторичка', 2), ('category', 'Загородная недвижимость', 3), ('category', 'Коммерческая недвижимость', 4),
-    ('actionType', 'Целевой лид', 1), ('actionType', 'Лид', 2), ('actionType', 'Заявка на показ', 3),
-    ('leadCheck', 'Да, ручная модерация', 1), ('leadCheck', 'Да, автоматическая', 2), ('leadCheck', 'Нет', 3),
-    ('objType', 'Квартира', 1), ('objType', 'Апартаменты', 2), ('objType', 'Дом', 3), ('objType', 'Таунхаус', 4), ('objType', 'Участок', 5), ('objType', 'Коммерция', 6),
-    ('objClass', 'Эконом', 1), ('objClass', 'Комфорт', 2), ('objClass', 'Комфорт+', 3), ('objClass', 'Бизнес', 4), ('objClass', 'Премиум', 5),
-    ('finish', 'Без отделки', 1), ('finish', 'Черновая', 2), ('finish', 'Чистовая', 3),
-    ('rooms', 'Студия', 1), ('rooms', '1к', 2), ('rooms', '2к', 3), ('rooms', '3к', 4), ('rooms', '4к+', 5),
-    ('clientType', 'Ипотечный заёмщик', 1), ('clientType', 'Наличный покупатель', 2), ('clientType', 'Инвестор', 3), ('clientType', 'Переезд по работе', 4), ('clientType', 'Улучшение жилищных условий', 5), ('clientType', 'Пенсионер', 6),
-    ('purchaseTerm', 'До 1 месяца', 1), ('purchaseTerm', '1–3 месяца', 2), ('purchaseTerm', '3–6 месяцев', 3), ('purchaseTerm', 'Более 6 месяцев', 4),
-    ('paymentMethod', 'Ипотека', 1), ('paymentMethod', 'Наличные', 2), ('paymentMethod', 'Рассрочка от застройщика', 3), ('paymentMethod', 'Сертификат/субсидия', 4), ('paymentMethod', 'Материнский капитал', 5),
-    ('mortgageType', 'Господдержка', 1), ('mortgageType', 'Семейная', 2), ('mortgageType', 'IT-ипотека', 3), ('mortgageType', 'Военная', 4), ('mortgageType', 'От застройщика', 5), ('mortgageType', 'Вторичная', 6)
-ON CONFLICT (list_key, value) DO NOTHING;
+-- Сидинг текущих значений — только если таблица ещё полностью пустая
+-- (report_2026-08-01.md, 09.08.2026). Раньше был обычный INSERT ... ON
+-- CONFLICT DO NOTHING, который гоняется migrate.js при каждом старте сервера
+-- — для значений, которые пользователь сам УДАЛИЛ через панель "Настройка
+-- списков", это неотличимо от "никогда не создавалось", и удалённая строка
+-- молча возвращалась на следующем деплое. IF NOT EXISTS (SELECT 1 ...) делает
+-- весь блок одноразовым — срабатывает только на пустой/новой базе, дальнейшие
+-- правки пользователя (удаления/добавления) переживают любое число деплоев.
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM param_lists) THEN
+        INSERT INTO param_lists (list_key, value, sort_order) VALUES
+            ('category', 'Новостройка', 1), ('category', 'Вторичка', 2), ('category', 'Загородная недвижимость', 3), ('category', 'Коммерческая недвижимость', 4),
+            ('actionType', 'Целевой лид', 1), ('actionType', 'Лид', 2), ('actionType', 'Заявка на показ', 3),
+            ('leadCheck', 'Да, ручная модерация', 1), ('leadCheck', 'Да, автоматическая', 2), ('leadCheck', 'Нет', 3),
+            ('objType', 'Квартира', 1), ('objType', 'Апартаменты', 2), ('objType', 'Дом', 3), ('objType', 'Таунхаус', 4), ('objType', 'Участок', 5), ('objType', 'Коммерция', 6),
+            ('objClass', 'Эконом', 1), ('objClass', 'Комфорт', 2), ('objClass', 'Комфорт+', 3), ('objClass', 'Бизнес', 4), ('objClass', 'Премиум', 5),
+            ('finish', 'Без отделки', 1), ('finish', 'Черновая', 2), ('finish', 'Чистовая', 3),
+            ('rooms', 'Студия', 1), ('rooms', '1к', 2), ('rooms', '2к', 3), ('rooms', '3к', 4), ('rooms', '4к+', 5),
+            ('clientType', 'Ипотечный заёмщик', 1), ('clientType', 'Наличный покупатель', 2), ('clientType', 'Инвестор', 3), ('clientType', 'Переезд по работе', 4), ('clientType', 'Улучшение жилищных условий', 5), ('clientType', 'Пенсионер', 6),
+            ('purchaseTerm', 'До 1 месяца', 1), ('purchaseTerm', '1–3 месяца', 2), ('purchaseTerm', '3–6 месяцев', 3), ('purchaseTerm', 'Более 6 месяцев', 4),
+            ('paymentMethod', 'Ипотека', 1), ('paymentMethod', 'Наличные', 2), ('paymentMethod', 'Рассрочка от застройщика', 3), ('paymentMethod', 'Сертификат/субсидия', 4), ('paymentMethod', 'Материнский капитал', 5),
+            ('mortgageType', 'Господдержка', 1), ('mortgageType', 'Семейная', 2), ('mortgageType', 'IT-ипотека', 3), ('mortgageType', 'Военная', 4), ('mortgageType', 'От застройщика', 5), ('mortgageType', 'Вторичная', 6)
+        ON CONFLICT (list_key, value) DO NOTHING;
+    END IF;
+END $$;
 
 -- ============================================================
 -- Корректировки формы оффера (report_2026-08-01.md, 08.08.2026)
@@ -555,3 +565,15 @@ ALTER TABLE real_estate_offers ALTER COLUMN other_borrower DROP DEFAULT;
 -- комнатности, множественный выбор снова смешивал бы разнородные диапазоны.
 ALTER TABLE real_estate_offers DROP COLUMN IF EXISTS rooms;
 ALTER TABLE real_estate_offer_segments ADD COLUMN IF NOT EXISTS room_count VARCHAR;
+
+-- ============================================================
+-- Скрипты: убрать привязку к офферу/статусу воронки (report_2026-08-01.md,
+-- 09.08.2026) — владелец подтвердил, что подбор по паре (оффер, статус
+-- воронки) окончательно отменён (routes/scripts.js, коммит 7ad10bd), скрипт
+-- теперь привязан только к оператору (employee_scripts). DROP COLUMN IF
+-- EXISTS идемпотентен сам по себе, отдельный DO-блок не нужен.
+-- ============================================================
+
+ALTER TABLE scripts DROP CONSTRAINT IF EXISTS scripts_offer_status_unique;
+ALTER TABLE scripts DROP COLUMN IF EXISTS offer_id;
+ALTER TABLE scripts DROP COLUMN IF EXISTS funnel_status_id;

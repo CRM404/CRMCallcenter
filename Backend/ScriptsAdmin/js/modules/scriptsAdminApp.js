@@ -3,7 +3,6 @@
 import {
     fetchScripts, createScript, updateScript,
     fetchScriptNodes, createScriptNode, updateScriptNode, deleteScriptNode,
-    fetchOffers, fetchFunnelStatuses,
     fetchEmployees
 } from './scriptsAdminStorage.js';
 import { renderScriptList } from './scriptsAdminScriptList.js';
@@ -29,28 +28,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
     const newScriptBtn = document.getElementById('saNewScriptBtn');
 
-    let offers = [];
-    let funnelStatuses = [];
     let selectedScript = null;
     let currentNodes = [];
     let editingScript = null; // используется только формой создания нового скрипта
     let nodesUiState = { rootEditing: false, addingObjection: false, editingObjectionId: null };
-
-    async function reloadOffers() {
-        try {
-            offers = await fetchOffers();
-        } catch (e) {
-            showToast(e.message, 'error');
-        }
-    }
-
-    async function reloadFunnelStatuses() {
-        try {
-            funnelStatuses = await fetchFunnelStatuses();
-        } catch (e) {
-            showToast(e.message, 'error');
-        }
-    }
 
     async function reloadScripts() {
         try {
@@ -95,19 +76,18 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // Метаданные (Название/Оффер/Статус воронки) — та же форма, что раньше жила
-    // в отдельной панели редактирования, теперь встроена в верх открытой панели
-    // "Открыть" (кнопка "Изменить" убрана, см. бриф). "Отмена" здесь просто
-    // перерисовывает форму текущими сохранёнными значениями — не закрывает и не
-    // трогает узлы/операторы ниже (тот же паттерн, что у "Отмена" в редактировании
-    // основного текста узла).
+    // Метаданные (Название) — та же форма, что раньше жила в отдельной панели
+    // редактирования, теперь встроена в верх открытой панели "Открыть" (кнопка
+    // "Изменить" убрана, см. бриф). "Отмена" здесь просто перерисовывает форму
+    // текущими сохранёнными значениями — не закрывает и не трогает узлы/операторы
+    // ниже (тот же паттерн, что у "Отмена" в редактировании основного текста узла).
     function renderScriptMeta() {
-        renderScriptForm(nodesMetaPanel, { editingScript: selectedScript, offers, funnelStatuses }, handleMetaSave, renderScriptMeta);
+        renderScriptForm(nodesMetaPanel, { editingScript: selectedScript }, handleMetaSave, renderScriptMeta);
     }
 
-    async function handleMetaSave({ title, offerId, funnelStatusId }) {
+    async function handleMetaSave({ title }) {
         try {
-            await updateScript(selectedScript.id, { title, offerId, funnelStatusId, status: selectedScript.status });
+            await updateScript(selectedScript.id, { title, status: selectedScript.status });
             showToast('Скрипт сохранён', 'success');
             await reloadScripts();
             renderScriptMeta();
@@ -223,7 +203,7 @@ document.addEventListener('DOMContentLoaded', function() {
         editingScript = script || null;
         scriptListWrap.hidden = true;
         scriptFormPanel.hidden = false;
-        renderScriptForm(scriptFormPanel, { editingScript, offers, funnelStatuses }, handleScriptFormSave, closeScriptFormPanel);
+        renderScriptForm(scriptFormPanel, { editingScript }, handleScriptFormSave, closeScriptFormPanel);
     }
 
     function closeScriptFormPanel() {
@@ -233,13 +213,13 @@ document.addEventListener('DOMContentLoaded', function() {
         editingScript = null;
     }
 
-    async function handleScriptFormSave({ title, offerId, funnelStatusId }) {
+    async function handleScriptFormSave({ title }) {
         try {
             if (editingScript) {
-                await updateScript(editingScript.id, { title, offerId, funnelStatusId, status: editingScript.status });
+                await updateScript(editingScript.id, { title, status: editingScript.status });
                 showToast('Скрипт сохранён', 'success');
             } else {
-                await createScript({ title, offerId, funnelStatusId });
+                await createScript({ title });
                 showToast('Скрипт создан', 'success');
             }
             closeScriptFormPanel();
@@ -266,8 +246,6 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     (async () => {
-        await reloadOffers();
-        await reloadFunnelStatuses();
         await reloadScripts();
     })();
 });

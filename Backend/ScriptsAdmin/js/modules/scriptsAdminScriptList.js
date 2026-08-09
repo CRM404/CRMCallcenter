@@ -37,8 +37,6 @@ export function renderScriptList(container, scripts, selectedId, onOpen, onChang
             <tr class="${isSelected ? 'sa-selected' : ''}" data-row-id="${script.id}">
                 <td>${escapeHtml(script.title)}</td>
                 <td>${badge}</td>
-                <td>${escapeHtml(script.offerName) || '—'}</td>
-                <td>${escapeHtml(script.funnelStatusName) || '—'}</td>
                 <td>${script.assignedCount === null ? '—' : script.assignedCount}</td>
                 <td>
                     <div class="sa-actions">
@@ -54,7 +52,7 @@ export function renderScriptList(container, scripts, selectedId, onOpen, onChang
     container.innerHTML = `
         <table class="sa-script-table">
             <thead>
-                <tr><th>Название</th><th>Статус</th><th>Оффер</th><th>Статус воронки</th><th>Операторов</th><th>Действия</th></tr>
+                <tr><th>Название</th><th>Статус</th><th>Операторов</th><th>Действия</th></tr>
             </thead>
             <tbody>${rows}</tbody>
         </table>
@@ -73,7 +71,7 @@ export function renderScriptList(container, scripts, selectedId, onOpen, onChang
             const ok = await confirmAction(`Активировать скрипт «${script.title}»? После этого его можно будет назначать операторам.`);
             if (!ok) return;
             try {
-                await updateScript(script.id, { title: script.title, status: 'active', offerId: script.offerId, funnelStatusId: script.funnelStatusId });
+                await updateScript(script.id, { title: script.title, status: 'active' });
                 showToast('Скрипт активирован', 'success');
                 onChanged();
             } catch (e) {
@@ -88,7 +86,7 @@ export function renderScriptList(container, scripts, selectedId, onOpen, onChang
             const ok = await confirmAction(`Вернуть скрипт «${script.title}» в черновик? Уже назначенные операторы продолжат его видеть — статус только запрещает НОВЫЕ назначения.`);
             if (!ok) return;
             try {
-                await updateScript(script.id, { title: script.title, status: 'draft', offerId: script.offerId, funnelStatusId: script.funnelStatusId });
+                await updateScript(script.id, { title: script.title, status: 'draft' });
                 showToast('Скрипт переведён в черновик', 'success');
                 onChanged();
             } catch (e) {

@@ -10,15 +10,19 @@ const { pool } = require('../db');
 
 const router = express.Router();
 
-// Порядок должен совпадать со списком колонок в UPDATE ниже.
+// Порядок должен совпадать со списком колонок в UPDATE ниже. "source" сюда
+// намеренно не входит (report_2026-08-01.md, 09.08.2026) — форма оператора
+// его больше не показывает (design-решение, риск случайной перезаписи), а
+// раз поля нет в форме, PUT присылал бы undefined → normalizeValue превращал
+// бы это в null и тихо обнулял source при каждом сохранении карточки — тот
+// же баг, что чинили для offerId, только обнаружился по факту удаления поля
+// из этой задачи, а не был описан в брифе отдельно.
 const EDITABLE_FIELD_COLUMNS = [
     ['lastName', 'last_name'],
     ['firstName', 'first_name'],
     ['middleName', 'middle_name'],
     ['phone', 'phone'],
-    ['source', 'source'],
     ['funnelStatusId', 'funnel_status_id'],
-    ['offerId', 'offer_id'],
     ['propertyType', 'property_type'],
     ['propertyClass', 'property_class'],
     ['roomCount', 'room_count'],
@@ -38,7 +42,7 @@ const EDITABLE_FIELD_COLUMNS = [
     ['notes', 'notes']
 ];
 
-const NUMERIC_FIELDS = new Set(['funnelStatusId', 'offerId', 'priceFrom', 'priceTo', 'areaFrom', 'areaTo', 'downPaymentPercent']);
+const NUMERIC_FIELDS = new Set(['funnelStatusId', 'priceFrom', 'priceTo', 'areaFrom', 'areaTo', 'downPaymentPercent']);
 
 function rowToLead(row) {
     return {
@@ -148,9 +152,6 @@ router.put('/:id', async (req, res) => {
         res.json(rowToLead(result.rows[0]));
     } catch (err) {
         if (err.code === '23503') {
-            if (err.constraint === 'leads_offer_id_fkey') {
-                return res.status(400).json({ error: 'Указан несуществующий оффер' });
-            }
             return res.status(400).json({ error: 'Указан несуществующий статус воронки' });
         }
         console.error(err);
