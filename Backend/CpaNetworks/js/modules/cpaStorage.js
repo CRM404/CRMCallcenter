@@ -107,6 +107,9 @@ export function deleteParamValue(key, value) {
 
 // --- Подсказки адреса, DaData-прокси (report_2026-08-01.md, 09.08.2026) ---
 
-export function fetchGeoSuggest(query) {
-    return request(`/geo-suggest?q=${encodeURIComponent(query)}`);
+export function fetchGeoSuggest(query, { bound, regionFiasId } = {}) {
+    const params = new URLSearchParams({ q: query });
+    if (bound) params.set('bound', bound);
+    if (regionFiasId) params.set('regionFiasId', regionFiasId);
+    return request(`/geo-suggest?${params.toString()}`);
 }

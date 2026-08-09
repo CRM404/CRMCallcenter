@@ -313,6 +313,11 @@ const GEO_SUGGEST_DEBOUNCE_MS = 300;
 let geoSuggestTimer = null;
 let geoSuggestRequestId = 0;
 
+// Имя поля в store/CSS-классе (.geo-<field>) → уровень адреса DaData
+// (from_bound/to_bound). "district" — это "район" в интерфейсе, но у DaData
+// такой уровень называется "area".
+const GEO_FIELD_BOUND = { region: 'region', city: 'city', district: 'area', locality: 'settlement' };
+
 function closeGeoSuggest() {
     document.querySelectorAll('.geo-suggest').forEach((el) => el.remove());
 }
@@ -344,11 +349,11 @@ function geoSuggestionParts(data) {
     };
 }
 
-function geoSuggestionLabel(data) {
-    const cityWithType = fullTypeText(data.city_with_type, data.city_type, data.city_type_full);
-    const parts = geoSuggestionParts(data);
-    const pieces = [parts.region, cityWithType, parts.area, parts.settlement].filter(Boolean);
-    return pieces.filter((p, i) => p !== pieces[i - 1]).join(', ');
+// Текст подсказки в дропдауне — значение ровно того уровня, который ищем
+// (с полным словом типа через fullTypeText), а не склеенный адрес целиком:
+// каждое поле подсказывает само за себя (report_2026-08-01.md, 09.08.2026).
+function geoSuggestionDisplay(bound, data) {
+    return fullTypeText(data[`${bound}_with_type`], data[`${bound}_type`], data[`${bound}_type_full`]);
 }
 
 function highlightMatch(text, q) {
@@ -359,11 +364,22 @@ function highlightMatch(text, q) {
 
 function attachGeoAutocomplete(containerId, store) {
     $('#' + containerId).querySelectorAll('.geo-field input').forEach((input) => {
+        const field = Object.keys(GEO_FIELD_BOUND).find((f) => input.classList.contains(`geo-${f}`));
+        const bound = GEO_FIELD_BOUND[field];
+
         input.addEventListener('input', () => {
             const q = input.value.trim();
-            const field = input.closest('.geo-field');
+            const fieldEl = input.closest('.geo-field');
             const row = input.closest('.geo-row');
             const i = Number(row.dataset.i);
+
+            // Ручной ввод расходится с уже сохранённым fias-id этого уровня —
+            // сбрасываем сужение, иначе следующий поиск в этой строке молча
+            // уйдёт в контекст региона/района, которого пользователь уже не
+            // видит в поле (dialog.md, 09.08.2026).
+            if (field === 'region') { store[i].regionFiasId = undefined; store[i].areaFiasId = undefined; }
+            if (field === 'district') { store[i].areaFiasId = undefined; }
+
             closeGeoSuggest();
             clearTimeout(geoSuggestTimer);
             if (!q) return;
@@ -372,7 +388,8 @@ function attachGeoAutocomplete(containerId, store) {
             geoSuggestTimer = setTimeout(async () => {
                 let suggestions;
                 try {
-                    const result = await fetchGeoSuggest(q);
+                    const regionFiasId = field !== 'region' ? store[i].regionFiasId : undefined;
+                    const result = await fetchGeoSuggest(q, { bound, regionFiasId });
                     suggestions = result?.suggestions || [];
                 } catch (err) {
                     showToast('Подсказки адреса недоступны — сервис не отвечает. Введите вручную.', 'error');
@@ -385,9 +402,9 @@ function attachGeoAutocomplete(containerId, store) {
                 const box = document.createElement('div');
                 box.className = 'geo-suggest';
                 box.innerHTML = items.length
-                    ? items.map((data, idx) => `<div class="geo-suggest-item" data-i="${idx}"><i class="fas fa-location-dot" aria-hidden="true"></i><span>${highlightMatch(geoSuggestionLabel(data), q)}</span></div>`).join('')
+                    ? items.map((data, idx) => `<div class="geo-suggest-item" data-i="${idx}"><i class="fas fa-location-dot" aria-hidden="true"></i><span>${highlightMatch(geoSuggestionDisplay(bound, data), q)}</span></div>`).join('')
                     : '<div class="geo-suggest-empty">Ничего не найдено</div>';
-                field.appendChild(box);
+                fieldEl.appendChild(box);
 
                 box.querySelectorAll('.geo-suggest-item').forEach((item) => {
                     item.addEventListener('mousedown', (e) => {
@@ -395,10 +412,9 @@ function attachGeoAutocomplete(containerId, store) {
                         const data = items[Number(item.dataset.i)];
                         if (!data) return;
                         const parts = geoSuggestionParts(data);
-                        store[i].region = parts.region;
-                        store[i].city = parts.city;
-                        store[i].district = parts.area;
-                        store[i].locality = parts.settlement;
+                        store[i][field] = parts[bound];
+                        if (field === 'region') { store[i].regionFiasId = data.region_fias_id; store[i].areaFiasId = undefined; }
+                        if (field === 'district') { store[i].areaFiasId = data.area_fias_id; }
                         renderGeoRows(containerId, store);
                     });
                 });

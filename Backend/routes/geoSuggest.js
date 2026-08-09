@@ -11,8 +11,15 @@ const router = express.Router();
 
 const DADATA_URL = 'https://suggestions.dadata.ru/suggestions/api/4_1/rs/suggest/address';
 
-// GET /api/geo-suggest?q=Химки — возвращает подсказки DaData как есть
-// (массив value/data), фронт сам решает, что показывать.
+// Уровни адреса, которыми можно ограничить поиск (report_2026-08-01.md,
+// 09.08.2026) — проверено живыми запросами к DaData, оба bound одним
+// значением дают поиск строго внутри этого уровня, без утечек соседних.
+const GEO_BOUNDS = ['region', 'area', 'city', 'settlement'];
+
+// GET /api/geo-suggest?q=Химки&bound=city&regionFiasId=... — возвращает
+// подсказки DaData как есть (массив value/data), фронт сам решает, что
+// показывать. bound/regionFiasId необязательны — без них ищет как раньше,
+// по всей стране и всем уровням сразу.
 router.get('/', async (req, res) => {
     const query = (req.query.q || '').trim();
     if (!query) {
@@ -23,6 +30,16 @@ router.get('/', async (req, res) => {
         console.error('DADATA_API_KEY не задан в переменных окружения');
         return res.status(500).json({ error: 'Подсказки адреса временно недоступны' });
     }
+    const bound = GEO_BOUNDS.includes(req.query.bound) ? req.query.bound : undefined;
+    const regionFiasId = req.query.regionFiasId;
+    const body = { query, count: 10 };
+    if (bound) {
+        body.from_bound = { value: bound };
+        body.to_bound = { value: bound };
+    }
+    if (regionFiasId) {
+        body.locations = [{ region_fias_id: regionFiasId }];
+    }
     try {
         const dadataRes = await fetch(DADATA_URL, {
             method: 'POST',
@@ -31,7 +48,7 @@ router.get('/', async (req, res) => {
                 Accept: 'application/json',
                 Authorization: `Token ${apiKey}`
             },
-            body: JSON.stringify({ query, count: 10 })
+            body: JSON.stringify(body)
         });
         if (!dadataRes.ok) {
             console.error('DaData вернула ошибку:', dadataRes.status, await dadataRes.text());
