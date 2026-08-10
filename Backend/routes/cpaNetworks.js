@@ -152,9 +152,16 @@ router.put('/:id', async (req, res) => {
     }
 });
 
-// DELETE /api/cpa-networks/:id
+// DELETE /api/cpa-networks/:id — блокируется, если на сеть ссылается хотя бы
+// один источник (report_2026-08-01.md, 11.08.2026, страница «Источники») —
+// тот же принцип понятного 409 вместо голой ошибки ON DELETE RESTRICT, что и
+// у площадок (routes/adPlatforms.js).
 router.delete('/:id', async (req, res) => {
     try {
+        const sourcesCount = await pool.query('SELECT count(*)::int AS c FROM source_cpa_networks WHERE cpa_network_id = $1', [req.params.id]);
+        if (sourcesCount.rows[0].c > 0) {
+            return res.status(409).json({ error: 'Нельзя удалить CPA-сеть, пока на неё ссылаются источники' });
+        }
         const result = await pool.query('DELETE FROM cpa_networks WHERE id = $1 RETURNING id', [req.params.id]);
         if (result.rows.length === 0) {
             return res.status(404).json({ error: 'CPA-сеть не найдена' });

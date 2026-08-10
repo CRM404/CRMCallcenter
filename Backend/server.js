@@ -23,6 +23,7 @@ const realEstateOffersRouter = require('./routes/realEstateOffers');
 const adPlatformsRouter = require('./routes/adPlatforms');
 const paramListsRouter = require('./routes/paramLists');
 const geoSuggestRouter = require('./routes/geoSuggest');
+const sourcesRouter = require('./routes/sources');
 
 const app = express();
 
@@ -49,24 +50,28 @@ app.use('/api/real-estate-offers', realEstateOffersRouter);
 app.use('/api/ad-platforms', adPlatformsRouter);
 app.use('/api/param-lists', paramListsRouter);
 app.use('/api/geo-suggest', geoSuggestRouter);
+app.use('/api/sources', sourcesRouter);
 
 // Отдаём страницы "Сотрудники", "Оператор", "Скрипт (админ)", "Главная" и
 // "CPA-сети" тем же сервером — отдельный статический хостинг фронтенда не
 // нужен. Все папки лежат внутри Backend/ (а не рядом), т.к. Railway собирает
 // только содержимое Root Directory. Файлы внутри Operator/, ScriptsAdmin/,
-// Main/ и CpaNetworks/ названы с префиксом operator*/scriptsAdmin*/main*/cpa*,
-// чтобы не пересекаться по имени с одноимённой структурой Employees/ — все
-// пять каталогов монтируются в корень "/".
+// Main/, CpaNetworks/ и Sources/ названы с префиксом
+// operator*/scriptsAdmin*/main*/cpa*/sources*, чтобы не пересекаться по имени
+// с одноимённой структурой Employees/ — все шесть каталогов монтируются в
+// корень "/".
 const employeesDir = path.join(__dirname, 'Employees');
 const operatorDir = path.join(__dirname, 'Operator');
 const scriptsAdminDir = path.join(__dirname, 'ScriptsAdmin');
 const mainDir = path.join(__dirname, 'Main');
 const cpaNetworksDir = path.join(__dirname, 'CpaNetworks');
+const sourcesDir = path.join(__dirname, 'Sources');
 app.use(express.static(employeesDir));
 app.use(express.static(operatorDir));
 app.use(express.static(scriptsAdminDir));
 app.use(express.static(mainDir));
 app.use(express.static(cpaNetworksDir));
+app.use(express.static(sourcesDir));
 app.get('/', (req, res) => {
     res.redirect('/main.html');
 });

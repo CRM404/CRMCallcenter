@@ -591,3 +591,35 @@ ALTER TABLE scripts DROP COLUMN IF EXISTS funnel_status_id;
 ALTER TABLE leads DROP CONSTRAINT IF EXISTS leads_offer_id_fkey;
 ALTER TABLE leads ADD CONSTRAINT leads_offer_id_fkey
     FOREIGN KEY (offer_id) REFERENCES real_estate_offers(id) ON DELETE SET NULL;
+
+-- ============================================================
+-- Источники (report_2026-08-01.md, 11.08.2026) — новая страница «Источники»
+-- в навигации. Площадка = упрощённая ad_platforms (category/type больше не
+-- используются — таблица и бэкенд были заведены 06.08.2026 под другую версию
+-- сущности, потом скрыты из UI 07.08.2026; теперь переиспользуются под
+-- "Площадку" в новом виде). Источник — новая сущность, дочерняя к площадке
+-- (N:1, обязательна). Источник <-> CPA-сеть — M:N через таблицу-связку.
+-- ============================================================
+
+ALTER TABLE ad_platforms DROP COLUMN IF EXISTS category;
+ALTER TABLE ad_platforms DROP COLUMN IF EXISTS type;
+-- status: было 3 значения (Активна/Приостановлена/Отключена), без DB CHECK
+-- (только app-level в routes/adPlatforms.js) — теперь 2 значения
+-- (Активна/Неактивна). DB CHECK не добавляем (сохраняем как было —
+-- app-level валидация), список допустимых значений обновлён в routes/adPlatforms.js.
+
+CREATE TABLE IF NOT EXISTS sources (
+    id SERIAL PRIMARY KEY,
+    platform_id INTEGER NOT NULL REFERENCES ad_platforms(id) ON DELETE RESTRICT,
+    name VARCHAR NOT NULL,
+    city_region VARCHAR NOT NULL,
+    status VARCHAR NOT NULL DEFAULT 'Актуализация' CHECK (status IN ('Активен', 'Неактивен', 'Архив', 'Актуализация')),
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS source_cpa_networks (
+    source_id INTEGER NOT NULL REFERENCES sources(id) ON DELETE CASCADE,
+    cpa_network_id INTEGER NOT NULL REFERENCES cpa_networks(id) ON DELETE RESTRICT,
+    PRIMARY KEY (source_id, cpa_network_id)
+);
