@@ -97,6 +97,15 @@ function applyFontSizeDelta(editorEl, delta) {
     wrapRangeInSpan(range, `font-size: ${newSize}px`);
 }
 
+function applyTextColor(editorEl, hexColor) {
+    const range = getEditorSelectionRange(editorEl);
+    if (!range) {
+        showToast('Выделите текст', 'error');
+        return;
+    }
+    wrapRangeInSpan(range, `color: ${hexColor}`);
+}
+
 function autoGrow(el) {
     el.style.height = 'auto';
     el.style.height = `${el.scrollHeight}px`;
@@ -106,9 +115,51 @@ function isRichTextEmpty(el) {
     return !el.textContent.trim();
 }
 
+// true, если commonAncestorContainer коллапсированного выделения лежит внутри <li>
+// (в пределах editorEl) — тогда Enter отдаём браузеру: нативное поведение списков
+// (новый пункт, выход из списка по двойному Enter на пустом пункте) трогать не нужно
+// (куратор, ответ в dialog.md 10.08.2026) — правка ниже касается только текста ВНЕ списка.
+function isCursorInsideListItem(range, editorEl) {
+    let node = range.commonAncestorContainer;
+    if (node.nodeType === Node.TEXT_NODE) node = node.parentElement;
+    while (node && node !== editorEl) {
+        if (node.tagName === 'LI') return true;
+        node = node.parentElement;
+    }
+    return false;
+}
+
+// Вставляет <br> в текущей позиции курсора — замена execCommand('defaultParagraphSeparator',
+// ..., 'br'), которая не всегда надёжно отрабатывает при обычном наборе текста (см. бриф,
+// report_2026-08-01.md, Задача 1): без неё браузер на Enter оборачивает абзац в <div>,
+// а серверный санитайзер вырезает div молча вместе с переносом строки.
+//
+// Используется именно execCommand('insertLineBreak'), а не ручная вставка узла <br> через
+// Range API (изначальный вариант по брифу) — на практике (Playwright, реальный Chromium)
+// ручная вставка на КОНЦЕ содержимого (br — последний child, следующего узла нет) даёт
+// рабочий DOM сразу после вставки, но курсор для СЛЕДУЮЩЕГО набора текста фактически
+// остаётся ПЕРЕД <br>, а не после — известная особенность contenteditable (нет узла-опоры
+// после последнего br). execCommand('insertLineBreak') — специализированная команда именно
+// для одиночного переноса (в отличие от общего, ненадёжного defaultParagraphSeparator) и
+// корректно обрабатывает эту границу изнутри браузера.
+function insertLineBreakAtCursor(editorEl) {
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0) return;
+    const range = selection.getRangeAt(0);
+    if (!editorEl.contains(range.commonAncestorContainer)) return;
+    document.execCommand('insertLineBreak', false, null);
+}
+
 function initRichTextEditor(el) {
-    el.addEventListener('focus', () => {
-        try { document.execCommand('defaultParagraphSeparator', false, 'br'); } catch (e) { /* старый браузер — переживём и без этого */ }
+    el.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter') return;
+        const selection = window.getSelection();
+        if (!selection || selection.rangeCount === 0) return;
+        const range = selection.getRangeAt(0);
+        if (isCursorInsideListItem(range, el)) return; // список — нативное поведение браузера
+        e.preventDefault();
+        insertLineBreakAtCursor(el);
+        autoGrow(el);
     });
     el.addEventListener('input', () => autoGrow(el));
     autoGrow(el);
@@ -143,6 +194,21 @@ function attachRichTextToolbar(container, editorEl) {
             autoGrow(editorEl);
         });
     }
+
+    // Тот же паттерн, что у fontSelect (stopPropagation, БЕЗ preventDefault) — с
+    // native <input type="color"> preventDefault на mousedown подавил бы открытие
+    // самого пикера (как у input type="file"), а он-то и нужен. Клик по input уводит
+    // фокус с редактора, но window.getSelection() внутри editorEl это не схлопывает —
+    // тот же эффект, на который уже полагается fontSelect (проверено вживую, см.
+    // readiness-отчёт в dialog.md).
+    const colorInput = container.querySelector('[data-rte-color-input]');
+    if (colorInput) {
+        colorInput.addEventListener('mousedown', (e) => e.stopPropagation());
+        colorInput.addEventListener('change', () => {
+            applyTextColor(editorEl, colorInput.value);
+            autoGrow(editorEl);
+        });
+    }
 }
 
 function renderRichTextToolbar() {
@@ -158,6 +224,7 @@ function renderRichTextToolbar() {
             </select>
             <button type="button" class="btn btn-secondary btn-sm" data-rte-size-delta="-1" title="Уменьшить размер на 1px">A−</button>
             <button type="button" class="btn btn-secondary btn-sm" data-rte-size-delta="1" title="Увеличить размер на 1px">A+</button>
+            <input type="color" class="sa-rte-color-input" data-rte-color-input title="Цвет текста">
         </div>
     `;
 }

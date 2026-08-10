@@ -243,6 +243,15 @@ h2 {
     background: #fff;
     font-family: inherit;
 }
+.sa-rte-color-input {
+    width: 30px;
+    height: 28px;
+    padding: 2px;
+    border: 1px solid #ccd7e6;
+    border-radius: 8px;
+    background: #fff;
+    cursor: pointer;
+}
 .sa-rte-editor {
     padding: 8px 12px;
     border: 1px solid #ccd7e6;
