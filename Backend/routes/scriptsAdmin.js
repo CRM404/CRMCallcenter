@@ -32,6 +32,19 @@ const ALLOWED_FONT_FAMILIES = new Set([
 ]);
 const FONT_SIZE_PATTERN = /^\d{1,3}px$/;
 const MAX_FONT_SIZE_PX = 200;
+// Свободный выбор цвета (report_2026-08-01.md, Задача 2) — в отличие от шрифта,
+// не список конкретных значений, а формат: ровно 6-значный hex.
+const TEXT_COLOR_PATTERN = /^#[0-9a-f]{6}$/i;
+
+// div/p — не в белом списке тегов, но в отличие от прочих неразрешённых тегов их
+// нельзя просто молча вырезать: это то, во что браузер (при обычном наборе текста,
+// см. report_2026-08-01.md, Задача 1) иногда оборачивает абзацы вместо <br>, и
+// молчаливое вырезание тега схлопывает вместе с ним и сам перенос строки. Основной
+// путь исправления — клиентский (ручная вставка <br> по Enter, scriptsAdminNodes.js);
+// эта обработка — подстраховка на случай, если source всё же пришлёт div/p (в обход
+// клиента или в будущем). На месте открывающего тега — ничего (не задваивать перенос
+// на каждой границе), на месте закрывающего — <br>.
+const BLOCK_TAGS_AS_BREAK = new Set(['div', 'p']);
 
 function decodeHtmlEntities(value) {
     return value
@@ -57,6 +70,8 @@ function sanitizeStyleValue(rawStyle) {
             kept.push(`font-family: ${value}`);
         } else if (prop === 'font-size' && FONT_SIZE_PATTERN.test(value) && parseInt(value, 10) > 0 && parseInt(value, 10) <= MAX_FONT_SIZE_PX) {
             kept.push(`font-size: ${value}`);
+        } else if (prop === 'color' && TEXT_COLOR_PATTERN.test(value)) {
+            kept.push(`color: ${value.toLowerCase()}`);
         }
     }
     return kept.join('; ');
@@ -65,7 +80,10 @@ function sanitizeStyleValue(rawStyle) {
 function sanitizeRichText(html) {
     return String(html).replace(/<(\/?)([a-zA-Z0-9]+)([^>]*)>/g, (match, closingSlash, tagNameRaw, attrs) => {
         const tag = tagNameRaw.toLowerCase();
-        if (!ALLOWED_RICH_TEXT_TAGS.has(tag)) return '';
+        if (!ALLOWED_RICH_TEXT_TAGS.has(tag)) {
+            if (BLOCK_TAGS_AS_BREAK.has(tag)) return closingSlash ? '<br>' : '';
+            return '';
+        }
         if (closingSlash) return `</${tag}>`;
         if (tag === 'span') {
             const styleMatch = attrs.match(/style\s*=\s*"([^"]*)"/i) || attrs.match(/style\s*=\s*'([^']*)'/i);
