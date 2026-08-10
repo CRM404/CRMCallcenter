@@ -97,8 +97,11 @@ function applyFontSizeDelta(editorEl, delta) {
     wrapRangeInSpan(range, `font-size: ${newSize}px`);
 }
 
-function applyTextColor(editorEl, hexColor) {
-    const range = getEditorSelectionRange(editorEl);
+// savedRange — Range, захваченный ДО открытия нативного color picker'а (см.
+// attachRichTextToolbar) — picker к моменту 'change' уже мог схлопнуть текущее
+// window.getSelection(), поэтому applyTextColor не полагается на живое выделение.
+function applyTextColor(editorEl, hexColor, savedRange) {
+    const range = savedRange || getEditorSelectionRange(editorEl);
     if (!range) {
         showToast('Выделите текст', 'error');
         return;
@@ -195,17 +198,27 @@ function attachRichTextToolbar(container, editorEl) {
         });
     }
 
-    // Тот же паттерн, что у fontSelect (stopPropagation, БЕЗ preventDefault) — с
-    // native <input type="color"> preventDefault на mousedown подавил бы открытие
-    // самого пикера (как у input type="file"), а он-то и нужен. Клик по input уводит
-    // фокус с редактора, но window.getSelection() внутри editorEl это не схлопывает —
-    // тот же эффект, на который уже полагается fontSelect (проверено вживую, см.
-    // readiness-отчёт в dialog.md).
+    // ИСПРАВЛЕНО (куратор, 10.08.2026): предыдущая версия полагалась на то, что
+    // window.getSelection() внутри editorEl переживает клик по color input — как
+    // у fontSelect. На практике это неверно именно для <input type="color">: в
+    // реальном браузере клик открывает всплывающий picker, который уводит фокус
+    // и схлопывает выделение (в отличие от нативного <select>, который так не
+    // делает) — к моменту 'change' getEditorSelectionRange уже возвращал null,
+    // отсюда стабильная ошибка "Выделите текст" при реально выделенном тексте.
+    // Playwright-тест этого не поймал, т.к. программный .click() там не открывает
+    // настоящий picker. Фикс — сохраняем Range на mousedown (ДО открытия picker'а)
+    // и применяем цвет к сохранённому Range на change, не полагаясь на живое
+    // состояние selection на тот момент.
     const colorInput = container.querySelector('[data-rte-color-input]');
     if (colorInput) {
-        colorInput.addEventListener('mousedown', (e) => e.stopPropagation());
+        let savedColorRange = null;
+        colorInput.addEventListener('mousedown', (e) => {
+            e.stopPropagation();
+            const range = getEditorSelectionRange(editorEl);
+            savedColorRange = range ? range.cloneRange() : null;
+        });
         colorInput.addEventListener('change', () => {
-            applyTextColor(editorEl, colorInput.value);
+            applyTextColor(editorEl, colorInput.value, savedColorRange);
             autoGrow(editorEl);
         });
     }
