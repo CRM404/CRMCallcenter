@@ -77,7 +77,6 @@ CREATE TABLE IF NOT EXISTS offers (
 -- IF NOT EXISTS — та же идемпотентность, что и весь этот файл (migrate.js
 -- прогоняет schema.sql при каждом старте сервера).
 ALTER TABLE scripts ADD COLUMN IF NOT EXISTS status VARCHAR NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'active'));
-ALTER TABLE scripts ADD COLUMN IF NOT EXISTS offer_id INTEGER REFERENCES offers(id) ON DELETE SET NULL;
 
 -- Назначение скрипта оператору — простая ссылка на employees (не таблица-связка):
 -- у сотрудника ровно один script_id, а на один scripts.id может ссылаться много
@@ -239,24 +238,19 @@ ON CONFLICT (stage_number, status_name) DO NOTHING;
 -- будущей загрузкой базы лидов; на этой итерации может быть NULL у старых лидов.
 ALTER TABLE leads ADD COLUMN IF NOT EXISTS offer_id INTEGER REFERENCES offers(id) ON DELETE SET NULL;
 
--- Скрипт теперь однозначно определяется парой (оффер, статус воронки) — оба
--- обязательны. Старое поведение "без оффера" (offer_id NULL) отменяется явно
--- по решению владельца проекта (2026-08-05) — оффер был необязателен только
--- пока не стал частью ключа подбора скрипта. Миграция написана "как для чистого
--- случая" — ручная зачистка существующих строк scripts (offer_id/funnel_status_id
--- IS NULL) на бою выполняется куратором вручную перед деплоем, отдельно от
--- этого файла (см. dialog.md, раунд 2) — сюда автоматический бэкофилл не добавляем.
-ALTER TABLE scripts ALTER COLUMN offer_id SET NOT NULL;
-ALTER TABLE scripts ADD COLUMN IF NOT EXISTS funnel_status_id INTEGER REFERENCES lead_funnel_statuses(id);
-ALTER TABLE scripts ALTER COLUMN funnel_status_id SET NOT NULL;
--- WHEN duplicate_object ловит повтор для большинства именованных объектов, но
--- ADD CONSTRAINT ... UNIQUE неявно создаёт ещё и индекс с тем же именем — при
--- повторном прогоне на уже смигрированной БД реально прилетает duplicate_table
--- ("отношение ... уже существует"), проверено эмпирически на локальной dev-БД
--- (голый WHEN duplicate_object ронял второй прогон migrate.js).
-DO $$ BEGIN
-    ALTER TABLE scripts ADD CONSTRAINT scripts_offer_status_unique UNIQUE (offer_id, funnel_status_id);
-EXCEPTION WHEN duplicate_object OR duplicate_table THEN NULL; END $$;
+-- УСТАРЕЛО (куратор, 10.08.2026): здесь раньше стояла принудительная привязка
+-- скрипта к паре (оффер, статус воронки) — offer_id/funnel_status_id NOT NULL +
+-- уникальный констрейнт на пару. Решение отменено позже (report_2026-08-01.md,
+-- 09.08.2026) — у скрипта больше нет ни оффера, ни статуса воронки, только
+-- привязка к оператору (employee_scripts). Обе колонки дропаются ниже
+-- ("Скрипты: убрать привязку к офферу/статусу воронки"). Блок удалён целиком —
+-- он был БАГОМ, а не просто мёртвым кодом: ALTER COLUMN offer_id SET NOT NULL
+-- гонялся на КАЖДОМ старте сервера (migrate.js прогоняет весь файл при каждом
+-- боте), и после того как колонка один раз дропалась ниже по файлу, следующий
+-- же старт пересоздавал её пустой (ADD COLUMN IF NOT EXISTS выше) и тут же
+-- падал на этой самой SET NOT NULL — вечный краш-луп на каждом рестарте
+-- (воспроизведено и на бою, и локально: error 23502, "column offer_id of
+-- relation scripts contains null values").
 
 -- Один оператор может работать сразу с несколькими скриптами (разными линиями:
 -- кто-то только новые, кто-то только повторные) — раньше было employees.script_id
