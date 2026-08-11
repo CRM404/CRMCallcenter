@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CRM – Источники</title>
+    <link rel="stylesheet" href="./css/sources-light.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" integrity="sha512-Fo3rlrZj/k7ujTnHg4CGR2D7kSs0v4LLanw2qksYuRlEzO+tcaEPQogQ0KaoGN26/zrn20ImR1DfuLWnOo7aBA==" crossorigin="anonymous" referrerpolicy="no-referrer">
+</head>
+<body>
+    <div id="toastContainer"></div>
+
+    <div class="hub-shell">
+        <nav class="hub-nav" id="hubNav"></nav>
+
+        <main class="hub-main">
+            <div class="canvas">
+
+                <div class="identity-strip">
+                    <div class="identity-copy">
+                        <div class="eyebrow">CRM · Источники лидов</div>
+                        <h1>Источники</h1>
+                        <p>Рекламные площадки и вложенные в них источники — то, откуда приходят лиды.</p>
+                    </div>
+                    <dl class="stat-chips">
+                        <div class="stat-chip"><dt>Площадок</dt><dd id="statPlatforms">0</dd></div>
+                        <div class="stat-chip"><dt>Источников</dt><dd id="statSources">0</dd></div>
+                        <div class="stat-chip ok"><dt>Активных</dt><dd id="statActive">0</dd></div>
+                    </dl>
+                </div>
+
+                <div class="platform-bar">
+                    <div class="platform-tabs" id="platformTabs"></div>
+                    <div class="platform-meta" id="platformMeta"></div>
+                    <button type="button" class="btn btn-ghost btn-sm" id="managePlatformsBtn"><i class="fas fa-gear" aria-hidden="true"></i>Управление площадками</button>
+                </div>
+
+                <div class="toolbar">
+                    <div class="search-field">
+                        <i class="fas fa-magnifying-glass" aria-hidden="true"></i>
+                        <input type="text" id="searchInput" placeholder="Поиск по названию, площадке, CPA-сети, городу, статусу…">
+                    </div>
+                    <div class="status-filter" id="statusFilter">
+                        <button type="button" class="status-pill active" data-status="all">Все</button>
+                        <button type="button" class="status-pill" data-status="Активен">Активен</button>
+                        <button type="button" class="status-pill" data-status="Неактивен">Неактивен</button>
+                        <button type="button" class="status-pill" data-status="Актуализация">Актуализация</button>
+                        <button type="button" class="status-pill" data-status="Архив">Архив</button>
+                    </div>
+                    <button type="button" class="btn btn-primary" id="addSourceBtn"><i class="fas fa-plus" aria-hidden="true"></i>Добавить источник</button>
+                </div>
+
+                <div class="table-card" id="sourcesTableCard">
+                    <div class="table-scroll">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th class="col-check"><input type="checkbox" class="head-checkbox" id="headCheckbox"></th>
+                                    <th id="thPlatform" hidden>Площадка</th>
+                                    <th>Название</th>
+                                    <th>Город/Регион</th>
+                                    <th>CPA-сети</th>
+                                    <th>Статус</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody id="sourcesBody"></tbody>
+                        </table>
+                    </div>
+                    <div class="empty-state" id="emptyState" hidden></div>
+                </div>
+
+            </div>
+        </main>
+    </div>
+
+    <!-- Модалка «Управление площадками»: список + инлайн-форма (1:1 с «Управление сетями» CPA-сетей) -->
+    <div class="modal-overlay" id="platformsModal" hidden>
+        <div class="modal-content">
+            <div class="modal-header">
+                <div><h2>Управление площадками</h2><p class="modal-sub">Название и статус</p></div>
+                <button type="button" class="modal-close" id="platformsModalClose"><i class="fas fa-xmark" aria-hidden="true"></i></button>
+            </div>
+            <div class="modal-body">
+                <div class="mgmt-list" id="platformsList"></div>
+                <button type="button" class="dashed-row" id="addPlatformBtn" style="margin-top:10px"><i class="fas fa-plus" aria-hidden="true"></i>Добавить площадку</button>
+                <div class="inline-form" id="platformInlineForm" hidden>
+                    <div class="form-grid">
+                        <div class="form-group span-2"><label for="pfName">Название *</label><input type="text" id="pfName" placeholder="Например, «Авито»"></div>
+                        <div class="form-group span-2"><label for="pfStatus">Статус</label>
+                            <select id="pfStatus"><option value="Активна">Активна</option><option value="Неактивна">Неактивна</option></select>
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-secondary btn-sm" id="platformFormCancel">Отмена</button>
+                        <button type="button" class="btn btn-primary btn-sm" id="platformFormSave">Сохранить</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модалка источника: создание/редактирование -->
+    <div class="modal-overlay" id="sourceModal" hidden>
+        <div class="modal-content wide">
+            <div class="modal-header">
+                <div><h2 id="sourceModalTitle">Новый источник</h2><p class="modal-sub">Все поля обязательны</p></div>
+                <button type="button" class="modal-close" id="sourceModalClose"><i class="fas fa-xmark" aria-hidden="true"></i></button>
+            </div>
+            <div class="modal-body">
+                <div class="context-note">Площадка: <strong id="sourceModalPlatformName">—</strong></div>
+                <div class="form-grid">
+                    <div class="form-group span-2"><label>CPA-сети * (минимум одна)</label>
+                        <div class="checkbox-grid" id="sourceNetworksGrid"></div>
+                    </div>
+                    <div class="form-group"><label for="srcName">Название *</label><input type="text" id="srcName" placeholder="Название, телефон или ссылка"></div>
+                    <div class="form-group"><label for="srcGeo">Город/Регион *</label><input type="text" id="srcGeo" placeholder="Например, «Москва»"></div>
+                    <div class="form-group span-2"><label for="srcStatus">Статус *</label>
+                        <select id="srcStatus">
+                            <option value="Активен">Активен</option>
+                            <option value="Неактивен">Неактивен</option>
+                            <option value="Актуализация">Актуализация</option>
+                            <option value="Архив">Архив</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-secondary" id="sourceModalCancel">Отмена</button>
+                <button type="button" class="btn btn-primary" id="sourceModalSave">Сохранить</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Общая модалка подтверждения удаления (источник / площадка / массовое удаление) -->
+    <div class="modal-overlay" id="confirmModal" hidden>
+        <div class="modal-content" style="max-width:420px">
+            <div class="modal-header">
+                <h2>Подтверждение</h2>
+                <button type="button" class="modal-close" id="confirmModalCloseBtn"><i class="fas fa-xmark" aria-hidden="true"></i></button>
+            </div>
+            <p id="confirmModalMessage"></p>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-secondary" id="confirmModalCancelBtn">Отмена</button>
+                <button type="button" class="btn btn-danger" id="confirmModalOkBtn">Удалить</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Плавающая панель массовых операций — только у Источников (dialog.md, 11.08.2026) -->
+    <div id="massActions">
+        <span id="selectedCount">Выбрано: 0</span>
+        <select id="massActionSelect">
+            <option value="">Выберите действие</option>
+            <option value="Активен">Статус → Активен</option>
+            <option value="Неактивен">Статус → Неактивен</option>
+            <option value="Архив">Статус → Архив</option>
+            <option value="delete">Удалить</option>
+        </select>
+        <button type="button" class="btn btn-primary btn-sm" id="massApplyBtn">Применить</button>
+        <button type="button" class="mass-clear-btn" id="massClearBtn" aria-label="Сбросить выделение" title="Сбросить выделение"><i class="fas fa-xmark" aria-hidden="true"></i></button>
+    </div>
+
+    <script type="module" src="./js/modules/sourcesApp.js"></script>
+</body>
+</html>

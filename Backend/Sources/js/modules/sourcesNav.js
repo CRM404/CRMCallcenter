@@ -1,9 +1,9 @@
-// --- mainNav.js: вертикальная иконочная навигация хаба слева (паттерн operatorNav.js) ---
-// 5 пунктов — 3 рабочих (переход между страницами хаба, обычные <a href>) и 2
-// заглушки на будущие разделы (клик — тост "скоро появится", как у оператора).
-// Без спейсера/кнопки выхода — в хабе нет логина (см. dialog.md, задача про хаб).
+// --- sourcesNav.js: вертикальная иконочная навигация хаба слева (паттерн operatorNav.js) ---
+// Дублирует mainNav.js/employeesNav.js/cpaNav.js/operatorNav.js — между
+// статическими папками нет общего кода. «Источники» — 6-й пункт (report_2026-08-01.md,
+// 11.08.2026), добавлен в конец списка во всех пяти файлах разом.
 
-import { showToast } from './mainToast.js';
+import { showToast } from './sourcesToast.js';
 
 const NAV_ITEMS = [
     { key: 'requisites', label: 'Реквизиты', icon: 'fa-file-invoice', href: '/main.html' },

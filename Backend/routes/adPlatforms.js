@@ -1,16 +1,19 @@
-// --- routes/adPlatforms.js: CRUD для справочника "Рекламные площадки"
-// (report_2026-08-01.md) — паттерн 1:1 с routes/departments.js, но без FK
-// вообще (самостоятельный справочник, решение куратора: без связи с оффером).
+// --- routes/adPlatforms.js: CRUD для справочника "Площадки" (страница
+// «Источники», report_2026-08-01.md, 11.08.2026) — упрощённая версия прежних
+// "Рекламных площадок" (category/type убраны — заводились 06.08.2026 под
+// другую версию сущности, сразу скрытую из UI; теперь площадка — родитель
+// для sources, только Название+Статус). Паттерн 1:1 с routes/departments.js,
+// без FK — самостоятельный справочник.
 
 const express = require('express');
 const { pool } = require('../db');
 
 const router = express.Router();
 
+const STATUS_VALUES = ['Активна', 'Неактивна'];
+
 const FIELD_COLUMNS = [
     ['name', 'name'],
-    ['category', 'category'],
-    ['type', 'type'],
     ['status', 'status']
 ];
 
@@ -27,9 +30,8 @@ function rowToPlatform(row) {
     return {
         id: row.id,
         name: row.name,
-        category: row.category,
-        type: row.type,
-        status: row.status
+        status: row.status,
+        sourcesCount: row.sources_count === undefined ? null : Number(row.sources_count)
     };
 }
 
@@ -37,13 +39,24 @@ function validateBody(body) {
     if (!body.name || String(body.name).trim() === '') {
         return 'Заполните обязательное поле: Наименование';
     }
+    const status = body.status === undefined || body.status === null || String(body.status).trim() === '' ? 'Активна' : body.status;
+    if (!STATUS_VALUES.includes(status)) {
+        return `Статус должен быть одним из: ${STATUS_VALUES.join(', ')}`;
+    }
     return null;
 }
 
-// GET /api/ad-platforms — список, отсортирован по id
+// GET /api/ad-platforms — список, отсортирован по id. sourcesCount — нужен
+// фронту и для пилюли-счётчика на табе площадки, и чтобы заранее (до клика)
+// знать, можно ли показывать кнопку удаления активной (паттерн 1:1 с
+// assignedCount в routes/scriptsAdmin.js).
 router.get('/', async (req, res) => {
     try {
-        const result = await pool.query('SELECT * FROM ad_platforms ORDER BY id');
+        const result = await pool.query(
+            `SELECT p.*, (SELECT count(*)::int FROM sources s WHERE s.platform_id = p.id) AS sources_count
+             FROM ad_platforms p
+             ORDER BY p.id`
+        );
         res.json(result.rows.map(rowToPlatform));
     } catch (err) {
         console.error(err);
@@ -96,9 +109,15 @@ router.put('/:id', async (req, res) => {
     }
 });
 
-// DELETE /api/ad-platforms/:id
+// DELETE /api/ad-platforms/:id — блокируется, пока у площадки есть источники
+// (ON DELETE RESTRICT на sources.platform_id тоже это ловит, но голая ошибка
+// Postgres — плохой UX, проверяем явно и отвечаем понятным 409).
 router.delete('/:id', async (req, res) => {
     try {
+        const sourcesCount = await pool.query('SELECT count(*)::int AS c FROM sources WHERE platform_id = $1', [req.params.id]);
+        if (sourcesCount.rows[0].c > 0) {
+            return res.status(409).json({ error: 'Нельзя удалить площадку, пока к ней привязаны источники' });
+        }
         const result = await pool.query('DELETE FROM ad_platforms WHERE id = $1 RETURNING id', [req.params.id]);
         if (result.rows.length === 0) {
             return res.status(404).json({ error: 'Площадка не найдена' });
