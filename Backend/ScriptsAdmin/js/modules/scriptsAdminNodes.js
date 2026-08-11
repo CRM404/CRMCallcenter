@@ -36,6 +36,21 @@ const DEFAULT_FONT_SIZE_PX = 16;
 const MIN_FONT_SIZE_PX = 8;
 const MAX_FONT_SIZE_PX = 200;
 
+// Фиксированная палитра вместо свободного нативного color picker'а (куратор,
+// 11.08.2026, report_2026-08-01.md) — предыдущая версия на <input type="color">
+// была неудобной/нестабильной в реальном использовании (два раунда фиксов
+// вокруг потери выделения при открытии нативного picker'а). Значения строго
+// совпадают с TEXT_COLOR_PATTERN в routes/scriptsAdmin.js (обычный hex, 6 знаков).
+const TEXT_COLOR_SWATCHES = [
+    { value: '#000000', label: 'Чёрный' },
+    { value: '#d92b2b', label: 'Красный' },
+    { value: '#e07b0f', label: 'Оранжевый' },
+    { value: '#b8960c', label: 'Жёлтый' },
+    { value: '#1f8a3d', label: 'Зелёный' },
+    { value: '#1a56db', label: 'Синий' },
+    { value: '#7c3aed', label: 'Фиолетовый' }
+];
+
 // Текущее выделение внутри editorEl — null, если оно пустое/схлопнуто или вне редактора.
 function getEditorSelectionRange(editorEl) {
     const selection = window.getSelection();
@@ -97,16 +112,89 @@ function applyFontSizeDelta(editorEl, delta) {
     wrapRangeInSpan(range, `font-size: ${newSize}px`);
 }
 
-// savedRange — Range, захваченный ДО открытия нативного color picker'а (см.
-// attachRichTextToolbar) — picker к моменту 'change' уже мог схлопнуть текущее
-// window.getSelection(), поэтому applyTextColor не полагается на живое выделение.
-function applyTextColor(editorEl, hexColor, savedRange) {
-    const range = savedRange || getEditorSelectionRange(editorEl);
-    if (!range) {
-        showToast('Выделите текст', 'error');
+// Текущая позиция курсора внутри editorEl, если выделение СХЛОПНУТО (просто
+// курсор, без выделенного текста) — иначе null. Пара к getEditorSelectionRange
+// (та, наоборот, требует НЕсхлопнутое выделение) — вместе покрывают оба режима
+// применения цвета: к уже выделенному тексту и "печатать этим цветом дальше".
+function getEditorCollapsedRange(editorEl) {
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0) return null;
+    const range = selection.getRangeAt(0);
+    if (!range.collapsed) return null;
+    if (!editorEl.contains(range.commonAncestorContainer)) return null;
+    return range;
+}
+
+// Режим "выбрать цвет и печатать им дальше" (владелец, 11.08.2026) — курсор
+// схлопнут, текста для покраски нет. Вставляет пустой span с нужным цветом и
+// zero-width space (иначе браузеру некуда ставить курсор внутрь пустого span) —
+// набранный дальше текст продолжает существующий текстовый узел ВНУТРИ span,
+// поэтому наследует цвет. ZWSP вычищается первым же вводом через editorEl
+// (слушатель 'input' снимает себя после первого срабатывания) — иначе invisible-
+// символ так и остался бы в сохранённом content.
+//
+// Если курсор уже стоит внутри такого же пустого (ещё не тронутого) span'а от
+// предыдущего клика по палитре — просто меняем его цвет на месте, а не вкладываем
+// новый span поверх старого (иначе переключение цвета туда-сюда без набора текста
+// между кликами плодило бы вложенные пустые span'ы).
+function applyPendingColor(editorEl, hexColor, collapsedRange) {
+    let node = collapsedRange.commonAncestorContainer;
+    if (node.nodeType === Node.TEXT_NODE) node = node.parentElement;
+    if (node && node.tagName === 'SPAN' && node.textContent === '​') {
+        node.style.color = hexColor;
         return;
     }
-    wrapRangeInSpan(range, `color: ${hexColor}`);
+
+    const span = document.createElement('span');
+    span.setAttribute('style', `color: ${hexColor}`);
+    const zwsp = document.createTextNode('​');
+    span.appendChild(zwsp);
+    collapsedRange.insertNode(span);
+
+    const newRange = document.createRange();
+    newRange.setStart(zwsp, 1);
+    newRange.collapse(true);
+    const selection = window.getSelection();
+    selection.removeAllRanges();
+    selection.addRange(newRange);
+    editorEl.focus();
+
+    const cleanupZwsp = () => {
+        if (zwsp.textContent.length > 1 && zwsp.textContent.charCodeAt(0) === 0x200b) {
+            zwsp.textContent = zwsp.textContent.slice(1);
+            // Мутация textContent сбрасывает позицию курсора внутри этого текстового
+            // узла (проверено эмпирически, реальный баг: без этого весь текст ПОСЛЕ
+            // первого напечатанного символа уезжал мимо span'а) — возвращаем курсор
+            // явно в конец обновлённого узла, чтобы дальнейший набор продолжался
+            // внутри того же цветного span'а.
+            const selection = window.getSelection();
+            const restoredRange = document.createRange();
+            restoredRange.setStart(zwsp, zwsp.textContent.length);
+            restoredRange.collapse(true);
+            selection.removeAllRanges();
+            selection.addRange(restoredRange);
+        }
+        editorEl.removeEventListener('input', cleanupZwsp);
+    };
+    editorEl.addEventListener('input', cleanupZwsp);
+}
+
+// Единая точка входа для клика по свотчу палитры: если есть реальное (не
+// схлопнутое) выделение — красит его; иначе, если курсор просто стоит внутри
+// редактора — включает режим "печатать этим цветом"; иначе (редактор вообще
+// не в фокусе) — просьба сначала кликнуть в текст.
+function applySwatchColor(editorEl, hexColor) {
+    const selectedRange = getEditorSelectionRange(editorEl);
+    if (selectedRange) {
+        wrapRangeInSpan(selectedRange, `color: ${hexColor}`);
+        return;
+    }
+    const collapsedRange = getEditorCollapsedRange(editorEl);
+    if (collapsedRange) {
+        applyPendingColor(editorEl, hexColor, collapsedRange);
+        return;
+    }
+    showToast('Сначала кликните в текст', 'error');
 }
 
 function autoGrow(el) {
@@ -116,6 +204,25 @@ function autoGrow(el) {
 
 function isRichTextEmpty(el) {
     return !el.textContent.trim();
+}
+
+// Подчищает "брошенные" пустые span'ы от режима "печатать этим цветом"
+// (applyPendingColor) — если пользователь кликнул по свотчу и ушёл сохранять,
+// ничего не напечатав, в DOM остаётся span с одним zero-width space внутри.
+// Сам по себе он не ломает ничего (сервер его не отклонит), но незачем
+// сохранять невидимый мусор — вызывается прямо перед чтением innerHTML на сохранение.
+function stripEmptyPendingColorSpans(editorEl) {
+    editorEl.querySelectorAll('span').forEach((span) => {
+        if (span.textContent === '​') span.remove();
+    });
+}
+
+// Общая точка чтения содержимого редактора для сохранения — паттерн
+// isRichTextEmpty(editorEl) ? '' : editorEl.innerHTML, но сначала подчищает
+// брошенные pending-color span'ы (см. stripEmptyPendingColorSpans).
+function getEditorHtmlForSave(editorEl) {
+    stripEmptyPendingColorSpans(editorEl);
+    return isRichTextEmpty(editorEl) ? '' : editorEl.innerHTML;
 }
 
 // true, если commonAncestorContainer коллапсированного выделения лежит внутри <li>
@@ -198,34 +305,28 @@ function attachRichTextToolbar(container, editorEl) {
         });
     }
 
-    // ИСПРАВЛЕНО (куратор, 10.08.2026): предыдущая версия полагалась на то, что
-    // window.getSelection() внутри editorEl переживает клик по color input — как
-    // у fontSelect. На практике это неверно именно для <input type="color">: в
-    // реальном браузере клик открывает всплывающий picker, который уводит фокус
-    // и схлопывает выделение (в отличие от нативного <select>, который так не
-    // делает) — к моменту 'change' getEditorSelectionRange уже возвращал null,
-    // отсюда стабильная ошибка "Выделите текст" при реально выделенном тексте.
-    // Playwright-тест этого не поймал, т.к. программный .click() там не открывает
-    // настоящий picker. Фикс — сохраняем Range на mousedown (ДО открытия picker'а)
-    // и применяем цвет к сохранённому Range на change, не полагаясь на живое
-    // состояние selection на тот момент.
-    const colorInput = container.querySelector('[data-rte-color-input]');
-    if (colorInput) {
-        let savedColorRange = null;
-        colorInput.addEventListener('mousedown', (e) => {
-            e.stopPropagation();
-            const range = getEditorSelectionRange(editorEl);
-            savedColorRange = range ? range.cloneRange() : null;
-        });
-        colorInput.addEventListener('change', () => {
-            applyTextColor(editorEl, colorInput.value, savedColorRange);
+    // ЗАМЕНЕНО (куратор, 11.08.2026, report_2026-08-01.md): нативный <input
+    // type="color"> убран целиком — фиксированная палитра из 7 кнопок вместо
+    // него. Причина замены не только "владелец так попросил": свободный picker
+    // при открытии уводит фокус/выделение со страницы, из-за чего потребовалось
+    // два отдельных раунда фиксов (10.08.2026); обычные <button> с mousedown
+    // preventDefault (тот же паттерн, что у bold/italic/font-size выше) фокус
+    // редактора вообще не теряют — весь класс этих багов просто не существует
+    // для кнопок.
+    container.querySelectorAll('[data-rte-color]').forEach((btn) => {
+        btn.addEventListener('mousedown', (e) => e.preventDefault());
+        btn.addEventListener('click', () => {
+            applySwatchColor(editorEl, btn.dataset.rteColor);
             autoGrow(editorEl);
         });
-    }
+    });
 }
 
 function renderRichTextToolbar() {
     const fontOptions = FONT_FAMILY_OPTIONS.map((o) => `<option value='${o.value}'>${escapeHtml(o.label)}</option>`).join('');
+    const colorSwatches = TEXT_COLOR_SWATCHES.map((c) => `
+        <button type="button" class="sa-rte-swatch" data-rte-color="${c.value}" style="background:${c.value}" title="${escapeHtml(c.label)}" aria-label="${escapeHtml(c.label)}"></button>
+    `).join('');
     return `
         <div class="sa-rte-toolbar">
             <button type="button" class="btn btn-secondary btn-sm" data-rte-cmd="bold" title="Жирный"><b>Ж</b></button>
@@ -237,7 +338,7 @@ function renderRichTextToolbar() {
             </select>
             <button type="button" class="btn btn-secondary btn-sm" data-rte-size-delta="-1" title="Уменьшить размер на 1px">A−</button>
             <button type="button" class="btn btn-secondary btn-sm" data-rte-size-delta="1" title="Увеличить размер на 1px">A+</button>
-            <input type="color" class="sa-rte-color-input" data-rte-color-input title="Цвет текста">
+            <div class="sa-rte-swatches" title="Цвет текста: выделите текст и выберите цвет, либо выберите цвет и печатайте им дальше">${colorSwatches}</div>
         </div>
     `;
 }
@@ -368,7 +469,7 @@ export function renderNodesPanel(container, nodes, uiState, handlers) {
         initRichTextEditor(editorEl);
         attachRichTextToolbar(container, editorEl);
         container.querySelector('#saRootCreateBtn').addEventListener('click', () => {
-            handlers.onCreateRoot(isRichTextEmpty(editorEl) ? '' : editorEl.innerHTML);
+            handlers.onCreateRoot(getEditorHtmlForSave(editorEl));
         });
         return;
     }
@@ -378,7 +479,7 @@ export function renderNodesPanel(container, nodes, uiState, handlers) {
         initRichTextEditor(editorEl);
         attachRichTextToolbar(container, editorEl);
         container.querySelector('#saRootSaveBtn').addEventListener('click', () => {
-            handlers.onSaveRoot(root, isRichTextEmpty(editorEl) ? '' : editorEl.innerHTML);
+            handlers.onSaveRoot(root, getEditorHtmlForSave(editorEl));
         });
         container.querySelector('#saRootCancelBtn').addEventListener('click', handlers.onCancelRootEdit);
     } else {

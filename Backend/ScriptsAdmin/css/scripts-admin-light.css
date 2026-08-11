@@ -243,14 +243,30 @@ h2 {
     background: #fff;
     font-family: inherit;
 }
-.sa-rte-color-input {
-    width: 30px;
-    height: 28px;
-    padding: 2px;
+.sa-rte-swatches {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 6px;
     border: 1px solid #ccd7e6;
     border-radius: 8px;
     background: #fff;
+}
+.sa-rte-swatch {
+    width: 18px;
+    height: 18px;
+    padding: 0;
+    border: 1px solid rgba(0, 0, 0, 0.15);
+    border-radius: 50%;
     cursor: pointer;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.4);
+}
+.sa-rte-swatch:hover {
+    transform: scale(1.15);
+}
+.sa-rte-swatch:focus-visible {
+    outline: 2px solid #4a90d9;
+    outline-offset: 2px;
 }
 .sa-rte-editor {
     padding: 8px 12px;
