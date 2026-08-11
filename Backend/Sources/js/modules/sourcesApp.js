@@ -147,10 +147,11 @@ function renderSourcesTable() {
             <tr class="${selectedIds.has(s.id) ? 'row-selected' : ''}" data-row-id="${s.id}">
                 <td class="col-check"><input type="checkbox" class="row-checkbox" data-check-id="${s.id}" ${checked}></td>
                 ${crossPlatform ? `<td class="col-platform">${escapeHtml(s.platformName)}</td>` : ''}
-                <td class="src-name">${escapeHtml(s.name)}</td>
+                <td class="src-name">${escapeHtml(s.rootSource)}</td>
                 <td class="src-geo">${escapeHtml(s.cityRegion)}</td>
                 <td><div class="chip-row">${nets}</div></td>
                 <td><span class="src-badge ${badgeClass}">${escapeHtml(s.status)}</span></td>
+                <td class="src-geo">${escapeHtml(s.leadSource)}</td>
                 <td>
                     <div class="row-actions">
                         <button type="button" class="m-icon-btn" data-edit="${s.id}" data-tooltip="Изменить" aria-label="Изменить"><i class="fas fa-pen" aria-hidden="true"></i></button>
@@ -170,7 +171,7 @@ function renderSourcesTable() {
     $('#sourcesBody').querySelectorAll('[data-del]').forEach((btn) => {
         btn.addEventListener('click', async () => {
             const s = sources.find((x) => x.id === Number(btn.dataset.del));
-            const ok = await confirmAction(`Удалить источник «${s.name}»? Это необратимо.`);
+            const ok = await confirmAction(`Удалить источник «${s.rootSource}»? Это необратимо.`);
             if (!ok) return;
             try {
                 await deleteSource(s.id);
@@ -268,7 +269,8 @@ $('#massApplyBtn').addEventListener('click', async () => {
         try {
             await updateSource(id, {
                 platformId: s.platformId,
-                name: s.name,
+                rootSource: s.rootSource,
+                leadSource: s.leadSource,
                 cityRegion: s.cityRegion,
                 status: action,
                 cpaNetworkIds: s.cpaNetworkIds
@@ -308,8 +310,9 @@ function openSourceModal(source) {
     const platform = platforms.find((p) => p.id === sourceModalPlatformId);
     $('#sourceModalTitle').textContent = source ? 'Изменить источник' : 'Новый источник';
     $('#sourceModalPlatformName').textContent = source ? source.platformName : (platform ? platform.name : '—');
-    $('#srcName').value = source ? source.name : '';
+    $('#srcName').value = source ? source.rootSource : '';
     $('#srcGeo').value = source ? source.cityRegion : '';
+    $('#srcLeadSource').value = source ? source.leadSource : '';
     $('#srcStatus').value = source ? source.status : 'Активен';
     renderNetworksGrid(source ? source.cpaNetworkIds : []);
     $('#sourceModal').hidden = false;
@@ -330,7 +333,8 @@ $('#sourceModalSave').addEventListener('click', async () => {
     const cpaNetworkIds = Array.from($('#sourceNetworksGrid').querySelectorAll('input:checked')).map((cb) => Number(cb.value));
     const payload = {
         platformId: sourceModalPlatformId,
-        name: $('#srcName').value.trim(),
+        rootSource: $('#srcName').value.trim(),
+        leadSource: $('#srcLeadSource').value.trim(),
         cityRegion: $('#srcGeo').value.trim(),
         status: $('#srcStatus').value,
         cpaNetworkIds

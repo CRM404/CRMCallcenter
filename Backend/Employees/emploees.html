@@ -58,6 +58,9 @@
                             <th id="thManagerName" data-field="managerName">Руководитель</th>
                             <th id="thHireDate" data-field="hireDate">Дата найма</th>
                             <th id="thStatus" data-field="status">Статус</th>
+                            <th id="thTerminationDate" data-field="terminationDate">Дата увольнения</th>
+                            <th id="thLineType" data-field="lineType">Тип линии</th>
+                            <th id="thWorkSchedule" data-field="workSchedule">График работы</th>
                             <th id="actionsHeader">Действия</th>
                         </tr>
                     </thead>
@@ -149,6 +152,18 @@
                 <option value="active">Активен</option>
                 <option value="inactive">Неактивен</option>
             </select>
+        </div>
+        <div class="form-group">
+            <label for="terminationDate">Дата увольнения</label>
+            <input type="date" id="terminationDate" name="terminationDate" />
+        </div>
+        <div class="form-group">
+            <label for="lineType">Тип линии</label>
+            <input type="text" id="lineType" name="lineType" />
+        </div>
+        <div class="form-group" style="grid-column: span 2;">
+            <label for="workSchedule">График работы</label>
+            <input type="text" id="workSchedule" name="workSchedule" placeholder="Например, «5/2»" />
         </div>
         <div class="form-group" style="grid-column: span 2;">
             <label for="password">Пароль</label>

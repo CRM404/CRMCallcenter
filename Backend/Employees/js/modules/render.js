@@ -32,7 +32,10 @@ const STANDALONE_TH_IDS = {
     department: 'thDepartment',
     managerName: 'thManagerName',
     hireDate: 'thHireDate',
-    status: 'thStatus'
+    status: 'thStatus',
+    terminationDate: 'thTerminationDate',
+    lineType: 'thLineType',
+    workSchedule: 'thWorkSchedule'
 };
 
 function applyStandaloneColumnVisibility(hiddenColumns) {
@@ -245,6 +248,9 @@ export async function renderTable() {
                 <td class="manager-td${hiddenCls('managerName')}">${renderManagerCell(emp)}</td>
                 <td class="hiredate-td${hiddenCls('hireDate')}">${emp.hireDate ? formatDate(emp.hireDate) : '—'}</td>
                 <td class="status-td${hiddenCls('status')}">${renderStatusBadge(emp)}</td>
+                <td class="termination-td${hiddenCls('terminationDate')}">${emp.terminationDate ? formatDate(emp.terminationDate) : '—'}</td>
+                <td class="linetype-td${hiddenCls('lineType')}">${emp.lineType ? escapeHtml(emp.lineType) : '—'}</td>
+                <td class="workschedule-td${hiddenCls('workSchedule')}">${emp.workSchedule ? escapeHtml(emp.workSchedule) : '—'}</td>
                 <td>
                     <button class="action-btn btn-edit" data-id="${emp.id}" aria-label="Редактировать" title="Изменить"><i class="fas fa-pencil-alt" aria-hidden="true"></i></button>
                     <button class="action-btn btn-delete" data-id="${emp.id}" data-name="${escapeHtml(fullName)}" aria-label="Удалить" title="Удалить"><i class="fas fa-trash" aria-hidden="true"></i></button>

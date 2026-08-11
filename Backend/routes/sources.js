@@ -30,7 +30,8 @@ function rowToSource(row) {
         id: row.id,
         platformId: row.platform_id,
         platformName: row.platform_name,
-        name: row.name,
+        rootSource: row.root_source,
+        leadSource: row.lead_source,
         cityRegion: row.city_region,
         status: row.status,
         cpaNetworkIds: row.cpa_network_ids,
@@ -44,8 +45,11 @@ function validateBody(body) {
     if (body.platformId === undefined || body.platformId === null || String(body.platformId).trim() === '') {
         return 'Заполните обязательное поле: Площадка';
     }
-    if (!body.name || String(body.name).trim() === '') {
-        return 'Заполните обязательное поле: Название';
+    if (!body.rootSource || String(body.rootSource).trim() === '') {
+        return 'Заполните обязательное поле: Корневой источник';
+    }
+    if (!body.leadSource || String(body.leadSource).trim() === '') {
+        return 'Заполните обязательное поле: Источник лидов';
     }
     if (!body.cityRegion || String(body.cityRegion).trim() === '') {
         return 'Заполните обязательное поле: Город/Регион';
@@ -100,7 +104,7 @@ router.get('/', async (req, res) => {
         if (q) {
             params = [`%${q}%`];
             where = `WHERE (
-                s.name ILIKE $1 OR p.name ILIKE $1 OR s.city_region ILIKE $1 OR s.status ILIKE $1
+                s.root_source ILIKE $1 OR s.lead_source ILIKE $1 OR p.name ILIKE $1 OR s.city_region ILIKE $1 OR s.status ILIKE $1
                 OR EXISTS (
                     SELECT 1 FROM source_cpa_networks scn2
                     JOIN cpa_networks cn2 ON cn2.id = scn2.cpa_network_id
@@ -145,8 +149,8 @@ router.post('/', async (req, res) => {
     try {
         await client.query('BEGIN');
         const insertResult = await client.query(
-            `INSERT INTO sources (platform_id, name, city_region, status) VALUES ($1, $2, $3, $4) RETURNING id`,
-            [req.body.platformId, req.body.name.trim(), req.body.cityRegion.trim(), req.body.status]
+            `INSERT INTO sources (platform_id, root_source, lead_source, city_region, status) VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+            [req.body.platformId, req.body.rootSource.trim(), req.body.leadSource.trim(), req.body.cityRegion.trim(), req.body.status]
         );
         const sourceId = insertResult.rows[0].id;
         await replaceCpaNetworks(client, sourceId, req.body.cpaNetworkIds);
@@ -172,8 +176,8 @@ router.put('/:id', async (req, res) => {
     try {
         await client.query('BEGIN');
         const result = await client.query(
-            `UPDATE sources SET platform_id = $1, name = $2, city_region = $3, status = $4, updated_at = NOW() WHERE id = $5 RETURNING id`,
-            [req.body.platformId, req.body.name.trim(), req.body.cityRegion.trim(), req.body.status, req.params.id]
+            `UPDATE sources SET platform_id = $1, root_source = $2, lead_source = $3, city_region = $4, status = $5, updated_at = NOW() WHERE id = $6 RETURNING id`,
+            [req.body.platformId, req.body.rootSource.trim(), req.body.leadSource.trim(), req.body.cityRegion.trim(), req.body.status, req.params.id]
         );
         if (result.rows.length === 0) {
             await client.query('ROLLBACK');

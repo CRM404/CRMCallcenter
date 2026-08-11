@@ -611,7 +611,7 @@ ALTER TABLE ad_platforms DROP COLUMN IF EXISTS type;
 CREATE TABLE IF NOT EXISTS sources (
     id SERIAL PRIMARY KEY,
     platform_id INTEGER NOT NULL REFERENCES ad_platforms(id) ON DELETE RESTRICT,
-    name VARCHAR NOT NULL,
+    root_source VARCHAR NOT NULL,
     city_region VARCHAR NOT NULL,
     status VARCHAR NOT NULL DEFAULT 'Актуализация' CHECK (status IN ('Активен', 'Неактивен', 'Архив', 'Актуализация')),
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
@@ -623,3 +623,32 @@ CREATE TABLE IF NOT EXISTS source_cpa_networks (
     cpa_network_id INTEGER NOT NULL REFERENCES cpa_networks(id) ON DELETE RESTRICT,
     PRIMARY KEY (source_id, cpa_network_id)
 );
+
+-- ============================================================
+-- Точечные правки «Источники» + «Сотрудники» (report_2026-08-01.md, 11.08.2026)
+-- ============================================================
+
+-- Источники: "Название" -> "Корневой источник" (данные сохраняются). RENAME
+-- COLUMN не идемпотентен сам по себе — тот же приём, что у
+-- real_estate_offers.down_payment.
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'sources' AND column_name = 'name'
+    ) THEN
+        ALTER TABLE sources RENAME COLUMN name TO root_source;
+    END IF;
+END $$;
+
+-- Новое поле "Источник лидов". NOT NULL на уровне БД не ставим — на проде в
+-- sources уже могут быть строки без значения, добавить NOT NULL без
+-- бэкофилла нельзя. Обязательность для новых/редактируемых записей — на
+-- уровне routes/sources.js (тот же приём, что и у ad_platforms.status).
+ALTER TABLE sources ADD COLUMN IF NOT EXISTS lead_source VARCHAR;
+
+-- Сотрудники: три новых поля, все nullable, без CHECK/справочников (свободный
+-- ввод, termination_date не связана со status).
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS termination_date DATE;
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS line_type VARCHAR;
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS work_schedule VARCHAR;
