@@ -18,7 +18,10 @@ export const CONFIGURABLE_COLUMNS = [
     { key: 'department', label: 'Отдел' },
     { key: 'managerName', label: 'Руководитель' },
     { key: 'hireDate', label: 'Дата найма' },
-    { key: 'status', label: 'Статус' }
+    { key: 'status', label: 'Статус' },
+    { key: 'terminationDate', label: 'Дата увольнения' },
+    { key: 'lineType', label: 'Тип линии' },
+    { key: 'workSchedule', label: 'График работы' }
 ];
 
 const SESSION_KEY = 'crm_identifiedEmployeeId';

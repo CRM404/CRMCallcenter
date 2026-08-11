@@ -42,6 +42,9 @@ const middleNameInput = document.getElementById('middleName');
 const whatsappInput = document.getElementById('whatsapp');
 const telegramInput = document.getElementById('telegram');
 const managerSelect = document.getElementById('manager');
+const terminationDateInput = document.getElementById('terminationDate');
+const lineTypeInput = document.getElementById('lineType');
+const workScheduleInput = document.getElementById('workSchedule');
 const passwordInput = document.getElementById('password');
 
 const countrySelect = document.getElementById('country');
@@ -73,6 +76,9 @@ const FIELD_SCHEMA = [
     { key: 'managerId', input: managerSelect },
     { key: 'hireDate', input: hireDateInput },
     { key: 'status', input: statusSelect },
+    { key: 'terminationDate', input: terminationDateInput },
+    { key: 'lineType', input: lineTypeInput },
+    { key: 'workSchedule', input: workScheduleInput },
     { key: 'password', input: passwordInput },
     { key: 'country', input: countrySelect },
     { key: 'registration', input: registrationInput },
@@ -300,6 +306,9 @@ export async function handleEmployeeSubmit(e) {
         managerId: managerSelect.value ? Number(managerSelect.value) : null,
         hireDate: hireDateInput.value,
         status: statusSelect.value,
+        terminationDate: terminationDateInput.value,
+        lineType: lineTypeInput.value.trim(),
+        workSchedule: workScheduleInput.value.trim(),
         password: passwordInput.value.trim(),
         country: countrySelect.value,
         registration: registrationInput.value.trim(),

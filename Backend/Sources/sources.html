@@ -38,7 +38,7 @@
                 <div class="toolbar">
                     <div class="search-field">
                         <i class="fas fa-magnifying-glass" aria-hidden="true"></i>
-                        <input type="text" id="searchInput" placeholder="Поиск по названию, площадке, CPA-сети, городу, статусу…">
+                        <input type="text" id="searchInput" placeholder="Поиск по корневому источнику, источнику лидов, площадке, CPA-сети, городу, статусу…">
                     </div>
                     <div class="status-filter" id="statusFilter">
                         <button type="button" class="status-pill active" data-status="all">Все</button>
@@ -57,10 +57,11 @@
                                 <tr>
                                     <th class="col-check"><input type="checkbox" class="head-checkbox" id="headCheckbox"></th>
                                     <th id="thPlatform" hidden>Площадка</th>
-                                    <th>Название</th>
+                                    <th>Корневой источник</th>
                                     <th>Город/Регион</th>
                                     <th>CPA-сети</th>
                                     <th>Статус</th>
+                                    <th>Источник лидов</th>
                                     <th></th>
                                 </tr>
                             </thead>
@@ -113,8 +114,9 @@
                     <div class="form-group span-2"><label>CPA-сети * (минимум одна)</label>
                         <div class="checkbox-grid" id="sourceNetworksGrid"></div>
                     </div>
-                    <div class="form-group"><label for="srcName">Название *</label><input type="text" id="srcName" placeholder="Название, телефон или ссылка"></div>
+                    <div class="form-group"><label for="srcName">Корневой источник *</label><input type="text" id="srcName" placeholder="Название, телефон или ссылка"></div>
                     <div class="form-group"><label for="srcGeo">Город/Регион *</label><input type="text" id="srcGeo" placeholder="Например, «Москва»"></div>
+                    <div class="form-group span-2"><label for="srcLeadSource">Источник лидов *</label><input type="text" id="srcLeadSource" placeholder="Например, «Форма на сайте»"></div>
                     <div class="form-group span-2"><label for="srcStatus">Статус *</label>
                         <select id="srcStatus">
                             <option value="Активен">Активен</option>
