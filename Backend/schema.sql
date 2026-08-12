@@ -652,3 +652,20 @@ ALTER TABLE sources ADD COLUMN IF NOT EXISTS lead_source VARCHAR;
 ALTER TABLE employees ADD COLUMN IF NOT EXISTS termination_date DATE;
 ALTER TABLE employees ADD COLUMN IF NOT EXISTS line_type VARCHAR;
 ALTER TABLE employees ADD COLUMN IF NOT EXISTS work_schedule VARCHAR;
+
+-- ============================================================
+-- Страница «Лиды» (report_2026-08-01.md, 13.08.2026)
+-- ============================================================
+
+-- Источник лида — переход со свободного текста на связь со справочником
+-- "Источники". Данные в текущей leads.source не переносим (0 реальных лидов
+-- на проде на момент задачи — таблица только что появилась в обороте).
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS source_id INTEGER REFERENCES sources(id) ON DELETE SET NULL;
+ALTER TABLE leads DROP COLUMN IF EXISTS source;
+
+-- «На линии» — ручной переключатель оператора (задел под будущую АТС).
+-- on_line_since — момент, когда сотрудник стал свободен для следующего лида;
+-- нужен для очереди автораспределения "кто дольше всех ждёт свободным".
+-- NULL, когда сотрудник не на линии.
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS on_line BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS on_line_since TIMESTAMP;

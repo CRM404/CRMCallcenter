@@ -2,6 +2,7 @@
 
 const express = require('express');
 const { pool } = require('../db');
+const { distributePendingLeads } = require('../services/leadDistribution');
 
 const router = express.Router();
 
@@ -56,6 +57,8 @@ function rowToEmployee(row) {
         terminationDate: row.termination_date,
         lineType: row.line_type,
         workSchedule: row.work_schedule,
+        onLine: row.on_line,
+        onLineSince: row.on_line_since,
         password: row.password,
         country: row.country,
         registration: row.registration,
@@ -265,6 +268,34 @@ router.put('/:id', async (req, res) => {
         if (handleUniqueViolation(err, res)) return;
         console.error(err);
         res.status(500).json({ error: 'Не удалось сохранить изменения' });
+    }
+});
+
+// PUT /api/employees/:id/on-line { onLine } — переключатель "На линии" на
+// "Рабочем столе" оператора (report_2026-08-01.md, 13.08.2026). При включении
+// сразу пробует разобрать очередь зависших лидов (см. services/leadDistribution).
+router.put('/:id/on-line', async (req, res) => {
+    try {
+        const { onLine } = req.body;
+        if (typeof onLine !== 'boolean') {
+            return res.status(400).json({ error: 'Не передан onLine' });
+        }
+        const result = await pool.query(
+            onLine
+                ? 'UPDATE employees SET on_line = true, on_line_since = NOW() WHERE id = $1 RETURNING id'
+                : 'UPDATE employees SET on_line = false, on_line_since = NULL WHERE id = $1 RETURNING id',
+            [req.params.id]
+        );
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Сотрудник не найден' });
+        }
+        if (onLine) {
+            await distributePendingLeads(pool);
+        }
+        res.json({ id: Number(req.params.id), onLine });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Не удалось обновить статус "на линии"' });
     }
 });
 

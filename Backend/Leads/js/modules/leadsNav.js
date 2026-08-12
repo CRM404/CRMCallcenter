@@ -1,9 +1,8 @@
-// --- mainNav.js: вертикальная иконочная навигация хаба слева (паттерн operatorNav.js) ---
-// 5 пунктов — 3 рабочих (переход между страницами хаба, обычные <a href>) и 2
-// заглушки на будущие разделы (клик — тост "скоро появится", как у оператора).
-// Без спейсера/кнопки выхода — в хабе нет логина (см. dialog.md, задача про хаб).
-
-import { showToast } from './mainToast.js';
+// --- leadsNav.js: вертикальная иконочная навигация хаба слева (паттерн operatorNav.js) ---
+// Дублирует mainNav.js/employeesNav.js/cpaNav.js/sourcesNav.js — между
+// статическими папками нет общего кода. Порядок пунктов: Реквизиты,
+// Сотрудники, CPA-сети, Оператор (заглушка), Управление скриптом,
+// Источники, Лиды.
 
 const NAV_ITEMS = [
     { key: 'requisites', label: 'Реквизиты', icon: 'fa-file-invoice', href: '/main.html' },
@@ -20,19 +19,12 @@ export function initHubNav(activeKey) {
     if (!nav) return;
 
     NAV_ITEMS.forEach((item) => {
-        const el = document.createElement(item.href ? 'a' : 'button');
-        if (item.href) {
-            el.href = item.href;
-        } else {
-            el.type = 'button';
-        }
+        const el = document.createElement('a');
+        el.href = item.href;
         el.className = 'hub-nav-item' + (item.key === activeKey ? ' active' : '');
         el.dataset.tooltip = item.label;
         el.setAttribute('aria-label', item.label);
         el.innerHTML = `<i class="fas ${item.icon}" aria-hidden="true"></i>`;
-        if (!item.href) {
-            el.addEventListener('click', () => showToast(`${item.label}: скоро появится`, 'info'));
-        }
         nav.appendChild(el);
     });
 }

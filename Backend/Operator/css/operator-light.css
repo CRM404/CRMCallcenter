@@ -434,3 +434,75 @@ h2 {
 .op-login-card .btn {
     width: 100%;
 }
+
+/* ----- "На линии" (переключатель автораспределения лидов, report_2026-08-01.md, 13.08.2026) ----- */
+.online-card {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    background: rgba(255, 255, 255, .55);
+    border: 1px solid var(--border-light);
+    border-radius: 12px;
+    padding: 16px 20px;
+    margin-bottom: 20px;
+}
+.online-card.is-online {
+    background: var(--badge-active-bg);
+    border-color: rgba(21, 87, 36, .25);
+}
+.online-status-text { flex: 1; }
+.online-status-text .label {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+.online-status-text .caption {
+    font-size: 12.5px;
+    color: var(--text-secondary);
+    margin-top: 2px;
+}
+.online-card.is-online .caption { color: var(--badge-active-text); }
+
+.online-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--text-secondary);
+    flex-shrink: 0;
+}
+.online-card.is-online .online-dot {
+    background: var(--badge-active-text);
+    box-shadow: 0 0 0 3px rgba(21, 87, 36, .18);
+}
+
+.switch {
+    position: relative;
+    display: inline-block;
+    width: 50px;
+    height: 28px;
+    flex-shrink: 0;
+}
+.switch input { opacity: 0; width: 0; height: 0; }
+.switch-track {
+    position: absolute;
+    inset: 0;
+    background: #e7eaf0;
+    border: 1px solid rgba(90, 100, 114, .3);
+    border-radius: 30px;
+    cursor: pointer;
+    transition: .2s;
+}
+.switch-track::before {
+    content: '';
+    position: absolute;
+    width: 20px;
+    height: 20px;
+    left: 3px;
+    top: 3px;
+    background: #fff;
+    border-radius: 50%;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, .25);
+    transition: .2s;
+}
+.switch input:checked + .switch-track { background: #0000FF; border-color: #0000FF; }
+.switch input:checked + .switch-track::before { transform: translateX(22px); }
