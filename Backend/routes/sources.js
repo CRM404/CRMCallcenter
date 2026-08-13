@@ -94,7 +94,9 @@ function handleFkError(err, res) {
 // GET /api/sources?platformId=X — источники одной площадки (обычный режим,
 // открытая вкладка). GET /api/sources?search=текст — кросс-площадочный режим:
 // игнорирует platformId, ищет по всем источникам сразу по всем полям
-// (название, площадка, CPA-сети, город/регион, статус).
+// (название, площадка, CPA-сети, город/регион, статус). GET /api/sources без
+// параметров — плоский список ВСЕХ источников (нужен странице «Лиды» для
+// выпадающего списка «Источник», report_2026-08-01.md, 13.08.2026).
 router.get('/', async (req, res) => {
     try {
         const { platformId, search } = req.query;
@@ -115,7 +117,8 @@ router.get('/', async (req, res) => {
             params = [platformId];
             where = 'WHERE s.platform_id = $1';
         } else {
-            return res.status(400).json({ error: 'Укажите platformId или search' });
+            params = [];
+            where = '';
         }
         const result = await pool.query(`${BASE_SELECT} ${where} GROUP BY s.id, p.name ORDER BY s.id`, params);
         res.json(result.rows.map(rowToSource));

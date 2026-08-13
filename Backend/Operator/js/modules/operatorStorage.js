@@ -67,6 +67,20 @@ export function fetchFunnelStatuses() {
     return request('/lead-funnel-statuses');
 }
 
+// "На линии" (report_2026-08-01.md, 13.08.2026) — читаем актуальное
+// состояние с сервера при каждой загрузке страницы, не из identity в
+// sessionStorage: могло измениться в другой вкладке/сессии.
+export function fetchEmployee(id) {
+    return request(`/employees/${id}`);
+}
+
+export function setOnLine(id, onLine) {
+    return request(`/employees/${id}/on-line`, {
+        method: 'PUT',
+        body: JSON.stringify({ onLine })
+    });
+}
+
 // Скрипт подбирается только по назначению оператору (employeeId), без учёта
 // оффера/статуса воронки лида. null в ответе — нет назначенного скрипта, это
 // не ошибка (см. routes/scripts.js).
