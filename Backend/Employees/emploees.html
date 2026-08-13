@@ -159,7 +159,11 @@
         </div>
         <div class="form-group">
             <label for="lineType">Тип линии</label>
-            <input type="text" id="lineType" name="lineType" />
+            <select id="lineType" name="lineType">
+                <option value="">— не выбран —</option>
+                <option value="Входящая">Входящая</option>
+                <option value="Исходящая">Исходящая</option>
+            </select>
         </div>
         <div class="form-group" style="grid-column: span 2;">
             <label for="workSchedule">График работы</label>

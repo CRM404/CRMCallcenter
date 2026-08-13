@@ -53,7 +53,9 @@
                                     <th id="th-source">Источник</th>
                                     <th id="th-employee">Сотрудник</th>
                                     <th id="th-funnelStatus">Статус</th>
-                                    <th id="th-offer" class="col-hidden">Оффер</th>
+                                    <th id="th-lineType">Линия</th>
+                                    <th id="th-script">Скрипт</th>
+                                    <th id="th-offers">Офферы</th>
                                     <th id="th-propertyType" class="col-hidden">Тип объекта</th>
                                     <th id="th-propertyClass" class="col-hidden">Класс объекта</th>
                                     <th id="th-roomCount" class="col-hidden">Комнатность</th>
@@ -131,10 +133,15 @@
     <div class="modal-overlay" id="leadModal" hidden>
         <div class="modal-content xwide">
             <div class="modal-header">
-                <div><h2 id="leadModalTitle">Новый лид</h2><p class="modal-sub">Обязательно только «Номер» — остальное можно заполнить позже</p></div>
+                <div><h2 id="leadModalTitle">Новый лид</h2><p class="modal-sub">Обязательные поля: номер, линия, источник, офферы, скрипт и статусы показа — остальное можно заполнить позже</p></div>
                 <button type="button" class="modal-close" id="leadModalClose"><i class="fas fa-xmark" aria-hidden="true"></i></button>
             </div>
+            <div class="modal-tabs" role="tablist">
+                <button type="button" class="modal-tab active" id="leadTabBtnMain" role="tab" aria-selected="true">Данные лида</button>
+                <button type="button" class="modal-tab" id="leadTabBtnOffers" role="tab" aria-selected="false">Офферы <span class="tab-count" id="offerTabCount">0</span></button>
+            </div>
             <div class="modal-body">
+            <div id="leadTabMain">
 
                 <div class="phone-field">
                     <i class="fas fa-phone" aria-hidden="true"></i>
@@ -147,11 +154,30 @@
 
                 <div class="form-section" style="margin-top:18px">
                     <h3>Назначение</h3>
+                    <p class="section-hint">Линия — перед сотрудником: раздача лида идёт только операторам выбранной линии.</p>
                     <div class="form-grid cols-3">
-                        <div class="form-group"><label for="ldSource">Источник</label><select id="ldSource"><option value="">— не выбран —</option></select></div>
+                        <div class="form-group"><label for="ldSource">Источник <span class="req">*</span></label><select id="ldSource"><option value="">— не выбран —</option></select></div>
+                        <div class="form-group"><label for="ldLine">Линия <span class="req">*</span></label><select id="ldLine"><option value="">— не выбрана —</option><option>Входящая</option><option>Исходящая</option></select></div>
                         <div class="form-group"><label for="ldEmployee">Сотрудник</label><select id="ldEmployee"><option value="">— не назначен —</option></select></div>
-                        <div class="form-group"><label for="ldOffer">Оффер</label><select id="ldOffer"><option value="">— не выбран —</option></select></div>
-                        <div class="form-group span-3"><label for="ldFunnelStatus">Статус воронки</label><select id="ldFunnelStatus"></select></div>
+                        <div class="form-group"><label for="ldFunnelStatus">Текущий статус воронки</label><select id="ldFunnelStatus"></select></div>
+                    </div>
+                    <p class="section-hint" style="margin:10px 0 0">Офферы лида — на вкладке «Офферы» (обязателен минимум один).</p>
+                </div>
+
+                <div class="form-section">
+                    <h3>Скрипт звонка</h3>
+                    <p class="section-hint">Оператор увидит основной скрипт, пока текущий статус лида входит в выбранные; на статусах этапов 5–6 — скрипт для повторных.</p>
+                    <div class="form-grid" style="align-items:start">
+                        <div class="form-group"><label for="ldScript">Скрипт <span class="req">*</span></label><select id="ldScript"></select></div>
+                        <div class="form-group">
+                            <label>Статусы показа скрипта <span class="req">*</span></label>
+                            <div class="pick-list" id="ldStatusPick"></div>
+                        </div>
+                        <div class="form-group" id="ldRepeatWrap" hidden>
+                            <label for="ldRepeatScript">Скрипт для повторных <span class="req">*</span></label>
+                            <select id="ldRepeatScript"></select>
+                            <span class="cond-hint">Обязателен: среди статусов показа есть этапы 5–6</span>
+                        </div>
                     </div>
                 </div>
 
@@ -205,6 +231,34 @@
                 </div>
 
             </div>
+
+            <!-- Вкладка «Офферы»: фильтры + серверный поиск по базе ≈38 000 -->
+            <div id="leadTabOffers" hidden>
+                <div class="form-grid cols-3" style="margin-bottom:14px">
+                    <div class="form-group"><label for="ofltRoot">Корневой источник</label><select id="ofltRoot"><option value="">Все</option></select></div>
+                    <div class="form-group"><label for="ofltPlat">Площадка</label><select id="ofltPlat"><option value="">Все</option></select></div>
+                    <div class="form-group"><label for="ofltGeo">Регион / город</label><select id="ofltGeo"><option value="">Все</option></select></div>
+                </div>
+                <div class="form-group">
+                    <label for="offerSearchInput">Поиск по базе офферов <span class="req">*</span></label>
+                    <input type="text" id="offerSearchInput" placeholder="Начните вводить название ЖК или оффера…" autocomplete="off">
+                </div>
+                <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
+                    <div class="offer-search-hint" id="offerSearchHint">Значения фильтров подтягиваются из базы источников. Фильтры работают и без текста поиска.</div>
+                    <button type="button" class="btn btn-ghost btn-sm" id="ofltResetBtn" style="margin-top:10px; flex-shrink:0;">Сбросить фильтры</button>
+                </div>
+                <div class="offer-results" id="offerResults" hidden></div>
+                <div class="form-section" style="margin-top:20px">
+                    <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; border-bottom:1px solid var(--line); margin-bottom:12px; padding-bottom:7px;">
+                        <h3 style="border:none; margin:0; padding:0;">Выбранные офферы (<span id="offerSelCount">0</span>)</h3>
+                        <button type="button" class="btn btn-ghost btn-sm" id="offerClearAllBtn" hidden>Убрать все</button>
+                    </div>
+                    <div class="param-tags" id="offerSelTags"></div>
+                    <div class="pick-empty" id="offerSelEmpty">Пока не выбран ни один оффер — обязателен минимум один.</div>
+                </div>
+            </div>
+
+            </div>
             <div class="modal-actions">
                 <button type="button" class="btn btn-secondary" id="leadModalCancel">Отмена</button>
                 <button type="button" class="btn btn-primary" id="leadModalSave">Сохранить</button>
@@ -214,26 +268,46 @@
 
     <!-- Модалка массовой загрузки базы -->
     <div class="modal-overlay" id="uploadModal" hidden>
-        <div class="modal-content">
+        <div class="modal-content wide">
             <div class="modal-header">
-                <div><h2>Загрузить базу</h2><p class="modal-sub">Excel или CSV — каждая строка станет лидом</p></div>
+                <div><h2>Загрузить базу</h2><p class="modal-sub">Excel или CSV — каждая строка станет лидом. Один набор параметров на всю партию</p></div>
                 <button type="button" class="modal-close" id="uploadModalClose"><i class="fas fa-xmark" aria-hidden="true"></i></button>
             </div>
             <div class="modal-body">
-                <div class="form-group" style="margin-bottom:14px">
-                    <label for="upSource">Источник для всей партии *</label>
-                    <select id="upSource"><option value="">— выберите источник —</option></select>
-                </div>
-                <div class="form-group">
-                    <label>Файл (.xlsx / .xls / .csv) *</label>
-                    <div class="file-upload-area">
-                        <i class="fas fa-upload" aria-hidden="true"></i>
-                        <span class="file-name" id="upFileName"></span>
-                        <button type="button" class="btn btn-secondary btn-sm" id="upFileTrigger">Выбрать файл</button>
-                        <input type="file" id="upFileInput" class="hidden-file-input" accept=".xlsx,.xls,.csv">
+                <div class="form-grid">
+                    <div class="form-group"><label for="upSource">Источник <span class="req">*</span></label><select id="upSource"><option value="">— выберите источник —</option></select></div>
+                    <div class="form-group"><label for="upLine">Линия <span class="req">*</span></label><select id="upLine"><option value="">— не выбрана —</option><option>Входящая</option><option>Исходящая</option></select></div>
+                    <div class="form-group" style="align-self:start"><label for="upScript">Скрипт <span class="req">*</span></label><select id="upScript"></select></div>
+                    <div class="form-group" style="align-self:start">
+                        <label>Статусы показа скрипта <span class="req">*</span></label>
+                        <div class="pick-list" id="upStatusPick"></div>
+                    </div>
+                    <div class="form-group" id="upRepeatWrap" hidden style="align-self:start">
+                        <label for="upRepeatScript">Скрипт для повторных <span class="req">*</span></label>
+                        <select id="upRepeatScript"></select>
+                        <span class="cond-hint">Обязателен: среди статусов показа есть этапы 5–6</span>
+                    </div>
+                    <div class="form-group span-2">
+                        <label>Офферы <span class="req">*</span></label>
+                        <div class="pick-search" id="upOfferPick"></div>
+                        <span class="cond-hint" style="color:var(--ink-faint)">Живой поиск по базе офферов: начните вводить, выберите из списка.</span>
+                    </div>
+                    <div class="form-group span-2">
+                        <label>Сотрудники — пул раздачи</label>
+                        <div class="pick-list" id="upPoolPick"></div>
+                        <span class="cond-hint" style="color:var(--ink-faint)">В списке — только сотрудники выбранной линии. Пусто — партия раздаётся всем подходящим по линии.</span>
+                    </div>
+                    <div class="form-group span-2">
+                        <label>Файл (.xlsx / .xls / .csv) <span class="req">*</span></label>
+                        <div class="file-upload-area">
+                            <i class="fas fa-upload" aria-hidden="true"></i>
+                            <span class="file-name" id="upFileName"></span>
+                            <button type="button" class="btn btn-secondary btn-sm" id="upFileTrigger">Выбрать файл</button>
+                            <input type="file" id="upFileInput" class="hidden-file-input" accept=".xlsx,.xls,.csv">
+                        </div>
                     </div>
                 </div>
-                <p style="font-size:12px;color:var(--ink-soft);margin-top:10px">Первая строка файла — заголовок (пропускается). Колонки читаются по порядку: Фамилия, Имя, Отчество, Телефон — обязателен только телефон. Всем загруженным лидам присваивается статус «Новый» и выбранный источник, оператор пока не назначается — распределение по свободным операторам «на линии» запускается автоматически сразу после загрузки.</p>
+                <p style="font-size:12px;color:var(--ink-soft);margin-top:10px">Первая строка файла — заголовок (пропускается). Колонки читаются по порядку: Фамилия, Имя, Отчество, Телефон — обязателен только телефон. Всем лидам партии присваиваются статус «Новый», выбранные источник, линия, скрипты, офферы и статусы показа. Распределение запускается сразу после загрузки: по очереди, только операторам линии партии со включённым «На линии»; если задан пул — только между выбранными.</p>
 
                 <dl class="upload-summary" id="uploadSummary" hidden>
                     <div class="upload-stat"><dt>Загружено</dt><dd id="upTotal">0</dd></div>
@@ -271,10 +345,14 @@
             <option value="">Выберите действие</option>
             <option value="employee">Сменить оператора</option>
             <option value="status">Сменить статус</option>
+            <option value="script">Сменить скрипт</option>
+            <option value="repeatScript">Сменить скрипт для повторных</option>
             <option value="delete">Удалить</option>
         </select>
         <select id="massEmployeeSelect" hidden><option value="">— не назначен —</option></select>
         <select id="massStatusSelect" hidden></select>
+        <select id="massScriptSelect" hidden></select>
+        <select id="massRepeatScriptSelect" hidden></select>
         <button type="button" class="btn btn-primary btn-sm" id="massApplyBtn">Применить</button>
         <button type="button" class="mass-clear-btn" id="massClearBtn" aria-label="Сбросить выделение" title="Сбросить выделение"><i class="fas fa-xmark" aria-hidden="true"></i></button>
     </div>

@@ -62,23 +62,6 @@ export function deleteScriptNode(nodeId) {
     return request(`/admin/script-nodes/${nodeId}`, { method: 'DELETE' });
 }
 
-// Список сотрудников для формы назначения — переиспользует прод-эндпоинт
-// GET /api/employees (он теперь отдаёт scriptIds — массив id — в каждой записи).
-export function fetchEmployees() {
-    return request('/employees');
-}
-
-// Многие-ко-многим (employee_scripts) — добавить/снять ОДНУ конкретную связь,
-// не затрагивая остальные скрипты этого оператора.
-export function addScriptToEmployee(employeeId, scriptId) {
-    return request(`/admin/employees/${employeeId}/scripts`, {
-        method: 'POST',
-        body: JSON.stringify({ scriptId })
-    });
-}
-
-export function removeScriptFromEmployee(employeeId, scriptId) {
-    return request(`/admin/employees/${employeeId}/scripts/${scriptId}`, {
-        method: 'DELETE'
-    });
-}
+// Здесь были fetchEmployees / addScriptToEmployee / removeScriptFromEmployee —
+// удалены вместе с панелью назначения операторов (13.08.2026). Скрипт теперь
+// привязывается к лиду на странице «Лиды», а не к оператору здесь.

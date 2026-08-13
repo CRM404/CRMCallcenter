@@ -78,10 +78,15 @@ CREATE TABLE IF NOT EXISTS offers (
 -- прогоняет schema.sql при каждом старте сервера).
 ALTER TABLE scripts ADD COLUMN IF NOT EXISTS status VARCHAR NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'active'));
 
--- Назначение скрипта оператору — простая ссылка на employees (не таблица-связка):
--- у сотрудника ровно один script_id, а на один scripts.id может ссылаться много
--- сотрудников — этого достаточно для "1 скрипт : много операторов".
-ALTER TABLE employees ADD COLUMN IF NOT EXISTS script_id INTEGER REFERENCES scripts(id) ON DELETE SET NULL;
+-- УСТАРЕЛО (13.08.2026): здесь была колонка employees.script_id — назначение
+-- скрипта оператору, позже вытесненная таблицей-связкой employee_scripts (её
+-- CREATE и миграция стояли ниже по файлу). Обе убраны вместе с самой идеей
+-- ручной привязки операторов к скриптам: скрипт теперь принадлежит ЛИДУ
+-- (leads.script_id / leads.repeat_script_id, см. конец файла). Сам ADD COLUMN
+-- удалён, а не оставлен "на всякий случай": migrate.js гоняет schema.sql при
+-- каждом старте, поэтому колонка пересоздавалась бы пустой на каждом рестарте,
+-- а дропающего её DO-блока в файле больше нет. Явный DROP COLUMN — в финальной
+-- секции файла.
 
 CREATE TABLE IF NOT EXISTS script_nodes (
     id SERIAL PRIMARY KEY,
@@ -234,9 +239,11 @@ INSERT INTO lead_funnel_statuses (stage_number, stage_name, status_name, sort_or
 (0, 'Новый', 'Новый', 1)
 ON CONFLICT (stage_number, status_name) DO NOTHING;
 
--- offer_id у лида — для подбора скрипта по паре (оффер, статус). Заполняется
--- будущей загрузкой базы лидов; на этой итерации может быть NULL у старых лидов.
-ALTER TABLE leads ADD COLUMN IF NOT EXISTS offer_id INTEGER REFERENCES offers(id) ON DELETE SET NULL;
+-- УСТАРЕЛО (13.08.2026): здесь заводилась leads.offer_id (один оффер на лида).
+-- У лида теперь несколько офферов — связка lead_offers в конце файла, куда
+-- старое значение и переносится. ADD COLUMN удалён по той же причине, что и
+-- employees.script_id выше: иначе колонка воскресала бы пустой на каждом
+-- старте сервера и снова дропалась в конце файла — бесконечный цикл.
 
 -- УСТАРЕЛО (куратор, 10.08.2026): здесь раньше стояла принудительная привязка
 -- скрипта к паре (оффер, статус воронки) — offer_id/funnel_status_id NOT NULL +
@@ -252,45 +259,24 @@ ALTER TABLE leads ADD COLUMN IF NOT EXISTS offer_id INTEGER REFERENCES offers(id
 -- (воспроизведено и на бою, и локально: error 23502, "column offer_id of
 -- relation scripts contains null values").
 
--- Один оператор может работать сразу с несколькими скриптами (разными линиями:
--- кто-то только новые, кто-то только повторные) — раньше было employees.script_id
--- (ровно один скрипт на оператора), теперь связка. Паттерн — как у уже
--- существующей knowledge_article_visibility (составной PK).
-CREATE TABLE IF NOT EXISTS employee_scripts (
-    employee_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
-    script_id INTEGER NOT NULL REFERENCES scripts(id) ON DELETE CASCADE,
-    PRIMARY KEY (employee_id, script_id)
-);
-
--- Перенос существующих назначений до дропа колонки. ВАЖНО (проверено эмпирически
--- на локальной dev-БД, см. dialog.md раунд про идемпотентность): голый
--- "INSERT ... SELECT script_id FROM employees ... ; ALTER TABLE employees DROP
--- COLUMN script_id;" НЕ идемпотентен, если написать его как два обычных
--- топ-уровневых стейтмента — на ПЕРВОМ прогоне после старта всё отрабатывает,
--- но колонка правда исчезает, а на ВТОРОМ и последующих прогонах (сервер
--- перезапускается, migrate.js гоняет этот файл заново) сам SELECT ... script_id
--- падает с ошибкой "column does not exist" ещё на этапе разбора запроса —
--- ошибка внутри multi-statement пакета обрывает весь прогон миграции и роняет
--- старт сервера НАВСЕГДА после первого успешного деплоя. IF NOT EXISTS на самом
--- DROP COLUMN тут не спасает, т.к. падает более ранний SELECT, а не DROP.
--- Решение: обернуть перенос+дроп в DO-блок с динамическим EXECUTE — тогда текст
--- с SELECT ... script_id лежит внутри строкового литерала и не разбирается
--- парсером заранее, а выполняется только когда IF подтвердил, что колонка
--- реально существует (проверено: второй прогон блока — чистый no-op, без ошибок).
-DO $$
-BEGIN
-    IF EXISTS (
-        SELECT 1 FROM information_schema.columns
-        WHERE table_name = 'employees' AND column_name = 'script_id'
-    ) THEN
-        EXECUTE '
-            INSERT INTO employee_scripts (employee_id, script_id)
-            SELECT id, script_id FROM employees WHERE script_id IS NOT NULL
-            ON CONFLICT DO NOTHING
-        ';
-        EXECUTE 'ALTER TABLE employees DROP COLUMN script_id';
-    END IF;
-END $$;
+-- УСТАРЕЛО (13.08.2026): здесь стояла таблица-связка employee_scripts
+-- (оператор ↔ скрипты, многие-ко-многим) и DO-блок, переносивший в неё старую
+-- employees.script_id. Ручная привязка операторов к скриптам отменена целиком —
+-- скрипт принадлежит лиду. Таблица дропается в финальной секции файла; и CREATE,
+-- и блок переноса удалены отсюда, иначе таблица пересоздавалась бы на каждом
+-- старте сервера сразу после собственного DROP.
+--
+-- Приём с DO + EXECUTE, который был в удалённом блоке, никуда не делся — он
+-- переиспользован для миграции leads.offer_id → lead_offers (конец файла).
+-- Причина, по которой он обязателен, тоже прежняя и проверена на бою: голый
+-- "INSERT ... SELECT <колонка> ...; ALTER TABLE ... DROP COLUMN <колонка>;"
+-- двумя обычными стейтментами НЕ идемпотентен. Первый прогон отрабатывает и
+-- колонку убирает, а на втором (migrate.js гоняет schema.sql при каждом старте)
+-- SELECT по уже несуществующей колонке падает "column does not exist", ошибка
+-- обрывает весь multi-statement пакет и сервер не поднимается НИКОГДА после
+-- первого успешного деплоя. IF NOT EXISTS на DROP не спасает — падает более
+-- ранний SELECT. Внутри EXECUTE текст запроса лежит строковым литералом, не
+-- разбирается заранее и выполняется только под проверкой information_schema.
 
 -- Организация (юрлицо владельца CRM) — справочные данные для будущей генерации
 -- документов. Обычная таблица (не singleton) — на этой итерации фронт работает
@@ -572,25 +558,10 @@ ALTER TABLE scripts DROP CONSTRAINT IF EXISTS scripts_offer_status_unique;
 ALTER TABLE scripts DROP COLUMN IF EXISTS offer_id;
 ALTER TABLE scripts DROP COLUMN IF EXISTS funnel_status_id;
 
--- ============================================================
--- leads.offer_id: перецепить с заглушки offers на реальные офферы
--- CPA-сети (владелец, 09.08.2026)
--- ============================================================
-
--- Было offer_id -> offers(id) (заглушка id+name, заведена только под подбор
--- скрипта по паре оффер+статус — та привязка убирается отдельной задачей).
--- Смыслово лид приходит по конкретному объявлению CPA-сети — это
--- real_estate_offers (ставка/гео/цена и т.п.), не двухколоночная заглушка.
--- Заодно снимает путаницу: во всех остальных местах схемы (сегменты/гео/
--- способы оплаты/ипотеки) offer_id уже означает real_estate_offers.id —
--- теперь это верно и для leads.offer_id, единообразно по всей схеме.
--- ON DELETE SET NULL сохраняю как было — удаление оффера не должно ронять
--- лида, только снимать привязку. leads.offer_id сейчас практически всегда
--- NULL (массовой загрузки базы лидов ещё не было) — конфликтов по данным
--- при пересоздании constraint не ожидается.
-ALTER TABLE leads DROP CONSTRAINT IF EXISTS leads_offer_id_fkey;
-ALTER TABLE leads ADD CONSTRAINT leads_offer_id_fkey
-    FOREIGN KEY (offer_id) REFERENCES real_estate_offers(id) ON DELETE SET NULL;
+-- УСТАРЕЛО (13.08.2026): здесь FK leads.offer_id перецеплялся с заглушки
+-- offers на real_estate_offers. Сама колонка ниже заменяется связкой
+-- lead_offers (у лида несколько офферов), поэтому пересоздавать FK на каждом
+-- старте больше не на что — блок удалён вместе с ADD COLUMN выше.
 
 -- ============================================================
 -- Источники (report_2026-08-01.md, 11.08.2026) — новая страница «Источники»
@@ -669,3 +640,84 @@ ALTER TABLE leads DROP COLUMN IF EXISTS source;
 -- NULL, когда сотрудник не на линии.
 ALTER TABLE employees ADD COLUMN IF NOT EXISTS on_line BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE employees ADD COLUMN IF NOT EXISTS on_line_since TIMESTAMP;
+
+-- ============================================================
+-- Скрипты: привязка к лиду, раздача по линии
+-- (report_2026-08-01.md, 13.08.2026)
+-- ============================================================
+
+-- Линия лида и два скрипта: основной и «для повторных» (этапы воронки 5–6).
+-- line_type без DB CHECK — валидация на API (routes/leadsAdmin.js), тот же
+-- приём, что уже принят для ad_platforms.status и sources.lead_source.
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS line_type VARCHAR;
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS script_id INTEGER REFERENCES scripts(id) ON DELETE SET NULL;
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS repeat_script_id INTEGER REFERENCES scripts(id) ON DELETE SET NULL;
+
+-- Три связки лида. Все — паттерн «пересборка целиком при каждом POST/PUT»
+-- (как real_estate_offer_segments): отдельных CRUD-ручек на строку нет.
+
+-- У лида несколько офферов (решение владельца п.4).
+CREATE TABLE IF NOT EXISTS lead_offers (
+    lead_id INTEGER NOT NULL REFERENCES leads(id) ON DELETE CASCADE,
+    offer_id INTEGER NOT NULL REFERENCES real_estate_offers(id) ON DELETE CASCADE,
+    PRIMARY KEY (lead_id, offer_id)
+);
+
+-- Правило «при каких статусах воронки показывать основной скрипт». Это НЕ
+-- текущий статус лида — тот один и лежит в leads.funnel_status_id.
+CREATE TABLE IF NOT EXISTS lead_script_statuses (
+    lead_id INTEGER NOT NULL REFERENCES leads(id) ON DELETE CASCADE,
+    funnel_status_id INTEGER NOT NULL REFERENCES lead_funnel_statuses(id) ON DELETE CASCADE,
+    PRIMARY KEY (lead_id, funnel_status_id)
+);
+
+-- Пул раздачи: есть строки — лид уходит только этим сотрудникам (и только
+-- своей линии), пусто — всем подходящим по линии.
+CREATE TABLE IF NOT EXISTS lead_distribution_pool (
+    lead_id INTEGER NOT NULL REFERENCES leads(id) ON DELETE CASCADE,
+    employee_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+    PRIMARY KEY (lead_id, employee_id)
+);
+
+-- Перенос единственного оффера лида в связку + дроп колонки. DO + EXECUTE
+-- здесь обязателен, а не «для красоты»: подробный разбор — в комментарии выше
+-- по файлу (там, где раньше стояла employee_scripts). Двумя обычными
+-- стейтментами этот перенос роняет сервер на втором старте после деплоя.
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'leads' AND column_name = 'offer_id'
+    ) THEN
+        EXECUTE '
+            INSERT INTO lead_offers (lead_id, offer_id)
+            SELECT id, offer_id FROM leads WHERE offer_id IS NOT NULL
+            ON CONFLICT DO NOTHING
+        ';
+        EXECUTE 'ALTER TABLE leads DROP COLUMN offer_id';
+    END IF;
+END $$;
+
+-- Ручная привязка операторов к скриптам отменена: сначала колонка, потом
+-- сменившая её таблица. Оба стейтмента идемпотентны сами по себе — DO-блок не
+-- нужен, здесь ничего не читается, только дропается.
+ALTER TABLE employees DROP COLUMN IF EXISTS script_id;
+DROP TABLE IF EXISTS employee_scripts;
+
+-- employees.line_type становится фиксированным списком Входящая/Исходящая
+-- (решение владельца п.9). Сначала подтягиваем близкие написания (лишние
+-- пробелы, другой регистр) к каноническим и только потом чистим в NULL
+-- действительно чужое: голое затирание по точному сравнению съело бы заодно
+-- и «входящая», и « Исходящая » (dialog.md, H1).
+UPDATE employees SET line_type = 'Входящая'
+    WHERE line_type IS NOT NULL AND lower(btrim(line_type)) = lower('Входящая') AND line_type <> 'Входящая';
+UPDATE employees SET line_type = 'Исходящая'
+    WHERE line_type IS NOT NULL AND lower(btrim(line_type)) = lower('Исходящая') AND line_type <> 'Исходящая';
+UPDATE employees SET line_type = NULL
+    WHERE line_type IS NOT NULL AND line_type NOT IN ('Входящая', 'Исходящая');
+
+-- TODO (за владельцем, dialog.md A5): таблица-заглушка offers (id+name,
+-- объявлена в начале файла) осталась без единой ссылки — leads.offer_id
+-- переехал в lead_offers, эндпоинты /api/admin/offers удалены. Куратор был за
+-- DROP TABLE с проверкой пустоты, дизайн-сессия — за «не трогать в этой
+-- задаче». До решения владельца таблица остаётся как есть.

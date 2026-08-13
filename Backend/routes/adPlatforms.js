@@ -48,8 +48,9 @@ function validateBody(body) {
 
 // GET /api/ad-platforms — список, отсортирован по id. sourcesCount — нужен
 // фронту и для пилюли-счётчика на табе площадки, и чтобы заранее (до клика)
-// знать, можно ли показывать кнопку удаления активной (паттерн 1:1 с
-// assignedCount в routes/scriptsAdmin.js).
+// знать, можно ли показывать кнопку удаления активной. (Раньше здесь стояла
+// ссылка на assignedCount из routes/scriptsAdmin.js как на такой же паттерн —
+// то поле удалено вместе с привязкой операторов к скриптам.)
 router.get('/', async (req, res) => {
     try {
         const result = await pool.query(

@@ -3,43 +3,81 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>CRM – Управление скриптом звонка</title>
+    <title>CRM – Скрипты</title>
     <link rel="stylesheet" href="./css/scripts-admin-light.css" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" integrity="sha512-Fo3rlrZj/k7ujTnHg4CGR2D7kSs0v4LLanw2qksYuRlEzO+tcaEPQogQ0KaoGN26/zrn20ImR1DfuLWnOo7aBA==" crossorigin="anonymous" referrerpolicy="no-referrer">
 </head>
 <body>
-    <div class="container">
-        <div>
-            <h1>Управление скриптом звонка</h1>
-        </div>
+    <div id="toastContainer"></div>
 
-        <section>
-            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
-                <h2 style="margin:0;">Скрипты</h2>
-                <button type="button" class="btn btn-primary btn-sm" id="saNewScriptBtn">+ Новый скрипт</button>
-            </div>
-            <div id="saScriptListWrap">
-                <div id="saScriptList"></div>
-            </div>
-            <div class="sa-panel" id="saScriptFormPanel" hidden></div>
-        </section>
+    <div class="hub-shell">
+        <nav class="hub-nav" id="hubNav"></nav>
 
-        <section id="saNodesSection" class="sa-nodes-section">
-            <div style="display:flex; justify-content:flex-end; margin-bottom:12px;">
-                <button type="button" class="btn btn-secondary btn-sm" id="saHideNodesBtn">Скрыть</button>
+        <main class="hub-main">
+            <div class="canvas">
+
+                <div class="identity-strip">
+                    <div class="identity-copy">
+                        <div class="eyebrow">CRM · Скрипты звонков</div>
+                        <h1>Скрипты</h1>
+                        <p>Сценарии разговора для операторов: основной текст и ответы на возражения. К лиду скрипт привязывается на странице «Лиды» — здесь только содержимое и статус.</p>
+                    </div>
+                    <dl class="stat-chips">
+                        <div class="stat-chip"><dt>Всего</dt><dd id="saStatTotal">0</dd></div>
+                        <div class="stat-chip ok"><dt>Активных</dt><dd id="saStatActive">0</dd></div>
+                        <div class="stat-chip draft"><dt>Черновиков</dt><dd id="saStatDraft">0</dd></div>
+                    </dl>
+                    <button type="button" class="btn btn-primary" id="saNewScriptBtn"><i class="fas fa-plus" aria-hidden="true"></i>Новый скрипт</button>
+                </div>
+
+                <div class="table-card" id="saScriptListWrap">
+                    <div class="table-scroll" id="saScriptList"></div>
+                </div>
+
+                <!-- Инлайн-создание вместо списка: единственное поле — название,
+                     после создания скрипт сразу открывается на наполнение -->
+                <div class="panel-card" id="saCreatePanel" hidden>
+                    <h3>Новый скрипт</h3>
+                    <div class="opened-head">
+                        <div class="form-group">
+                            <label for="saNewTitle">Название</label>
+                            <input type="text" id="saNewTitle" placeholder="Например: Первичный обзвон — новостройки">
+                        </div>
+                        <div class="opened-head-actions">
+                            <button type="button" class="btn btn-primary btn-sm" id="saCreateBtn">Создать</button>
+                            <button type="button" class="btn btn-ghost btn-sm" id="saCreateCancelBtn">Отмена</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Открытый скрипт: шапка (название/статус) → основной текст → возражения -->
+                <section id="saOpenedSection" hidden>
+                    <div class="panel-card">
+                        <div class="opened-head">
+                            <div class="form-group">
+                                <label for="saMetaTitle">Название</label>
+                                <input type="text" id="saMetaTitle" aria-label="Название скрипта">
+                            </div>
+                            <div class="opened-head-actions">
+                                <span class="status-chip" id="saOpenStatusChip">—</span>
+                                <button type="button" class="btn btn-primary btn-sm" id="saMetaSaveBtn">Сохранить</button>
+                                <button type="button" class="btn btn-ghost btn-sm" id="saHideNodesBtn">Скрыть</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="saNodesPanel"></div>
+                </section>
+
             </div>
-            <div class="sa-panel" id="saNodesMetaPanel"></div>
-            <div class="sa-panel" id="saNodesPanel" style="margin-top:24px;"></div>
-            <div class="sa-panel" id="saAssignmentPanel" style="margin-top:24px;"></div>
-        </section>
+        </main>
     </div>
 
-    <!-- Общая модалка подтверждения (удаление скрипта/узла) -->
+    <!-- Общая модалка подтверждения: удаление скрипта/возражения, смена статуса -->
     <div class="modal-overlay" id="confirmModal" hidden>
         <div class="modal-content">
             <div class="modal-header">
                 <h2>Подтверждение</h2>
-                <button type="button" class="modal-close" id="confirmModalCloseBtn">&times;</button>
+                <button type="button" class="modal-close" id="confirmModalCloseBtn"><i class="fas fa-xmark" aria-hidden="true"></i></button>
             </div>
             <p id="confirmModalMessage"></p>
             <div class="modal-actions">
@@ -48,24 +86,6 @@
             </div>
         </div>
     </div>
-
-    <!-- Модалка выбора при назначении оператора, у которого уже есть другой скрипт -->
-    <div class="modal-overlay" id="reassignModal" hidden>
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2>У оператора уже есть скрипт</h2>
-                <button type="button" class="modal-close" id="reassignModalCloseBtn">&times;</button>
-            </div>
-            <p id="reassignModalMessage"></p>
-            <div class="modal-actions">
-                <button type="button" class="btn btn-secondary" id="reassignModalCancelBtn">Отмена</button>
-                <button type="button" class="btn btn-secondary" id="reassignModalReplaceBtn">Переназначить</button>
-                <button type="button" class="btn btn-primary" id="reassignModalAddBtn">Добавить ещё</button>
-            </div>
-        </div>
-    </div>
-
-    <div id="toastContainer"></div>
 
     <script type="module" src="./js/modules/scriptsAdminApp.js"></script>
 </body>

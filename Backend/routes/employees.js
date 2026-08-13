@@ -8,6 +8,10 @@ const router = express.Router();
 
 const REQUIRED_FIELDS = ['lastName', 'firstName', 'email', 'phone'];
 
+// Линия сотрудника — фиксированный список (тот же, что у лида). Валидация
+// только на уровне API, без DB CHECK — как у ad_platforms.status.
+const LINE_TYPES = ['Входящая', 'Исходящая'];
+
 // Порядок должен совпадать со списком колонок в INSERT/UPDATE ниже.
 const FIELD_COLUMNS = [
     ['lastName', 'last_name'],
@@ -51,7 +55,6 @@ function rowToEmployee(row) {
         department: row.department,
         managerId: row.manager_id,
         managerName: row.manager_name || null,
-        scriptIds: row.script_ids || [],
         hireDate: row.hire_date,
         status: row.status,
         terminationDate: row.termination_date,
@@ -88,8 +91,7 @@ function normalizeValue(key, value) {
 // ответа для POST/PUT (INSERT/UPDATE ... RETURNING * не знает про manager_name).
 async function fetchEmployeeWithManager(id) {
     const result = await pool.query(
-        `SELECT e.*, CASE WHEN m.id IS NOT NULL THEN m.last_name || ' ' || m.first_name ELSE NULL END AS manager_name,
-                COALESCE((SELECT array_agg(es.script_id) FROM employee_scripts es WHERE es.employee_id = e.id), ARRAY[]::integer[]) AS script_ids
+        `SELECT e.*, CASE WHEN m.id IS NOT NULL THEN m.last_name || ' ' || m.first_name ELSE NULL END AS manager_name
          FROM employees e
          LEFT JOIN employees m ON e.manager_id = m.id
          WHERE e.id = $1`,
@@ -105,6 +107,13 @@ function validateRequiredFields(body) {
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.email)) {
         return 'Введите корректный email';
+    }
+    // «Тип линии» стал фиксированным списком (решение владельца п.9): в форме
+    // это select, но эндпоинт может получить запрос и в обход UI. Пустое
+    // значение допустимо — линия у сотрудника необязательна.
+    if (body.lineType !== undefined && body.lineType !== null && String(body.lineType).trim() !== ''
+        && !LINE_TYPES.includes(body.lineType)) {
+        return `Тип линии должен быть одним из: ${LINE_TYPES.join(', ')}`;
     }
     return null;
 }
@@ -172,8 +181,7 @@ router.get('/', async (req, res) => {
 
         const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
         const result = await pool.query(
-            `SELECT e.*, CASE WHEN m.id IS NOT NULL THEN m.last_name || ' ' || m.first_name ELSE NULL END AS manager_name,
-                    COALESCE((SELECT array_agg(es.script_id) FROM employee_scripts es WHERE es.employee_id = e.id), ARRAY[]::integer[]) AS script_ids
+            `SELECT e.*, CASE WHEN m.id IS NOT NULL THEN m.last_name || ' ' || m.first_name ELSE NULL END AS manager_name
              FROM employees e
              LEFT JOIN employees m ON e.manager_id = m.id
              ${whereClause}

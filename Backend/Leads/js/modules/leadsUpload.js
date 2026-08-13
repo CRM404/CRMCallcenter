@@ -1,26 +1,39 @@
-// --- leadsUpload.js: массовая загрузка базы (Excel/CSV), report_2026-08-01.md,
-// п.3, 13.08.2026. Парсинг — на фронте (библиотека SheetJS/xlsx через CDN,
-// см. leads.html), бэку уходит уже готовый JSON. Формат файла — решение
-// куратора (dialog.md, 13.08.2026): первая строка — заголовок (пропускается),
-// дальше колонки читаются по фиксированному порядку (не по тексту заголовка):
-// Фамилия, Имя, Отчество, Телефон. Пустые ФИО допускаются, обязателен только
-// телефон — строки без телефона в партию не попадают вообще.
+// --- leadsUpload.js: массовая загрузка базы (Excel/CSV) ---
+// Парсинг — на фронте (библиотека SheetJS/xlsx через CDN, см. leads.html),
+// бэку уходит уже готовый JSON. Формат файла — решение куратора (dialog.md,
+// 13.08.2026): первая строка — заголовок (пропускается), дальше колонки
+// читаются по фиксированному порядку (не по тексту заголовка): Фамилия, Имя,
+// Отчество, Телефон. Пустые ФИО допускаются, обязателен только телефон —
+// строки без телефона в партию не попадают вообще.
+//
+// Задача «скрипты: привязка к лиду»: к партии добавился весь набор параметров
+// подбора — линия, скрипт, статусы показа, условный скрипт для повторных,
+// офферы и опциональный пул раздачи. Один набор на всю партию.
 
 import { bulkImportLeads } from './leadsStorage.js';
 import { showToast } from './leadsToast.js';
+import { createPickList } from './leadsPickList.js';
+import { createOfferInlinePicker } from './leadsOffers.js';
 
 const $ = (sel) => document.querySelector(sel);
 
+const REPEAT_STAGE_FROM = 5;
+
 let selectedFile = null;
+let statusPick = null;
+let poolPick = null;
+let offerPick = null;
+let allEmployees = [];
+let allStatuses = [];
 
 function escapeHtml(value) {
     if (value === null || value === undefined) return '';
     return String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-function fillSourceSelect(sources) {
-    $('#upSource').innerHTML = '<option value="">— выберите источник —</option>'
-        + sources.map((s) => `<option value="${s.id}">${escapeHtml(s.rootSource)}</option>`).join('');
+function fillSelect(select, items, placeholder) {
+    select.innerHTML = `<option value="">${escapeHtml(placeholder)}</option>`
+        + items.map((i) => `<option value="${i.id}">${escapeHtml(i.name)}</option>`).join('');
 }
 
 // CSV — читаем как текст (File.text() всегда декодирует как UTF-8) и отдаём
@@ -64,14 +77,73 @@ function resetSummary() {
     $('#upDupes').textContent = '0';
 }
 
-export function initUpload({ sources }, onImported) {
-    fillSourceSelect(sources);
+function syncRepeatVisibility() {
+    const chosen = new Set(statusPick.getValues());
+    const needsRepeat = allStatuses.some((s) => chosen.has(s.id) && s.stageNumber >= REPEAT_STAGE_FROM);
+    $('#upRepeatWrap').hidden = !needsRepeat;
+    return needsRepeat;
+}
+
+// Пул раздачи заполняется только после выбора линии и показывает лишь
+// сотрудников этой линии: раздача всё равно идёт только по своей линии,
+// остальные в списке были бы ловушкой.
+function syncPoolByLine() {
+    const line = $('#upLine').value;
+    if (!line) {
+        poolPick.setItems([]);
+        poolPick.setDisabled(true);
+        return;
+    }
+    poolPick.setDisabled(false);
+    poolPick.setItems(
+        allEmployees
+            .filter((e) => e.lineType === line && e.status === 'active')
+            .map((e) => ({ id: e.id, label: `${e.lastName} ${e.firstName}` }))
+    );
+}
+
+function preselectNewStatus() {
+    const newStatus = allStatuses.find((s) => s.stageNumber === 0);
+    statusPick.setValues(newStatus ? [newStatus.id] : []);
+}
+
+export function initUpload({ sources, employees, statuses, scripts }, onImported) {
+    allEmployees = employees;
+    allStatuses = statuses;
+
+    fillSelect($('#upSource'), sources.map((s) => ({ id: s.id, name: s.rootSource })), '— выберите источник —');
+    fillSelect($('#upScript'), scripts.map((s) => ({ id: s.id, name: s.title })), '— не выбран —');
+    fillSelect($('#upRepeatScript'), scripts.map((s) => ({ id: s.id, name: s.title })), '— не выбран —');
+
+    statusPick = createPickList($('#upStatusPick'), {
+        emptyText: 'Ни один статус не выбран — обязателен минимум один.',
+        onChange: syncRepeatVisibility
+    });
+    statusPick.setItems(statuses.map((s) => ({
+        id: s.id, label: s.statusName, stageNumber: s.stageNumber, stageName: s.stageName
+    })));
+
+    // Без emptyText: та же мысль уже сказана в подписи поля под списком —
+    // две одинаковые подсказки подряд читаются как ошибка вёрстки.
+    poolPick = createPickList($('#upPoolPick'));
+    poolPick.setDisabled(true);
+
+    offerPick = createOfferInlinePicker($('#upOfferPick'));
+
+    $('#upLine').addEventListener('change', syncPoolByLine);
 
     $('#uploadBtn').addEventListener('click', () => {
         selectedFile = null;
         $('#upFileName').textContent = '';
         $('#upFileInput').value = '';
         $('#upSource').value = '';
+        $('#upLine').value = '';
+        $('#upScript').value = '';
+        $('#upRepeatScript').value = '';
+        preselectNewStatus();
+        syncRepeatVisibility();
+        syncPoolByLine();
+        offerPick.clear();
         resetSummary();
         $('#uploadModal').hidden = false;
     });
@@ -86,15 +158,27 @@ export function initUpload({ sources }, onImported) {
     });
 
     $('#uploadModalGo').addEventListener('click', async () => {
-        const sourceId = $('#upSource').value;
-        if (!sourceId) {
-            showToast('Выберите источник для партии', 'error');
+        const params = {
+            sourceId: $('#upSource').value,
+            lineType: $('#upLine').value,
+            scriptId: $('#upScript').value,
+            repeatScriptId: $('#upRepeatScript').value || null,
+            scriptStatusIds: statusPick.getValues(),
+            poolEmployeeIds: poolPick.getValues(),
+            offerIds: offerPick.getValues()
+        };
+
+        if (!params.sourceId) { showToast('Выберите источник для партии', 'error'); return; }
+        if (!params.lineType) { showToast('Выберите линию', 'error'); return; }
+        if (!params.scriptId) { showToast('Выберите скрипт', 'error'); return; }
+        if (params.scriptStatusIds.length === 0) { showToast('Выберите хотя бы один статус показа скрипта', 'error'); return; }
+        if (syncRepeatVisibility() && !params.repeatScriptId) {
+            showToast('Среди статусов показа есть этапы 5–6 — укажите скрипт для повторных', 'error');
             return;
         }
-        if (!selectedFile) {
-            showToast('Выберите файл', 'error');
-            return;
-        }
+        if (params.offerIds.length === 0) { showToast('Выберите хотя бы один оффер', 'error'); return; }
+        if (!selectedFile) { showToast('Выберите файл', 'error'); return; }
+
         $('#uploadModalGo').disabled = true;
         try {
             const rows = await parseFile(selectedFile);
@@ -102,7 +186,7 @@ export function initUpload({ sources }, onImported) {
                 showToast('В файле не найдено ни одной строки с номером телефона', 'error');
                 return;
             }
-            const result = await bulkImportLeads(sourceId, rows);
+            const result = await bulkImportLeads({ ...params, rows });
             $('#upTotal').textContent = result.imported;
             $('#upAssigned').textContent = result.distributed;
             $('#upQueued').textContent = result.queued;

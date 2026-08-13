@@ -102,14 +102,32 @@ function sanitizeRichText(html) {
     });
 }
 
+// hasMainText/objectionsCount — подстрока наполненности в списке скриптов
+// («основной текст · N возражений» / «Пока не наполнен»). Считаются одним
+// JOIN в SCRIPT_SELECT ниже, без N+1 запросов с фронта.
 function rowToScript(row) {
     return {
         id: row.id,
         title: row.title,
         status: row.status,
-        assignedCount: row.assigned_count === undefined ? null : Number(row.assigned_count)
+        hasMainText: row.has_main_text === undefined ? null : Boolean(row.has_main_text),
+        objectionsCount: row.objections_count === undefined ? null : Number(row.objections_count)
     };
 }
+
+const SCRIPT_SELECT = `
+    SELECT s.*,
+           COALESCE(n.objections_count, 0) AS objections_count,
+           COALESCE(n.has_main_text, false) AS has_main_text
+    FROM scripts s
+    LEFT JOIN (
+        SELECT script_id,
+               count(*) FILTER (WHERE node_type = 'objection')::int AS objections_count,
+               bool_or(parent_id IS NULL AND node_type = 'statement') AS has_main_text
+        FROM script_nodes
+        GROUP BY script_id
+    ) n ON n.script_id = s.id
+`;
 
 function rowToNode(row) {
     return {
@@ -124,7 +142,7 @@ function rowToNode(row) {
 }
 
 async function fetchScriptById(id) {
-    const result = await pool.query('SELECT * FROM scripts WHERE id = $1', [id]);
+    const result = await pool.query(`${SCRIPT_SELECT} WHERE s.id = $1`, [id]);
     return result.rows[0] || null;
 }
 
@@ -143,14 +161,18 @@ async function isDescendantChain(startNodeId, targetId) {
     return false;
 }
 
-// GET /api/admin/scripts — список всех скриптов (черновики + активные)
+// GET /api/admin/scripts — список скриптов (по умолчанию все: черновики +
+// активные). ?status=active — только активные, под выпадающие списки
+// «Скрипт»/«Скрипт для повторных» на странице «Лиды».
 router.get('/scripts', async (req, res) => {
     try {
-        const result = await pool.query(
-            `SELECT s.*, (SELECT count(*)::int FROM employee_scripts es WHERE es.script_id = s.id) AS assigned_count
-             FROM scripts s
-             ORDER BY s.id`
-        );
+        const { status } = req.query;
+        if (status !== undefined && status !== 'draft' && status !== 'active') {
+            return res.status(400).json({ error: 'Недопустимый статус' });
+        }
+        const result = status
+            ? await pool.query(`${SCRIPT_SELECT} WHERE s.status = $1 ORDER BY s.id`, [status])
+            : await pool.query(`${SCRIPT_SELECT} ORDER BY s.id`);
         res.json(result.rows.map(rowToScript));
     } catch (err) {
         console.error(err);
@@ -213,19 +235,16 @@ router.put('/scripts/:id', async (req, res) => {
 });
 
 // DELETE /api/admin/scripts/:id — удалить скрипт целиком (каскадно удалит узлы).
-// Заблокировано, если скрипт сейчас назначен хотя бы одному оператору
-// (employee_scripts) — статус здесь ни при чём, важно только назначение.
+// Больше ничем не блокируется: прежняя блокировка «назначен операторам» ушла
+// вместе с employee_scripts, а у лидов привязка обнуляется сама
+// (leads.script_id / repeat_script_id — ON DELETE SET NULL). Подтверждено
+// владельцем вместе с макетом.
 router.delete('/scripts/:id', async (req, res) => {
     try {
-        const existing = await pool.query('SELECT id FROM scripts WHERE id = $1', [req.params.id]);
-        if (existing.rows.length === 0) {
+        const result = await pool.query('DELETE FROM scripts WHERE id = $1 RETURNING id', [req.params.id]);
+        if (result.rows.length === 0) {
             return res.status(404).json({ error: 'Скрипт не найден' });
         }
-        const assigned = await pool.query('SELECT count(*)::int AS c FROM employee_scripts WHERE script_id = $1', [req.params.id]);
-        if (assigned.rows[0].c > 0) {
-            return res.status(400).json({ error: 'Скрипт назначен операторам, снимите назначение' });
-        }
-        await pool.query('DELETE FROM scripts WHERE id = $1', [req.params.id]);
         res.status(204).send();
     } catch (err) {
         console.error(err);
@@ -233,77 +252,12 @@ router.delete('/scripts/:id', async (req, res) => {
     }
 });
 
-// GET /api/admin/offers — список офферов (для выпадающего списка)
-router.get('/offers', async (req, res) => {
-    try {
-        const result = await pool.query('SELECT id, name FROM offers ORDER BY name');
-        res.json(result.rows.map((r) => ({ id: r.id, name: r.name })));
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: 'Не удалось получить список офферов' });
-    }
-});
-
-// POST /api/admin/offers — создать оффер (справочник совсем новый и пустой)
-router.post('/offers', async (req, res) => {
-    try {
-        const { name } = req.body;
-        if (!name || !String(name).trim()) {
-            return res.status(400).json({ error: 'Укажите название оффера' });
-        }
-        const result = await pool.query('INSERT INTO offers (name) VALUES ($1) RETURNING id, name', [name.trim()]);
-        res.status(201).json({ id: result.rows[0].id, name: result.rows[0].name });
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: 'Не удалось создать оффер' });
-    }
-});
-
-// POST /api/admin/employees/:employeeId/scripts — добавить связь оператор↔скрипт
-// (многие-ко-многим, employee_scripts). Ограничение "нельзя назначить черновик"
-// убрано (решение владельца, 2026-08-05) — операторов теперь назначают до
-// активации скрипта. Повторное добавление уже существующей связи — no-op.
-router.post('/employees/:employeeId/scripts', async (req, res) => {
-    try {
-        const { scriptId } = req.body;
-        if (!scriptId) {
-            return res.status(400).json({ error: 'Не передан scriptId' });
-        }
-        const employee = await pool.query('SELECT id FROM employees WHERE id = $1', [req.params.employeeId]);
-        if (employee.rows.length === 0) {
-            return res.status(404).json({ error: 'Сотрудник не найден' });
-        }
-        const script = await pool.query('SELECT id FROM scripts WHERE id = $1', [scriptId]);
-        if (script.rows.length === 0) {
-            return res.status(400).json({ error: 'Скрипт не найден' });
-        }
-        await pool.query(
-            'INSERT INTO employee_scripts (employee_id, script_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
-            [req.params.employeeId, scriptId]
-        );
-        res.status(201).json({ employeeId: Number(req.params.employeeId), scriptId: Number(scriptId) });
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: 'Не удалось назначить скрипт' });
-    }
-});
-
-// DELETE /api/admin/employees/:employeeId/scripts/:scriptId — снять одну конкретную связь.
-router.delete('/employees/:employeeId/scripts/:scriptId', async (req, res) => {
-    try {
-        const result = await pool.query(
-            'DELETE FROM employee_scripts WHERE employee_id = $1 AND script_id = $2 RETURNING employee_id',
-            [req.params.employeeId, req.params.scriptId]
-        );
-        if (result.rows.length === 0) {
-            return res.status(404).json({ error: 'Назначение не найдено' });
-        }
-        res.status(204).send();
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: 'Не удалось снять назначение' });
-    }
-});
+// Здесь были GET/POST /api/admin/offers (таблица-заглушка offers) и
+// POST/DELETE /api/admin/employees/:employeeId/scripts (привязка операторов к
+// скриптам через employee_scripts). Все четыре удалены 13.08.2026: привязка
+// операторов отменена целиком — скрипт назначается лиду на странице «Лиды», а
+// эндпоинты офферов-заглушек фронт не вызывал уже давно (реальные офферы живут
+// в routes/realEstateOffers.js).
 
 // GET /api/admin/scripts/:id/nodes — плоский список узлов скрипта (дерево строит фронт)
 router.get('/scripts/:id/nodes', async (req, res) => {

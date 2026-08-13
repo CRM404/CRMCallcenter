@@ -51,10 +51,13 @@ function rowToLead(row) {
         firstName: row.first_name,
         middleName: row.middle_name,
         phone: row.phone,
-        source: row.source,
+        // source и offerId убраны 13.08.2026: обе колонки в leads больше не
+        // существуют (source заменён на source_id ещё задачей «Лиды»,
+        // offer_id заменён связкой lead_offers этой задачей), поэтому оба
+        // поля всегда отдавали undefined. Форма оператора их не показывает и
+        // не редактирует — EDITABLE_FIELD_COLUMNS их не содержит.
         employeeId: row.employee_id,
         funnelStatusId: row.funnel_status_id,
-        offerId: row.offer_id,
         propertyType: row.property_type,
         propertyClass: row.property_class,
         roomCount: row.room_count,

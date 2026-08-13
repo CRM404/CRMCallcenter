@@ -10,7 +10,7 @@ const NAV_ITEMS = [
     { key: 'employees', label: 'Сотрудники', icon: 'fa-users', href: '/emploees.html' },
     { key: 'cpa', label: 'CPA-сети', icon: 'fa-handshake', href: '/cpa-networks.html' },
     { key: 'operator', label: 'Оператор', icon: 'fa-headset', href: '/operator-login.html' },
-    { key: 'scripts', label: 'Управление скриптом', icon: 'fa-diagram-project', href: '/scripts-admin.html' },
+    { key: 'scripts', label: 'Скрипты', icon: 'fa-diagram-project', href: '/scripts-admin.html' },
     { key: 'sources', label: 'Источники', icon: 'fa-tower-broadcast', href: '/sources.html' },
     { key: 'leads', label: 'Лиды', icon: 'fa-address-card', href: '/leads.html' }
 ];
