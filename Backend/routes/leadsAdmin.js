@@ -31,9 +31,14 @@ const FIELD_COLUMNS = [
     ['funnelStatusId', 'funnel_status_id'],
     ['scriptId', 'script_id'],
     ['repeatScriptId', 'repeat_script_id'],
+    ['decisionMaker', 'decision_maker'],
+    ['clientType', 'client_type'],
+    ['otherBorrower', 'other_borrower'],
+    ['category', 'category'],
     ['propertyType', 'property_type'],
     ['propertyClass', 'property_class'],
     ['roomCount', 'room_count'],
+    ['finish', 'finish'],
     ['priceFrom', 'price_from'],
     ['priceTo', 'price_to'],
     ['areaFrom', 'area_from'],
@@ -43,6 +48,10 @@ const FIELD_COLUMNS = [
     ['city', 'city'],
     ['district', 'district'],
     ['locality', 'locality'],
+    ['clientRegion', 'client_region'],
+    ['clientCity', 'client_city'],
+    ['clientDistrict', 'client_district'],
+    ['clientLocality', 'client_locality'],
     ['purchaseMethod', 'purchase_method'],
     ['mortgageType', 'mortgage_type'],
     ['downPaymentPercent', 'down_payment_percent'],
@@ -51,6 +60,10 @@ const FIELD_COLUMNS = [
 ];
 
 const NUMERIC_FIELDS = new Set(['sourceId', 'employeeId', 'funnelStatusId', 'scriptId', 'repeatScriptId', 'priceFrom', 'priceTo', 'areaFrom', 'areaTo', 'downPaymentPercent']);
+
+// «Иной заёмщик» трёхзначный (NULL / true / false) — та же обработка, что в
+// routes/leads.js: без неё строка 'false' из формы легла бы в базу как true.
+const BOOLEAN_FIELDS = new Set(['otherBorrower']);
 
 // Ключи, которые разрешено менять через bulk-update. Строгий whitelist, а не
 // «всё, что пришло» (требование куратора, dialog.md B1): иначе лёгкий PATCH
@@ -63,6 +76,11 @@ const BULK_PATCH_COLUMNS = {
 };
 
 function normalizeValue(key, value) {
+    if (BOOLEAN_FIELDS.has(key)) {
+        if (value === true || value === 'true') return true;
+        if (value === false || value === 'false') return false;
+        return null; // undefined, null, '' — «неприменимо»
+    }
     if (NUMERIC_FIELDS.has(key)) {
         return value === '' || value === undefined || value === null ? null : Number(value);
     }
@@ -133,9 +151,14 @@ function rowToLead(row) {
         offerIds: offers.map((o) => o.id),
         scriptStatusIds: row.script_status_ids || [],
         poolEmployeeIds: row.pool_employee_ids || [],
+        decisionMaker: row.decision_maker,
+        clientType: row.client_type,
+        otherBorrower: row.other_borrower,
+        category: row.category,
         propertyType: row.property_type,
         propertyClass: row.property_class,
         roomCount: row.room_count,
+        finish: row.finish,
         priceFrom: row.price_from,
         priceTo: row.price_to,
         areaFrom: row.area_from,
@@ -145,6 +168,10 @@ function rowToLead(row) {
         city: row.city,
         district: row.district,
         locality: row.locality,
+        clientRegion: row.client_region,
+        clientCity: row.client_city,
+        clientDistrict: row.client_district,
+        clientLocality: row.client_locality,
         purchaseMethod: row.purchase_method,
         mortgageType: row.mortgage_type,
         downPaymentPercent: row.down_payment_percent,

@@ -187,31 +187,46 @@
                         <div class="form-group"><label for="ldLastName">Фамилия</label><input type="text" id="ldLastName"></div>
                         <div class="form-group"><label for="ldFirstName">Имя</label><input type="text" id="ldFirstName"></div>
                         <div class="form-group"><label for="ldMiddleName">Отчество</label><input type="text" id="ldMiddleName"></div>
+                        <div class="form-group"><label for="ldDecisionMaker">ЛПР</label><select id="ldDecisionMaker"></select></div>
                     </div>
                 </div>
 
                 <div class="form-section">
                     <h3>Что ищет</h3>
                     <div class="form-grid cols-3">
+                        <div class="form-group"><label for="ldCategory">Категория</label><select id="ldCategory"></select></div>
                         <div class="form-group"><label for="ldPropertyType">Тип объекта</label><select id="ldPropertyType"></select></div>
                         <div class="form-group"><label for="ldPropertyClass">Класс объекта</label><select id="ldPropertyClass"></select></div>
                         <div class="form-group"><label for="ldRoomCount">Комнатность</label><select id="ldRoomCount"></select></div>
+                        <div class="form-group"><label for="ldFinish">Отделка</label><select id="ldFinish"></select></div>
+                        <div class="form-group"><label for="ldDeliveryDeadline">Срок сдачи <span class="hint">— не позже</span></label><select id="ldDeliveryDeadline"></select></div>
                         <div class="form-group"><label for="ldPriceFrom">Цена от</label><input type="number" id="ldPriceFrom"></div>
                         <div class="form-group"><label for="ldPriceTo">Цена до</label><input type="number" id="ldPriceTo"></div>
                         <div class="form-group"><label for="ldAreaFrom">Площадь от</label><input type="number" id="ldAreaFrom"></div>
                         <div class="form-group"><label for="ldAreaTo">Площадь до</label><input type="number" id="ldAreaTo"></div>
-                        <div class="form-group"><label for="ldDeliveryDeadline">Срок сдачи</label><input type="text" id="ldDeliveryDeadline" placeholder="Например, «4 кв. 2027»"></div>
                     </div>
                 </div>
 
                 <div class="form-section">
                     <h3>География</h3>
-                    <p class="section-hint">Подсказки адреса — тот же сервис (DaData), что уже используется в гео-критериях оффера CPA-сетей: начните вводить, выберите из списка.</p>
-                    <div class="form-grid cols-3">
-                        <div class="form-group geo-field"><label for="ldRegion">Область</label><input type="text" id="ldRegion" class="geo-region" placeholder="Начните вводить…" autocomplete="off"></div>
-                        <div class="form-group geo-field"><label for="ldCity">Город</label><input type="text" id="ldCity" class="geo-city" placeholder="Начните вводить…" autocomplete="off"></div>
-                        <div class="form-group geo-field"><label for="ldDistrict">Район</label><input type="text" id="ldDistrict" class="geo-district" placeholder="Начните вводить…" autocomplete="off"></div>
-                        <div class="form-group geo-field"><label for="ldLocality">Населённый пункт</label><input type="text" id="ldLocality" class="geo-locality" placeholder="Начните вводить…" autocomplete="off"></div>
+                    <p class="section-hint">Подсказки адреса — тот же сервис (DaData), что уже используется в гео-критериях оффера CPA-сетей: начните вводить, выберите из списка. Два адреса независимы: сужение по региону у каждого своё.</p>
+                    <div class="geo-block">
+                        <div class="geo-block-title"><i class="fas fa-location-dot" aria-hidden="true"></i>Гео объекта</div>
+                        <div class="form-grid cols-4">
+                            <div class="form-group geo-field"><label for="ldRegion">Регион</label><input type="text" id="ldRegion" data-geo-level="region" placeholder="Начните вводить…" autocomplete="off"></div>
+                            <div class="form-group geo-field"><label for="ldCity">Город</label><input type="text" id="ldCity" data-geo-level="city" placeholder="Начните вводить…" autocomplete="off"></div>
+                            <div class="form-group geo-field"><label for="ldDistrict">Район</label><input type="text" id="ldDistrict" data-geo-level="district" placeholder="Начните вводить…" autocomplete="off"></div>
+                            <div class="form-group geo-field"><label for="ldLocality">Населённый пункт</label><input type="text" id="ldLocality" data-geo-level="locality" placeholder="Начните вводить…" autocomplete="off"></div>
+                        </div>
+                    </div>
+                    <div class="geo-block">
+                        <div class="geo-block-title"><i class="fas fa-location-dot" aria-hidden="true"></i>Гео клиента</div>
+                        <div class="form-grid cols-4">
+                            <div class="form-group geo-field"><label for="ldClientRegion">Регион</label><input type="text" id="ldClientRegion" data-geo-level="region" placeholder="Начните вводить…" autocomplete="off"></div>
+                            <div class="form-group geo-field"><label for="ldClientCity">Город</label><input type="text" id="ldClientCity" data-geo-level="city" placeholder="Начните вводить…" autocomplete="off"></div>
+                            <div class="form-group geo-field"><label for="ldClientDistrict">Район</label><input type="text" id="ldClientDistrict" data-geo-level="district" placeholder="Начните вводить…" autocomplete="off"></div>
+                            <div class="form-group geo-field"><label for="ldClientLocality">Населённый пункт</label><input type="text" id="ldClientLocality" data-geo-level="locality" placeholder="Начните вводить…" autocomplete="off"></div>
+                        </div>
                     </div>
                 </div>
 
@@ -219,9 +234,18 @@
                     <h3>Покупка</h3>
                     <div class="form-grid cols-3">
                         <div class="form-group"><label for="ldPurchaseMethod">Способ покупки</label><select id="ldPurchaseMethod"></select></div>
-                        <div class="form-group"><label for="ldMortgageType">Вид ипотеки</label><select id="ldMortgageType"></select></div>
-                        <div class="form-group"><label for="ldDownPaymentPercent">Первоначальный взнос, %</label><select id="ldDownPaymentPercent"></select></div>
+                        <div class="form-group" id="ldDownPaymentWrap"><label for="ldDownPaymentPercent">Первоначальный взнос, %</label><select id="ldDownPaymentPercent"></select></div>
+                        <div class="form-group" id="ldMortgageWrap"><label for="ldMortgageType">Вид ипотеки</label><select id="ldMortgageType"></select></div>
+                        <div class="form-group"><label for="ldClientType">Вид клиента</label><select id="ldClientType"></select></div>
                         <div class="form-group"><label for="ldPurchaseTimeframe">Срок покупки</label><select id="ldPurchaseTimeframe"></select></div>
+                    </div>
+                    <div class="form-group lead-checkbox-row" id="ldOtherBorrowerWrap">
+                        <label for="ldOtherBorrower">
+                            <input type="checkbox" id="ldOtherBorrower">
+                            <span class="txt">Заёмщик может быть другим человеком
+                                <span class="sub">Показано, потому что вид клиента «Пенсионер» и способ покупки — ипотека</span>
+                            </span>
+                        </label>
                     </div>
                 </div>
 
