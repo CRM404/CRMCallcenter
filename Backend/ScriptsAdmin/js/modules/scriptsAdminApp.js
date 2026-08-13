@@ -1,54 +1,63 @@
-// --- scriptsAdminApp.js: инициализация страницы управления скриптом ---
+// --- scriptsAdminApp.js: инициализация страницы «Скрипты» ---
+// Панель «Операторы, использующие этот скрипт» удалена целиком вместе с
+// модулями scriptsAdminAssignment.js / scriptsAdminReassignModal.js: ручной
+// привязки операторов к скриптам больше нет, скрипт назначается ЛИДУ на
+// странице «Лиды» (решение владельца, 13.08.2026).
 
 import {
     fetchScripts, createScript, updateScript,
-    fetchScriptNodes, createScriptNode, updateScriptNode, deleteScriptNode,
-    fetchEmployees
+    fetchScriptNodes, createScriptNode, updateScriptNode, deleteScriptNode
 } from './scriptsAdminStorage.js';
 import { renderScriptList } from './scriptsAdminScriptList.js';
-import { renderScriptForm } from './scriptsAdminScriptForm.js';
 import { renderNodesPanel } from './scriptsAdminNodes.js';
-import { renderAssignmentPanel } from './scriptsAdminAssignment.js';
 import { initConfirmModal, confirmAction } from './scriptsAdminConfirm.js';
-import { initReassignModal } from './scriptsAdminReassignModal.js';
+import { initHubNav } from './scriptsAdminNav.js';
 import { showToast } from './scriptsAdminToast.js';
 
 document.addEventListener('DOMContentLoaded', function() {
+    initHubNav('scripts');
     initConfirmModal();
-    initReassignModal();
 
     const scriptListEl = document.getElementById('saScriptList');
     const scriptListWrap = document.getElementById('saScriptListWrap');
-    const scriptFormPanel = document.getElementById('saScriptFormPanel');
-    const nodesSection = document.getElementById('saNodesSection');
-    const nodesMetaPanel = document.getElementById('saNodesMetaPanel');
+    const createPanel = document.getElementById('saCreatePanel');
+    const openedSection = document.getElementById('saOpenedSection');
     const nodesPanelEl = document.getElementById('saNodesPanel');
-    const assignmentEl = document.getElementById('saAssignmentPanel');
-    const hideNodesBtn = document.getElementById('saHideNodesBtn');
-
-    const newScriptBtn = document.getElementById('saNewScriptBtn');
+    const metaTitleInput = document.getElementById('saMetaTitle');
+    const openStatusChip = document.getElementById('saOpenStatusChip');
 
     let selectedScript = null;
     let currentNodes = [];
-    let editingScript = null; // используется только формой создания нового скрипта
     let nodesUiState = { rootEditing: false, addingObjection: false, editingObjectionId: null };
+
+    // Стат-чипы считаются из уже загруженного списка — отдельного эндпоинта
+    // под три числа заводить не нужно (решение куратора).
+    function renderStats(scripts) {
+        document.getElementById('saStatTotal').textContent = scripts.length;
+        document.getElementById('saStatActive').textContent = scripts.filter((s) => s.status === 'active').length;
+        document.getElementById('saStatDraft').textContent = scripts.filter((s) => s.status === 'draft').length;
+    }
+
+    function syncOpenStatusChip() {
+        if (!selectedScript) return;
+        openStatusChip.className = 'status-chip ' + selectedScript.status;
+        openStatusChip.textContent = selectedScript.status === 'active' ? 'Активен' : 'Черновик';
+    }
 
     async function reloadScripts() {
         try {
             const scripts = await fetchScripts();
+            renderStats(scripts);
             renderScriptList(scriptListEl, scripts, selectedScript ? selectedScript.id : null, openScript, async () => {
                 await reloadScripts();
             });
             if (selectedScript) {
                 const refreshed = scripts.find((s) => s.id === selectedScript.id);
                 if (!refreshed) {
-                    selectedScript = null;
-                    currentNodes = [];
-                    nodesSection.classList.remove('visible');
-                    scriptListWrap.hidden = false;
+                    hideOpened();
                 } else {
                     selectedScript = refreshed;
-                    await reloadAssignment();
+                    syncOpenStatusChip();
                 }
             }
         } catch (e) {
@@ -65,37 +74,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    async function reloadAssignment() {
-        try {
-            const employees = await fetchEmployees();
-            renderAssignmentPanel(assignmentEl, selectedScript, employees, async () => {
-                await reloadScripts();
-            });
-        } catch (e) {
-            showToast(e.message, 'error');
-        }
-    }
-
-    // Метаданные (Название) — та же форма, что раньше жила в отдельной панели
-    // редактирования, теперь встроена в верх открытой панели "Открыть" (кнопка
-    // "Изменить" убрана, см. бриф). "Отмена" здесь просто перерисовывает форму
-    // текущими сохранёнными значениями — не закрывает и не трогает узлы/операторы
-    // ниже (тот же паттерн, что у "Отмена" в редактировании основного текста узла).
-    function renderScriptMeta() {
-        renderScriptForm(nodesMetaPanel, { editingScript: selectedScript }, handleMetaSave, renderScriptMeta);
-    }
-
-    async function handleMetaSave({ title }) {
-        try {
-            await updateScript(selectedScript.id, { title, status: selectedScript.status });
-            showToast('Скрипт сохранён', 'success');
-            await reloadScripts();
-            renderScriptMeta();
-        } catch (err) {
-            showToast(err.message, 'error');
-        }
-    }
-
     function renderNodes() {
         renderNodesPanel(nodesPanelEl, currentNodes, nodesUiState, {
             onEditRootStart: () => { nodesUiState.rootEditing = true; renderNodes(); },
@@ -109,6 +87,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     await createScriptNode(selectedScript.id, { parentId: null, nodeType: 'statement', label: null, content, sortOrder: 0 });
                     showToast('Основной текст создан', 'success');
                     await reloadNodes();
+                    await reloadScripts();
                 } catch (e) {
                     showToast(e.message, 'error');
                 }
@@ -147,6 +126,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     showToast('Возражение добавлено', 'success');
                     nodesUiState.addingObjection = false;
                     await reloadNodes();
+                    await reloadScripts();
                 } catch (e) {
                     showToast(e.message, 'error');
                 }
@@ -178,6 +158,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     await deleteScriptNode(id);
                     showToast('Возражение удалено', 'success');
                     await reloadNodes();
+                    await reloadScripts();
                 } catch (e) {
                     showToast(e.message, 'error');
                 }
@@ -185,64 +166,81 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // "Открыть" — единая панель: метаданные (Название/Оффер/Статус воронки) +
-    // узлы + назначение операторов. Замещает список скриптов, как раньше делала
-    // отдельная форма редактирования (кнопка "Изменить" убрана, см. бриф).
+    // "Открыть" — шапка (название + статус) и наполнение (основной текст +
+    // возражения). Список скриптов на это время прячется, как и раньше.
     async function openScript(script) {
         selectedScript = script;
         nodesUiState = { rootEditing: false, addingObjection: false, editingObjectionId: null };
+        createPanel.hidden = true;
         scriptListWrap.hidden = true;
-        nodesSection.classList.add('visible');
-        renderScriptMeta();
+        openedSection.hidden = false;
+        metaTitleInput.value = script.title;
+        syncOpenStatusChip();
         await reloadNodes();
-        await reloadAssignment();
-        nodesSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        openedSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
-    function openScriptFormPanel(script) {
-        editingScript = script || null;
-        scriptListWrap.hidden = true;
-        scriptFormPanel.hidden = false;
-        renderScriptForm(scriptFormPanel, { editingScript }, handleScriptFormSave, closeScriptFormPanel);
-    }
-
-    function closeScriptFormPanel() {
-        scriptFormPanel.hidden = true;
-        scriptFormPanel.innerHTML = '';
-        scriptListWrap.hidden = false;
-        editingScript = null;
-    }
-
-    async function handleScriptFormSave({ title }) {
-        try {
-            if (editingScript) {
-                await updateScript(editingScript.id, { title, status: editingScript.status });
-                showToast('Скрипт сохранён', 'success');
-            } else {
-                await createScript({ title });
-                showToast('Скрипт создан', 'success');
-            }
-            closeScriptFormPanel();
-            await reloadScripts();
-        } catch (err) {
-            showToast(err.message, 'error');
-        }
-    }
-
-    newScriptBtn.addEventListener('click', () => openScriptFormPanel(null));
-
-    // "Скрыть" — полностью убирает объединённую панель (метаданные + узлы +
-    // операторы), возвращает к чистому виду "только таблица скриптов".
-    hideNodesBtn.addEventListener('click', async () => {
+    function hideOpened() {
         selectedScript = null;
         currentNodes = [];
         nodesUiState = { rootEditing: false, addingObjection: false, editingObjectionId: null };
-        nodesSection.classList.remove('visible');
-        nodesMetaPanel.innerHTML = '';
+        openedSection.hidden = true;
         nodesPanelEl.innerHTML = '';
-        assignmentEl.innerHTML = '';
         scriptListWrap.hidden = false;
+    }
+
+    document.getElementById('saMetaSaveBtn').addEventListener('click', async () => {
+        const title = metaTitleInput.value.trim();
+        if (!title) {
+            showToast('Название не может быть пустым', 'error');
+            return;
+        }
+        try {
+            await updateScript(selectedScript.id, { title, status: selectedScript.status });
+            showToast('Название сохранено', 'success');
+            await reloadScripts();
+        } catch (e) {
+            showToast(e.message, 'error');
+        }
+    });
+
+    document.getElementById('saHideNodesBtn').addEventListener('click', async () => {
+        hideOpened();
         await reloadScripts();
+    });
+
+    // Инлайн-создание: единственное поле — название, после создания скрипт
+    // сразу открывается на наполнение (как в живой реализации и в макете).
+    document.getElementById('saNewScriptBtn').addEventListener('click', () => {
+        hideOpened();
+        scriptListWrap.hidden = true;
+        createPanel.hidden = false;
+        document.getElementById('saNewTitle').value = '';
+        document.getElementById('saNewTitle').focus();
+    });
+
+    function closeCreatePanel() {
+        createPanel.hidden = true;
+        scriptListWrap.hidden = false;
+    }
+
+    document.getElementById('saCreateCancelBtn').addEventListener('click', closeCreatePanel);
+
+    document.getElementById('saCreateBtn').addEventListener('click', async () => {
+        const title = document.getElementById('saNewTitle').value.trim();
+        if (!title) {
+            showToast('Укажите название скрипта', 'error');
+            return;
+        }
+        try {
+            const created = await createScript({ title });
+            showToast('Скрипт создан', 'success');
+            closeCreatePanel();
+            await reloadScripts();
+            await openScript(created);
+        } catch (e) {
+            showToast(e.message, 'error');
+        }
     });
 
     (async () => {

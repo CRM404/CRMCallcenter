@@ -1,8 +1,17 @@
-// --- leadsModal.js: модалка лида (создание/редактирование), report_2026-08-01.md, 13.08.2026 ---
+// --- leadsModal.js: модалка лида (создание/редактирование) ---
+// Две вкладки: «Данные лида» | «Офферы (N)» — счётчик выбранных прямо на
+// ярлыке, сохранение без офферов само переключает на вкладку «Офферы»
+// (композиция дизайн-сессии, report_designer.md, 13.08.2026).
+//
+// Обязательные поля: номер, линия, источник, минимум один оффер, скрипт и
+// минимум один статус показа. «Скрипт для повторных» условный — появляется и
+// становится обязательным, когда среди статусов показа есть этапы 5–6.
 
 import { createLead, updateLead, checkPhoneDuplicate } from './leadsStorage.js';
 import { showToast } from './leadsToast.js';
 import { initGeoAutocomplete, resetGeoContext } from './leadsGeo.js';
+import { createPickList } from './leadsPickList.js';
+import { createOfferTabPicker } from './leadsOffers.js';
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -15,9 +24,11 @@ function escapeHtml(value) {
 // 13.08.2026) — своего param_list в БД под это нет, значения просто зашиты.
 const DOWN_PAYMENT_OPTIONS = ['10', '15', '20', '25', '30', '50'];
 
+// «Повторные» — этапы воронки 5 и 6 (решение владельца п.2).
+const REPEAT_STAGE_FROM = 5;
+
 // Простые текстовые поля, читаемые/заполняемые 1:1 по value (id = `ld` + key
-// с большой первой буквы). Селекты (source/employee/offer/funnelStatus) и
-// телефон обрабатываются отдельно.
+// с большой первой буквы). Селекты и телефон обрабатываются отдельно.
 const PLAIN_FIELDS = [
     'lastName', 'firstName', 'middleName',
     'propertyType', 'propertyClass', 'roomCount', 'priceFrom', 'priceTo', 'areaFrom', 'areaTo', 'deliveryDeadline',
@@ -33,6 +44,8 @@ function fieldId(key) {
 let editingLeadId = null;
 let funnelStatuses = [];
 let onSavedCallback = null;
+let statusPick = null;
+let offerPicker = null;
 
 function fillSelectFromList(select, items, placeholder, withNone) {
     let html = `<option value="">${escapeHtml(placeholder)}</option>`;
@@ -96,13 +109,34 @@ async function handlePhoneBlur() {
     }
 }
 
-export function initLeadModal({ sources, employees, offers, statuses, paramLists }, onSaved) {
+// Условный «Скрипт для повторных»: в скрытом виде места в сетке НЕ резервирует
+// (display:none через [hidden], а не visibility) — фидбек владельца про пустоту
+// в форме.
+function syncRepeatVisibility() {
+    const selectedStatusIds = new Set(statusPick.getValues());
+    const needsRepeat = funnelStatuses.some((s) => selectedStatusIds.has(s.id) && s.stageNumber >= REPEAT_STAGE_FROM);
+    $('#ldRepeatWrap').hidden = !needsRepeat;
+    return needsRepeat;
+}
+
+function switchTab(tab) {
+    const isMain = tab === 'main';
+    $('#leadTabBtnMain').classList.toggle('active', isMain);
+    $('#leadTabBtnOffers').classList.toggle('active', !isMain);
+    $('#leadTabBtnMain').setAttribute('aria-selected', String(isMain));
+    $('#leadTabBtnOffers').setAttribute('aria-selected', String(!isMain));
+    $('#leadTabMain').hidden = !isMain;
+    $('#leadTabOffers').hidden = isMain;
+}
+
+export function initLeadModal({ sources, employees, statuses, paramLists, scripts }, onSaved) {
     funnelStatuses = statuses;
     onSavedCallback = onSaved;
 
     fillSelectFromList($('#ldSource'), sources.map((s) => ({ id: s.id, name: s.rootSource })), '— не выбран —');
     fillSelectFromList($('#ldEmployee'), employees.map((e) => ({ id: e.id, name: `${e.lastName} ${e.firstName}` })), '— не назначен —');
-    fillSelectFromList($('#ldOffer'), offers, '— не выбран —');
+    fillSelectFromList($('#ldScript'), scripts.map((s) => ({ id: s.id, name: s.title })), '— не выбран —');
+    fillSelectFromList($('#ldRepeatScript'), scripts.map((s) => ({ id: s.id, name: s.title })), '— не выбран —');
     fillFunnelStatusSelect($('#ldFunnelStatus'), funnelStatuses, true);
 
     fillPlainSelect($('#ldPropertyType'), paramLists.objType || [], '— не выбран —');
@@ -113,7 +147,25 @@ export function initLeadModal({ sources, employees, offers, statuses, paramLists
     fillPlainSelect($('#ldPurchaseTimeframe'), paramLists.purchaseTerm || [], '— не выбран —');
     fillPlainSelect($('#ldDownPaymentPercent'), DOWN_PAYMENT_OPTIONS, '— не выбран —');
 
+    statusPick = createPickList($('#ldStatusPick'), {
+        emptyText: 'Ни один статус не выбран — обязателен минимум один.',
+        onChange: syncRepeatVisibility
+    });
+    statusPick.setItems(funnelStatuses.map((s) => ({
+        id: s.id, label: s.statusName, stageNumber: s.stageNumber, stageName: s.stageName
+    })));
+
+    offerPicker = createOfferTabPicker({
+        rootSelect: $('#ofltRoot'), platSelect: $('#ofltPlat'), geoSelect: $('#ofltGeo'),
+        searchInput: $('#offerSearchInput'), resetBtn: $('#ofltResetBtn'),
+        resultsEl: $('#offerResults'), tagsEl: $('#offerSelTags'), countEl: $('#offerSelCount'),
+        emptyEl: $('#offerSelEmpty'), clearAllBtn: $('#offerClearAllBtn'), tabCountEl: $('#offerTabCount')
+    });
+
     initGeoAutocomplete();
+
+    $('#leadTabBtnMain').addEventListener('click', () => switchTab('main'));
+    $('#leadTabBtnOffers').addEventListener('click', () => switchTab('offers'));
 
     $('#ldPhone').addEventListener('input', (e) => {
         const pos = e.target.selectionStart;
@@ -131,9 +183,10 @@ export function initLeadModal({ sources, employees, offers, statuses, paramLists
     $('#leadModalSave').addEventListener('click', handleSave);
 }
 
-export function openLeadModal(lead) {
+export async function openLeadModal(lead) {
     editingLeadId = lead ? lead.id : null;
     resetGeoContext();
+    switchTab('main');
     $('#leadModalTitle').textContent = lead ? `Лид #${lead.id}` : 'Новый лид';
     $('#dupWarning').hidden = true;
 
@@ -142,11 +195,24 @@ export function openLeadModal(lead) {
         $('#' + fieldId(key)).value = lead && lead[key] !== null && lead[key] !== undefined ? lead[key] : '';
     });
     $('#ldSource').value = lead && lead.sourceId ? lead.sourceId : '';
+    $('#ldLine').value = lead && lead.lineType ? lead.lineType : '';
     $('#ldEmployee').value = lead && lead.employeeId ? lead.employeeId : '';
-    $('#ldOffer').value = lead && lead.offerId ? lead.offerId : '';
     $('#ldFunnelStatus').value = lead && lead.funnelStatusId ? lead.funnelStatusId : '';
+    $('#ldScript').value = lead && lead.scriptId ? lead.scriptId : '';
+    $('#ldRepeatScript').value = lead && lead.repeatScriptId ? lead.repeatScriptId : '';
+
+    // «Новый» предвыбран у нового лида (требование куратора): иначе легко
+    // создать лида, у которого оператор сразу не увидит скрипта.
+    if (lead) {
+        statusPick.setValues(lead.scriptStatusIds || []);
+    } else {
+        const newStatus = funnelStatuses.find((s) => s.stageNumber === 0);
+        statusPick.setValues(newStatus ? [newStatus.id] : []);
+    }
+    syncRepeatVisibility();
 
     $('#leadModal').hidden = false;
+    await offerPicker.open(lead ? lead.offers : []);
 }
 
 function closeLeadModal() {
@@ -158,18 +224,40 @@ function gatherLeadData() {
     const data = { phone: $('#ldPhone').value.trim() };
     PLAIN_FIELDS.forEach((key) => { data[key] = $('#' + fieldId(key)).value.trim(); });
     data.sourceId = $('#ldSource').value || null;
+    data.lineType = $('#ldLine').value || null;
     data.employeeId = $('#ldEmployee').value || null;
-    data.offerId = $('#ldOffer').value || null;
     data.funnelStatusId = $('#ldFunnelStatus').value || null;
+    data.scriptId = $('#ldScript').value || null;
+    data.repeatScriptId = $('#ldRepeatScript').value || null;
+    data.scriptStatusIds = statusPick.getValues();
+    data.offerIds = offerPicker.getValues();
+    data.poolEmployeeIds = [];
     return data;
 }
 
 async function handleSave() {
     const data = gatherLeadData();
-    if (!data.phone) {
-        showToast('Укажите номер телефона', 'error');
+
+    // Клиентская валидация — ровно та же, что на сервере, чтобы пользователь
+    // не ловил 400 на каждое пропущенное поле по очереди.
+    if (!data.phone) { showToast('Укажите номер телефона', 'error'); switchTab('main'); return; }
+    if (!data.lineType) { showToast('Выберите линию', 'error'); switchTab('main'); return; }
+    if (!data.sourceId) { showToast('Выберите источник', 'error'); switchTab('main'); return; }
+    if (!data.scriptId) { showToast('Выберите скрипт', 'error'); switchTab('main'); return; }
+    if (data.scriptStatusIds.length === 0) { showToast('Выберите хотя бы один статус показа скрипта', 'error'); switchTab('main'); return; }
+    if (syncRepeatVisibility() && !data.repeatScriptId) {
+        showToast('Среди статусов показа есть этапы 5–6 — укажите скрипт для повторных', 'error');
+        switchTab('main');
         return;
     }
+    // Сохранение без офферов само переключает на вкладку «Офферы» — там же
+    // и подсказка «обязателен минимум один» (решение дизайн-сессии).
+    if (data.offerIds.length === 0) {
+        showToast('Выберите хотя бы один оффер', 'error');
+        switchTab('offers');
+        return;
+    }
+
     try {
         if (editingLeadId) {
             await updateLead(editingLeadId, data);

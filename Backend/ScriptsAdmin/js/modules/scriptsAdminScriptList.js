@@ -1,4 +1,9 @@
 // --- scriptsAdminScriptList.js: таблица скриптов (черновики + активные) ---
+// Колонки: Скрипт (название + подстрока наполненности) / Статус / Действия.
+// Колонки «Операторов» больше нет — ручная привязка операторов к скриптам
+// отменена, скрипт назначается лиду на странице «Лиды». «Удалить» по той же
+// причине больше ничем не блокируется: у лидов привязка обнуляется сама
+// (ON DELETE SET NULL), подтверждено владельцем вместе с макетом.
 
 import { updateScript, deleteScript } from './scriptsAdminStorage.js';
 import { confirmAction } from './scriptsAdminConfirm.js';
@@ -12,37 +17,51 @@ function escapeHtml(value) {
         .replace(/>/g, '&gt;');
 }
 
-// onOpen(script) — открыть единую панель (метаданные + узлы + назначение);
-// onChanged() — перезагрузить список после действия.
+function pluralObjections(count) {
+    const mod10 = count % 10;
+    const mod100 = count % 100;
+    if (mod10 === 1 && mod100 !== 11) return `${count} возражение`;
+    if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return `${count} возражения`;
+    return `${count} возражений`;
+}
+
+// Подстрока наполненности — единственное добавление сверх прежней
+// функциональности: показывает уже существующие данные (агрегаты приходят из
+// GET /api/admin/scripts одним JOIN, без N+1 запросов отсюда).
+function fillSummary(script) {
+    const parts = [];
+    if (script.hasMainText) parts.push('основной текст');
+    if (script.objectionsCount > 0) parts.push(pluralObjections(script.objectionsCount));
+    return parts.length ? parts.join(' · ') : 'Пока не наполнен';
+}
+
+// onOpen(script) — открыть панель наполнения; onChanged() — перезагрузить список.
 export function renderScriptList(container, scripts, selectedId, onOpen, onChanged) {
     if (!scripts.length) {
-        container.innerHTML = '<div class="sa-empty-state">Пока нет ни одного скрипта — создайте первый.</div>';
+        container.innerHTML = '<div class="sa-empty-state" style="padding:40px 20px; text-align:center;">Пока нет ни одного скрипта — создайте первый.</div>';
         return;
     }
 
     const rows = scripts.map((script) => {
-        const badge = script.status === 'active'
-            ? '<span class="badge active">Активный</span>'
-            : '<span class="badge draft">Черновик</span>';
-        const isSelected = script.id === selectedId;
+        const chip = script.status === 'active'
+            ? '<span class="status-chip active">Активен</span>'
+            : '<span class="status-chip draft">Черновик</span>';
         const statusToggleBtn = script.status === 'draft'
-            ? `<button type="button" class="btn btn-success btn-sm" data-action="activate" data-id="${script.id}">Активировать</button>`
-            : `<button type="button" class="btn btn-secondary btn-sm" data-action="deactivate" data-id="${script.id}">Вернуть в черновик</button>`;
-        const isAssigned = script.assignedCount > 0;
-        const deleteBtn = !isAssigned
-            ? `<button type="button" class="btn btn-danger btn-sm" data-action="delete" data-id="${script.id}">Удалить</button>`
-            : `<button type="button" class="btn btn-danger btn-sm" data-action="delete" data-id="${script.id}" disabled title="Скрипт назначен ${script.assignedCount} оператор(ам) — сначала снимите назначение">Удалить</button>`;
+            ? `<button type="button" class="btn btn-ghost btn-sm" data-action="activate" data-id="${script.id}">Активировать</button>`
+            : `<button type="button" class="btn btn-ghost btn-sm" data-action="deactivate" data-id="${script.id}">В черновик</button>`;
 
         return `
-            <tr class="${isSelected ? 'sa-selected' : ''}" data-row-id="${script.id}">
-                <td>${escapeHtml(script.title)}</td>
-                <td>${badge}</td>
-                <td>${script.assignedCount === null ? '—' : script.assignedCount}</td>
+            <tr class="${script.id === selectedId ? 'sa-selected' : ''}" data-row-id="${script.id}">
                 <td>
+                    <div class="script-title">${escapeHtml(script.title)}</div>
+                    <div class="script-sub">${escapeHtml(fillSummary(script))}</div>
+                </td>
+                <td>${chip}</td>
+                <td class="col-actions">
                     <div class="sa-actions">
-                        <button type="button" class="btn btn-secondary btn-sm" data-action="open" data-id="${script.id}">Открыть</button>
+                        <button type="button" class="btn btn-ghost btn-sm" data-action="open" data-id="${script.id}">Открыть</button>
                         ${statusToggleBtn}
-                        ${deleteBtn}
+                        <button type="button" class="btn btn-danger btn-sm" data-action="delete" data-id="${script.id}">Удалить</button>
                     </div>
                 </td>
             </tr>
@@ -50,9 +69,9 @@ export function renderScriptList(container, scripts, selectedId, onOpen, onChang
     }).join('');
 
     container.innerHTML = `
-        <table class="sa-script-table">
+        <table>
             <thead>
-                <tr><th>Название</th><th>Статус</th><th>Операторов</th><th>Действия</th></tr>
+                <tr><th>Скрипт</th><th>Статус</th><th class="col-actions">Действия</th></tr>
             </thead>
             <tbody>${rows}</tbody>
         </table>
@@ -68,7 +87,7 @@ export function renderScriptList(container, scripts, selectedId, onOpen, onChang
     container.querySelectorAll('[data-action="activate"]').forEach((btn) => {
         btn.addEventListener('click', async () => {
             const script = scripts.find((s) => s.id === Number(btn.dataset.id));
-            const ok = await confirmAction(`Активировать скрипт «${script.title}»? После этого его можно будет назначать операторам.`);
+            const ok = await confirmAction(`Активировать скрипт «${script.title}»? Он станет доступен для выбора на странице «Лиды».`);
             if (!ok) return;
             try {
                 await updateScript(script.id, { title: script.title, status: 'active' });
@@ -83,7 +102,7 @@ export function renderScriptList(container, scripts, selectedId, onOpen, onChang
     container.querySelectorAll('[data-action="deactivate"]').forEach((btn) => {
         btn.addEventListener('click', async () => {
             const script = scripts.find((s) => s.id === Number(btn.dataset.id));
-            const ok = await confirmAction(`Вернуть скрипт «${script.title}» в черновик? Уже назначенные операторы продолжат его видеть — статус только запрещает НОВЫЕ назначения.`);
+            const ok = await confirmAction(`Вернуть скрипт «${script.title}» в черновик? Он пропадёт из выбора на «Лидах»; у лидов, где он уже назначен, ничего не изменится.`);
             if (!ok) return;
             try {
                 await updateScript(script.id, { title: script.title, status: 'draft' });
@@ -95,10 +114,10 @@ export function renderScriptList(container, scripts, selectedId, onOpen, onChang
         });
     });
 
-    container.querySelectorAll('[data-action="delete"]:not(:disabled)').forEach((btn) => {
+    container.querySelectorAll('[data-action="delete"]').forEach((btn) => {
         btn.addEventListener('click', async () => {
             const script = scripts.find((s) => s.id === Number(btn.dataset.id));
-            const ok = await confirmAction(`Удалить скрипт «${script.title}» вместе со всеми узлами? Это необратимо.`);
+            const ok = await confirmAction(`Удалить скрипт «${script.title}» вместе с основным текстом и возражениями? У лидов, где он был назначен, поле скрипта очистится. Это необратимо.`);
             if (!ok) return;
             try {
                 await deleteScript(script.id);

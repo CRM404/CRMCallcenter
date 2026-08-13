@@ -88,13 +88,12 @@ document.addEventListener('DOMContentLoaded', async function() {
             listView.style.display = 'none';
             detailView.style.display = 'block';
 
-            // Скрипт зависит от пары (оффер, статус) КОНКРЕТНОГО лида — запрашивается
-            // заново при каждом открытии карточки, без кэша на весь сеанс страницы
-            // (кэш по employeeId был корректен, пока скрипт был один на оператора;
-            // с подбором по лиду его пришлось убрать — иначе после лида A показывался
-            // бы его скрипт и для лида B с другой парой оффер+статус).
+            // Скрипт привязан к КОНКРЕТНОМУ лиду и зависит от его текущего статуса
+            // (этапы 5–6 — скрипт для повторных), поэтому запрашивается заново при
+            // каждом открытии карточки, без кэша на весь сеанс страницы: у соседнего
+            // лида и скрипт, и его состояние могут быть другими.
             try {
-                const currentScript = await fetchScript(identity.id, leadId);
+                const currentScript = await fetchScript(leadId);
                 scriptPanel.innerHTML = '';
                 if (currentScript) {
                     createScriptView(scriptPanel, currentScript);

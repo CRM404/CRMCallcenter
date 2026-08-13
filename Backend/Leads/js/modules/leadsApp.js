@@ -5,8 +5,8 @@
 // переписаны на реальные API-вызовы вместо демо-данных макета.
 
 import {
-    fetchLeads, fetchLeadStats, deleteLead, updateLead,
-    fetchAllSources, fetchAllEmployees, fetchAllOffers, fetchFunnelStatuses, fetchParamLists
+    fetchLeads, fetchLeadStats, deleteLead, bulkUpdateLeads,
+    fetchAllSources, fetchAllEmployees, fetchFunnelStatuses, fetchParamLists, fetchActiveScripts
 } from './leadsStorage.js';
 import { showToast } from './leadsToast.js';
 import { initConfirmModal, confirmAction } from './leadsConfirm.js';
@@ -36,13 +36,17 @@ function fullName(lead) {
     return [lead.lastName, lead.firstName, lead.middleName].filter(Boolean).join(' ');
 }
 
-// Группировка настройки колонок — 1:1 с макетом (5 групп).
+// Группировка настройки колонок. Заголовок первой группы — просто «Основное»:
+// прежнее «(видно по умолчанию)» врало про «Оффер», который по умолчанию был
+// скрыт (замечание дизайн-сессии с прошлой задачи, dialog.md E2).
 const COLUMN_GROUPS = [
-    { label: 'Основное (видно по умолчанию)', columns: [
+    { label: 'Основное', columns: [
         { key: 'source', label: 'Источник' },
         { key: 'employee', label: 'Сотрудник' },
         { key: 'funnelStatus', label: 'Статус' },
-        { key: 'offer', label: 'Оффер' }
+        { key: 'lineType', label: 'Линия' },
+        { key: 'script', label: 'Скрипт' },
+        { key: 'offers', label: 'Офферы' }
     ] },
     { label: 'Что ищет', columns: [
         { key: 'propertyType', label: 'Тип объекта' },
@@ -73,24 +77,58 @@ const COLUMN_GROUPS = [
     ] }
 ];
 const COLUMN_ORDER = COLUMN_GROUPS.flatMap((g) => g.columns.map((c) => c.key));
+// «Линия», «Скрипт» и «Офферы» видимы по умолчанию наравне с прежними тремя:
+// теперь это обязательные атрибуты лида, админ сверяет их с одного взгляда
+// (решение дизайн-сессии, подтверждено куратором — dialog.md E3).
+const DEFAULT_VISIBLE = new Set(['source', 'employee', 'funnelStatus', 'lineType', 'script', 'offers']);
 const COLUMN_DEFAULT = COLUMN_ORDER.reduce((acc, key) => {
-    acc[key] = key === 'source' || key === 'employee' || key === 'funnelStatus';
+    acc[key] = DEFAULT_VISIBLE.has(key);
     return acc;
 }, {});
 
-// Ключ колонки -> lead[field], либо кастомный рендер ячейки.
+const REPEAT_STAGE_FROM = 5;
+
+// Ячейки, которые собираются в готовый HTML (пилюли/чипы), а не в текст.
+const RICH_CELLS = {
+    funnelStatus: (l) => (l.funnelStatusId
+        ? `<span class="stage-badge ${l.stageNumber === 0 ? 'stage-0' : ''}"><span class="stage-num">${l.stageNumber}</span>${escapeHtml(l.statusName)}</span>`
+        : null),
+    lineType: (l) => (l.lineType
+        ? `<span class="line-tag"><i class="fas ${l.lineType === 'Входящая' ? 'fa-arrow-down-left' : 'fa-arrow-up-right'}" aria-hidden="true"></i>${escapeHtml(l.lineType)}</span>`
+        : null),
+    // Название основного скрипта + мини-чип «повт.», если задан повторный.
+    // Чип синий, когда лид сейчас на этапе 5–6 — то есть оператор видит
+    // именно повторный скрипт.
+    script: (l) => {
+        if (!l.scriptId) return null;
+        const onRepeat = l.stageNumber >= REPEAT_STAGE_FROM;
+        const chip = l.repeatScriptId
+            ? `<span class="rep-chip ${onRepeat ? 'on' : ''}" title="${escapeHtml(`Скрипт для повторных: ${l.repeatScriptTitle || ''}`)}">повт.</span>`
+            : '';
+        return `${escapeHtml(l.scriptTitle || '')}${chip}`;
+    },
+    // Первый оффер + счётчик остальных, полный список — в tooltip.
+    offers: (l) => {
+        const offers = l.offers || [];
+        if (offers.length === 0) return null;
+        const more = offers.length > 1
+            ? `<span class="offer-more" title="${escapeHtml(offers.map((o) => o.name).join(', '))}">+${offers.length - 1}</span>`
+            : '';
+        return `${escapeHtml(offers[0].name)}${more}`;
+    }
+};
+
+// Ключ колонки -> lead[field] (простой текст).
 const COLUMN_CELL = {
     source: (l) => l.sourceName,
     employee: (l) => l.employeeName,
-    funnelStatus: (l) => (l.funnelStatusId ? `<span class="stage-badge ${l.stageNumber === 0 ? 'stage-0' : ''}"><span class="stage-num">${l.stageNumber}</span>${escapeHtml(l.statusName)}</span>` : null),
-    offer: (l) => l.offerName,
     priceFrom: (l) => l.priceFrom, priceTo: (l) => l.priceTo,
     areaFrom: (l) => l.areaFrom, areaTo: (l) => l.areaTo,
     downPaymentPercent: (l) => l.downPaymentPercent,
     createdAt: (l) => formatDate(l.createdAt), updatedAt: (l) => formatDate(l.updatedAt)
 };
 function cellHtml(key, lead) {
-    if (key === 'funnelStatus') return COLUMN_CELL.funnelStatus(lead) || '—';
+    if (RICH_CELLS[key]) return RICH_CELLS[key](lead) || '<span class="muted">—</span>';
     const getValue = COLUMN_CELL[key] || ((l) => l[key]);
     const value = getValue(lead);
     return value !== null && value !== undefined && value !== '' ? escapeHtml(value) : '<span class="muted">—</span>';
@@ -98,9 +136,9 @@ function cellHtml(key, lead) {
 
 let sources = [];
 let employees = [];
-let offers = [];
 let statuses = [];
 let paramLists = {};
+let scripts = [];
 
 let leads = [];
 let filters = { fio: '', phone: '', sourceId: '', employeeId: '', funnelStatusId: '' };
@@ -111,9 +149,11 @@ let hasMore = true;
 
 // ================= Загрузка данных =================
 
+// Справочник офферов сюда НЕ входит: их ≈38 000, страница ходит только в
+// серверный поиск (leadsOffers.js).
 async function loadReferenceData() {
-    [sources, employees, offers, statuses, paramLists] = await Promise.all([
-        fetchAllSources(), fetchAllEmployees(), fetchAllOffers(), fetchFunnelStatuses(), fetchParamLists()
+    [sources, employees, statuses, paramLists, scripts] = await Promise.all([
+        fetchAllSources(), fetchAllEmployees(), fetchFunnelStatuses(), fetchParamLists(), fetchActiveScripts()
     ]);
 }
 
@@ -264,7 +304,19 @@ $('#massActionSelect').addEventListener('change', () => {
     const action = $('#massActionSelect').value;
     $('#massEmployeeSelect').hidden = action !== 'employee';
     $('#massStatusSelect').hidden = action !== 'status';
+    $('#massScriptSelect').hidden = action !== 'script';
+    $('#massRepeatScriptSelect').hidden = action !== 'repeatScript';
 });
+
+// Действие -> ключ patch'а и select со значением. Все четыре идут одним
+// лёгким bulk-update: полное тело лида для них не требуется, поэтому массово
+// править можно и старых лидов без линии/скрипта/офферов (dialog.md B1).
+const MASS_PATCH_ACTIONS = {
+    employee: { key: 'employeeId', selectId: '#massEmployeeSelect', required: false, done: 'Оператор изменён' },
+    status: { key: 'funnelStatusId', selectId: '#massStatusSelect', required: true, prompt: 'Выберите статус', done: 'Статус изменён' },
+    script: { key: 'scriptId', selectId: '#massScriptSelect', required: true, prompt: 'Выберите скрипт', done: 'Скрипт изменён' },
+    repeatScript: { key: 'repeatScriptId', selectId: '#massRepeatScriptSelect', required: false, done: 'Скрипт для повторных изменён' }
+};
 
 $('#massApplyBtn').addEventListener('click', async () => {
     const action = $('#massActionSelect').value;
@@ -286,26 +338,19 @@ $('#massApplyBtn').addEventListener('click', async () => {
         return;
     }
 
-    if (action === 'employee' || action === 'status') {
-        const overrideKey = action === 'employee' ? 'employeeId' : 'funnelStatusId';
-        const select = action === 'employee' ? $('#massEmployeeSelect') : $('#massStatusSelect');
-        if (action === 'status' && !select.value) { showToast('Выберите статус', 'error'); return; }
-        const overrideValue = select.value || null;
-        let changed = 0, failed = 0;
-        for (const id of ids) {
-            const lead = leads.find((x) => x.id === id);
-            if (!lead) { failed++; continue; }
-            try {
-                await updateLead(id, { ...lead, [overrideKey]: overrideValue });
-                changed++;
-            } catch (e) {
-                failed++;
-            }
-        }
+    const config = MASS_PATCH_ACTIONS[action];
+    if (!config) return;
+
+    const select = $(config.selectId);
+    if (config.required && !select.value) { showToast(config.prompt, 'error'); return; }
+
+    try {
+        const { updated } = await bulkUpdateLeads(ids, { [config.key]: select.value || null });
         clearSelection();
         await reloadAll();
-        if (changed > 0) showToast(action === 'employee' ? `Оператор изменён у ${changed} лид(ов)` : `Статус изменён у ${changed} лид(ов)`, 'success');
-        if (failed > 0) showToast(`Не удалось обновить ${failed} лид(ов)`, 'error');
+        showToast(`${config.done} у ${updated} лид(ов)`, 'success');
+    } catch (e) {
+        showToast(e.message, 'error');
     }
 });
 
@@ -389,11 +434,14 @@ $('#columnsApplyBtn').addEventListener('click', () => {
         await loadReferenceData();
         fillFilterSelects();
         renderColumnsModalBody();
-        initLeadModal({ sources, employees, offers, statuses, paramLists }, reloadAll);
-        initUpload({ sources }, reloadAll);
+        initLeadModal({ sources, employees, statuses, paramLists, scripts }, reloadAll);
+        initUpload({ sources, employees, statuses, scripts }, reloadAll);
         fillFunnelStatusSelect($('#massStatusSelect'), statuses, false);
         $('#massEmployeeSelect').innerHTML = '<option value="">— не назначен —</option>'
             + employees.map((e) => `<option value="${e.id}">${escapeHtml(e.lastName + ' ' + e.firstName)}</option>`).join('');
+        const scriptOptions = scripts.map((s) => `<option value="${s.id}">${escapeHtml(s.title)}</option>`).join('');
+        $('#massScriptSelect').innerHTML = '<option value="">— выберите скрипт —</option>' + scriptOptions;
+        $('#massRepeatScriptSelect').innerHTML = '<option value="">— снять скрипт —</option>' + scriptOptions;
         await reloadAll();
     } catch (e) {
         showToast(e.message, 'error');

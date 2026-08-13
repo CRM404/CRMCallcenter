@@ -6,6 +6,7 @@
 
 const express = require('express');
 const { pool } = require('../db');
+const { MAX_OFFERS_PER_LEAD, TOO_MANY_OFFERS_HINT } = require('../services/leadOfferLimits');
 
 const router = express.Router();
 
@@ -240,6 +241,168 @@ router.get('/', async (req, res) => {
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: 'Не удалось получить список офферов' });
+    }
+});
+
+// ============================================================
+// Серверный поиск офферов для страницы «Лиды» (13.08.2026).
+// Офферов в базе ≈38 000 — фронт «Лидов» не грузит справочник целиком
+// никогда, только эти три лёгких эндпоинта. GET / выше не тронут: им живёт
+// страница CPA-сетей, там нужны вложенные segments/geo.
+//
+// Маппинг фильтров на схему (решение куратора): «Корневой источник»,
+// «Площадка» и «Регион/город» — это колонки sources (root_source,
+// platform_id -> ad_platforms.name, city_region). К офферу они цепляются
+// через его сеть: real_estate_offers.network_id -> source_cpa_networks ->
+// sources. Оффер проходит фильтр, если у его сети есть ХОТЯ БЫ ОДИН источник,
+// удовлетворяющий ВСЕМ выбранным условиям сразу (один EXISTS со всеми
+// условиями, dialog.md D1) — иначе подстрока строки результата, которая
+// берётся с одного конкретного источника, противоречила бы фильтру.
+// ============================================================
+
+const SEARCH_DEFAULT_LIMIT = 50;
+// Потолок совпадает с максимумом офферов на лида: после «Добавить все» фронту
+// нужны НАЗВАНИЯ всего отбора, чтобы показать выбранное тегами (search-ids по
+// контракту отдаёт только id). Больше этого числа офферов на лида всё равно
+// не сохранить, поэтому и запрашивать больше незачем.
+const SEARCH_MAX_LIMIT = MAX_OFFERS_PER_LEAD;
+
+// Подстрока «площадка · корневой источник · город, регион» — от первого по id
+// источника сети оффера. Нет источников — прочерк (LEFT JOIN LATERAL).
+const SEARCH_FROM = `
+    FROM real_estate_offers o
+    LEFT JOIN LATERAL (
+        SELECT s.root_source, s.city_region, p.name AS platform_name
+        FROM source_cpa_networks scn
+        JOIN sources s ON s.id = scn.source_id
+        LEFT JOIN ad_platforms p ON p.id = s.platform_id
+        WHERE scn.cpa_network_id = o.network_id
+        ORDER BY s.id
+        LIMIT 1
+    ) src ON true
+`;
+
+function buildSearchWhere(query) {
+    const { search, rootSource, platformId, cityRegion } = query;
+    const conditions = [];
+    const params = [];
+
+    if (search && String(search).trim()) {
+        params.push(`%${String(search).trim()}%`);
+        conditions.push(`o.name ILIKE $${params.length}`);
+    }
+
+    const sourceConditions = [];
+    if (rootSource && String(rootSource).trim()) {
+        params.push(String(rootSource).trim());
+        sourceConditions.push(`s.root_source = $${params.length}`);
+    }
+    if (platformId && String(platformId).trim()) {
+        params.push(Number(platformId));
+        sourceConditions.push(`s.platform_id = $${params.length}`);
+    }
+    if (cityRegion && String(cityRegion).trim()) {
+        params.push(String(cityRegion).trim());
+        sourceConditions.push(`s.city_region = $${params.length}`);
+    }
+    // Ни один фильтр не выбран — EXISTS не добавляем вовсе, иначе из выдачи
+    // молча выпали бы офферы сетей, у которых источников пока нет.
+    if (sourceConditions.length > 0) {
+        conditions.push(`EXISTS (
+            SELECT 1 FROM source_cpa_networks scn
+            JOIN sources s ON s.id = scn.source_id
+            WHERE scn.cpa_network_id = o.network_id AND ${sourceConditions.join(' AND ')}
+        )`);
+    }
+
+    return {
+        whereClause: conditions.length ? `WHERE ${conditions.join(' AND ')}` : '',
+        params
+    };
+}
+
+// GET /api/real-estate-offers/search?search=&rootSource=&platformId=&cityRegion=&limit=
+// Плоские строки + общий счётчик отбора для шапки «Найдено: N».
+router.get('/search', async (req, res) => {
+    try {
+        const { whereClause, params } = buildSearchWhere(req.query);
+
+        const requestedLimit = Number(req.query.limit);
+        const limit = Number.isFinite(requestedLimit) && requestedLimit > 0
+            ? Math.min(requestedLimit, SEARCH_MAX_LIMIT)
+            : SEARCH_DEFAULT_LIMIT;
+        params.push(limit);
+
+        // count(*) OVER () считается до LIMIT — общий размер отбора известен
+        // из того же запроса, второй COUNT не нужен.
+        const result = await pool.query(
+            `SELECT o.id, o.name, src.platform_name, src.root_source, src.city_region,
+                    count(*) OVER ()::int AS total
+             ${SEARCH_FROM}
+             ${whereClause}
+             ORDER BY o.name, o.id
+             LIMIT $${params.length}`,
+            params
+        );
+
+        res.json({
+            total: result.rows[0] ? result.rows[0].total : 0,
+            items: result.rows.map((r) => ({
+                id: r.id,
+                name: r.name,
+                platform: r.platform_name,
+                rootSource: r.root_source,
+                cityRegion: r.city_region
+            }))
+        });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Не удалось выполнить поиск офферов' });
+    }
+});
+
+// GET /api/real-estate-offers/search-ids — те же параметры, только id всего
+// отбора: транспорт кнопки «Добавить все (N)». Фронт видит первые строки, но
+// выбирает весь отбор и отправляет id обычным offerIds при сохранении лида —
+// отдельной серверной записи «критериев отбора» не заводим.
+router.get('/search-ids', async (req, res) => {
+    try {
+        const { whereClause, params } = buildSearchWhere(req.query);
+        const result = await pool.query(
+            `SELECT o.id ${SEARCH_FROM} ${whereClause} ORDER BY o.id`,
+            params
+        );
+        if (result.rows.length > MAX_OFFERS_PER_LEAD) {
+            return res.status(400).json({
+                error: `В отборе ${result.rows.length} офферов, максимум на одного лида — ${MAX_OFFERS_PER_LEAD}. ${TOO_MANY_OFFERS_HINT}`
+            });
+        }
+        res.json({ ids: result.rows.map((r) => r.id) });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Не удалось получить список офферов отбора' });
+    }
+});
+
+// GET /api/real-estate-offers/search-filters — значения трёх фильтров.
+// Простые DISTINCT по sources, без проверки «есть ли под это значение офферы»
+// (решение куратора D3): джойн на 38 000 при каждом открытии модалки дороже,
+// чем изредка пустой результат — пользователь честно увидит «Ничего не найдено».
+router.get('/search-filters', async (req, res) => {
+    try {
+        const [rootSources, platforms, cityRegions] = await Promise.all([
+            pool.query(`SELECT DISTINCT root_source FROM sources WHERE root_source IS NOT NULL AND root_source <> '' ORDER BY root_source`),
+            pool.query(`SELECT DISTINCT p.id, p.name FROM sources s JOIN ad_platforms p ON p.id = s.platform_id ORDER BY p.name`),
+            pool.query(`SELECT DISTINCT city_region FROM sources WHERE city_region IS NOT NULL AND city_region <> '' ORDER BY city_region`)
+        ]);
+        res.json({
+            rootSources: rootSources.rows.map((r) => r.root_source),
+            platforms: platforms.rows.map((r) => ({ id: r.id, name: r.name })),
+            cityRegions: cityRegions.rows.map((r) => r.city_region)
+        });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Не удалось получить значения фильтров' });
     }
 });
 

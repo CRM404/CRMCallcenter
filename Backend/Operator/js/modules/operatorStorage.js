@@ -81,9 +81,10 @@ export function setOnLine(id, onLine) {
     });
 }
 
-// Скрипт подбирается только по назначению оператору (employeeId), без учёта
-// оффера/статуса воронки лида. null в ответе — нет назначенного скрипта, это
-// не ошибка (см. routes/scripts.js).
-export function fetchScript(employeeId, leadId) {
-    return request(`/scripts${buildQuery({ employeeId, leadId })}`);
+// Скрипт привязан к ЛИДУ: администратор выбирает его на странице «Лиды», а
+// сервер по текущему статусу лида решает, показать основной скрипт или скрипт
+// для повторных (этапы 5–6). employeeId в запросе больше не нужен. null в
+// ответе — скрипта для этого состояния нет, это не ошибка (routes/scripts.js).
+export function fetchScript(leadId) {
+    return request(`/scripts${buildQuery({ leadId })}`);
 }
