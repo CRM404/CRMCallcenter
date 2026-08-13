@@ -34,6 +34,9 @@ body {
     background-position: center;
     background-repeat: no-repeat;
     background-attachment: fixed;
+    /* Запасной цвет, если картинка не загрузится — тот же, что на остальных
+       страницах проекта (Реквизиты/CPA/Источники/Лиды/Скрипты). */
+    background-color: #eef1f6;
     color: #333;
 }
 
