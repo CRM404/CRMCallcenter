@@ -46,6 +46,12 @@ let funnelStatuses = [];
 let onSavedCallback = null;
 let statusPick = null;
 let offerPicker = null;
+let allEmployees = [];
+// Сотрудник, уже назначенный открытому лиду. Нужен отдельно от списка: он
+// остаётся доступным, даже если не проходит фильтр по линии или уволен
+// (легаси-данные, dialog.md B1/B4) — иначе сохранение карточки молча обнулило
+// бы существующее назначение.
+let assignedEmployeeId = null;
 
 function fillSelectFromList(select, items, placeholder, withNone) {
     let html = `<option value="">${escapeHtml(placeholder)}</option>`;
@@ -109,6 +115,45 @@ async function handlePhoneBlur() {
     }
 }
 
+function employeeName(employee) {
+    return `${employee.lastName} ${employee.firstName}`;
+}
+
+// Раздача уводит лида только оператору его линии, поэтому и вручную назначить
+// можно только такого же (`leadsUpload.js` фильтрует пул раздачи ровно так же).
+// Исключение — уже назначенный сотрудник: он остаётся в списке с пометкой
+// причины, по которой не прошёл бы фильтр, чтобы сохранение карточки не
+// потеряло существующее назначение.
+function syncEmployeesByLine() {
+    const line = $('#ldLine').value;
+    const select = $('#ldEmployee');
+    const previous = select.value;
+
+    if (!line) {
+        select.innerHTML = '<option value="">— сначала выберите линию —</option>';
+        select.disabled = true;
+        select.value = '';
+        return;
+    }
+
+    const matching = allEmployees.filter((e) => e.lineType === line && e.status === 'active');
+    const options = matching.map((e) => ({ id: e.id, name: employeeName(e) }));
+
+    const assigned = assignedEmployeeId ? allEmployees.find((e) => e.id === assignedEmployeeId) : null;
+    if (assigned && !matching.some((e) => e.id === assigned.id)) {
+        const reasons = [];
+        if (assigned.lineType !== line) reasons.push('другая линия');
+        if (assigned.status !== 'active') reasons.push('неактивен');
+        options.unshift({ id: assigned.id, name: `${employeeName(assigned)} (${reasons.join(', ')})` });
+    }
+
+    select.disabled = false;
+    fillSelectFromList(select, options, '— не назначен —');
+    // Прежний выбор сохраняем, только если он всё ещё в списке: при смене
+    // линии сотрудник старой линии из выбора уходит.
+    select.value = options.some((o) => String(o.id) === previous) ? previous : '';
+}
+
 // Условный «Скрипт для повторных»: в скрытом виде места в сетке НЕ резервирует
 // (display:none через [hidden], а не visibility) — фидбек владельца про пустоту
 // в форме.
@@ -133,8 +178,9 @@ export function initLeadModal({ sources, employees, statuses, paramLists, script
     funnelStatuses = statuses;
     onSavedCallback = onSaved;
 
+    allEmployees = employees;
+
     fillSelectFromList($('#ldSource'), sources.map((s) => ({ id: s.id, name: s.rootSource })), '— не выбран —');
-    fillSelectFromList($('#ldEmployee'), employees.map((e) => ({ id: e.id, name: `${e.lastName} ${e.firstName}` })), '— не назначен —');
     fillSelectFromList($('#ldScript'), scripts.map((s) => ({ id: s.id, name: s.title })), '— не выбран —');
     fillSelectFromList($('#ldRepeatScript'), scripts.map((s) => ({ id: s.id, name: s.title })), '— не выбран —');
     fillFunnelStatusSelect($('#ldFunnelStatus'), funnelStatuses, true);
@@ -156,7 +202,11 @@ export function initLeadModal({ sources, employees, statuses, paramLists, script
     })));
 
     offerPicker = createOfferTabPicker({
-        rootSelect: $('#ofltRoot'), platSelect: $('#ofltPlat'), geoSelect: $('#ofltGeo'),
+        rootSelect: $('#ofltRoot'), platSelect: $('#ofltPlat'),
+        geoSelects: {
+            region: $('#ofltRegion'), city: $('#ofltCity'),
+            district: $('#ofltDistrict'), locality: $('#ofltLocality')
+        },
         searchInput: $('#offerSearchInput'), resetBtn: $('#ofltResetBtn'),
         resultsEl: $('#offerResults'), tagsEl: $('#offerSelTags'), countEl: $('#offerSelCount'),
         emptyEl: $('#offerSelEmpty'), clearAllBtn: $('#offerClearAllBtn'), tabCountEl: $('#offerTabCount')
@@ -166,6 +216,7 @@ export function initLeadModal({ sources, employees, statuses, paramLists, script
 
     $('#leadTabBtnMain').addEventListener('click', () => switchTab('main'));
     $('#leadTabBtnOffers').addEventListener('click', () => switchTab('offers'));
+    $('#ldLine').addEventListener('change', syncEmployeesByLine);
 
     $('#ldPhone').addEventListener('input', (e) => {
         const pos = e.target.selectionStart;
@@ -196,6 +247,10 @@ export async function openLeadModal(lead) {
     });
     $('#ldSource').value = lead && lead.sourceId ? lead.sourceId : '';
     $('#ldLine').value = lead && lead.lineType ? lead.lineType : '';
+    // Список сотрудников зависит от линии, поэтому заполняется ПОСЛЕ неё, и
+    // только потом выставляется текущее назначение.
+    assignedEmployeeId = lead && lead.employeeId ? lead.employeeId : null;
+    syncEmployeesByLine();
     $('#ldEmployee').value = lead && lead.employeeId ? lead.employeeId : '';
     $('#ldFunnelStatus').value = lead && lead.funnelStatusId ? lead.funnelStatusId : '';
     $('#ldScript').value = lead && lead.scriptId ? lead.scriptId : '';

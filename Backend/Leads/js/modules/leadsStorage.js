@@ -96,17 +96,19 @@ export function fetchAllEmployees() {
 // Офферы — ТОЛЬКО серверный поиск: в базе ≈38 000, полный справочник
 // (GET /real-estate-offers, им живёт страница CPA-сетей) эта страница не
 // запрашивает никогда.
-export function searchOffers({ search, rootSource, platformId, cityRegion, limit } = {}) {
-    return request(`/real-estate-offers/search${buildQuery({ search, rootSource, platformId, cityRegion, limit })}`);
+export function searchOffers({ search, rootSource, platformId, region, city, district, locality, limit } = {}) {
+    return request(`/real-estate-offers/search${buildQuery({ search, rootSource, platformId, region, city, district, locality, limit })}`);
 }
 
 // Транспорт кнопки «Добавить все (N)»: id всего отбора, а не видимой страницы.
-export function searchOfferIds({ search, rootSource, platformId, cityRegion } = {}) {
-    return request(`/real-estate-offers/search-ids${buildQuery({ search, rootSource, platformId, cityRegion })}`);
+export function searchOfferIds({ search, rootSource, platformId, region, city, district, locality } = {}) {
+    return request(`/real-estate-offers/search-ids${buildQuery({ search, rootSource, platformId, region, city, district, locality })}`);
 }
 
-export function fetchOfferFilters() {
-    return request('/real-estate-offers/search-filters');
+// Гео-уровни каскадные: выбранные верхние сужают списки нижних, поэтому
+// эндпоинт принимает их параметрами и перезапрашивается при смене уровня.
+export function fetchOfferFilters({ region, city, district } = {}) {
+    return request(`/real-estate-offers/search-filters${buildQuery({ region, city, district })}`);
 }
 
 // Только активные скрипты — черновики в выборе на «Лидах» не участвуют.

@@ -245,6 +245,34 @@ async function validateFullLeadBody(db, body) {
     return validateLeadParams(db, body);
 }
 
+// Назначить лиду можно только оператора ЕГО линии — то же правило, по которому
+// работает автораздача (services/leadDistribution.js). Проверка нужна и в обход
+// интерфейса: эндпоинт доступен напрямую.
+//
+// Ключевая тонкость: проверяем ТОЛЬКО когда назначение МЕНЯЕТСЯ. У легаси-лида
+// уже может стоять оператор другой линии (на бою такие есть), а карточка шлёт
+// PUT полным телом — без этого условия правка телефона у такого лида падала бы
+// с 400 на операторе, которого пользователь не трогал (dialog.md B1).
+// currentEmployeeId === undefined означает «сравнивать не с чем» (создание).
+async function checkEmployeeLine(db, { employeeId, lineType, currentEmployeeId }) {
+    if (employeeId === null || employeeId === undefined || employeeId === '') return null;
+    const nextId = Number(employeeId);
+    if (currentEmployeeId !== undefined && currentEmployeeId !== null && Number(currentEmployeeId) === nextId) {
+        return null; // назначение не меняется — не наше дело
+    }
+    if (!lineType) {
+        return 'Сначала укажите линию лида — без неё нельзя назначить оператора';
+    }
+    const result = await db.query('SELECT last_name, first_name, line_type FROM employees WHERE id = $1', [nextId]);
+    if (result.rows.length === 0) return 'Указанный сотрудник не найден';
+    const employee = result.rows[0];
+    if (employee.line_type !== lineType) {
+        const employeeLine = employee.line_type ? `«${employee.line_type}»` : 'не указана';
+        return `Сотрудник ${employee.last_name} ${employee.first_name}: линия ${employeeLine}, а у лида «${lineType}». Назначить можно только оператора той же линии`;
+    }
+    return null;
+}
+
 // ================= Связки =================
 
 // Пересборка целиком: delete + один INSERT ... SELECT unnest на связку.
@@ -412,6 +440,14 @@ router.post('/', async (req, res) => {
         if (validation.error) {
             return res.status(400).json({ error: validation.error });
         }
+        // Новый лид — сравнивать не с чем, назначение всегда «меняется».
+        const lineError = await checkEmployeeLine(client, {
+            employeeId: req.body.employeeId,
+            lineType: req.body.lineType
+        });
+        if (lineError) {
+            return res.status(400).json({ error: lineError });
+        }
 
         await client.query('BEGIN');
         const body = { ...req.body, repeatScriptId: validation.data.repeatScriptId };
@@ -445,6 +481,20 @@ router.put('/:id', async (req, res) => {
         const validation = await validateFullLeadBody(client, req.body);
         if (validation.error) {
             return res.status(400).json({ error: validation.error });
+        }
+        // Текущее назначение нужно, чтобы отличить «пользователь назначил
+        // нового оператора» от «легаси-назначение просто приехало обратно».
+        const current = await client.query('SELECT employee_id FROM leads WHERE id = $1', [req.params.id]);
+        if (current.rows.length === 0) {
+            return res.status(404).json({ error: 'Лид не найден' });
+        }
+        const lineError = await checkEmployeeLine(client, {
+            employeeId: req.body.employeeId,
+            lineType: req.body.lineType,
+            currentEmployeeId: current.rows[0].employee_id
+        });
+        if (lineError) {
+            return res.status(400).json({ error: lineError });
         }
 
         await client.query('BEGIN');
@@ -516,6 +566,24 @@ router.post('/bulk-update', async (req, res) => {
                 const label = key === 'scriptId' ? 'Скрипт' : 'Скрипт для повторных';
                 const scriptError = await checkActiveScript(pool, patch[key], label);
                 if (scriptError) return res.status(400).json({ error: scriptError });
+            }
+        }
+
+        // Массовое назначение оператора проверяется по КАЖДОМУ лиду отдельно:
+        // линия у них своя, а у части может стоять то же назначение (тогда
+        // ничего не меняется и проверять нечего). Всё или ничего — применить
+        // к части выбранных нельзя, иначе пользователь не поймёт, что вышло.
+        if (keys.includes('employeeId') && patch.employeeId) {
+            const leads = await pool.query('SELECT id, employee_id, line_type FROM leads WHERE id = ANY($1::int[])', [ids]);
+            for (const lead of leads.rows) {
+                const lineError = await checkEmployeeLine(pool, {
+                    employeeId: patch.employeeId,
+                    lineType: lead.line_type,
+                    currentEmployeeId: lead.employee_id
+                });
+                if (lineError) {
+                    return res.status(400).json({ error: `Лид #${lead.id}: ${lineError}` });
+                }
             }
         }
 

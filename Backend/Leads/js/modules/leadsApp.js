@@ -305,8 +305,47 @@ function clearSelection() {
 
 $('#massClearBtn').addEventListener('click', () => { clearSelection(); renderTable(); });
 
+// Назначить можно только оператора линии лида — значит и список для массового
+// действия зависит от выбранных лидов, а не от всех сотрудников сразу.
+// Возвращает { error } либо { line }.
+function selectedLeadsLine() {
+    const lines = new Set(
+        Array.from(selectedIds)
+            .map((id) => leads.find((l) => l.id === id))
+            .filter(Boolean)
+            .map((l) => l.lineType || null)
+    );
+    if (lines.size > 1) return { error: 'Выбраны лиды разных линий — сузьте выбор' };
+    const line = lines.values().next().value;
+    // Все выбранные без линии: формально линия одна и та же, но подходящих
+    // операторов нет. Показывать пустой список нельзя — пользователь не
+    // поймёт, сломано это или так задумано (dialog.md B5).
+    if (!line) return { error: 'У выбранных лидов не указана линия — сначала заполните её' };
+    return { line };
+}
+
+function fillMassEmployeeSelect(line) {
+    $('#massEmployeeSelect').innerHTML = '<option value="">— не назначен —</option>'
+        + employees
+            .filter((e) => e.lineType === line && e.status === 'active')
+            .map((e) => `<option value="${e.id}">${escapeHtml(e.lastName + ' ' + e.firstName)}</option>`)
+            .join('');
+}
+
 $('#massActionSelect').addEventListener('change', () => {
     const action = $('#massActionSelect').value;
+
+    if (action === 'employee') {
+        const { error, line } = selectedLeadsLine();
+        if (error) {
+            showToast(error, 'error');
+            $('#massActionSelect').value = '';
+            $('#massEmployeeSelect').hidden = true;
+            return;
+        }
+        fillMassEmployeeSelect(line);
+    }
+
     $('#massEmployeeSelect').hidden = action !== 'employee';
     $('#massStatusSelect').hidden = action !== 'status';
     $('#massScriptSelect').hidden = action !== 'script';
@@ -345,6 +384,12 @@ $('#massApplyBtn').addEventListener('click', async () => {
 
     const config = MASS_PATCH_ACTIONS[action];
     if (!config) return;
+
+    // Выделение могли изменить уже после выбора действия — перепроверяем.
+    if (action === 'employee') {
+        const { error } = selectedLeadsLine();
+        if (error) { showToast(error, 'error'); return; }
+    }
 
     const select = $(config.selectId);
     if (config.required && !select.value) { showToast(config.prompt, 'error'); return; }
@@ -442,8 +487,8 @@ $('#columnsApplyBtn').addEventListener('click', () => {
         initLeadModal({ sources, employees, statuses, paramLists, scripts }, reloadAll);
         initUpload({ sources, employees, statuses, scripts }, reloadAll);
         fillFunnelStatusSelect($('#massStatusSelect'), statuses, false);
-        $('#massEmployeeSelect').innerHTML = '<option value="">— не назначен —</option>'
-            + employees.map((e) => `<option value="${e.id}">${escapeHtml(e.lastName + ' ' + e.firstName)}</option>`).join('');
+        // Список сотрудников для массового действия заполняется не здесь, а в
+        // момент выбора действия: он зависит от линии выбранных лидов.
         const scriptOptions = scripts.map((s) => `<option value="${s.id}">${escapeHtml(s.title)}</option>`).join('');
         $('#massScriptSelect').innerHTML = '<option value="">— выберите скрипт —</option>' + scriptOptions;
         $('#massRepeatScriptSelect').innerHTML = '<option value="">— снять скрипт —</option>' + scriptOptions;

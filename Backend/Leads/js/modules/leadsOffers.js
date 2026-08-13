@@ -24,10 +24,27 @@ function escapeHtml(value) {
     return String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-// «площадка · корневой источник · город, регион» — от первого источника сети
-// оффера; чего нет, то не показываем (не оставляем висящие разделители).
+const GEO_LEVELS = ['region', 'city', 'district', 'locality'];
+
+// Гео-часть подстроки: самый детальный заполненный уровень + регион. Соседний
+// повтор схлопывается — иначе у оффера, где заполнен только регион, выйдет
+// «Московская обл., Московская обл.», а у Москвы/СПб (город = регион) —
+// «Москва, Москва». Тот же приём, что в подсказках адреса CPA-сетей
+// (cpaApp.js, geoSuggestionLabel): убрать соседние дубли перед склейкой.
+function offerGeoLabel(offer) {
+    const filled = GEO_LEVELS.map((level) => offer[level]).filter(Boolean);
+    if (filled.length === 0) return '';
+    const mostDetailed = filled[filled.length - 1];
+    const pieces = [mostDetailed, offer.region].filter(Boolean);
+    return pieces.filter((p, i) => p !== pieces[i - 1]).join(', ');
+}
+
+// «площадка · корневой источник · <география объекта>». Площадка и корневой
+// источник по-прежнему от первого источника сети оффера, а гео — собственная
+// география оффера (та самая строка, по которой он и нашёлся, если фильтр
+// задан). Чего нет, то не показываем — висящих разделителей не остаётся.
 function offerSubtitle(offer) {
-    const parts = [offer.platform, offer.rootSource, offer.cityRegion].filter(Boolean);
+    const parts = [offer.platform, offer.rootSource, offerGeoLabel(offer)].filter(Boolean);
     return parts.length ? parts.join(' · ') : '—';
 }
 
@@ -44,7 +61,7 @@ function debounce(fn, ms) {
 // ============================================================
 
 export function createOfferTabPicker({
-    rootSelect, platSelect, geoSelect, searchInput, resetBtn,
+    rootSelect, platSelect, geoSelects, searchInput, resetBtn,
     resultsEl, tagsEl, countEl, emptyEl, clearAllBtn, tabCountEl, onChange
 }) {
     // id -> name: имя нужно для тегов выбранного, а поиск возвращает только
@@ -59,12 +76,13 @@ export function createOfferTabPicker({
     let maxPerLead = null;
 
     function currentParams() {
-        return {
+        const params = {
             search: searchInput.value.trim(),
             rootSource: rootSelect.value,
-            platformId: platSelect.value,
-            cityRegion: geoSelect.value
+            platformId: platSelect.value
         };
+        GEO_LEVELS.forEach((level) => { params[level] = geoSelects[level].value; });
+        return params;
     }
 
     function emitChange() {
@@ -194,25 +212,58 @@ export function createOfferTabPicker({
     });
 
     searchInput.addEventListener('input', runSearchDebounced);
-    [rootSelect, platSelect, geoSelect].forEach((el) => el.addEventListener('change', runSearch));
-    resetBtn.addEventListener('click', () => {
-        rootSelect.value = '';
-        platSelect.value = '';
-        geoSelect.value = '';
-        searchInput.value = '';
-        runSearch();
+    [rootSelect, platSelect].forEach((el) => el.addEventListener('change', runSearch));
+
+    // Смена гео-уровня сбрасывает все НИЖНИЕ и перезагружает их списки:
+    // прежний город почти наверняка не принадлежит новому региону, и оставлять
+    // его — значит показывать пустую выдачу вместо понятного результата.
+    GEO_LEVELS.forEach((level, index) => {
+        geoSelects[level].addEventListener('change', async () => {
+            GEO_LEVELS.slice(index + 1).forEach((lower) => { geoSelects[lower].value = ''; });
+            await loadFilters({ force: true });
+            await runSearch();
+        });
     });
 
-    async function loadFilters() {
-        if (filtersLoaded) return;
+    resetBtn.addEventListener('click', async () => {
+        rootSelect.value = '';
+        platSelect.value = '';
+        GEO_LEVELS.forEach((level) => { geoSelects[level].value = ''; });
+        searchInput.value = '';
+        await loadFilters({ force: true });
+        await runSearch();
+    });
+
+    function fillSelect(select, values) {
+        // Значение сохраняем: списки верхних уровней при каскаде не меняются,
+        // и терять уже выбранное при перезагрузке нельзя.
+        const previous = select.value;
+        select.innerHTML = '<option value="">Все</option>'
+            + values.map((v) => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
+        select.value = values.includes(previous) ? previous : '';
+    }
+
+    async function loadFilters({ force = false } = {}) {
+        if (filtersLoaded && !force) return;
         try {
-            const { rootSources, platforms, cityRegions } = await fetchOfferFilters();
+            const { rootSources, platforms, regions, cities, districts, localities } = await fetchOfferFilters({
+                region: geoSelects.region.value,
+                city: geoSelects.city.value,
+                district: geoSelects.district.value
+            });
+            const previousRoot = rootSelect.value;
             rootSelect.innerHTML = '<option value="">Все</option>'
                 + rootSources.map((v) => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
+            rootSelect.value = rootSources.includes(previousRoot) ? previousRoot : '';
+            const previousPlat = platSelect.value;
             platSelect.innerHTML = '<option value="">Все</option>'
                 + platforms.map((p) => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join('');
-            geoSelect.innerHTML = '<option value="">Все</option>'
-                + cityRegions.map((v) => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
+            platSelect.value = platforms.some((p) => String(p.id) === previousPlat) ? previousPlat : '';
+
+            fillSelect(geoSelects.region, regions);
+            fillSelect(geoSelects.city, cities);
+            fillSelect(geoSelects.district, districts);
+            fillSelect(geoSelects.locality, localities);
             filtersLoaded = true;
         } catch (e) {
             showToast(e.message, 'error');
@@ -230,12 +281,14 @@ export function createOfferTabPicker({
             renderSelected();
             rootSelect.value = '';
             platSelect.value = '';
-            geoSelect.value = '';
+            GEO_LEVELS.forEach((level) => { geoSelects[level].value = ''; });
             searchInput.value = '';
             resultsEl.hidden = true;
             lastResults = [];
             lastTotal = 0;
-            await loadFilters();
+            // force: списки гео-уровней могли остаться суженными каскадом от
+            // прошлого открытия, а значения мы только что сбросили.
+            await loadFilters({ force: true });
             await runSearch();
         },
         getValues
