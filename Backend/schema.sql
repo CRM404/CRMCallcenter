@@ -461,12 +461,13 @@ CREATE TABLE IF NOT EXISTS real_estate_offer_mortgage_types (
 ALTER TABLE real_estate_offers DROP COLUMN IF EXISTS payment_method;
 ALTER TABLE real_estate_offers DROP COLUMN IF EXISTS mortgage_type;
 
--- «Настройка списков» — 11 управляемых справочников формы оффера, ведутся
--- прямо из модалки оффера (переключатель в шапке). Одна общая таблица на
--- все списки (архитектурное решение куратора, report_2026-08-01.md) — все
--- 11 списков структурно одинаковы (упорядоченный список строк без
--- доп. метаданных), отдельные таблицы дали бы 11-кратный дублирующийся CRUD
--- без пользы. «Статус» сюда намеренно не входит — от него зависит цвет
+-- «Настройка списков» — 13 управляемых справочников форм оффера и лида,
+-- ведутся прямо из модалки оффера (переключатель в шапке). Одна общая таблица
+-- на все списки (архитектурное решение куратора, report_2026-08-01.md) — все
+-- списки структурно одинаковы (упорядоченный список строк без
+-- доп. метаданных), отдельные таблицы дали бы 13-кратный дублирующийся CRUD
+-- без пользы. Два списка (decisionMaker, deadline) поля в форме оффера не
+-- имеют — они нужны карточке лида, но управляются той же панелью (14.08.2026). «Статус» сюда намеренно не входит — от него зависит цвет
 -- бейджа/логика фильтра в таблице офферов, произвольные значения там
 -- сломают раскраску.
 CREATE TABLE IF NOT EXISTS param_lists (
@@ -721,3 +722,107 @@ UPDATE employees SET line_type = NULL
 -- переехал в lead_offers, эндпоинты /api/admin/offers удалены. Куратор был за
 -- DROP TABLE с проверкой пустоты, дизайн-сессия — за «не трогать в этой
 -- задаче». До решения владельца таблица остаётся как есть.
+
+-- ============================================================
+-- Карточка клиента на странице оператора: новый состав полей
+-- (report_2026-08-01.md + report_designer.md, 14.08.2026)
+-- ============================================================
+
+-- Замок одноразовых правок ДАННЫХ (решение куратора, dialog.md A2).
+-- Зачем отдельная таблица: migrate.js гоняет весь этот файл при КАЖДОМ старте
+-- сервера, поэтому обычный INSERT ... ON CONFLICT DO NOTHING для справочных
+-- значений неотличим от «пользователь его удалил» — удалённая строка молча
+-- возвращалась бы на следующем деплое (этот баг уже чинили 09.08 для сидинга
+-- param_lists). Для НОВОГО ключа хватает замка «такого list_key ещё нет»
+-- (ниже), но для дополнения СУЩЕСТВУЮЩЕГО списка такого признака нет — нужен
+-- внешний факт «эта правка уже применялась», он и лежит здесь.
+-- Запись замка ставится в том же DO-блоке, что и сама правка: DO-блок
+-- атомарен, так что «замок встал, а данные не доехали» невозможно.
+CREATE TABLE IF NOT EXISTS applied_migrations (
+    id VARCHAR PRIMARY KEY,
+    applied_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+-- Девять новых полей лида. Все значения хранятся ТЕКСТОМ, без FK на
+-- param_lists (решение владельца, вариант 1): у офферов те же признаки лежат
+-- текстом, и перевод одной стороны на ключи сломал бы будущее сравнение.
+-- Гео клиента — плоскими колонками рядом с гео объекта, без отдельной таблицы:
+-- у лида гарантированно один адрес каждого вида, таблица дала бы джойн ради
+-- связи 1:1 (решение куратора). Колонок под fias-идентификаторы нет и не
+-- планируется — они живут только в памяти открытой формы, как у офферов.
+-- other_borrower ТРЁХЗНАЧНЫЙ, поэтому без NOT NULL и без DEFAULT:
+-- NULL — условие показа не выполнено (поле неприменимо), true/false — оператор
+-- ответил. Ровно как real_estate_offers.other_borrower после правки 08.08.
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS decision_maker VARCHAR;
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS client_type VARCHAR;
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS other_borrower BOOLEAN;
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS finish VARCHAR;
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS category VARCHAR;
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS client_region VARCHAR;
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS client_city VARCHAR;
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS client_district VARCHAR;
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS client_locality VARCHAR;
+
+-- Два новых справочника. Замок — на КЛЮЧ, а не на пустоту всей таблицы
+-- (dialog.md A1): общий замок сидинга выше срабатывает только на полностью
+-- пустой param_lists, то есть на боевой базе, где строки давно есть, новые
+-- списки не наполнились бы никогда — владелец получил бы два пустых списка.
+-- Замок по ключу наполняет каждый список ровно один раз и не воскрешает
+-- значения, удалённые владельцем через «Настройку списков».
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM param_lists WHERE list_key = 'decisionMaker') THEN
+        INSERT INTO param_lists (list_key, value, sort_order) VALUES
+            ('decisionMaker', 'Для себя', 1),
+            ('decisionMaker', 'Риэлтор', 2)
+        ON CONFLICT (list_key, value) DO NOTHING;
+    END IF;
+END $$;
+
+-- «Срок сдачи» — АБСОЛЮТНЫЕ кварталы, а не относительные сроки («до полугода»
+-- и т.п.): у офферов на бою лежат именно кварталы, и относительный срок с ними
+-- не сравнить без пересчёта от текущей даты. sort_order хронологический —
+-- будущая сверка «оффер сдаётся не позже, чем нужно клиенту» становится
+-- сравнением порядка. Список конечен и однажды устареет; продлевает владелец
+-- сам через «Настройку списков».
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM param_lists WHERE list_key = 'deadline') THEN
+        INSERT INTO param_lists (list_key, value, sort_order) VALUES
+            ('deadline', 'Сдан', 1),
+            ('deadline', '1 кв. 2026', 2), ('deadline', '2 кв. 2026', 3), ('deadline', '3 кв. 2026', 4), ('deadline', '4 кв. 2026', 5),
+            ('deadline', '1 кв. 2027', 6), ('deadline', '2 кв. 2027', 7), ('deadline', '3 кв. 2027', 8), ('deadline', '4 кв. 2027', 9),
+            ('deadline', '1 кв. 2028', 10), ('deadline', '2 кв. 2028', 11), ('deadline', '3 кв. 2028', 12), ('deadline', '4 кв. 2028', 13),
+            ('deadline', '1 кв. 2029', 14), ('deadline', '2 кв. 2029', 15), ('deadline', '3 кв. 2029', 16), ('deadline', '4 кв. 2029', 17)
+        ON CONFLICT (list_key, value) DO NOTHING;
+    END IF;
+END $$;
+
+-- Дополнение СУЩЕСТВУЮЩИХ справочников значениями, которые на бою уже стоят у
+-- офферов, но в списках отсутствуют: «Стандартный» (вид клиента), «White-box»
+-- и «Ремонт под ключ» (отделка). Без них такие офферы не сошлись бы с лидом
+-- никогда — как только лид начнёт выбирать значение из справочника, их
+-- значений в списке просто не будет.
+-- Замок здесь внешний (applied_migrations), потому что ключи уже существуют:
+-- «значения нет» и «владелец его удалил» изнутри param_lists неразличимы.
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM applied_migrations WHERE id = '2026-08-14-clienttype-finish-values') THEN
+        INSERT INTO param_lists (list_key, value, sort_order)
+        SELECT 'clientType', 'Стандартный',
+               COALESCE((SELECT MAX(sort_order) FROM param_lists WHERE list_key = 'clientType'), 0) + 1
+        ON CONFLICT (list_key, value) DO NOTHING;
+
+        INSERT INTO param_lists (list_key, value, sort_order)
+        SELECT 'finish', 'White-box',
+               COALESCE((SELECT MAX(sort_order) FROM param_lists WHERE list_key = 'finish'), 0) + 1
+        ON CONFLICT (list_key, value) DO NOTHING;
+
+        INSERT INTO param_lists (list_key, value, sort_order)
+        SELECT 'finish', 'Ремонт под ключ',
+               COALESCE((SELECT MAX(sort_order) FROM param_lists WHERE list_key = 'finish'), 0) + 1
+        ON CONFLICT (list_key, value) DO NOTHING;
+
+        INSERT INTO applied_migrations (id) VALUES ('2026-08-14-clienttype-finish-values');
+    END IF;
+END $$;

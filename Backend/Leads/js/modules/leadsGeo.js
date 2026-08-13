@@ -1,9 +1,15 @@
 // --- leadsGeo.js: гео-автоподсказки (DaData) для модалки лида —
 // упрощённая версия attachGeoAutocomplete из CpaNetworks/js/modules/cpaApp.js
 // (report_2026-08-01.md, 13.08.2026): там это повторяемые строки критериев
-// оффера (массив, add/remove), здесь — один-единственный адрес лида, без
-// repeat-row. Смысловая логика (debounce, сужение по regionFiasId/areaFiasId,
-// сброс сужения при ручном вводе) переносится как есть.
+// оффера (массив, add/remove), здесь — адреса лида, без repeat-row. Смысловая
+// логика (debounce, сужение по regionFiasId/areaFiasId, сброс сужения при
+// ручном вводе) переносится как есть.
+//
+// 14.08.2026: адресов стало ДВА — объекта и клиента. Контекст сужения раньше
+// лежал в переменных модуля, то есть был один на всю страницу: выбор региона
+// в гео объекта молча сужал бы поиск города в гео клиента. Теперь контекст
+// свой у каждого блока `.geo-block` (тот же приём, что в форме оффера, где он
+// хранится по строке критерия).
 
 import { fetchGeoSuggest } from './leadsStorage.js';
 import { showToast } from './leadsToast.js';
@@ -13,8 +19,9 @@ const GEO_DEBOUNCE_MS = 300;
 
 let geoSuggestTimer = null;
 let geoSuggestRequestId = 0;
-let regionFiasId;
-let areaFiasId;
+// Контексты сужения по блокам: WeakMap, потому что блоки живут ровно столько,
+// сколько живёт разметка модалки.
+const blockContexts = new WeakMap();
 
 function escapeHtml(value) {
     if (value === null || value === undefined) return '';
@@ -54,29 +61,41 @@ function highlightMatch(text, q) {
     return escapeHtml(text.slice(0, idx)) + '<b>' + escapeHtml(text.slice(idx, idx + q.length)) + '</b>' + escapeHtml(text.slice(idx + q.length));
 }
 
-// Сбрасывает контекст сужения (regionFiasId/areaFiasId) — вызывать при каждом
+// Сбрасывает контекст сужения у ВСЕХ адресных блоков — вызывать при каждом
 // открытии модалки лида, иначе поиск для нового/другого лида молча уйдёт в
 // контекст региона предыдущего редактируемого лида.
 export function resetGeoContext() {
-    regionFiasId = undefined;
-    areaFiasId = undefined;
+    document.querySelectorAll('.geo-block').forEach((block) => {
+        blockContexts.set(block, { regionFiasId: undefined, areaFiasId: undefined });
+    });
     closeGeoSuggest();
+}
+
+function contextOf(input) {
+    // Поле вне адресного блока (в разметке такого нет, но модуль не должен
+    // падать на этом) получает собственный одноразовый контекст.
+    const block = input.closest('.geo-block');
+    if (!block) return { regionFiasId: undefined, areaFiasId: undefined };
+    if (!blockContexts.has(block)) blockContexts.set(block, { regionFiasId: undefined, areaFiasId: undefined });
+    return blockContexts.get(block);
 }
 
 export function initGeoAutocomplete() {
     document.querySelectorAll('.geo-field input').forEach((input) => {
-        const field = Object.keys(GEO_FIELD_BOUND).find((f) => input.classList.contains(`geo-${f}`));
+        const field = input.dataset.geoLevel;
         const bound = GEO_FIELD_BOUND[field];
+        if (!bound) return;
 
         input.addEventListener('input', () => {
             const q = input.value.trim();
             const fieldEl = input.closest('.geo-field');
+            const context = contextOf(input);
 
             // Ручной ввод расходится с уже сохранённым fias-id этого уровня —
             // сбрасываем сужение, иначе следующий поиск молча уйдёт в контекст
             // региона/района, которого пользователь уже не видит в поле.
-            if (field === 'region') { regionFiasId = undefined; areaFiasId = undefined; }
-            if (field === 'district') { areaFiasId = undefined; }
+            if (field === 'region') { context.regionFiasId = undefined; context.areaFiasId = undefined; }
+            if (field === 'district') { context.areaFiasId = undefined; }
 
             closeGeoSuggest();
             clearTimeout(geoSuggestTimer);
@@ -86,7 +105,7 @@ export function initGeoAutocomplete() {
             geoSuggestTimer = setTimeout(async () => {
                 let suggestions;
                 try {
-                    const result = await fetchGeoSuggest(q, { bound, regionFiasId: field !== 'region' ? regionFiasId : undefined });
+                    const result = await fetchGeoSuggest(q, { bound, regionFiasId: field !== 'region' ? context.regionFiasId : undefined });
                     suggestions = result?.suggestions || [];
                 } catch (err) {
                     showToast('Подсказки адреса недоступны — сервис не отвечает. Введите вручную.', 'error');
@@ -110,8 +129,8 @@ export function initGeoAutocomplete() {
                         if (!data) return;
                         const parts = geoSuggestionParts(data);
                         input.value = parts[bound];
-                        if (field === 'region') { regionFiasId = data.region_fias_id; areaFiasId = undefined; }
-                        if (field === 'district') { areaFiasId = data.area_fias_id; }
+                        if (field === 'region') { context.regionFiasId = data.region_fias_id; context.areaFiasId = undefined; }
+                        if (field === 'district') { context.areaFiasId = data.area_fias_id; }
                         closeGeoSuggest();
                     });
                 });

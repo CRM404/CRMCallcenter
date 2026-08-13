@@ -219,7 +219,12 @@ tbody tr.row-selected td { background: rgba(0, 0, 255, .045); }
 
 /* ----- Гео-автоподсказки (DaData) — 1:1 с реальным паттерном из
    Backend/CpaNetworks (routes/geoSuggest.js + cpaApp.js attachGeoAutocomplete),
-   только без repeat-row: у лида один адрес, повторяемость не нужна. ----- */
+   только без repeat-row: у лида по одному адресу каждого вида. С 14.08.2026
+   адресов два — объекта и клиента, — и каждый обёрнут в .geo-block: по этой
+   обёртке leadsGeo.js держит СВОЙ контекст сужения на адрес. ----- */
+.geo-block + .geo-block { margin-top: 14px; }
+.geo-block-title { display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 700; color: var(--ink); margin-bottom: 10px; }
+.geo-block-title i { color: var(--accent); }
 .geo-field { position: relative; min-width: 0; }
 .geo-suggest { position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 60; background: var(--surface-modal); backdrop-filter: blur(14px); border: 1px solid var(--line-strong); border-radius: var(--radius-sm); box-shadow: var(--shadow-pop); max-height: 230px; overflow-y: auto; }
 .geo-suggest-item { display: flex; align-items: flex-start; gap: 7px; padding: 8px 10px; font-size: 12.5px; line-height: 1.35; color: var(--ink); cursor: pointer; }
@@ -309,9 +314,19 @@ tbody tr.row-selected td { background: rgba(0, 0, 255, .045); }
 .req { color: var(--danger); font-weight: 700; }
 /* .form-group задан как display:flex, поэтому браузерный стиль [hidden]{display:none}
    им перебивается — без явного правила условный «Скрипт для повторных» оставался
-   бы видимым всегда (поймано тестом). */
+   бы видимым всегда (поймано тестом). Тем же правилом скрываются каскадные поля
+   «Покупки» (взнос / вид ипотеки / иной заёмщик), добавленные 14.08.2026. */
 .form-group[hidden] { display: none !important; }
 .cond-hint { font-size: 11.5px; color: var(--warn-ink); }
+.form-group label .hint { font-weight: 500; color: var(--ink-faint); }
+
+/* Чекбокс «иной заёмщик» — тот же паттерн, что в форме оффера и в карточке
+   оператора: подпись объясняет, почему поле вообще появилось. */
+.lead-checkbox-row { margin-top: 12px; }
+.lead-checkbox-row label { display: flex; align-items: flex-start; gap: 10px; padding: 11px 14px; border-radius: var(--radius-md); background: rgba(60, 76, 118, .07); border: 1px solid rgba(60, 76, 118, .18); cursor: pointer; font-weight: 400; margin: 0; }
+.lead-checkbox-row input { width: 16px; height: 16px; margin-top: 1px; accent-color: var(--accent); cursor: pointer; flex-shrink: 0; }
+.lead-checkbox-row .txt { font-size: 13px; color: var(--ink); line-height: 1.4; }
+.lead-checkbox-row .txt .sub { display: block; font-size: 11.5px; color: var(--ink-faint); margin-top: 2px; }
 
 /* ----- Вкладки модалки лида: «Данные лида» | «Офферы (N)» ----- */
 .modal-tabs { display: flex; gap: 2px; padding: 0 26px; border-bottom: 1px solid var(--line); flex-shrink: 0; }

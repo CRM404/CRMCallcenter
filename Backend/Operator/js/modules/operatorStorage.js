@@ -81,6 +81,20 @@ export function setOnLine(id, onLine) {
     });
 }
 
+// Справочники карточки клиента (14.08.2026). Те же значения, что у офферов и
+// в админской карточке лида: сравнивать лид с офферами можно только пока обе
+// стороны выбирают из одного списка.
+export function fetchParamLists() {
+    return request('/param-lists');
+}
+
+// Подсказки адреса — тот же прокси DaData, что на офферах и в админской
+// карточке лида. bound задаёт уровень (region|city|area|settlement),
+// regionFiasId сужает поиск внутри уже выбранного региона.
+export function fetchGeoSuggest(query, { bound, regionFiasId } = {}) {
+    return request(`/geo-suggest${buildQuery({ q: query, bound, regionFiasId })}`);
+}
+
 // Скрипт привязан к ЛИДУ: администратор выбирает его на странице «Лиды», а
 // сервер по текущему статусу лида решает, показать основной скрипт или скрипт
 // для повторных (этапы 5–6). employeeId в запросе больше не нужен. null в

@@ -276,13 +276,16 @@ h2 {
 }
 .op-back-link:hover { text-decoration: underline; }
 
+/* Пропорция полотна: скрипт 55 %, карточка 45 % (задано владельцем; до
+   14.08.2026 было наоборот). Перенос в одну колонку на 1080px, а не на 900:
+   карточка в 45 % становится нечитаемо узкой раньше. */
 .op-detail-grid {
     display: grid;
-    grid-template-columns: minmax(280px, 1fr) minmax(360px, 1.4fr);
+    grid-template-columns: minmax(340px, 55fr) minmax(420px, 45fr);
     gap: 24px;
     align-items: start;
 }
-@media (max-width: 900px) {
+@media (max-width: 1080px) {
     .op-detail-grid { grid-template-columns: 1fr; }
 }
 
@@ -348,11 +351,261 @@ h2 {
     margin-bottom: 10px;
 }
 
+/* ============================================================
+   Карточка клиента: новый состав полей (макет дизайн-сессии,
+   версия «script-order», 14.08.2026)
+   ============================================================ */
+
+/* .form-group задан как display:flex, поэтому браузерное [hidden]{display:none}
+   проигрывает по специфичности и скрытый каскадом блок остаётся видимым. Тот же
+   дефект уже ловили на странице «Лиды» — там правило есть, здесь его не было,
+   и без него все три каскада («взнос», «вид ипотеки», «иной заёмщик») были бы
+   видны всегда, то есть логика каскадов существовала бы только на бумаге. */
+.form-group[hidden],
+.op-form-section[hidden] { display: none !important; }
+
+/* Сетки карточки. Базовый .form-grid (auto-fill) не трогаем — он используется
+   и вне карточки; раскладка макета задаётся модификаторами. */
+.form-grid.cols-3 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px 16px;
+    align-items: end; /* двухстрочная подпись не роняет своё поле ниже соседей */
+    margin-bottom: 0;
+}
+.form-grid.cols-3 + .form-grid.cols-3 { margin-top: 14px; }
+.form-grid .span-2 { grid-column: span 2; }
+.form-grid .span-full { grid-column: 1 / -1; }
+@media (max-width: 700px) {
+    .form-grid.cols-3 { grid-template-columns: 1fr; }
+    .form-grid .span-2 { grid-column: auto; }
+}
+
+.op-card-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+}
+.op-card-head h2 {
+    font-size: 15px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    color: #1e2a3a;
+}
+.op-card-icon {
+    width: 27px;
+    height: 27px;
+    border-radius: 8px;
+    background: rgba(0, 0, 255, 0.08);
+    color: #0000FF;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-size: 13px;
+}
+/* Номер лида — только чтение, приходит из базы */
+.op-lead-no {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 5px 12px;
+    border-radius: 20px;
+    background: rgba(96, 112, 148, 0.12);
+    border: 1px solid var(--border-light, rgba(96, 112, 148, 0.18));
+    font-size: 12.5px;
+    font-weight: 700;
+    color: #55637c;
+}
+.op-lead-no .n { color: #16202e; }
+/* Строка не прячется при пустом источнике (показываем «—»): иначе шапка
+   прыгала бы по высоте при переходе между лидами. */
+.op-lead-meta {
+    font-size: 12px;
+    color: #8a95a8;
+    width: 100%;
+    margin-top: -4px;
+}
+
+.op-section-label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: #8a95a8;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.op-section-label::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: rgba(96, 112, 148, 0.18);
+}
+
+.form-group label .hint {
+    font-weight: 500;
+    color: #8a95a8;
+}
+
+/* Стрелки числового поля съедали место — семизначная цена в них не помещалась */
+.form-group input[type=number] { -moz-appearance: textfield; }
+.form-group input[type=number]::-webkit-outer-spin-button,
+.form-group input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+
+/* Пара «от — до»: два поля базы под одной подписью по центру */
+.form-group.centered label { text-align: center; }
+.range-pair {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.range-pair .sep {
+    color: #8a95a8;
+    font-size: 12.5px;
+    flex-shrink: 0;
+}
+.range-pair input {
+    text-align: right;
+    min-width: 0;
+}
+
+/* Кнопка «показать ещё»: ступень раскрывается один раз и не сворачивается */
+.op-dashed-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 9px;
+    width: 100%;
+    padding: 13px;
+    border-radius: 12px;
+    border: 1.5px dashed rgba(96, 112, 148, 0.30);
+    background: transparent;
+    color: #8a95a8;
+    font-size: 13.5px;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: 0.15s;
+}
+.op-dashed-row:hover {
+    border-color: #4a90d9;
+    color: #0000FF;
+    background: rgba(0, 0, 255, 0.04);
+}
+.op-dashed-row .count { color: #8a95a8; font-weight: 500; }
+
+/* Чекбокс «иной заёмщик» — тот же паттерн, что в форме оффера */
+.op-checkbox-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 12px 14px;
+    border-radius: 11px;
+    background: #e8edfa;
+    border: 1px solid rgba(60, 76, 118, 0.22);
+    cursor: pointer;
+    font-weight: 400;
+    margin-bottom: 0;
+}
+.op-checkbox-row input {
+    width: 17px;
+    height: 17px;
+    margin-top: 1px;
+    accent-color: #0000FF;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+.op-checkbox-row .txt {
+    font-size: 13.5px;
+    color: #16202e;
+    line-height: 1.4;
+}
+.op-checkbox-row .txt .sub {
+    display: block;
+    font-size: 12px;
+    color: #55637c;
+    margin-top: 2px;
+}
+
+/* Адресный блок: подпись + четыре уровня 2 × 2 (в карточке шириной 45 %
+   четыре поля в один ряд стали бы нечитаемо узкими) */
+.geo-block + .geo-block { margin-top: 16px; }
+.geo-block-title {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 13px;
+    font-weight: 700;
+    color: #1e2a3a;
+    margin-bottom: 10px;
+}
+.geo-block-title i { color: #0000FF; }
+.geo-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px 14px;
+}
+@media (max-width: 700px) {
+    .geo-grid { grid-template-columns: 1fr; }
+}
+
+/* Подсказки адреса (прокси DaData). Стили продублированы из leads-light.css:
+   страницы проекта не делят CSS — каждая раздаётся своей статической папкой. */
+.geo-field { position: relative; }
+.geo-suggest {
+    position: absolute;
+    z-index: 40;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    min-width: 240px;
+    background: #fff;
+    border: 1px solid #ccd7e6;
+    border-radius: 10px;
+    box-shadow: 0 12px 32px rgba(23, 32, 55, 0.16);
+    overflow: hidden;
+    max-height: 236px;
+    overflow-y: auto;
+}
+.geo-suggest-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 12px;
+    font-size: 13.5px;
+    color: #1e2a3a;
+    cursor: pointer;
+    border-bottom: 1px solid rgba(96, 112, 148, 0.14);
+}
+.geo-suggest-item:last-child { border-bottom: none; }
+.geo-suggest-item:hover { background: rgba(0, 0, 255, 0.06); }
+.geo-suggest-item i { color: #8a95a8; font-size: 12px; }
+.geo-suggest-empty {
+    padding: 11px 13px;
+    font-size: 13px;
+    color: #8a95a8;
+}
+
 .op-card-actions {
     display: flex;
     justify-content: flex-end;
+    align-items: center;
     gap: 12px;
-    margin-top: 10px;
+    margin-top: 22px;
+    padding-top: 18px;
+    border-top: 1px solid rgba(96, 112, 148, 0.18);
+}
+.op-saved-at {
+    margin-right: auto;
+    font-size: 12.5px;
+    color: #8a95a8;
 }
 
 /* ----- Тосты (та же разметка, что у employees-light.css) ----- */

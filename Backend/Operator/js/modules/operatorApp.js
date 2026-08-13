@@ -3,10 +3,10 @@
 import { requireOperatorIdentity } from './operatorIdentity.js';
 import { initOperatorNav } from './operatorNav.js';
 import { showToast } from './operatorToast.js';
-import { fetchOwnLeads, fetchLead, saveLead, fetchFunnelStatuses, fetchScript, fetchEmployee, setOnLine } from './operatorStorage.js';
+import { fetchOwnLeads, fetchLead, saveLead, fetchFunnelStatuses, fetchScript, fetchEmployee, setOnLine, fetchParamLists } from './operatorStorage.js';
 import { renderLeadList } from './operatorLeadList.js';
 import { createScriptView } from './operatorScript.js';
-import { renderLeadForm } from './operatorLeadForm.js';
+import { renderLeadForm, updateSavedAt } from './operatorLeadForm.js';
 
 // "На линии" (report_2026-08-01.md, 13.08.2026) — карточка-переключатель
 // над списком лидов. Сам эндпоинт при onLine=true уже разбирает очередь
@@ -63,12 +63,26 @@ document.addEventListener('DOMContentLoaded', async function() {
 
     let statuses = [];
     let statusesById = new Map();
+    // Справочники карточки клиента грузятся один раз при заходе на страницу и
+    // живут в памяти — тот же приём, что на странице офферов. Внутри рабочего
+    // дня их правит владелец, и перечитывать их на каждое открытие карточки
+    // незачем.
+    let paramLists = {};
 
     try {
         statuses = await fetchFunnelStatuses();
         statusesById = new Map(statuses.map((s) => [s.id, s]));
     } catch (e) {
         showToast(e.message, 'error');
+    }
+
+    try {
+        paramLists = await fetchParamLists();
+    } catch (e) {
+        // Карточка остаётся рабочей и без справочников: выпадающие списки
+        // окажутся пустыми, но уже сохранённые значения не потеряются —
+        // каждое из них показывается отдельным пунктом «— вне списка».
+        showToast('Справочники не загрузились — выпадающие списки будут пустыми', 'error');
     }
 
     async function showListView() {
@@ -105,9 +119,13 @@ document.addEventListener('DOMContentLoaded', async function() {
                 scriptPanel.innerHTML = '';
             }
 
-            renderLeadForm(cardPanel, lead, statuses, async (data) => {
+            renderLeadForm(cardPanel, lead, statuses, paramLists, async (data) => {
                 try {
-                    await saveLead(leadId, identity.id, data);
+                    const saved = await saveLead(leadId, identity.id, data);
+                    // Подпись «Последнее сохранение» обновляем НА МЕСТЕ:
+                    // перерисовка формы схлопнула бы раскрытые ступени лесенки
+                    // посреди звонка.
+                    updateSavedAt(cardPanel, saved && saved.updatedAt);
                     showToast('Сохранено', 'success');
                 } catch (e) {
                     showToast(e.message, 'error');

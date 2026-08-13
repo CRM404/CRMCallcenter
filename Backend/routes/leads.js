@@ -23,9 +23,14 @@ const EDITABLE_FIELD_COLUMNS = [
     ['middleName', 'middle_name'],
     ['phone', 'phone'],
     ['funnelStatusId', 'funnel_status_id'],
+    ['decisionMaker', 'decision_maker'],
+    ['clientType', 'client_type'],
+    ['otherBorrower', 'other_borrower'],
+    ['category', 'category'],
     ['propertyType', 'property_type'],
     ['propertyClass', 'property_class'],
     ['roomCount', 'room_count'],
+    ['finish', 'finish'],
     ['priceFrom', 'price_from'],
     ['priceTo', 'price_to'],
     ['areaFrom', 'area_from'],
@@ -35,6 +40,10 @@ const EDITABLE_FIELD_COLUMNS = [
     ['city', 'city'],
     ['district', 'district'],
     ['locality', 'locality'],
+    ['clientRegion', 'client_region'],
+    ['clientCity', 'client_city'],
+    ['clientDistrict', 'client_district'],
+    ['clientLocality', 'client_locality'],
     ['purchaseMethod', 'purchase_method'],
     ['mortgageType', 'mortgage_type'],
     ['downPaymentPercent', 'down_payment_percent'],
@@ -43,6 +52,13 @@ const EDITABLE_FIELD_COLUMNS = [
 ];
 
 const NUMERIC_FIELDS = new Set(['funnelStatusId', 'priceFrom', 'priceTo', 'areaFrom', 'areaTo', 'downPaymentPercent']);
+
+// «Иной заёмщик» — ТРИ состояния, поэтому отдельно от остальных полей
+// (dialog.md H2): null — условие показа не выполнено, поле неприменимо;
+// true/false — оператор ответил. Обычная нормализация тут не годится: она
+// превращает пустую строку в null (это верно), но строку 'false' из формы
+// пропустила бы как непустое значение, и в булеву колонку легло бы true.
+const BOOLEAN_FIELDS = new Set(['otherBorrower']);
 
 function rowToLead(row) {
     return {
@@ -58,9 +74,17 @@ function rowToLead(row) {
         // не редактирует — EDITABLE_FIELD_COLUMNS их не содержит.
         employeeId: row.employee_id,
         funnelStatusId: row.funnel_status_id,
+        // sourceName приходит только из запроса одной карточки (там есть JOIN);
+        // в списке лидов колонки нет, и поле честно остаётся undefined.
+        sourceName: row.source_name,
+        decisionMaker: row.decision_maker,
+        clientType: row.client_type,
+        otherBorrower: row.other_borrower,
+        category: row.category,
         propertyType: row.property_type,
         propertyClass: row.property_class,
         roomCount: row.room_count,
+        finish: row.finish,
         priceFrom: row.price_from,
         priceTo: row.price_to,
         areaFrom: row.area_from,
@@ -70,6 +94,10 @@ function rowToLead(row) {
         city: row.city,
         district: row.district,
         locality: row.locality,
+        clientRegion: row.client_region,
+        clientCity: row.client_city,
+        clientDistrict: row.client_district,
+        clientLocality: row.client_locality,
         purchaseMethod: row.purchase_method,
         mortgageType: row.mortgage_type,
         downPaymentPercent: row.down_payment_percent,
@@ -81,6 +109,11 @@ function rowToLead(row) {
 }
 
 function normalizeValue(key, value) {
+    if (BOOLEAN_FIELDS.has(key)) {
+        if (value === true || value === 'true') return true;
+        if (value === false || value === 'false') return false;
+        return null; // undefined, null, '' — «неприменимо»
+    }
     if (NUMERIC_FIELDS.has(key)) {
         return value === '' || value === undefined || value === null ? null : Number(value);
     }
@@ -88,6 +121,22 @@ function normalizeValue(key, value) {
     if (typeof value === 'string' && value.trim() === '') return null;
     return value;
 }
+
+// Источник лида для шапки карточки — «Площадка · Корневой источник»
+// (формат из макета, dialog.md D1). Собирается на сервере, а не на клиенте:
+// иначе странице оператора пришлось бы тянуть весь справочник источников ради
+// одной подписи. Только чтение — в EDITABLE_FIELD_COLUMNS поля нет: форма его
+// не показывает как поле, а PUT прислал бы undefined и обнулил source_id.
+const LEAD_CARD_SELECT = `
+    SELECT l.*,
+           CASE
+               WHEN s.id IS NULL THEN NULL
+               ELSE COALESCE(p.name || ' · ', '') || s.root_source
+           END AS source_name
+    FROM leads l
+    LEFT JOIN sources s ON s.id = l.source_id
+    LEFT JOIN ad_platforms p ON p.id = s.platform_id
+`;
 
 // GET /api/leads?employeeId=... — список своих лидов, новые сверху
 router.get('/', async (req, res) => {
@@ -114,7 +163,7 @@ router.get('/:id', async (req, res) => {
         if (!employeeId) {
             return res.status(400).json({ error: 'Не передан employeeId' });
         }
-        const result = await pool.query('SELECT * FROM leads WHERE id = $1', [req.params.id]);
+        const result = await pool.query(`${LEAD_CARD_SELECT} WHERE l.id = $1`, [req.params.id]);
         if (result.rows.length === 0) {
             return res.status(404).json({ error: 'Лид не найден' });
         }
@@ -148,10 +197,14 @@ router.put('/:id', async (req, res) => {
         const values = EDITABLE_FIELD_COLUMNS.map(([key]) => normalizeValue(key, req.body[key]));
         const setClauses = EDITABLE_FIELD_COLUMNS.map(([, col], i) => `${col} = $${i + 1}`);
         values.push(req.params.id);
-        const result = await pool.query(
-            `UPDATE leads SET ${setClauses.join(', ')}, updated_at = NOW() WHERE id = $${values.length} RETURNING *`,
+        await pool.query(
+            `UPDATE leads SET ${setClauses.join(', ')}, updated_at = NOW() WHERE id = $${values.length}`,
             values
         );
+        // Перечитываем тем же запросом, что и GET: RETURNING * не знает про
+        // JOIN, и ответ на сохранение приходил бы без source_name — форма
+        // обновляет по нему шапку и «Последнее сохранение».
+        const result = await pool.query(`${LEAD_CARD_SELECT} WHERE l.id = $1`, [req.params.id]);
         res.json(rowToLead(result.rows[0]));
     } catch (err) {
         if (err.code === '23503') {

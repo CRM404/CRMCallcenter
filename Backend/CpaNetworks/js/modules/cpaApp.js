@@ -15,10 +15,19 @@ import {
 
 const STATUS_LABEL = { active: 'Активен', paused: 'На паузе', disabled: 'Отключён', draft: 'Черновик' };
 
-// «Настройка списков» (report_2026-08-01.md, Фаза 2) — 11 управляемых
-// справочников формы оффера, значения приходят с бэкенда (paramLists),
-// PARAM_META описывает только КАК их применить к полю формы. «Статус»
-// сюда намеренно не входит — от него зависит цвет бейджа/логика фильтра.
+// «Настройка списков» (report_2026-08-01.md, Фаза 2) — 13 управляемых
+// справочников, значения приходят с бэкенда (paramLists), PARAM_META описывает
+// только КАК их применить к полю формы. «Статус» сюда намеренно не входит — от
+// него зависит цвет бейджа/логика фильтра.
+//
+// target: null — список, у которого поля в форме оффера НЕТ (14.08.2026).
+// «ЛПР» и «Срок сдачи» нужны карточке лида, но управляться должны здесь:
+// панель одна на проект, и без неё владелец не смог бы править эти два списка,
+// в отличие от всех остальных. Перерисовывать после правки нечего — см.
+// refreshParamField. «Срок сдачи» у самого оффера пока остаётся свободным
+// текстом: перевести его в список можно только после того, как владелец
+// выполнит SQL нормализации, иначе 39 боевых офферов не совпадут со
+// справочником (отдельная задача).
 const PARAM_META = [
     { key: 'category', label: 'Категория', target: 'fCategory', type: 'select' },
     { key: 'actionType', label: 'Тип действия', target: 'fActionType', type: 'select' },
@@ -29,8 +38,10 @@ const PARAM_META = [
     { key: 'rooms', label: 'Комнатность', target: 'fSegments', type: 'segments' },
     { key: 'clientType', label: 'Тип клиента', target: 'fClientType', type: 'chips' },
     { key: 'purchaseTerm', label: 'Срок покупки', target: 'fPurchaseTerm', type: 'select' },
+    { key: 'deadline', label: 'Срок сдачи (карточка лида)', target: null, type: 'select' },
     { key: 'paymentMethod', label: 'Способ покупки', target: 'fPaymentMethod', type: 'chips' },
-    { key: 'mortgageType', label: 'Виды ипотеки', target: 'fMortgageType', type: 'chips' }
+    { key: 'mortgageType', label: 'Виды ипотеки', target: 'fMortgageType', type: 'chips' },
+    { key: 'decisionMaker', label: 'ЛПР (карточка лида)', target: null, type: 'select' }
 ];
 
 const $ = (s) => document.querySelector(s);
@@ -462,6 +473,7 @@ function toggleMortgageType() {
 function refreshParamField(key) {
     const meta = PARAM_META.find((m) => m.key === key);
     if (!meta) return;
+    if (!meta.target) return; // список без поля в форме оффера — перерисовывать нечего
     if (meta.type === 'select') {
         renderSelectOptions(meta.target, paramLists[key], document.getElementById(meta.target).value);
     } else if (meta.type === 'segments') {
