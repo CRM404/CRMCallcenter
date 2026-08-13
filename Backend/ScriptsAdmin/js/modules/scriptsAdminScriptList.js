@@ -61,7 +61,7 @@ export function renderScriptList(container, scripts, selectedId, onOpen, onChang
                     <div class="sa-actions">
                         <button type="button" class="btn btn-ghost btn-sm" data-action="open" data-id="${script.id}">Открыть</button>
                         ${statusToggleBtn}
-                        <button type="button" class="btn btn-danger btn-sm" data-action="delete" data-id="${script.id}">Удалить</button>
+                        <button type="button" class="m-icon-btn danger" data-action="delete" data-id="${script.id}" title="Удалить" aria-label="Удалить"><i class="fas fa-trash" aria-hidden="true"></i></button>
                     </div>
                 </td>
             </tr>

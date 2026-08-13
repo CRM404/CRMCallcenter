@@ -102,8 +102,13 @@ const RICH_CELLS = {
     script: (l) => {
         if (!l.scriptId) return null;
         const onRepeat = l.stageNumber >= REPEAT_STAGE_FROM;
+        // Подсвеченный чип означает «оператор сейчас видит именно повторный» —
+        // тултип должен говорить то же самое, а не одно и то же в обоих состояниях.
+        const chipTitle = onRepeat
+            ? `Оператор сейчас видит скрипт для повторных: ${l.repeatScriptTitle || ''}`
+            : `Скрипт для повторных: ${l.repeatScriptTitle || ''}`;
         const chip = l.repeatScriptId
-            ? `<span class="rep-chip ${onRepeat ? 'on' : ''}" title="${escapeHtml(`Скрипт для повторных: ${l.repeatScriptTitle || ''}`)}">повт.</span>`
+            ? `<span class="rep-chip ${onRepeat ? 'on' : ''}" title="${escapeHtml(chipTitle)}">повт.</span>`
             : '';
         return `${escapeHtml(l.scriptTitle || '')}${chip}`;
     },

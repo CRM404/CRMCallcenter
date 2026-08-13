@@ -123,7 +123,9 @@ export function initUpload({ sources, employees, statuses, scripts }, onImported
         id: s.id, label: s.statusName, stageNumber: s.stageNumber, stageName: s.stageName
     })));
 
-    poolPick = createPickList($('#upPoolPick'), { emptyText: 'Пусто — раздаётся всем подходящим по линии.' });
+    // Без emptyText: та же мысль уже сказана в подписи поля под списком —
+    // две одинаковые подсказки подряд читаются как ошибка вёрстки.
+    poolPick = createPickList($('#upPoolPick'));
     poolPick.setDisabled(true);
 
     offerPick = createOfferInlinePicker($('#upOfferPick'));

@@ -49,7 +49,12 @@ html { font-variant-numeric: tabular-nums; }
 
 body {
     min-height: 100vh;
-    background: #eef1f6;
+    /* Фото — основной фон проекта (тот же, что на «Сотрудниках»,
+       «Скриптах» и «Операторе»); цвет остаётся запасным вариантом,
+       если картинка не загрузится. Все статические папки монтируются
+       в один корень, поэтому относительный путь разрешается в общий
+       /css/foto/images1.jpg — копировать файл сюда не нужно. */
+    background: url('./foto/images1.jpg') center/cover fixed no-repeat, #eef1f6;
     color: var(--ink);
 }
 

@@ -94,6 +94,13 @@ tbody tr.sa-selected td { background: rgba(0,0,255,.045); }
 .script-sub { font-size: 11.5px; color: var(--ink-faint); margin-top: 2px; }
 .col-actions { text-align: right; }
 .sa-actions { display: flex; justify-content: flex-end; gap: 8px; align-items: center; flex-wrap: wrap; }
+/* Действие удаления в строке — нейтральная иконка, красная только на hover:
+   тот же паттерн, что в строках «Лидов» и «Сотрудников». Сплошные цветные
+   кнопки в строках проект убрал ещё редизайном «Сотрудников» — восемь красных
+   плашек подряд читаются как сплошной алярм. */
+.m-icon-btn { width: 30px; height: 30px; display: inline-flex; align-items: center; justify-content: center; border-radius: 9px; border: none; background: transparent; color: var(--ink-faint); cursor: pointer; transition: background .15s, color .15s; }
+.m-icon-btn:hover { background: rgba(0,0,255,.08); color: var(--accent); }
+.m-icon-btn.danger:hover { background: rgba(231,76,60,.1); color: var(--danger); }
 
 .status-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; white-space: nowrap; }
 .status-chip::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }

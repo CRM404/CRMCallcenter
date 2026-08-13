@@ -15,7 +15,7 @@ const { distributePendingLeads, findNewFunnelStatusId } = require('../services/l
 
 const router = express.Router();
 
-const { MAX_OFFERS_PER_LEAD, TOO_MANY_OFFERS_HINT } = require('../services/leadOfferLimits');
+const { MAX_OFFERS_PER_LEAD, MAX_OFFER_LINKS_PER_BATCH, TOO_MANY_OFFERS_HINT } = require('../services/leadOfferLimits');
 
 const LINE_TYPES = ['Входящая', 'Исходящая'];
 
@@ -555,6 +555,18 @@ router.post('/bulk-import', async (req, res) => {
             return res.status(400).json({ error: validation.error });
         }
         const { offerIds, scriptStatusIds, poolEmployeeIds, repeatScriptId } = validation.data;
+
+        // Потолок на лида (проверен выше) партию не защищает: связки
+        // перемножаются, и 5000 строк × 1000 офферов дали бы 5 млн строк в
+        // одной транзакции — таймаут прокси с откатом всей загрузки в конце.
+        // Считаем по rows.length, а не по числу строк с телефоном: это верхняя
+        // граница, и отбить партию нужно ДО того, как начнём вставку.
+        const linkCount = rows.length * offerIds.length;
+        if (linkCount > MAX_OFFER_LINKS_PER_BATCH) {
+            return res.status(400).json({
+                error: `Слишком большая партия: ${rows.length} строк × ${offerIds.length} офферов = ${linkCount} связок, максимум ${MAX_OFFER_LINKS_PER_BATCH}. Уменьшите файл или сузьте набор офферов`
+            });
+        }
 
         await client.query('BEGIN');
 

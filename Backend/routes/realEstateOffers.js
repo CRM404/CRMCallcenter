@@ -347,6 +347,11 @@ router.get('/search', async (req, res) => {
 
         res.json({
             total: result.rows[0] ? result.rows[0].total : 0,
+            // Лимит отдаётся вместе с выдачей, а не хардкодится во фронте:
+            // бандлера в проекте нет, require серверного модуля из браузера
+            // невозможен, а разъехавшиеся числа дали бы кнопку «Добавить все»,
+            // предлагающую действие, которое сервер обязан отбить.
+            maxPerLead: MAX_OFFERS_PER_LEAD,
             items: result.rows.map((r) => ({
                 id: r.id,
                 name: r.name,

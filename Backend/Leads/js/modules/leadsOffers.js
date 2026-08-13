@@ -14,6 +14,11 @@ import { showToast } from './leadsToast.js';
 const SEARCH_DEBOUNCE_MS = 300;
 const SUGGEST_LIMIT = 8;
 
+// Формулировка та же, что отдаёт сервер при превышении потолка — здесь она
+// показывается ДО запроса, вместо кнопки. Само число берётся с сервера
+// (maxPerLead в ответе поиска), во фронте не хардкодится.
+const TOO_MANY_OFFERS_HINT = 'Сузьте отбор фильтрами или поиском';
+
 function escapeHtml(value) {
     if (value === null || value === undefined) return '';
     return String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -48,6 +53,10 @@ export function createOfferTabPicker({
     let lastResults = [];
     let lastTotal = 0;
     let filtersLoaded = false;
+    // Потолок офферов на лида приходит с сервера вместе с выдачей — во фронте
+    // его не хардкодим, иначе через полгода лимит поменяют на сервере, а
+    // кнопка «Добавить все» продолжит предлагать заведомо отбиваемое действие.
+    let maxPerLead = null;
 
     function currentParams() {
         return {
@@ -82,6 +91,13 @@ export function createOfferTabPicker({
         const addAllLabel = allAdded && lastTotal === lastResults.length
             ? '✓ все добавлены'
             : `Добавить все (${lastTotal})`;
+        // Отбор шире потолка — кнопку не рисуем вовсе: сервер такой набор всё
+        // равно отобьёт, а предлагать заведомо невыполнимое действие нечестно
+        // (при 38 000 офферов это первое, что видит пользователь).
+        const overLimit = maxPerLead !== null && lastTotal > maxPerLead;
+        const addAllControl = overLimit
+            ? `<span>${escapeHtml(TOO_MANY_OFFERS_HINT)}</span>`
+            : `<button type="button" class="btn btn-ghost btn-sm" id="offerAddAllBtn"${allAdded && lastTotal === lastResults.length ? ' disabled' : ''}>${addAllLabel}</button>`;
 
         const rows = lastResults.map((o) => {
             const added = selected.has(o.id);
@@ -95,14 +111,14 @@ export function createOfferTabPicker({
         }).join('');
 
         const note = lastTotal > lastResults.length
-            ? `<div class="offer-results-note">Показаны первые ${lastResults.length} из ${lastTotal}. Уточните поиск или используйте «Добавить все».</div>`
+            ? `<div class="offer-results-note">Показаны первые ${lastResults.length} из ${lastTotal}. ${overLimit ? 'Уточните поиск или сузьте отбор фильтрами.' : 'Уточните поиск или используйте «Добавить все».'}</div>`
             : '';
 
         resultsEl.hidden = false;
         resultsEl.innerHTML = `
             <div class="offer-results-head">
                 <span>Найдено: ${lastTotal}</span>
-                <button type="button" class="btn btn-ghost btn-sm" id="offerAddAllBtn"${allAdded && lastTotal === lastResults.length ? ' disabled' : ''}>${addAllLabel}</button>
+                ${addAllControl}
             </div>
             ${rows}
             ${note}`;
@@ -110,9 +126,10 @@ export function createOfferTabPicker({
 
     async function runSearch() {
         try {
-            const { total, items } = await searchOffers(currentParams());
+            const { total, items, maxPerLead: limit } = await searchOffers(currentParams());
             lastTotal = total;
             lastResults = items;
+            if (typeof limit === 'number') maxPerLead = limit;
             renderResults();
         } catch (e) {
             showToast(e.message, 'error');
@@ -124,7 +141,7 @@ export function createOfferTabPicker({
     async function addAll() {
         try {
             // search-ids по контракту отдаёт только id и сам отбивает отбор
-            // шире потолка (1000) внятной ошибкой. Названия для тегов
+            // шире потолка внятной ошибкой. Названия для тегов
             // добираем вторым запросом — на весь отбор, а не на видимую
             // страницу: пользователь выбирает ВЕСЬ отбор, а не то, что видит.
             const { ids } = await searchOfferIds(currentParams());
