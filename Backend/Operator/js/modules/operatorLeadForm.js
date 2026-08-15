@@ -459,6 +459,20 @@ export function renderLeadForm(container, lead, statuses, paramLists, onSave, op
     // --- Сохранение --------------------------------------------------------
     container.querySelector('#opSaveLeadBtn').addEventListener('click', () => {
         const status = selectedStatus();
+
+        // Без статуса не сохраняем (правка куратора при приёмке, 15.08.2026).
+        // Условие очереди — «статус „Новый“ ИЛИ наступил перезвон», и лид с
+        // пустым статусом не подходит ни под одну ветку: он исчез бы с экрана и
+        // не достался бы больше никому. Сервер это же отбивает кодом 400, здесь
+        // — чтобы оператор увидел причину сразу, а не после запроса.
+        if (!status) {
+            statusSelect.classList.add('is-invalid');
+            statusSelect.focus();
+            onSave(null, null, 'Выберите статус звонка — без него лид не вернётся в очередь');
+            return;
+        }
+        statusSelect.classList.remove('is-invalid');
+
         let nextCallAt = null;
         if (status && status.requiresCallTime) {
             const input = callbackBox.querySelector('#opCallbackWhen');

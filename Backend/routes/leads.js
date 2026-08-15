@@ -236,6 +236,18 @@ router.post('/:id/complete', async (req, res) => {
             }
 
             const statusId = normalizeValue('funnelStatusId', req.body.funnelStatusId);
+
+            // Пустой статус запрещён (правка куратора при приёмке, 15.08.2026).
+            // Раньше статус был обычным полем формы, и лид без него оставался
+            // виден в списке оператора. Списка больше нет, а условие очереди —
+            // «статус „Новый“ ИЛИ наступил перезвон»: лид с funnel_status_id =
+            // NULL не подходит ни под одну ветку, не отдаётся никому и не
+            // отцепляется правилом освобождения. Один клик по «— не выбран —»
+            // молча терял бы лида навсегда.
+            if (statusId === null) {
+                return { code: 400, error: 'Выберите статус звонка — без него лид не вернётся в очередь' };
+            }
+
             const statusFlags = await fetchStatusFlags(client, statusId);
 
             let callTime = null;

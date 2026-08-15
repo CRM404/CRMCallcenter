@@ -79,6 +79,16 @@ async function findAvailableEmployee(db, lead, newStatusId) {
 // оператором и в очередь не возвращается — это граница задачи (dialog.md 0.1).
 async function releaseHeldLeads(db, newStatusId) {
     if (newStatusId === null) return { released: 0 };
+
+    // Осиротевшие открытые карточки (правка куратора при приёмке, 15.08.2026).
+    // leads.employee_id объявлен ON DELETE SET NULL: удалили сотрудника — у его
+    // открытой карточки оператор обнуляется, а opened_at остаётся. Такой лид не
+    // виден никому: очередь берёт только opened_at IS NULL, а правило ниже
+    // джойнится с employees, которых уже нет. До этой задачи лид просто вернулся
+    // бы в общую раздачу, теперь пропадал бы навсегда — тот же класс потери, что
+    // и лид с пустым статусом. Снимаем метку и возвращаем его в очередь.
+    await db.query('UPDATE leads SET opened_at = NULL, updated_at = NOW() WHERE employee_id IS NULL AND opened_at IS NOT NULL');
+
     const result = await db.query(
         `UPDATE leads l
          SET employee_id = NULL, opened_at = NULL, updated_at = NOW()
