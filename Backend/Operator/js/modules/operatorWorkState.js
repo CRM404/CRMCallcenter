@@ -40,9 +40,18 @@ function mmss(totalSeconds) {
     return `${pad(Math.floor(s / 60))}:${pad(s % 60)}`;
 }
 
+// Суммы за день — словами, а не «02:19» (замечание дизайн-сессии на приёмке,
+// 15.08.2026). Рядом в пилюле бежит счётчик в формате мм:сс, и два одинаковых с
+// виду числа в двух сантиметрах друг от друга означали бы разное: «00:06» в
+// пилюле — шесть секунд, «00:06» в панели — шесть минут. Подпись словами делает
+// путаницу невозможной.
 function hhmm(totalSeconds) {
     const s = Math.max(0, Math.floor(totalSeconds));
-    return `${pad(Math.floor(s / 3600))}:${pad(Math.floor((s % 3600) / 60))}`;
+    const hours = Math.floor(s / 3600);
+    const minutes = Math.floor((s % 3600) / 60);
+    if (hours === 0 && minutes === 0) return `${s % 60} с`;
+    if (hours === 0) return `${minutes} мин`;
+    return `${hours} ч ${minutes} мин`;
 }
 
 export function createWorkStatePanel({ employeeId, identity, onStateChange }) {
