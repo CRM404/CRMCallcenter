@@ -48,18 +48,24 @@ export function operatorLogin(email, password) {
     });
 }
 
-export function fetchOwnLeads(employeeId) {
-    return request(`/leads${buildQuery({ employeeId })}`);
-}
-
 export function fetchLead(id, employeeId) {
     return request(`/leads/${id}${buildQuery({ employeeId })}`);
 }
 
-export function saveLead(id, employeeId, data) {
-    return request(`/leads/${id}`, {
-        method: 'PUT',
-        body: JSON.stringify({ ...data, employeeId })
+// Очередь оператора (15.08.2026). Списка лидов больше нет: сервер сам решает,
+// с какой карточкой оператор работает сейчас, и отдаёт её вместе со своим
+// «сейчас» — счётчик пост-обработки считается от серверного времени.
+export function fetchNextLead(employeeId) {
+    return request(`/leads/next${buildQuery({ employeeId })}`);
+}
+
+// «Сохранить» — один запрос: сохраняет карточку, применяет правила статуса
+// звонка и сразу возвращает следующего лида. Парой запросов это делать нельзя:
+// между ними лид успевает уйти другому оператору.
+export function completeLead(id, employeeId, data, nextCallAt) {
+    return request(`/leads/${id}/complete`, {
+        method: 'POST',
+        body: JSON.stringify({ ...data, employeeId, nextCallAt: nextCallAt || null })
     });
 }
 
@@ -74,10 +80,17 @@ export function fetchEmployee(id) {
     return request(`/employees/${id}`);
 }
 
-export function setOnLine(id, onLine) {
-    return request(`/employees/${id}/on-line`, {
+// Состояние оператора (15.08.2026) — пять состояний вместо прежнего «на линии»
+// да/нет. Ответ содержит текущее состояние, момент его начала, серверное
+// «сейчас» и суммы по состояниям за сегодня.
+export function fetchWorkState(id) {
+    return request(`/employees/${id}/work-state`);
+}
+
+export function setWorkState(id, state) {
+    return request(`/employees/${id}/work-state`, {
         method: 'PUT',
-        body: JSON.stringify({ onLine })
+        body: JSON.stringify({ state })
     });
 }
 
@@ -101,4 +114,12 @@ export function fetchGeoSuggest(query, { bound, regionFiasId } = {}) {
 // ответе — скрипта для этого состояния нет, это не ошибка (routes/scripts.js).
 export function fetchScript(leadId) {
     return request(`/scripts${buildQuery({ leadId })}`);
+}
+
+// Возражения того скрипта, который сейчас открыт у оператора. Запрашиваются по
+// leadId, а не по scriptId: какой скрипт открыт — решает сервер, и подставить
+// чужой идентификатор нельзя. Поиск идёт на клиенте — возражений десятки, и в
+// разговоре задержка на запрос заметна.
+export function fetchObjections(leadId) {
+    return request(`/scripts/objections${buildQuery({ leadId })}`);
 }

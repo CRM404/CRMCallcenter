@@ -13,34 +13,40 @@
 
         <main class="op-main">
             <div class="op-container">
-                <h1>Рабочий стол</h1>
-
-                <div class="online-card" id="onlineCard">
-                    <span class="online-dot"></span>
-                    <div class="online-status-text">
-                        <div class="label" id="onlineLabel">Не на линии</div>
-                        <div class="caption" id="onlineCaption">Новые лиды при автораспределении вам не попадут</div>
-                    </div>
-                    <label class="switch">
-                        <input type="checkbox" id="onlineToggle">
-                        <span class="switch-track"></span>
-                    </label>
-                </div>
-
-                <div id="opListView"></div>
-
-                <div id="opDetailView" style="display:none;">
-                    <button type="button" class="op-back-link" id="opBackToListBtn">
-                        <i class="fas fa-arrow-left" aria-hidden="true"></i> Назад к списку
-                    </button>
-                    <div class="op-detail-grid">
-                        <section class="op-panel" id="opScriptPanel"></section>
-                        <section class="op-panel" id="opCardPanel"></section>
+                <!-- Верхняя полоса: заголовок + блок оператора. Единственное
+                     место, где живут состояние и таймеры. -->
+                <div class="op-topbar">
+                    <h1>Рабочий стол</h1>
+                    <div class="op-topbar-spacer"></div>
+                    <div class="op-identity">
+                        <div class="op-identity-avatar" id="opIdentityAvatar"></div>
+                        <div class="op-identity-copy">
+                            <div class="op-identity-name" id="opIdentityName">—</div>
+                            <div class="op-identity-line" id="opIdentityLine">—</div>
+                        </div>
+                        <button type="button" class="op-state-pill" id="opStatePill" aria-haspopup="true" aria-expanded="false">
+                            <span class="dot"></span>
+                            <span id="opStateName">—</span>
+                            <span class="timer" id="opStateTimer">00:00</span>
+                        </button>
+                        <div class="op-state-panel" id="opStatePanel" hidden></div>
                     </div>
                 </div>
+
+                <!-- Три взаимоисключающих состояния: работа с лидом,
+                     пустая очередь, «не на линии». -->
+                <div id="opWorkArea"></div>
             </div>
         </main>
     </div>
+
+    <!-- Кнопка поиска возражений — в правом нижнем углу СТРАНИЦЫ, как чат
+         (решение владельца). На экранах пустой очереди и «не на линии» скрыта:
+         скрипта там нет и искать нечего. -->
+    <button type="button" class="op-fab" id="opObjBtn" aria-label="Возражения" hidden>
+        <i class="fas fa-comments" aria-hidden="true"></i>
+    </button>
+    <div class="op-obj-panel" id="opObjPanel" hidden></div>
 
     <div id="toastContainer"></div>
 

@@ -826,3 +826,108 @@ BEGIN
         INSERT INTO applied_migrations (id) VALUES ('2026-08-14-clienttype-finish-values');
     END IF;
 END $$;
+
+-- ============================================================
+-- Рабочий режим оператора: очередь вместо списка, состояния и
+-- таймеры, перезвоны (report_2026-08-01.md + report_designer.md,
+-- 15.08.2026)
+-- ============================================================
+
+-- Перезвоны и признак «карточка сейчас у оператора».
+-- next_call_at — момент, когда лид должен вернуться в очередь. NULL = либо в
+-- очереди по общим правилам (статус «Новый»), либо вне очереди совсем.
+-- call_attempts — СКВОЗНОЙ счётчик недозвонов, общий по всем операторам линии,
+-- а не персональный: лид после каждой попытки уходит в общую очередь и
+-- следующую попытку делает уже другой человек.
+-- opened_at — момент, когда карточка реально выдана в браузер оператора. От неё
+-- считается пост-обработка. Ставит её только тот запрос, который отдал карточку
+-- (GET /api/leads/next и ответ /complete), а НЕ раздача: раздача проставляет
+-- employee_id и в фоне, и оператор, вышедший на линию и отошедший от стола,
+-- вернулся бы к пост-обработке «43 минуты», не увидев карточки (dialog.md 0.3).
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS next_call_at TIMESTAMP;
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS last_call_at TIMESTAMP;
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS call_attempts INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS opened_at TIMESTAMP;
+CREATE INDEX IF NOT EXISTS idx_leads_next_call ON leads (next_call_at) WHERE next_call_at IS NOT NULL;
+
+-- Признаки поведения статуса. Список «автоперезвонных» статусов НЕ хардкодится
+-- в коде по названиям: сравнение строки «Недоступен» сломалось бы молча от
+-- одного лишнего пробела. Сам справочник статусов через интерфейс не
+-- редактируется (эндпоинтов записи нет, см. routes/leadFunnelStatuses.js),
+-- поэтому флаги проставляются по названиям ОДИН раз миграцией ниже — а
+-- дальше код работает только с флагами.
+ALTER TABLE lead_funnel_statuses ADD COLUMN IF NOT EXISTS auto_recall BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE lead_funnel_statuses ADD COLUMN IF NOT EXISTS requires_call_time BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE lead_funnel_statuses ADD COLUMN IF NOT EXISTS releases_lead BOOLEAN NOT NULL DEFAULT false;
+
+-- Замок внешний (applied_migrations): «флаг не стоит» и «флаг сняли вручную»
+-- изнутри таблицы неразличимы, а сидинг статусов гоняется при каждом старте.
+-- Фильтр по stage_number = 1 не косметика: 'Перезвон' и четыре недозвона живут
+-- только на первичном контакте, а на этапах 5–6 есть похожие по смыслу строки,
+-- которые лид отпускать не должны.
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM applied_migrations WHERE id = '2026-08-15-funnel-status-flags') THEN
+        UPDATE lead_funnel_statuses
+        SET auto_recall = true, releases_lead = true
+        WHERE stage_number = 1
+          AND status_name IN ('Номер отключен', 'Недоступен', 'Автоответчик / голосовая почта', 'Сбросил трубку');
+
+        UPDATE lead_funnel_statuses
+        SET requires_call_time = true, releases_lead = true
+        WHERE stage_number = 1 AND status_name = 'Перезвон';
+
+        INSERT INTO applied_migrations (id) VALUES ('2026-08-15-funnel-status-flags');
+    END IF;
+END $$;
+
+-- Состояние оператора: off | on_line | break | lunch | training | review.
+-- Проверка значений — в коде (services/operatorState.js), не CHECK-констрейнтом:
+-- набор состояний ещё будет меняться при появлении телефонии, а снятие CHECK в
+-- идемпотентном журнале требует отдельного guard-блока.
+-- on_line/on_line_since ОСТАЮТСЯ и продолжают работать как раньше (их читает
+-- раздача), но становятся ПРОИЗВОДНЫМИ от work_state: on_line = (work_state =
+-- 'on_line'), и поддерживается это в одном месте — в эндпоинте смены состояния.
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS work_state VARCHAR NOT NULL DEFAULT 'off';
+
+-- Разовое уведомление «лид, который был за вами, вернулся в общую очередь».
+-- Лид держится за оператором на перерыве, значит держится и после ухода домой;
+-- через HELD_LEAD_RELEASE_HOURS он отцепляется (services/leadDistribution.js).
+-- Без этой отметки оператор на следующий день просто не найдёт «своего»
+-- клиента и прочитает это как потерю (замечание дизайн-сессии, бриф п.11.2).
+-- Снимается сразу после того, как оператор её увидел.
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS released_lead_notice BOOLEAN NOT NULL DEFAULT false;
+
+-- Таймеры хранятся интервалами на сервере, а не в браузере: обновление страницы
+-- обнуляло бы счётчики и цифры были бы бесполезны.
+CREATE TABLE IF NOT EXISTS employee_state_intervals (
+    id SERIAL PRIMARY KEY,
+    employee_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+    state VARCHAR NOT NULL,
+    started_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    ended_at TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_state_intervals_emp ON employee_state_intervals (employee_id, started_at);
+
+-- «Открытый интервал ровно один» — гарантия БД, а не только кода (dialog.md C1):
+-- две вкладки одного оператора иначе дадут два открытых интервала и удвоят суммы.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_state_intervals_open
+    ON employee_state_intervals (employee_id) WHERE ended_at IS NULL;
+
+-- Разовая правка существующих сотрудников: work_state приезжает с DEFAULT 'off',
+-- и у тех, кто прямо сейчас on_line = true, это прямое противоречие с их же
+-- состоянием. COALESCE на случай, когда on_line = true, а on_line_since пуст —
+-- иначе получили бы интервал с пустым started_at (уточнение куратора, dialog.md C2).
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM applied_migrations WHERE id = '2026-08-15-work-state-backfill') THEN
+        UPDATE employees SET work_state = 'on_line' WHERE on_line = true;
+
+        INSERT INTO employee_state_intervals (employee_id, state, started_at)
+        SELECT id, 'on_line', COALESCE(on_line_since, NOW())
+        FROM employees
+        WHERE on_line = true;
+
+        INSERT INTO applied_migrations (id) VALUES ('2026-08-15-work-state-backfill');
+    END IF;
+END $$;

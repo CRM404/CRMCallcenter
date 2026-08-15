@@ -27,6 +27,12 @@
     --toast-text: #f8fafc;
 }
 
+/* Атрибут hidden сильнее любой раскладки. Без этого правила элемент, которому
+   CSS задал display (flex/grid/block), остаётся видимым с hidden — на этой
+   странице так уже ломались скрытые группы формы. Один раз глобально, чтобы
+   каждый новый блок не приходилось чинить отдельным селектором. */
+[hidden] { display: none !important; }
+
 body {
     min-height: 100vh;
     background-image: url('./foto/images1.jpg');
@@ -148,8 +154,12 @@ h2 {
 .op-shell {
     display: flex;
     min-height: 100vh;
+    align-items: flex-start;
 }
 
+/* Меню ЗАКРЕПЛЕНО. Раньше оно тянулось по высоте содержимого, и при длинном
+   скрипте кнопка выхода уезжала на середину страницы (скриншот владельца).
+   Внутренний скролл — на случай, когда пунктов больше, чем помещается. */
 .op-nav {
     width: 64px;
     flex-shrink: 0;
@@ -160,7 +170,12 @@ h2 {
     gap: 6px;
     background: rgba(30, 42, 58, 0.9);
     backdrop-filter: blur(8px);
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow-y: auto;
 }
+.op-nav-item { flex-shrink: 0; }
 
 .op-nav-item {
     position: relative;
@@ -218,64 +233,19 @@ h2 {
     overflow-x: hidden;
 }
 
+/* padding-bottom — воздух под круглой кнопкой возражений: без него она садится
+   на «Сохранить», а это самое опасное соседство на странице. */
 .op-container {
     max-width: 1300px;
     margin: 0 auto;
     background: var(--bg-container);
-    padding: 25px 30px;
+    padding: 25px 30px 90px;
     border-radius: 16px;
     box-shadow: var(--shadow-container);
     border: 1px solid var(--border-light);
 }
 
-/* ----- Список лидов ----- */
-.op-lead-table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-top: 10px;
-}
-.op-lead-table th {
-    text-align: left;
-    font-size: 13px;
-    color: #64748b;
-    padding: 10px 12px;
-    border-bottom: 2px solid #e2e8f0;
-}
-.op-lead-table td {
-    padding: 10px 12px;
-    border-bottom: 1px solid #eef1f6;
-    font-size: 14px;
-}
-.op-lead-table tbody tr {
-    cursor: pointer;
-    transition: background 0.15s;
-}
-.op-lead-table tbody tr:hover {
-    background: rgba(0, 0, 255, 0.05);
-}
-.op-empty-state {
-    padding: 30px 0;
-    text-align: center;
-    color: #64748b;
-    font-size: 15px;
-}
-
 /* ----- Работа с лидом: скрипт + карточка ----- */
-.op-back-link {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    color: #0000FF;
-    text-decoration: none;
-    font-size: 14px;
-    font-weight: 600;
-    margin-bottom: 16px;
-    cursor: pointer;
-    background: none;
-    border: none;
-}
-.op-back-link:hover { text-decoration: underline; }
-
 /* Пропорция полотна: скрипт 55 %, карточка 45 % (задано владельцем; до
    14.08.2026 было наоборот). Перенос в одну колонку на 1080px, а не на 900:
    карточка в 45 % становится нечитаемо узкой раньше. */
@@ -691,74 +661,408 @@ h2 {
     width: 100%;
 }
 
-/* ----- "На линии" (переключатель автораспределения лидов, report_2026-08-01.md, 13.08.2026) ----- */
-.online-card {
+/* ============================================================
+   Рабочий режим оператора (15.08.2026): блок оператора, состояния
+   и таймеры, экраны очереди, перезвон, поиск возражений.
+   ============================================================ */
+
+/* ----- Верхняя полоса и блок оператора ----- */
+.op-topbar {
+    display: flex;
+    align-items: flex-start;
+    gap: 20px;
+    flex-wrap: wrap;
+    /* z-index обязателен: панели рабочей области полупрозрачные и создают свой
+       контекст наложения — без него выпадающая панель состояний видна, но не
+       кликается. */
+    position: relative;
+    z-index: 70;
+    margin-bottom: 18px;
+}
+.op-topbar h1 { margin-bottom: 0; }
+.op-topbar-spacer { flex: 1; }
+
+/* Блок оператора — по образцу .header-identity со страницы «Сотрудники». */
+.op-identity {
     display: flex;
     align-items: center;
-    gap: 16px;
-    background: rgba(255, 255, 255, .55);
+    gap: 13px;
+    padding: 11px 16px;
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.82);
     border: 1px solid var(--border-light);
-    border-radius: 12px;
-    padding: 16px 20px;
-    margin-bottom: 20px;
+    box-shadow: 0 10px 30px rgba(23, 32, 55, 0.10);
+    position: relative;
 }
-.online-card.is-online {
-    background: var(--badge-active-bg);
-    border-color: rgba(21, 87, 36, .25);
-}
-.online-status-text { flex: 1; }
-.online-status-text .label {
+.op-identity-avatar {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    background: linear-gradient(135deg, #5b6d92, #3d4c6b);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     font-size: 15px;
     font-weight: 700;
-    color: var(--text-primary);
 }
-.online-status-text .caption {
-    font-size: 12.5px;
-    color: var(--text-secondary);
-    margin-top: 2px;
-}
-.online-card.is-online .caption { color: var(--badge-active-text); }
+.op-identity-copy { min-width: 0; }
+.op-identity-name { font-size: 14.5px; font-weight: 700; white-space: nowrap; color: #16202e; }
+.op-identity-line { font-size: 12px; color: #8a95a8; margin-top: 1px; }
 
-.online-dot {
-    width: 9px;
-    height: 9px;
-    border-radius: 50%;
-    background: var(--text-secondary);
-    flex-shrink: 0;
-}
-.online-card.is-online .online-dot {
-    background: var(--badge-active-text);
-    box-shadow: 0 0 0 3px rgba(21, 87, 36, .18);
-}
-
-.switch {
-    position: relative;
-    display: inline-block;
-    width: 50px;
-    height: 28px;
-    flex-shrink: 0;
-}
-.switch input { opacity: 0; width: 0; height: 0; }
-.switch-track {
-    position: absolute;
-    inset: 0;
-    background: #e7eaf0;
-    border: 1px solid rgba(90, 100, 114, .3);
-    border-radius: 30px;
+/* ----- Пилюля состояния ----- */
+.op-state-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+    padding: 8px 14px;
+    border-radius: 22px;
+    border: 1px solid rgba(96, 112, 148, 0.26);
+    background: #eceff5;
+    color: #55637c;
+    font-size: 13.5px;
+    font-weight: 700;
+    font-family: inherit;
     cursor: pointer;
-    transition: .2s;
+    white-space: nowrap;
+    transition: filter .15s;
 }
-.switch-track::before {
-    content: '';
+.op-state-pill:hover { filter: brightness(.97); }
+.op-state-pill .dot { width: 9px; height: 9px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
+.op-state-pill .timer { font-weight: 600; opacity: .8; font-variant-numeric: tabular-nums; }
+.op-state-pill.online { background: #e2f3e8; border-color: rgba(21, 112, 63, 0.28); color: #15703f; }
+.op-state-pill.online .dot { box-shadow: 0 0 0 4px rgba(21, 112, 63, 0.16); }
+/* Пост-обработка — единственное состояние, где время работает против оператора. */
+.op-state-pill.post { background: #e8edfa; border-color: rgba(47, 63, 140, 0.26); color: #2f3f8c; }
+/* Мягкое напоминание, без блокировок: забытый «обед» до конца смены — реальный
+   сценарий, но выбрасывать человека из карточки мы не будем. */
+.op-state-pill.nudge { animation: opNudge 2.4s ease-in-out infinite; }
+@keyframes opNudge {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(138, 100, 16, 0); }
+    50%      { box-shadow: 0 0 0 6px rgba(138, 100, 16, .14); }
+}
+
+.op-state-panel {
     position: absolute;
-    width: 20px;
-    height: 20px;
-    left: 3px;
-    top: 3px;
+    top: calc(100% + 9px);
+    right: 0;
+    width: 310px;
+    z-index: 80;
     background: #fff;
-    border-radius: 50%;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, .25);
-    transition: .2s;
+    border: 1px solid rgba(96, 112, 148, 0.30);
+    border-radius: 16px;
+    box-shadow: 0 22px 60px rgba(15, 22, 40, 0.26);
+    overflow: hidden;
 }
-.switch input:checked + .switch-track { background: #0000FF; border-color: #0000FF; }
-.switch input:checked + .switch-track::before { transform: translateX(22px); }
+.op-state-panel-head {
+    padding: 12px 16px 10px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .07em;
+    text-transform: uppercase;
+    color: #8a95a8;
+    border-bottom: 1px solid rgba(96, 112, 148, 0.18);
+}
+.op-state-row {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    width: 100%;
+    padding: 11px 16px;
+    border: none;
+    background: none;
+    font-family: inherit;
+    font-size: 13.5px;
+    cursor: pointer;
+    text-align: left;
+    color: #16202e;
+    border-bottom: 1px solid rgba(96, 112, 148, 0.18);
+}
+.op-state-row:hover { background: rgba(0, 0, 255, 0.05); }
+.op-state-row .dot { width: 9px; height: 9px; border-radius: 50%; background: #8a95a8; flex-shrink: 0; }
+.op-state-row.is-current { background: rgba(21, 112, 63, 0.07); font-weight: 700; }
+.op-state-row.is-current .dot { background: #15703f; }
+.op-state-row .name { flex: 1; }
+.op-state-row .sum { color: #8a95a8; font-size: 12.5px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.op-state-panel-foot {
+    padding: 10px 16px;
+    font-size: 12px;
+    color: #8a95a8;
+    background: rgba(96, 112, 148, 0.06);
+    border-top: 1px solid rgba(96, 112, 148, 0.18);
+}
+
+/* ----- Экраны пустой очереди и «не на линии» ----- */
+/* Спокойное состояние ожидания, а не поломка: ничего красного, никаких иконок
+   ошибки и никакой кнопки «Обновить» — она провоцирует дёргать страницу. */
+.op-screen {
+    background: rgba(255, 255, 255, 0.6);
+    border: 1px solid var(--border-light);
+    border-radius: 18px;
+    box-shadow: 0 10px 30px rgba(23, 32, 55, 0.10);
+    padding: 64px 40px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+}
+.op-halo {
+    width: 76px;
+    height: 76px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(96, 112, 148, 0.10);
+    color: #8a95a8;
+    font-size: 26px;
+    margin-bottom: 4px;
+}
+.op-screen.waiting .op-halo { background: #e2f3e8; color: #15703f; }
+.op-screen h2 { font-size: 21px; font-weight: 700; margin: 0; }
+.op-screen p { font-size: 14px; color: #55637c; max-width: 44ch; line-height: 1.6; }
+.op-wait-timer {
+    margin-top: 6px;
+    font-size: 13px;
+    color: #8a95a8;
+    padding: 7px 14px;
+    border-radius: 20px;
+    background: rgba(96, 112, 148, 0.09);
+    font-variant-numeric: tabular-nums;
+}
+.op-screen .btn { margin-top: 8px; }
+
+/* ----- Скрипт: линейный текст ----- */
+.op-panel-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+}
+.op-panel-head h2 {
+    font-size: 15px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    margin: 0;
+}
+.op-script-title {
+    margin-left: auto;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: #55637c;
+    padding: 5px 12px;
+    border-radius: 20px;
+    background: rgba(96, 112, 148, 0.12);
+    border: 1px solid rgba(96, 112, 148, 0.18);
+}
+.op-script-block + .op-script-block { margin-top: 14px; }
+
+/* ----- Полоса «Новый лид № …» ----- */
+.op-flash {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 11px 16px;
+    border-radius: 12px;
+    margin-bottom: 12px;
+    background: #e8edfa;
+    border: 1px solid rgba(47, 63, 140, 0.26);
+    color: #2f3f8c;
+    font-size: 13.5px;
+    font-weight: 700;
+    animation: opFlashIn .25s ease;
+}
+@keyframes opFlashIn {
+    from { opacity: 0; transform: translateY(-6px); }
+    to { opacity: 1; transform: none; }
+}
+
+/* ----- Счётчик попыток дозвона ----- */
+.op-attempt {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 700;
+    background: #eceff5;
+    color: #55637c;
+    border: 1px solid rgba(96, 112, 148, 0.26);
+    white-space: nowrap;
+}
+.op-attempt.warn { background: #faf1d8; color: #8a6410; border-color: rgba(138, 100, 16, 0.26); }
+.op-attempt-note {
+    font-size: 11.5px;
+    color: #8a95a8;
+    margin: -12px 0 14px 2px;
+    line-height: 1.45;
+}
+
+/* ----- Перезвон ----- */
+.op-callback {
+    margin-top: 12px;
+    padding: 14px 16px;
+    border-radius: 12px;
+    background: #faf1d8;
+    border: 1px solid rgba(138, 100, 16, 0.26);
+}
+.op-callback-title { font-size: 12.5px; font-weight: 700; color: #8a6410; margin-bottom: 10px; }
+.op-callback-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
+.op-callback-row input.is-invalid {
+    border-color: #ef4444;
+    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.18);
+}
+.op-callback-quick { display: flex; gap: 7px; flex-wrap: wrap; margin-top: 10px; }
+.op-callback-quick button {
+    padding: 6px 12px;
+    border-radius: 18px;
+    border: 1px solid rgba(138, 100, 16, 0.26);
+    background: rgba(255, 255, 255, 0.6);
+    color: #8a6410;
+    font-size: 12.5px;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+}
+.op-callback-quick button:hover { background: #fff; }
+.op-callback-note { font-size: 12px; color: #8a6410; margin-top: 10px; line-height: 1.45; }
+
+/* ----- Кнопка и панель возражений ----- */
+.op-fab {
+    position: fixed;
+    right: 24px;
+    bottom: 24px;
+    z-index: 95;
+    width: 58px;
+    height: 58px;
+    border-radius: 50%;
+    border: none;
+    cursor: pointer;
+    background: #696969;
+    color: #fff;
+    font-size: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 16px 44px rgba(23, 32, 55, 0.16);
+    transition: background .2s, transform .12s;
+}
+.op-fab:hover { background: #555555; }
+.op-fab:active { transform: scale(.94); }
+.op-fab::after {
+    content: 'Возражения · F2';
+    position: absolute;
+    right: calc(100% + 12px);
+    top: 50%;
+    transform: translateY(-50%);
+    background: #1e293b;
+    color: #f8fafc;
+    padding: 7px 11px;
+    border-radius: 8px;
+    font-size: 12.5px;
+    font-weight: 600;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .15s;
+}
+.op-fab:hover::after { opacity: 1; }
+
+/* Панель НЕ модальная: без затемнения, карточку не блокирует — оператор во
+   время возражения продолжает вводить данные. */
+.op-obj-panel {
+    position: fixed;
+    right: 24px;
+    bottom: 94px;
+    width: min(420px, calc(100vw - 48px));
+    z-index: 95;
+    background: #fff;
+    border: 1px solid rgba(96, 112, 148, 0.30);
+    border-radius: 18px;
+    box-shadow: 0 22px 60px rgba(15, 22, 40, 0.26);
+    display: flex;
+    flex-direction: column;
+    max-height: min(460px, calc(100vh - 140px));
+    overflow: hidden;
+}
+.op-obj-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 16px 12px;
+    border-bottom: 1px solid rgba(96, 112, 148, 0.18);
+}
+.op-obj-head i { color: #0000FF; }
+.op-obj-head h3 { font-size: 14px; font-weight: 700; flex: 1; margin: 0; color: #16202e; }
+.op-obj-close {
+    background: none;
+    border: none;
+    color: #8a95a8;
+    cursor: pointer;
+    padding: 4px 6px;
+    border-radius: 6px;
+    font-size: 15px;
+}
+.op-obj-close:hover { color: #16202e; background: rgba(96, 112, 148, 0.12); }
+.op-obj-search { padding: 12px 16px; border-bottom: 1px solid rgba(96, 112, 148, 0.18); position: relative; }
+.op-obj-search input {
+    width: 100%;
+    padding: 10px 12px 10px 36px;
+    border: 1px solid rgba(96, 112, 148, 0.30);
+    border-radius: 10px;
+    font-size: 13.5px;
+    font-family: inherit;
+    color: #16202e;
+    background: #fff;
+}
+.op-obj-search input:focus {
+    outline: none;
+    border-color: #4a90d9;
+    box-shadow: 0 0 0 3px rgba(0, 0, 255, 0.12);
+}
+.op-obj-search i {
+    position: absolute;
+    left: 28px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #8a95a8;
+    font-size: 13px;
+}
+.op-obj-list { overflow-y: auto; }
+.op-obj-item { border-bottom: 1px solid rgba(96, 112, 148, 0.18); }
+.op-obj-item:last-child { border-bottom: none; }
+.op-obj-item-head {
+    width: 100%;
+    text-align: left;
+    background: none;
+    border: none;
+    font-family: inherit;
+    cursor: pointer;
+    padding: 11px 16px;
+    display: block;
+}
+.op-obj-item-head:hover { background: rgba(0, 0, 255, 0.04); }
+.op-obj-item-title { font-size: 13.5px; font-weight: 700; color: #16202e; display: block; }
+.op-obj-item-preview { font-size: 12.5px; color: #55637c; margin-top: 3px; line-height: 1.45; display: block; }
+.op-obj-item.is-open .op-obj-item-preview { display: none; }
+.op-obj-answer {
+    padding: 0 16px 13px;
+    font-size: 13.5px;
+    line-height: 1.6;
+    color: #16202e;
+    white-space: pre-wrap;
+}
+.op-obj-empty { padding: 16px; font-size: 13.5px; color: #55637c; }
+.op-obj-empty b { display: block; color: #16202e; margin-bottom: 3px; }
+.op-obj-empty .hint { font-size: 12.5px; color: #8a95a8; margin-bottom: 4px; }
+.op-obj-panel mark { background: rgba(255, 221, 87, .55); color: inherit; border-radius: 3px; padding: 0 1px; }
+
+@media (prefers-reduced-motion: reduce) {
+    .op-state-pill.nudge { animation: none; }
+}

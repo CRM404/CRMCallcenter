@@ -34,6 +34,9 @@ function formatDateTime(iso) {
     });
 }
 
+// Пометка «— автоперезвон» берётся из ФЛАГА статуса, а не из его названия:
+// сравнение строк вида «Недоступен» сломалось бы молча от одного пробела.
+// Оператор должен видеть, что после такого статуса лид вернётся в очередь сам.
 function buildFunnelStatusOptions(statuses, selectedId) {
     const byStage = new Map();
     statuses.forEach((s) => {
@@ -44,11 +47,23 @@ function buildFunnelStatusOptions(statuses, selectedId) {
     const groups = stageNumbers.map((num) => {
         const { stageName, items } = byStage.get(num);
         const options = items.map((s) => `
-            <option value="${s.id}" ${s.id === selectedId ? 'selected' : ''}>${escapeHtml(s.statusName)}</option>
+            <option value="${s.id}" data-call-time="${s.requiresCallTime ? '1' : ''}" ${s.id === selectedId ? 'selected' : ''}>${escapeHtml(s.statusName)}${s.autoRecall ? ' — автоперезвон' : ''}</option>
         `).join('');
         return `<optgroup label="${escapeHtml(`${num}. ${stageName}`)}">${options}</optgroup>`;
     }).join('');
     return `<option value="">— не выбран —</option>${groups}`;
+}
+
+function pad(value) {
+    return String(value).padStart(2, '0');
+}
+
+// Значение для <input type="datetime-local"> — в ЛОКАЛЬНОМ времени оператора:
+// он говорит клиенту «наберу через час», глядя на свои часы (dialog.md G6).
+// Приведение к поясу приложения делает сервер.
+function toLocalInputValue(date) {
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+        + `T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
 // Значение, сохранённое у лида, но отсутствующее в справочнике (владелец удалил
@@ -176,11 +191,23 @@ function hasAnyValue(container, keys) {
     });
 }
 
-export function renderLeadForm(container, lead, statuses, paramLists, onSave) {
+// Порог, с которого бейдж попыток становится жёлтым: оператор, взявший лида на
+// последних попытках, обязан понимать, что это последний шанс, иначе потратит
+// на него столько же усилий, сколько на свежий.
+const ATTEMPTS_WARN_FROM = 15;
+const MAX_CALL_ATTEMPTS = 20;
+
+// options.flash = true — карточку только что подменили после сохранения:
+// над ней на две секунды появляется полоса «Новый лид № …». Смена собеседника
+// обязана быть заметна боковым зрением.
+export function renderLeadForm(container, lead, statuses, paramLists, onSave, options) {
     const lists = paramLists || {};
     const savedAt = formatDateTime(lead.updatedAt);
+    const attempts = Number(lead.callAttempts) || 0;
+    const opts = options || {};
 
     container.innerHTML = `
+        ${opts.flash ? `<div class="op-flash" id="opFlashBar"><i class="fas fa-circle-check" aria-hidden="true"></i>Новый лид № ${lead.id} — перед вами другой человек</div>` : ''}
         <div class="op-card-head">
             <h2><span class="op-card-icon"><i class="fas fa-user" aria-hidden="true"></i></span>Карточка клиента</h2>
             <span class="op-lead-no" title="Номер лида — из базы, не редактируется">
@@ -192,7 +219,9 @@ export function renderLeadForm(container, lead, statuses, paramLists, onSave) {
         <div class="op-lead-phone">
             <i class="fas fa-phone" aria-hidden="true"></i>
             <input id="op-field-phone" name="phone" type="tel" value="${escapeHtml(lead.phone)}" aria-label="Телефон">
+            ${attempts ? `<span class="op-attempt${attempts >= ATTEMPTS_WARN_FROM ? ' warn' : ''}">Попытка ${attempts} из ${MAX_CALL_ATTEMPTS}</span>` : ''}
         </div>
+        ${attempts ? `<div class="op-attempt-note">Предыдущая попытка: ${escapeHtml(formatDateTime(lead.lastCallAt)) || '—'}. Счётчик общий по всем операторам линии; после ${MAX_CALL_ATTEMPTS}-й лид уйдёт в статус «Не ответил после N перезвонов».</div>` : ''}
 
         <div class="op-form-section">
             <div class="op-section-label">Клиент</div>
@@ -280,10 +309,11 @@ export function renderLeadForm(container, lead, statuses, paramLists, onSave) {
                     ${buildFunnelStatusOptions(statuses, lead.funnelStatusId)}
                 </select>
             </div>
+            <div id="opCallbackBox"></div>
         </div>
 
         <div class="op-card-actions">
-            <span class="op-saved-at" id="opSavedAt">${savedAt ? `Последнее сохранение: ${escapeHtml(savedAt)}` : ''}</span>
+            <span class="op-saved-at" id="opSavedAt">${savedAt ? `Последнее сохранение: ${escapeHtml(savedAt)}` : 'Ещё не сохранялся'} · после сохранения сразу откроется следующий лид</span>
             <button type="button" class="btn btn-primary" id="opSaveLeadBtn">Сохранить</button>
         </div>
     `;
@@ -371,8 +401,96 @@ export function renderLeadForm(container, lead, statuses, paramLists, onSave) {
     if (geoFilled || paramsFilled) openGeoStep();
     if (paramsFilled) openParamsStep();
 
+    // --- Перезвон ----------------------------------------------------------
+    // Выбор даты и времени раскрывается ПОД селектом статуса, не модалкой:
+    // модальное окно ради двух полей закрывает карточку в самый неудобный
+    // момент. Показывается по флагу requiresCallTime, а не по названию статуса.
+    const statusSelect = container.querySelector('#op-field-funnelStatusId');
+    const callbackBox = container.querySelector('#opCallbackBox');
+    const statusById = new Map(statuses.map((s) => [String(s.id), s]));
+
+    function selectedStatus() {
+        return statusById.get(statusSelect.value) || null;
+    }
+
+    function renderCallbackBox() {
+        const status = selectedStatus();
+        if (!status || !status.requiresCallTime) {
+            callbackBox.innerHTML = '';
+            return;
+        }
+        const initial = lead.nextCallAt ? new Date(lead.nextCallAt) : new Date(Date.now() + 3600 * 1000);
+        callbackBox.innerHTML = `
+            <div class="op-callback">
+                <div class="op-callback-title">Когда перезвонить</div>
+                <div class="op-callback-row">
+                    <div class="form-group">
+                        <label for="opCallbackWhen">Дата и время</label>
+                        <input type="datetime-local" id="opCallbackWhen" step="60" value="${escapeHtml(toLocalInputValue(initial))}">
+                    </div>
+                </div>
+                <div class="op-callback-quick">
+                    <button type="button" data-quick="1">через 1 час</button>
+                    <button type="button" data-quick="3">через 3 часа</button>
+                    <button type="button" data-quick="tomorrow">завтра 10:00</button>
+                </div>
+                <div class="op-callback-note">Лид уйдёт из очереди и в назначенное время вернётся в <b>общую очередь</b> — его может взять любой оператор линии.</div>
+            </div>
+        `;
+        callbackBox.querySelectorAll('[data-quick]').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                const when = new Date();
+                if (btn.dataset.quick === 'tomorrow') {
+                    when.setDate(when.getDate() + 1);
+                    when.setHours(10, 0, 0, 0);
+                } else {
+                    when.setHours(when.getHours() + Number(btn.dataset.quick));
+                }
+                const input = callbackBox.querySelector('#opCallbackWhen');
+                input.value = toLocalInputValue(when);
+                input.classList.remove('is-invalid');
+            });
+        });
+    }
+
+    statusSelect.addEventListener('change', renderCallbackBox);
+    renderCallbackBox();
+
     // --- Сохранение --------------------------------------------------------
     container.querySelector('#opSaveLeadBtn').addEventListener('click', () => {
+        const status = selectedStatus();
+
+        // Без статуса не сохраняем (правка куратора при приёмке, 15.08.2026).
+        // Условие очереди — «статус „Новый“ ИЛИ наступил перезвон», и лид с
+        // пустым статусом не подходит ни под одну ветку: он исчез бы с экрана и
+        // не достался бы больше никому. Сервер это же отбивает кодом 400, здесь
+        // — чтобы оператор увидел причину сразу, а не после запроса.
+        if (!status) {
+            statusSelect.classList.add('is-invalid');
+            statusSelect.focus();
+            onSave(null, null, 'Выберите статус звонка — без него лид не вернётся в очередь');
+            return;
+        }
+        statusSelect.classList.remove('is-invalid');
+
+        let nextCallAt = null;
+        if (status && status.requiresCallTime) {
+            const input = callbackBox.querySelector('#opCallbackWhen');
+            const when = input && input.value ? new Date(input.value) : null;
+            // Прошедшее время не принимается: подсвечиваем поле и не сохраняем.
+            // Ручной перезвон вне рабочего окна поставить МОЖНО — клиент вправе
+            // попросить любое время, сдвигается только автоматический.
+            if (!when || Number.isNaN(when.getTime()) || when.getTime() <= Date.now()) {
+                if (input) {
+                    input.classList.add('is-invalid');
+                    input.focus();
+                }
+                onSave(null, null, 'Укажите будущие дату и время перезвона');
+                return;
+            }
+            nextCallAt = when.toISOString();
+        }
+
         const data = {};
         FIELD_KEYS.forEach((key) => {
             const el = container.querySelector(`#op-field-${key}`);
@@ -388,15 +506,19 @@ export function renderLeadForm(container, lead, statuses, paramLists, onSave) {
         } else {
             data.otherBorrower = cascadeTouched ? null : (lead.otherBorrower ?? null);
         }
-        onSave(data);
+        onSave(data, nextCallAt);
     });
 }
 
-// Обновление подписи о сохранении БЕЗ перерисовки формы: перерисовка схлопнула
-// бы раскрытые ступени посреди звонка (dialog.md D2).
-export function updateSavedAt(container, updatedAt) {
-    const el = container.querySelector('#opSavedAt');
-    if (!el) return;
-    const text = formatDateTime(updatedAt);
-    el.textContent = text ? `Последнее сохранение: ${text}` : '';
+// Полоса «Новый лид № …» держится строго 2 секунды по таймеру, а не до первого
+// действия оператора (решение дизайн-сессии, G3): привязка к действию делает её
+// невидимой ровно для тех, кто торопится, — а им она и нужна.
+export function clearFlash(container) {
+    const bar = container.querySelector('#opFlashBar');
+    if (bar) bar.remove();
 }
+
+// УДАЛЕНО 15.08.2026: здесь была updateSavedAt — обновление подписи о
+// сохранении без перерисовки формы, чтобы не схлопывать раскрытые ступени
+// лесенки посреди звонка. С очередью сохранение закрывает карточку и открывает
+// следующего лида, обновлять на месте больше нечего.

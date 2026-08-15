@@ -14,9 +14,13 @@ const NAV_ITEMS = [
     { key: 'access', label: 'Доступы', icon: 'fa-key' }
 ];
 
-export function initOperatorNav() {
+// beforeLogout — снять оператора с линии перед выходом. Открытый интервал
+// состояния иначе остался бы висеть и накрутил бы «На линии» до потолка
+// (services/operatorState.js): по таким цифрам нельзя ничего считать.
+export function initOperatorNav(options) {
     const nav = document.getElementById('opNav');
     if (!nav) return;
+    const beforeLogout = options && options.beforeLogout;
 
     NAV_ITEMS.forEach((item) => {
         const btn = document.createElement('button');
@@ -41,7 +45,12 @@ export function initOperatorNav() {
     logoutBtn.dataset.tooltip = 'Выход';
     logoutBtn.setAttribute('aria-label', 'Выход');
     logoutBtn.innerHTML = '<i class="fas fa-right-from-bracket" aria-hidden="true"></i>';
-    logoutBtn.addEventListener('click', () => {
+    logoutBtn.addEventListener('click', async () => {
+        // Не блокируем выход, если запрос не прошёл: человек всё равно уходит,
+        // а зависший интервал закроется потолком на сервере.
+        if (beforeLogout) {
+            try { await beforeLogout(); } catch (e) { /* выход важнее */ }
+        }
         clearOperatorIdentity();
         window.location.replace('/operator-login.html');
     });
