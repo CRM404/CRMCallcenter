@@ -1,77 +1,89 @@
-// --- operatorApp.js: инициализация страницы оператора (operator.html) ---
+// --- operatorApp.js: страница оператора (operator.html) ---
+//
+// Список лидов заменён ОЧЕРЕДЬЮ (решение владельца, 15.08.2026). Оператор не
+// выбирает, с кем работать: система выдаёт по одной карточке, сохранение сразу
+// открывает следующую. Промежуточного экрана со списком нет.
+//
+// Три взаимоисключающих состояния рабочей области:
+//   • работа с лидом — скрипт 55 % + карточка 45 %;
+//   • пустая очередь — «Нет активных лидов» и счётчик ожидания;
+//   • не на линии — «Новые лиды не поступают» с реальным состоянием.
+//
+// Кнопка «Сохранить» — ВРЕМЕННЫЙ механизм выдачи следующего лида. Целевая
+// модель: карточка открывается сама, когда телефония начала исходящий звонок
+// (future_implementation_notes.md п.24). Поэтому вокруг кнопки ничего не
+// построено — она вызывает ту же функцию, что и опрос очереди.
 
 import { requireOperatorIdentity } from './operatorIdentity.js';
 import { initOperatorNav } from './operatorNav.js';
 import { showToast } from './operatorToast.js';
-import { fetchOwnLeads, fetchLead, saveLead, fetchFunnelStatuses, fetchScript, fetchEmployee, setOnLine, fetchParamLists } from './operatorStorage.js';
-import { renderLeadList } from './operatorLeadList.js';
+import {
+    fetchNextLead, completeLead, fetchFunnelStatuses, fetchScript,
+    fetchEmployee, fetchParamLists
+} from './operatorStorage.js';
 import { createScriptView } from './operatorScript.js';
-import { renderLeadForm, updateSavedAt } from './operatorLeadForm.js';
+import { renderLeadForm, clearFlash } from './operatorLeadForm.js';
+import { createWorkStatePanel } from './operatorWorkState.js';
+import { createObjectionsPanel } from './operatorObjections.js';
 
-// "На линии" (report_2026-08-01.md, 13.08.2026) — карточка-переключатель
-// над списком лидов. Сам эндпоинт при onLine=true уже разбирает очередь
-// зависших лидов на бэке (services/leadDistribution) — здесь только UI.
-async function initOnlineToggle(employeeId) {
-    const card = document.getElementById('onlineCard');
-    const toggle = document.getElementById('onlineToggle');
-    const label = document.getElementById('onlineLabel');
-    const caption = document.getElementById('onlineCaption');
+// Опрос очереди на экране ожидания. Кнопки «Обновить» нет намеренно: она
+// провоцирует дёргать страницу вместо того, чтобы ждать.
+const QUEUE_POLL_MS = 15000;
+const FLASH_MS = 2000;
 
-    function render(onLine) {
-        card.classList.toggle('is-online', onLine);
-        toggle.checked = onLine;
-        label.textContent = onLine ? 'На линии' : 'Не на линии';
-        caption.textContent = onLine
-            ? 'Готовы принимать новых лидов — попадёте в автораспределение'
-            : 'Новые лиды при автораспределении вам не попадут';
-    }
+function escapeHtml(value) {
+    if (value === null || value === undefined) return '';
+    return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+}
 
+document.addEventListener('DOMContentLoaded', async function () {
+    const identity = requireOperatorIdentity();
+    if (!identity) return; // уже редиректнуло на operator-login.html
+
+    const workArea = document.getElementById('opWorkArea');
+
+    let statuses = [];
+    // Справочники карточки клиента грузятся один раз при заходе на страницу и
+    // живут в памяти — внутри рабочего дня их правит владелец, и перечитывать их
+    // на каждую выданную карточку незачем.
+    let paramLists = {};
+    let currentLead = null;
+    // Что СЕЙЧАС НАРИСОВАНО на экране. Отдельно от currentLead: на перерыве лид
+    // остаётся закреплён (currentLead не пуст), но на экране висит «не на
+    // линии», и сравнивать «пришёл тот же лид» надо именно с нарисованным —
+    // иначе возврат на линию не перерисовывал бы карточку.
+    let renderedLeadId = null;
+    let pollTimer = null;
+    let flashTimer = null;
+
+    let employee = {};
     try {
-        const employee = await fetchEmployee(employeeId);
-        render(!!employee.onLine);
+        employee = await fetchEmployee(identity.id);
     } catch (e) {
         showToast(e.message, 'error');
     }
 
-    toggle.addEventListener('change', async () => {
-        const onLine = toggle.checked;
-        toggle.disabled = true;
-        try {
-            await setOnLine(employeeId, onLine);
-            render(onLine);
-        } catch (e) {
-            showToast(e.message, 'error');
-            toggle.checked = !onLine; // откатываем визуально, запрос не прошёл
-        } finally {
-            toggle.disabled = false;
-        }
+    const workState = createWorkStatePanel({
+        employeeId: identity.id,
+        identity: { ...identity, lineType: employee.lineType },
+        onStateChange: () => { refreshQueue({ silent: true }); }
     });
-}
+    const objections = createObjectionsPanel();
 
-document.addEventListener('DOMContentLoaded', async function() {
-    const identity = requireOperatorIdentity();
-    if (!identity) return; // уже редиректнуло на operator-login.html
-
-    initOperatorNav();
-    initOnlineToggle(identity.id);
-
-    const listView = document.getElementById('opListView');
-    const detailView = document.getElementById('opDetailView');
-    const backBtn = document.getElementById('opBackToListBtn');
-    const scriptPanel = document.getElementById('opScriptPanel');
-    const cardPanel = document.getElementById('opCardPanel');
-
-    let statuses = [];
-    let statusesById = new Map();
-    // Справочники карточки клиента грузятся один раз при заходе на страницу и
-    // живут в памяти — тот же приём, что на странице офферов. Внутри рабочего
-    // дня их правит владелец, и перечитывать их на каждое открытие карточки
-    // незачем.
-    let paramLists = {};
+    initOperatorNav({
+        employeeId: identity.id,
+        // Выход закрывает открытый интервал состояния: иначе «На линии»
+        // накрутило бы всю ночь, и таймеры, ради которых всё делается, врали бы
+        // с первого дня (решение куратора, dialog.md C3).
+        beforeLogout: () => workState.setState('off')
+    });
 
     try {
         statuses = await fetchFunnelStatuses();
-        statusesById = new Map(statuses.map((s) => [s.id, s]));
     } catch (e) {
         showToast(e.message, 'error');
     }
@@ -85,58 +97,169 @@ document.addEventListener('DOMContentLoaded', async function() {
         showToast('Справочники не загрузились — выпадающие списки будут пустыми', 'error');
     }
 
-    async function showListView() {
-        detailView.style.display = 'none';
-        listView.style.display = 'block';
-        try {
-            const leads = await fetchOwnLeads(identity.id);
-            renderLeadList(listView, leads, statusesById, openLead);
-        } catch (e) {
-            showToast(e.message, 'error');
+    await workState.refresh();
+
+    // ---- Экраны ------------------------------------------------------------
+
+    function stopPolling() {
+        if (pollTimer !== null) {
+            clearInterval(pollTimer);
+            pollTimer = null;
         }
     }
 
-    async function openLead(leadId) {
-        try {
-            const lead = await fetchLead(leadId, identity.id);
-            listView.style.display = 'none';
-            detailView.style.display = 'block';
+    function startPolling() {
+        if (pollTimer !== null) return;
+        pollTimer = setInterval(() => { refreshQueue({ silent: true }); }, QUEUE_POLL_MS);
+    }
 
-            // Скрипт привязан к КОНКРЕТНОМУ лиду и зависит от его текущего статуса
-            // (этапы 5–6 — скрипт для повторных), поэтому запрашивается заново при
-            // каждом открытии карточки, без кэша на весь сеанс страницы: у соседнего
-            // лида и скрипт, и его состояние могут быть другими.
-            try {
-                const currentScript = await fetchScript(leadId);
-                scriptPanel.innerHTML = '';
-                if (currentScript) {
-                    createScriptView(scriptPanel, currentScript);
-                } else {
-                    scriptPanel.innerHTML = '<p class="op-script-end">Для этого статуса скрипт не назначен</p>';
-                }
-            } catch (e) {
-                showToast(e.message, 'error');
-                scriptPanel.innerHTML = '';
+    function renderOfflineScreen() {
+        renderedLeadId = null;
+        const label = document.getElementById('opStateName').textContent;
+        workArea.innerHTML = `
+            <div class="op-screen">
+                <div class="op-halo"><i class="fas fa-mug-hot" aria-hidden="true"></i></div>
+                <h2>Новые лиды не поступают</h2>
+                <p>Вы в состоянии «${escapeHtml(label)}». Очередь остановлена${currentLead
+                    ? ', текущий лид остаётся закреплён за вами и откроется, как только вы вернётесь на линию.'
+                    : ' и возобновится, как только вы вернётесь на линию.'}</p>
+                <button type="button" class="btn btn-primary" id="opBackOnlineBtn">Вернуться на линию</button>
+            </div>
+        `;
+        document.getElementById('opBackOnlineBtn').addEventListener('click', () => workState.setState('on_line'));
+    }
+
+    // Счётчик на экране ожидания идёт с момента ПОЯВЛЕНИЯ ЭКРАНА: это ответ на
+    // вопрос «сколько я жду лида», а не «сколько я на смене» — второе видно в
+    // панели состояний (dialog.md G8).
+    function renderEmptyQueueScreen() {
+        renderedLeadId = null;
+        if (workArea.querySelector('.op-screen.waiting')) return; // не сбрасываем счётчик на каждом опросе
+        workArea.innerHTML = `
+            <div class="op-screen waiting">
+                <div class="op-halo"><i class="fas fa-inbox" aria-hidden="true"></i></div>
+                <h2>Нет активных лидов</h2>
+                <p>Вы на линии — следующий лид откроется здесь автоматически, как только поступит.</p>
+                <div class="op-wait-timer">Ожидание: <b data-live-timer="${workState.serverNow()}">00:00</b></div>
+            </div>
+        `;
+    }
+
+    async function renderLeadScreen(lead, flash) {
+        workArea.innerHTML = `
+            <div class="op-detail-grid">
+                <section class="op-panel op-script-panel" id="opScriptPanel"></section>
+                <section class="op-panel" id="opCardPanel"></section>
+            </div>
+        `;
+        const scriptPanel = document.getElementById('opScriptPanel');
+        const cardPanel = document.getElementById('opCardPanel');
+
+        // Скрипт зависит от ТЕКУЩЕГО статуса лида (этапы 5–6 — скрипт для
+        // повторных), поэтому запрашивается на каждую карточку заново.
+        try {
+            const script = await fetchScript(lead.id);
+            if (script) {
+                createScriptView(scriptPanel, script);
+            } else {
+                scriptPanel.innerHTML = '<p class="op-script-end">Для этого статуса скрипт не назначен</p>';
             }
-
-            renderLeadForm(cardPanel, lead, statuses, paramLists, async (data) => {
-                try {
-                    const saved = await saveLead(leadId, identity.id, data);
-                    // Подпись «Последнее сохранение» обновляем НА МЕСТЕ:
-                    // перерисовка формы схлопнула бы раскрытые ступени лесенки
-                    // посреди звонка.
-                    updateSavedAt(cardPanel, saved && saved.updatedAt);
-                    showToast('Сохранено', 'success');
-                } catch (e) {
-                    showToast(e.message, 'error');
-                }
-            });
         } catch (e) {
             showToast(e.message, 'error');
+            scriptPanel.innerHTML = '';
+        }
+
+        renderedLeadId = lead.id;
+        renderLeadForm(cardPanel, lead, statuses, paramLists, (data, nextCallAt, validationError) => {
+            if (validationError) {
+                showToast(validationError, 'error');
+                return;
+            }
+            save(lead.id, data, nextCallAt);
+        }, { flash });
+
+        if (flash) {
+            if (flashTimer !== null) clearTimeout(flashTimer);
+            flashTimer = setTimeout(() => clearFlash(cardPanel), FLASH_MS);
         }
     }
 
-    backBtn.addEventListener('click', showListView);
+    // ---- Очередь -----------------------------------------------------------
 
-    await showListView();
+    async function showLead(lead, flash) {
+        currentLead = lead;
+        workState.setOpenedAt(lead ? lead.openedAt : null);
+        // Кнопка возражений привязана к КАРТОЧКЕ НА ЭКРАНЕ, а не к закреплённому
+        // лиду: на перерыве лид остаётся за оператором, но скрипта на экране нет
+        // и искать в нём нечего.
+        const cardOnScreen = workState.isOnline() && !!lead;
+        objections.setLead(cardOnScreen ? lead.id : null);
+
+        if (!workState.isOnline()) {
+            stopPolling();
+            renderOfflineScreen();
+            return;
+        }
+        if (!lead) {
+            startPolling();
+            renderEmptyQueueScreen();
+            return;
+        }
+        stopPolling();
+        await renderLeadScreen(lead, flash);
+    }
+
+    async function refreshQueue({ silent } = {}) {
+        // Не на линии — очередь не опрашиваем вообще: сервер всё равно ничего не
+        // выдаст, а лишний запрос раз в 15 секунд не нужен никому.
+        if (!workState.isOnline()) {
+            await showLead(currentLead, false);
+            return;
+        }
+        try {
+            const result = await fetchNextLead(identity.id);
+            const lead = result && result.lead;
+            // Та же карточка И она уже на экране — не перерисовываем поверх
+            // работы оператора: он мог заполнить половину полей.
+            if (lead && lead.id === renderedLeadId) return;
+            await showLead(lead || null, false);
+        } catch (e) {
+            if (!silent) showToast(e.message, 'error');
+        }
+    }
+
+    async function save(leadId, data, nextCallAt) {
+        const button = document.getElementById('opSaveLeadBtn');
+        if (button) button.disabled = true;
+        try {
+            const result = await completeLead(leadId, identity.id, data, nextCallAt);
+            await showLead(result.next || null, !!result.next);
+            showToast(result.next ? 'Сохранено · выдан следующий лид' : 'Сохранено · свободных лидов больше нет', 'success');
+        } catch (e) {
+            if (e.status === 409) {
+                // Лид успел уйти по времени или его перехватили. Данные НЕ
+                // сохранены — оператор должен это увидеть, а не догадаться.
+                showToast(e.message, 'error');
+                await refreshQueue({ silent: true });
+                return;
+            }
+            showToast(e.message, 'error');
+            if (button) button.disabled = false;
+        }
+    }
+
+    // Если карточка была открыта до перезагрузки страницы, сервер вернёт ЕЁ же:
+    // opened_at не сбрасывается, и начатая работа не теряется.
+    await refreshQueue();
+
+    // На всякий случай синхронизируем состояние и суммы, когда вкладка снова
+    // становится видимой: за время в фоне таймеры браузера могли отстать.
+    document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) workState.refresh();
+    });
 });
+
+// Открытая карточка остаётся за оператором и после закрытия вкладки — это
+// сознательное правило («лид держится за оператором»), поэтому opened_at здесь
+// НЕ сбрасывается. Забирает такого лида обратно только правило освобождения
+// удержанного лида на сервере (services/leadDistribution.js).

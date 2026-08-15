@@ -3,6 +3,9 @@
 const express = require('express');
 const { pool } = require('../db');
 const { distributePendingLeads } = require('../services/leadDistribution');
+const {
+    SELECTABLE_STATES, isValidState, setWorkState, getWorkState, clearReleasedLeadNotice
+} = require('../services/operatorState');
 
 const router = express.Router();
 
@@ -62,6 +65,7 @@ function rowToEmployee(row) {
         workSchedule: row.work_schedule,
         onLine: row.on_line,
         onLineSince: row.on_line_since,
+        workState: row.work_state,
         password: row.password,
         country: row.country,
         registration: row.registration,
@@ -279,22 +283,63 @@ router.put('/:id', async (req, res) => {
     }
 });
 
-// PUT /api/employees/:id/on-line { onLine } — переключатель "На линии" на
-// "Рабочем столе" оператора (report_2026-08-01.md, 13.08.2026). При включении
-// сразу пробует разобрать очередь зависших лидов (см. services/leadDistribution).
+// GET /api/employees/:id/work-state — текущее состояние оператора, момент его
+// начала, серверное «сейчас» и суммы по состояниям за календарные сутки.
+// Разовую отметку «лид, который был за вами, вернулся в общую очередь» отдаём
+// один раз и сразу снимаем.
+router.get('/:id/work-state', async (req, res) => {
+    try {
+        const state = await getWorkState(pool, req.params.id);
+        if (!state) {
+            return res.status(404).json({ error: 'Сотрудник не найден' });
+        }
+        if (state.releasedLeadNotice) {
+            await clearReleasedLeadNotice(pool, req.params.id);
+        }
+        res.json({ ...state, states: SELECTABLE_STATES });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Не удалось получить состояние оператора' });
+    }
+});
+
+// PUT /api/employees/:id/work-state { state } — смена состояния. Заменяет собой
+// прежний переключатель «на линии» (да/нет). При выходе на линию сразу пробует
+// разобрать очередь зависших лидов (services/leadDistribution).
+router.put('/:id/work-state', async (req, res) => {
+    try {
+        const { state } = req.body || {};
+        if (!isValidState(state)) {
+            return res.status(400).json({ error: 'Недопустимое состояние оператора' });
+        }
+        const updated = await setWorkState(pool, req.params.id, state);
+        if (!updated) {
+            return res.status(404).json({ error: 'Сотрудник не найден' });
+        }
+        if (state === 'on_line') {
+            await distributePendingLeads(pool);
+        }
+        const fresh = await getWorkState(pool, req.params.id);
+        res.json({ ...fresh, states: SELECTABLE_STATES });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Не удалось сменить состояние' });
+    }
+});
+
+// PUT /api/employees/:id/on-line { onLine } — прежний переключатель «На линии».
+// Оставлен как совместимость (решение куратора, dialog.md C4) и реализован
+// ЧЕРЕЗ новый эндпоинт: писать в on_line/on_line_since вправе только смена
+// состояния, второго источника правды нет. Потребителей в интерфейсе у него
+// больше не осталось — страница оператора работает через work-state.
 router.put('/:id/on-line', async (req, res) => {
     try {
         const { onLine } = req.body;
         if (typeof onLine !== 'boolean') {
             return res.status(400).json({ error: 'Не передан onLine' });
         }
-        const result = await pool.query(
-            onLine
-                ? 'UPDATE employees SET on_line = true, on_line_since = NOW() WHERE id = $1 RETURNING id'
-                : 'UPDATE employees SET on_line = false, on_line_since = NULL WHERE id = $1 RETURNING id',
-            [req.params.id]
-        );
-        if (result.rows.length === 0) {
+        const updated = await setWorkState(pool, req.params.id, onLine ? 'on_line' : 'off');
+        if (!updated) {
             return res.status(404).json({ error: 'Сотрудник не найден' });
         }
         if (onLine) {

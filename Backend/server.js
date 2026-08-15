@@ -7,6 +7,8 @@ const express = require('express');
 const cors = require('cors');
 
 const { runMigrations } = require('./migrate');
+const { pool } = require('./db');
+const { checkStatusFlagsConfigured } = require('./services/leadCallRules');
 const employeesRouter = require('./routes/employees');
 const documentsRouter = require('./routes/documents');
 const authRouter = require('./routes/auth');
@@ -86,7 +88,15 @@ app.use((req, res) => {
 
 const PORT = process.env.PORT || 3000;
 
+// Флаги поведения статусов (auto_recall / requires_call_time) проставляются
+// миграцией ПО НАЗВАНИЮ статуса. Если на бою хоть одно название отличается
+// пробелом, флаг молча не встанет и автоперезвон не заработает — без единой
+// ошибки в логе. Поэтому проверка при старте: она не мешает серверу подняться,
+// но оставляет запись, по которой поломку видно сразу (dialog.md A1).
 runMigrations()
+    .then(() => checkStatusFlagsConfigured(pool).catch((err) => {
+        console.error('Не удалось проверить флаги статусов воронки:', err);
+    }))
     .then(() => {
         app.listen(PORT, () => {
             console.log(`API запущен на порту ${PORT}`);

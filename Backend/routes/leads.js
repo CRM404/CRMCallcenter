@@ -7,6 +7,9 @@
 
 const express = require('express');
 const { pool } = require('../db');
+const { assignNextLeadForEmployee } = require('../services/leadDistribution');
+const { fetchStatusFlags, resolveCallStatusEffects } = require('../services/leadCallRules');
+const { withTransaction } = require('../services/dbTx');
 
 const router = express.Router();
 
@@ -103,6 +106,13 @@ function rowToLead(row) {
         downPaymentPercent: row.down_payment_percent,
         purchaseTimeframe: row.purchase_timeframe,
         notes: row.notes,
+        // Рабочий режим оператора (15.08.2026). callAttempts — счётчик СКВОЗНОЙ
+        // по всем операторам линии, а не персональный: в интерфейсе это
+        // подписано, иначе «Попытка 19 из 20» читается как «мои девятнадцать».
+        nextCallAt: row.next_call_at,
+        lastCallAt: row.last_call_at,
+        callAttempts: row.call_attempts,
+        openedAt: row.opened_at,
         createdAt: row.created_at,
         updatedAt: row.updated_at
     };
@@ -153,6 +163,147 @@ router.get('/', async (req, res) => {
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: 'Не удалось получить список лидов' });
+    }
+});
+
+// Поля карточки без статуса воронки: статус на сохранении проходит через
+// правила звонка (services/leadCallRules.js) и пишется вместе с ними, а не как
+// обычное поле формы.
+const CARD_FIELD_COLUMNS = EDITABLE_FIELD_COLUMNS.filter(([key]) => key !== 'funnelStatusId');
+
+async function fetchLeadCard(db, leadId) {
+    const result = await db.query(`${LEAD_CARD_SELECT} WHERE l.id = $1`, [leadId]);
+    return result.rows[0] ? rowToLead(result.rows[0]) : null;
+}
+
+// Серверное «сейчас» уходит клиенту вместе с карточкой: счётчик пост-обработки
+// тикает в браузере, но считается от разницы серверных значений, а не от
+// Date.now() — иначе уехавшие часы браузера соврут (dialog.md G5).
+async function serverNow(db) {
+    const result = await db.query('SELECT NOW() AS now');
+    return result.rows[0].now;
+}
+
+// GET /api/leads/next?employeeId=... — очередь оператора: карточка, с которой он
+// должен работать прямо сейчас, либо null (экран «Нет активных лидов»).
+// Этот же запрос разбирает очередь под запросившего оператора — полный проход
+// раздачи он не запускает (dialog.md D3): при пяти ожидающих операторах опрос
+// раз в 15 секунд означал бы 20 полных проходов в минуту.
+//
+// Объявлен ДО '/:id' — иначе Express прочитает «next» как идентификатор лида.
+router.get('/next', async (req, res) => {
+    try {
+        const { employeeId } = req.query;
+        if (!employeeId) {
+            return res.status(400).json({ error: 'Не передан employeeId' });
+        }
+        const { leadId, reason } = await assignNextLeadForEmployee(pool, employeeId);
+        const lead = leadId === null ? null : await fetchLeadCard(pool, leadId);
+        res.json({ lead, reason, now: await serverNow(pool) });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Не удалось получить следующего лида' });
+    }
+});
+
+// POST /api/leads/:id/complete — «Сохранить»: сохраняет карточку, применяет
+// правила статуса звонка и сразу отдаёт следующего лида. Одним запросом, а не
+// парой «сохранить» + «дай следующего»: между двумя запросами лид успевает
+// уйти другому оператору.
+router.post('/:id/complete', async (req, res) => {
+    const { employeeId, nextCallAt } = req.body || {};
+    if (!employeeId) {
+        return res.status(400).json({ error: 'Не передан employeeId' });
+    }
+
+    let outcome;
+    try {
+        outcome = await withTransaction(pool, async (client) => {
+            const existing = await client.query(
+                'SELECT id, employee_id, call_attempts FROM leads WHERE id = $1 FOR UPDATE',
+                [req.params.id]
+            );
+            if (existing.rows.length === 0) {
+                return { code: 404, error: 'Лид не найден' };
+            }
+            const lead = existing.rows[0];
+
+            // Лид успел уйти по времени или его перехватили. Правки НЕ сохраняем
+            // — он уже не этого оператора, — но следующего лида всё равно
+            // отдадим, чтобы человек не залип на мёртвой карточке (dialog.md D2).
+            if (String(lead.employee_id) !== String(employeeId)) {
+                return { code: 409, error: 'Лид уже не закреплён за вами — введённые данные не сохранены' };
+            }
+
+            const statusId = normalizeValue('funnelStatusId', req.body.funnelStatusId);
+            const statusFlags = await fetchStatusFlags(client, statusId);
+
+            let callTime = null;
+            if (statusFlags && statusFlags.requires_call_time) {
+                callTime = nextCallAt ? new Date(nextCallAt) : null;
+                if (!callTime || Number.isNaN(callTime.getTime())) {
+                    return { code: 400, error: 'Для статуса «Перезвон» укажите дату и время следующего звонка' };
+                }
+                if (callTime.getTime() <= Date.now()) {
+                    return { code: 400, error: 'Время перезвона уже прошло — выберите будущее время' };
+                }
+            }
+
+            const nowRow = await client.query('SELECT NOW() AS now');
+            const effects = await resolveCallStatusEffects(client, {
+                currentAttempts: lead.call_attempts || 0,
+                statusId,
+                statusFlags,
+                nextCallAt: callTime,
+                now: nowRow.rows[0].now
+            });
+
+            const values = CARD_FIELD_COLUMNS.map(([key]) => normalizeValue(key, req.body[key]));
+            const setClauses = CARD_FIELD_COLUMNS.map(([, col], i) => `${col} = $${i + 1}`);
+            const push = (clause, value) => {
+                values.push(value);
+                setClauses.push(clause.replace('$?', `$${values.length}`));
+            };
+            push('funnel_status_id = $?', effects.funnel_status_id);
+            push('opened_at = $?::timestamptz', effects.opened_at);
+            push('next_call_at = $?::timestamptz', effects.next_call_at);
+            push('call_attempts = $?::int', effects.call_attempts);
+            if (effects.last_call_at !== undefined) push('last_call_at = $?::timestamptz', effects.last_call_at);
+            if (effects.employee_id !== undefined) push('employee_id = $?::int', effects.employee_id);
+
+            values.push(req.params.id);
+            await client.query(
+                `UPDATE leads SET ${setClauses.join(', ')}, updated_at = NOW() WHERE id = $${values.length}`,
+                values
+            );
+            return { code: 200 };
+        });
+    } catch (err) {
+        if (err.code === '23503') {
+            return res.status(400).json({ error: 'Указан несуществующий статус воронки' });
+        }
+        console.error(err);
+        return res.status(500).json({ error: 'Не удалось сохранить лида' });
+    }
+
+    if (outcome.code === 404 || outcome.code === 400) {
+        return res.status(outcome.code).json({ error: outcome.error });
+    }
+
+    // Следующего лида берём ОТДЕЛЬНОЙ транзакцией, уже после того как сохранение
+    // зафиксировано: иначе выборка кандидата с FOR UPDATE SKIP LOCKED увидела бы
+    // ещё не закоммиченного текущего лида как свободного и вернула бы его же.
+    try {
+        const { leadId } = await assignNextLeadForEmployee(pool, employeeId);
+        const next = leadId === null ? null : await fetchLeadCard(pool, leadId);
+        const now = await serverNow(pool);
+        if (outcome.code === 409) {
+            return res.status(409).json({ error: outcome.error, saved: false, next, now });
+        }
+        res.json({ saved: true, next, now });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Данные сохранены, но следующего лида получить не удалось' });
     }
 });
 
