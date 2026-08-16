@@ -12,6 +12,8 @@ import {
 import { showToast } from './toast.js';
 import { validatePhone, validateEmail, formatPhone } from './validation.js';
 import { renderTable } from './render.js';
+import { parseShiftInput, parseWorkDaysInput, formatShiftInput } from './scheduleTime.js';
+import { getScheduleState, loadMonth } from './scheduleView.js';
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
 
@@ -45,7 +47,15 @@ const managerSelect = document.getElementById('manager');
 const terminationDateInput = document.getElementById('terminationDate');
 const lineTypeInput = document.getElementById('lineType');
 const workScheduleInput = document.getElementById('workSchedule');
+const shiftTimeInput = document.getElementById('shiftTime');
 const passwordInput = document.getElementById('password');
+
+// Подсказки блока «График работы» — дословно из макета. Держим их здесь,
+// потому что подпись под полем меняется на три состояния: обычная, пустое поле
+// (предупреждение) и ошибка формата.
+const WORK_SCHEDULE_HINT = 'Рабочих дней подряд и выходных подряд: 5/2, 3/3, 2/2, 4/2. Справочная запись: выходные при заполнении месяца отмечает администратор, из этого поля они не считаются.';
+const SHIFT_TIME_HINT = 'С минутами, 24 часа. Смена через полночь — 22:00-06:00.';
+const SHIFT_TIME_EMPTY_HINT = 'Без времени смены месяц по этому сотруднику заполнить нельзя, а в меню дня пункт «Смена» неактивен. Поле «Дни» на заполнение не влияет — пустым оно ничего не ломает.';
 
 const countrySelect = document.getElementById('country');
 const registrationInput = document.getElementById('registration');
@@ -79,6 +89,9 @@ const FIELD_SCHEMA = [
     { key: 'terminationDate', input: terminationDateInput },
     { key: 'lineType', input: lineTypeInput },
     { key: 'workSchedule', input: workScheduleInput },
+    // Одно поле формы — две колонки в базе: собирается из shiftStart/shiftEnd
+    // при заполнении и разбирается обратно при сохранении (dialog.md, Б1).
+    { key: 'shiftTime', input: shiftTimeInput, fromEmployee: (emp) => formatShiftInput(emp.shiftStart, emp.shiftEnd) },
     { key: 'password', input: passwordInput },
     { key: 'country', input: countrySelect },
     { key: 'registration', input: registrationInput },
@@ -154,14 +167,16 @@ export async function openEmployeeModal(title, employee = null) {
         editingId = null;
     }
 
+    resetScheduleFieldHints();
+
     // Сохраняем исходные данные для отслеживания изменений
     captureOriginalData();
 }
 
 // --- Заполнение формы данными сотрудника ---
 function fillForm(emp) {
-    FIELD_SCHEMA.forEach(({ key, input }) => {
-        input.value = emp[key] || '';
+    FIELD_SCHEMA.forEach(({ key, input, fromEmployee }) => {
+        input.value = (fromEmployee ? fromEmployee(emp) : emp[key]) || '';
     });
     FILE_FIELD_SCHEMA.forEach(({ key, input }) => {
         const wrapper = input.closest('.file-upload-area');
@@ -230,6 +245,60 @@ function getCurrentFormData() {
     return data;
 }
 
+// --- Блок «График работы»: проверка формата на клиенте ---
+//
+// Проверка есть и здесь, и на сервере: форма — не единственный вход в
+// PUT /api/employees/:id. Тексты ошибок одни и те же, дословно из макета.
+
+function setScheduleFieldState(input, { error = false, warn = false, text }) {
+    const group = input.closest('.schedule-field');
+    if (!group) return;
+    group.classList.toggle('bad', error);
+    const hint = group.querySelector('.field-hint');
+    if (!hint) return;
+    hint.classList.toggle('warn', warn);
+    hint.textContent = text;
+}
+
+// Проверяет и НОРМАЛИЗУЕТ значение. Нормализация видна сразу: если ввод
+// остаётся как набрали, а в таблице появляется другое, человек решит, что
+// система поправила его молча и неизвестно как.
+function validateWorkDaysField() {
+    const result = parseWorkDaysInput(workScheduleInput.value);
+    if (result.error) {
+        setScheduleFieldState(workScheduleInput, { error: true, text: result.error });
+        return null;
+    }
+    workScheduleInput.value = result.value || '';
+    setScheduleFieldState(workScheduleInput, { text: WORK_SCHEDULE_HINT });
+    return result;
+}
+
+function validateShiftTimeField() {
+    const result = parseShiftInput(shiftTimeInput.value);
+    if (result.error) {
+        setScheduleFieldState(shiftTimeInput, { error: true, text: result.error });
+        return null;
+    }
+    shiftTimeInput.value = formatShiftInput(result.start, result.end);
+    setScheduleFieldState(shiftTimeInput, {
+        warn: !result.start,
+        text: result.start ? SHIFT_TIME_HINT : SHIFT_TIME_EMPTY_HINT
+    });
+    return result;
+}
+
+// Возврат подписей к исходному виду при открытии модалки: ошибка от прошлого
+// сотрудника не должна висеть на новом.
+function resetScheduleFieldHints() {
+    const hasTime = Boolean(shiftTimeInput.value.trim());
+    setScheduleFieldState(workScheduleInput, { text: WORK_SCHEDULE_HINT });
+    setScheduleFieldState(shiftTimeInput, {
+        warn: !hasTime,
+        text: hasTime ? SHIFT_TIME_HINT : SHIFT_TIME_EMPTY_HINT
+    });
+}
+
 // --- Читает файл как base64 (data URL) ---
 function readFileAsDataUrl(file) {
     return new Promise((resolve, reject) => {
@@ -293,6 +362,17 @@ export async function handleEmployeeSubmit(e) {
         return;
     }
 
+    // Блок «График работы»: сохранить непонятное значение нельзя. Ошибка
+    // показывается второй раз (первый — при уходе из поля).
+    const workDays = validateWorkDaysField();
+    const shiftTimes = validateShiftTimeField();
+    if (!workDays || !shiftTimes) {
+        const invalid = !workDays ? workScheduleInput : shiftTimeInput;
+        showToast('Проверьте блок «График работы»: значение не распознано', 'error');
+        invalid.focus();
+        return;
+    }
+
     const empData = {
         lastName,
         firstName,
@@ -308,7 +388,9 @@ export async function handleEmployeeSubmit(e) {
         status: statusSelect.value,
         terminationDate: terminationDateInput.value,
         lineType: lineTypeInput.value.trim(),
-        workSchedule: workScheduleInput.value.trim(),
+        workSchedule: workDays.value,
+        shiftStart: shiftTimes.start,
+        shiftEnd: shiftTimes.end,
         password: passwordInput.value.trim(),
         country: countrySelect.value,
         registration: registrationInput.value.trim(),
@@ -334,6 +416,13 @@ export async function handleEmployeeSubmit(e) {
     const docErrors = await uploadChangedDocuments(savedEmployee.id);
 
     await renderTable();
+    // Если режим «График» уже загружен в этой вкладке — перечитываем месяц:
+    // время смены и «Дни» показываются в строке сетки, и оставить их устаревшими
+    // значит показывать неправду до перезагрузки страницы.
+    const scheduleState = getScheduleState();
+    if (scheduleState.loaded && scheduleState.month) {
+        await loadMonth(scheduleState.month);
+    }
     closeEmployeeModal(true);
 
     if (docErrors.length > 0) {
@@ -378,6 +467,10 @@ export function initModal() {
     });
 
     prevStepBtn.addEventListener('click', () => goToStep(1));
+
+    // Ошибка формата показывается при уходе из поля и повторно при сохранении.
+    workScheduleInput.addEventListener('blur', validateWorkDaysField);
+    shiftTimeInput.addEventListener('blur', validateShiftTimeField);
 
     // Генерация пароля
     document.getElementById('generatePasswordBtn').addEventListener('click', () => {

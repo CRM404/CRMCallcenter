@@ -27,6 +27,7 @@ const paramListsRouter = require('./routes/paramLists');
 const geoSuggestRouter = require('./routes/geoSuggest');
 const sourcesRouter = require('./routes/sources');
 const leadsAdminRouter = require('./routes/leadsAdmin');
+const scheduleRouter = require('./routes/schedule');
 
 const app = express();
 
@@ -55,6 +56,7 @@ app.use('/api/param-lists', paramListsRouter);
 app.use('/api/geo-suggest', geoSuggestRouter);
 app.use('/api/sources', sourcesRouter);
 app.use('/api/leads-admin', leadsAdminRouter);
+app.use('/api/schedule', scheduleRouter);
 
 // Отдаём страницы "Сотрудники", "Оператор", "Скрипт (админ)", "Главная",
 // "CPA-сети", "Источники" и "Лиды" тем же сервером — отдельный статический

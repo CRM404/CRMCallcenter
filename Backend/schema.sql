@@ -931,3 +931,71 @@ BEGIN
         INSERT INTO applied_migrations (id) VALUES ('2026-08-15-work-state-backfill');
     END IF;
 END $$;
+
+-- ============================================================
+-- График работы сотрудников — админский экран
+-- (report_2026-08-01.md, 17.08.2026)
+-- ============================================================
+
+-- День графика: одна строка = один день одного сотрудника. Пустая ячейка в
+-- сетке — это ОТСУТСТВИЕ строки, отдельного состояния «не заполнено» в базе
+-- нет; пункт «Очистить» = DELETE.
+--
+-- UNIQUE (employee_id, day) — «у сотрудника в одном дне ровно одно состояние»
+-- гарантирует база, а не код: два администратора в двух вкладках иначе дадут
+-- две строки на один день, и что покажет таблица — вопрос везения. Этот же
+-- индекс обслуживает выборку по одному сотруднику.
+--
+-- ON DELETE CASCADE (в отличие от leads, где отвязка от сотрудника —
+-- нормальная жизненная ситуация): осмысленных строк графика без сотрудника не
+-- бывает, уволили и удалили — график уходит вместе с ним.
+--
+-- state без CHECK-констрейнта — валидация на уровне API
+-- (services/scheduleFormat.js), как уже принято в проекте для
+-- ad_platforms.status, sources.lead_source, employees.line_type/work_state.
+--
+-- shift_start/shift_end типа TIME, а не VARCHAR: из них считаются часы, строка
+-- потребовала бы разбора при каждом подсчёте. Для state <> 'shift' оба NULL —
+-- принудительно на сервере, клиенту тут не доверяем.
+--
+-- is_extra — признак разовой смены. В ИНТЕРФЕЙСЕ ОН НЕ ИСПОЛЬЗУЕТСЯ: владелец
+-- решил, что доп. смена выглядит ровно как обычная. Колонка нужна потому, что
+-- этот признак нельзя восстановить задним числом — если он не записан в момент
+-- постановки, вернуть различение позже можно будет только вручную по всей
+-- истории. Цена колонки нулевая, цена её отсутствия — потерянные данные.
+CREATE TABLE IF NOT EXISTS employee_schedule_days (
+    id SERIAL PRIMARY KEY,
+    employee_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+    day DATE NOT NULL,
+    state VARCHAR NOT NULL,
+    shift_start TIME,
+    shift_end TIME,
+    is_extra BOOLEAN NOT NULL DEFAULT false,
+    UNIQUE (employee_id, day)
+);
+
+-- Основная выборка экрана идёт по месяцу сразу для всех сотрудников — ведущий
+-- столбец day, а не employee_id (последний покрыт UNIQUE-индексом выше).
+CREATE INDEX IF NOT EXISTS idx_schedule_days_day ON employee_schedule_days (day);
+
+-- Личное время смены сотрудника (произвольное, с минутами; shift_end < shift_start
+-- означает ночную смену). employees.work_schedule, существующая с 11.08.2026,
+-- ПЕРЕИСПОЛЬЗУЕТСЯ под поле «Дни»: новой колонки не заводим, переименования нет,
+-- смысл поля не меняется — меняется только строгость формата (проверка в
+-- routes/employees.js). Шаблон «5/2» нигде в вычислениях не участвует.
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS shift_start TIME;
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS shift_end TIME;
+
+-- Разовое обнуление work_schedule (решение владельца): старые свободные значения
+-- под новый формат не распознаём, поле чистится и заполняется заново руками.
+-- Замок ОБЯЗАТЕЛЕН и внешний: migrate.js перечитывает этот файл при КАЖДОМ
+-- старте сервера, и без замка UPDATE затирал бы то, что администратор только что
+-- ввёл. Изнутри таблицы «значение ещё не проставлено» и «администратор его
+-- стёр» неразличимы — ровно тот случай, ради которого applied_migrations и заведён.
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM applied_migrations WHERE id = '2026-08-17-work-schedule-reset') THEN
+        UPDATE employees SET work_schedule = NULL;
+        INSERT INTO applied_migrations (id) VALUES ('2026-08-17-work-schedule-reset');
+    END IF;
+END $$;

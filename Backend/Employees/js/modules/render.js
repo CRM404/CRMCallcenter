@@ -106,6 +106,17 @@ function renderMessengersCell(emp, hiddenColumns) {
     return `<div class="messenger-cell">${chips.join('')}</div>`;
 }
 
+// "График работы" — теперь два значения вместо одного свободного поля:
+// "3/3 · 21:00–23:30", при одном заполненном — только оно, при пустых прочерк
+// (решение куратора, dialog.md). Время печатается длинным тире без пробелов,
+// как в сетке; дефис остаётся только в поле ввода.
+function renderWorkScheduleCell(emp) {
+    const parts = [];
+    if (emp.workSchedule) parts.push(escapeHtml(emp.workSchedule));
+    if (emp.shiftStart && emp.shiftEnd) parts.push(`${escapeHtml(emp.shiftStart)}–${escapeHtml(emp.shiftEnd)}`);
+    return parts.length ? parts.join(' · ') : '—';
+}
+
 function renderManagerCell(emp) {
     if (!emp.managerName) {
         return '<span class="manager-cell manager-empty">—</span>';
@@ -250,7 +261,7 @@ export async function renderTable() {
                 <td class="status-td${hiddenCls('status')}">${renderStatusBadge(emp)}</td>
                 <td class="termination-td${hiddenCls('terminationDate')}">${emp.terminationDate ? formatDate(emp.terminationDate) : '—'}</td>
                 <td class="linetype-td${hiddenCls('lineType')}">${emp.lineType ? escapeHtml(emp.lineType) : '—'}</td>
-                <td class="workschedule-td${hiddenCls('workSchedule')}">${emp.workSchedule ? escapeHtml(emp.workSchedule) : '—'}</td>
+                <td class="workschedule-td${hiddenCls('workSchedule')}">${renderWorkScheduleCell(emp)}</td>
                 <td>
                     <button class="action-btn btn-edit" data-id="${emp.id}" aria-label="Редактировать" title="Изменить"><i class="fas fa-pencil-alt" aria-hidden="true"></i></button>
                     <button class="action-btn btn-delete" data-id="${emp.id}" data-name="${escapeHtml(fullName)}" aria-label="Удалить" title="Удалить"><i class="fas fa-trash" aria-hidden="true"></i></button>

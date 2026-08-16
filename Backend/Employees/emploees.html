@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>CRM – Сотрудники колл-центра</title>
     <link rel="stylesheet" href="./css/employees-light.css" />
+    <!-- Режим «График» — отдельный файл, чтобы режим «Список» не был задет
+         физически, а не только на словах (dialog.md, Н11). -->
+    <link rel="stylesheet" href="./css/employees-schedule.css" />
 
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" integrity="sha512-Fo3rlrZj/k7ujTnHg4CGR2D7kSs0v4LLanw2qksYuRlEzO+tcaEPQogQ0KaoGN26/zrn20ImR1DfuLWnOo7aBA==" crossorigin="anonymous" referrerpolicy="no-referrer">
 </head>
@@ -20,12 +23,28 @@
                 <div class="header-eyebrow">CRM · Кадровый учёт</div>
                 <h1>Сотрудники</h1>
             </div>
-            <div class="stat-chips">
+            <!-- Переключатель режима страницы. Виден в ОБОИХ режимах и всегда на
+                 одном месте: иначе из графика не выйти, а прыгающий переключатель
+                 дёргает шапку при переключении (dialog.md, Б2). -->
+            <div class="view-switch" id="viewSwitch" role="tablist" aria-label="Режим страницы">
+                <button type="button" role="tab" aria-selected="true" class="active" id="viewListBtn"><i class="fas fa-list" aria-hidden="true"></i>Список</button>
+                <button type="button" role="tab" aria-selected="false" id="viewScheduleBtn"><i class="fas fa-calendar-days" aria-hidden="true"></i>График</button>
+            </div>
+            <div class="stat-chips" id="listStatChips">
                 <div class="stat-chip"><span class="stat-value" id="statTotal">0</span><span class="stat-label">Всего</span></div>
                 <div class="stat-chip stat-active"><span class="stat-value" id="statActive">0</span><span class="stat-label">Активны</span></div>
                 <div class="stat-chip stat-inactive"><span class="stat-value" id="statInactive">0</span><span class="stat-label">Неактивны</span></div>
             </div>
-            <div style="display: flex; gap: 12px; align-items: center;">
+            <!-- Счётчики графика: по колонке сегодняшнего дня, по ВИДИМЫМ строкам.
+                 В месяце без «сегодня» показывают «—», а не нули: ноль — это
+                 утверждение «никто не в смене», а тут просто другой месяц. -->
+            <div class="stat-chips sched-chips" id="schedStatChips" hidden>
+                <div class="stat-chip stat-shift"><span class="stat-value" id="chipShift">0</span><span class="stat-label">Сегодня в смене</span></div>
+                <div class="stat-chip"><span class="stat-value" id="chipOff">0</span><span class="stat-label">Выходной</span></div>
+                <div class="stat-chip stat-vac"><span class="stat-value" id="chipVac">0</span><span class="stat-label">Отпуск</span></div>
+                <div class="stat-chip stat-sick"><span class="stat-value" id="chipSick">0</span><span class="stat-label">Больничный</span></div>
+            </div>
+            <div style="display: flex; gap: 12px; align-items: center;" id="addEmployeeWrap">
                 <button class="btn btn-primary" id="addEmployeeBtn"><i class="fas fa-user-plus" aria-hidden="true" style="margin-right:8px;"></i>Добавить сотрудника</button>
             </div>
         </div>
@@ -73,6 +92,55 @@
                 <!-- Номера страниц генерируются скриптом -->
             </div>
             <div id="emptyMessage" class="empty-message">Нет сотрудников. Добавьте первого!</div>
+        </section>
+
+        <!-- ===== Режим «График» ===== -->
+        <section class="sched-section" id="scheduleView" hidden>
+            <div class="toolbar-card sched-toolbar-card">
+                <div class="sched-toolbar">
+                    <div class="month-nav">
+                        <div class="month-pill">
+                            <button type="button" id="schedPrevMonth" aria-label="Предыдущий месяц"><i class="fas fa-chevron-left" aria-hidden="true"></i></button>
+                            <span class="month-label" id="schedMonthLabel">—</span>
+                            <button type="button" id="schedNextMonth" aria-label="Следующий месяц"><i class="fas fa-chevron-right" aria-hidden="true"></i></button>
+                        </div>
+                        <button type="button" class="btn btn-ghost" id="schedTodayBtn">Сегодня</button>
+                    </div>
+                    <div class="sched-search-wrap">
+                        <i class="fas fa-magnifying-glass" aria-hidden="true"></i>
+                        <input type="text" id="schedSearchInput" placeholder="Поиск по сотруднику..." />
+                    </div>
+                    <select class="filter-select sched-dept-select" id="schedDeptSelect" aria-label="Отдел"></select>
+                    <button class="btn btn-primary sched-fill-btn" id="schedFillBtn"><i class="fas fa-calendar-plus" aria-hidden="true"></i>Добавить график</button>
+                </div>
+                <div class="sched-legend" aria-label="Обозначения">
+                    <span class="legend-item"><span class="legend-swatch sw-shift"><span>9:00</span><span class="t2">18:00</span></span>Смена и доп. смена — своё время</span>
+                    <span class="legend-item"><span class="legend-swatch sw-off">Вых</span>Выходной</span>
+                    <span class="legend-item"><span class="legend-swatch sw-vac">ОТ</span>Отпуск</span>
+                    <span class="legend-item"><span class="legend-swatch sw-sick">Б</span>Больничный</span>
+                    <span class="legend-item"><span class="legend-swatch sw-empty"></span>Не заполнено</span>
+                </div>
+            </div>
+
+            <!-- Пустой месяц: плашка появляется, но сетка всё равно рисуется —
+                 экран без таблицы читался бы как поломка, а кликать было бы некуда. -->
+            <div class="sched-empty-note" id="schedEmptyNote" hidden>
+                <i class="fas fa-circle-info" aria-hidden="true"></i>
+                <span>
+                    <b id="schedEmptyNoteTitle"></b>
+                    Нажмите «Добавить график», чтобы проставить месяц целиком по одному сотруднику, или заполните дни по одному — кликом в сетке.
+                </span>
+            </div>
+
+            <div class="sched-card">
+                <div class="sched-table-wrapper" id="schedTableWrapper">
+                    <table class="sched">
+                        <thead><tr id="schedHead"></tr></thead>
+                        <tbody id="schedBody"></tbody>
+                        <tfoot><tr id="schedFoot"></tr></tfoot>
+                    </table>
+                </div>
+            </div>
         </section>
 
         <!-- Плавающая панель массовых операций — вне .list-section, position:fixed (Отчёт Дизайн.md, 3.5) -->
@@ -165,9 +233,19 @@
                 <option value="Исходящая">Исходящая</option>
             </select>
         </div>
-        <div class="form-group" style="grid-column: span 2;">
-            <label for="workSchedule">График работы</label>
-            <input type="text" id="workSchedule" name="workSchedule" placeholder="Например, «5/2»" />
+        <!-- Блок «График работы»: одно свободное поле превратилось в два.
+             «Дни» — справочная запись о режиме сотрудника, автоматика её не
+             читает; «Время смены» — одно текстовое поле «начало-конец»,
+             разбирается на две колонки TIME (dialog.md, Б1). -->
+        <div class="form-group schedule-field" id="workScheduleField" style="grid-column: span 2;">
+            <label for="workSchedule">Дни</label>
+            <input type="text" id="workSchedule" name="workSchedule" placeholder="5/2" />
+            <span class="field-hint" id="workScheduleHint">Рабочих дней подряд и выходных подряд: 5/2, 3/3, 2/2, 4/2. Справочная запись: выходные при заполнении месяца отмечает администратор, из этого поля они не считаются.</span>
+        </div>
+        <div class="form-group schedule-field" id="shiftTimeField" style="grid-column: span 2;">
+            <label for="shiftTime">Время смены</label>
+            <input type="text" id="shiftTime" name="shiftTime" placeholder="09:00-18:00" />
+            <span class="field-hint" id="shiftTimeHint">С минутами, 24 часа. Смена через полночь — 22:00-06:00.</span>
         </div>
         <div class="form-group" style="grid-column: span 2;">
             <label for="password">Пароль</label>
@@ -440,6 +518,79 @@
             </div>
             <div id="departmentsList" class="departments-list"></div>
             <div id="departmentsEmptyMessage" class="empty-message">Пока нет отделов. Добавьте первый!</div>
+        </div>
+    </div>
+
+    <!-- Поповер дня: шаг 1 — состояния, шаг 2 — время доп. смены (не отдельная
+         модалка: действие делают на бегу, отдельное окно ради двух полей тяжело). -->
+    <div class="cell-pop" id="cellPop" role="menu" hidden>
+        <div class="cell-pop-title" id="cellPopTitle"></div>
+        <div id="popMain">
+            <button type="button" class="cell-pop-opt" data-set="shift" id="optShift"><span class="dot dot-shift"></span><span id="optShiftText">Смена</span></button>
+            <button type="button" class="cell-pop-opt" data-set="day_off"><span class="dot dot-off"></span>Выходной</button>
+            <button type="button" class="cell-pop-opt" data-set="vacation"><span class="dot dot-vac"></span>Отпуск</button>
+            <button type="button" class="cell-pop-opt" data-set="sick"><span class="dot dot-sick"></span>Больничный</button>
+            <hr class="cell-pop-sep" />
+            <button type="button" class="cell-pop-opt" data-set="extra"><span class="dot dot-extra"></span><span>Доп. смена<span class="sub">разовая, со своим временем</span></span></button>
+            <hr class="cell-pop-sep" />
+            <button type="button" class="cell-pop-opt opt-clear" data-set="clear"><span class="dot dot-clear"></span>Очистить</button>
+        </div>
+        <div class="pop-step" id="popExtra" hidden>
+            <div class="time-row">
+                <input type="time" id="extraFrom" aria-label="Начало доп. смены" />
+                <span class="dash">–</span>
+                <input type="time" id="extraTo" aria-label="Конец доп. смены" />
+            </div>
+            <div class="note">Смена через полночь относится к дню, в котором началась.</div>
+            <div class="actions">
+                <button type="button" class="btn btn-ghost" id="extraBack">Назад</button>
+                <button type="button" class="btn btn-primary" id="extraApply">Поставить</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модалка «Добавить график» -->
+    <div class="modal-overlay" id="fillModal" style="display:none;">
+        <div class="modal-content sched-modal">
+            <div class="modal-header">
+                <h2>Добавить график</h2>
+                <span class="modal-close" id="fillCloseBtn" aria-label="Закрыть"><i class="fas fa-xmark" aria-hidden="true"></i></span>
+            </div>
+            <div class="form-group">
+                <label for="fillEmp">Сотрудник</label>
+                <select id="fillEmp"></select>
+                <div class="emp-schedule" id="fillEmpSchedule">
+                    <div class="es-line"><span class="es-key">Время смены</span><span class="es-val" id="fillEmpTime">—</span></div>
+                    <div class="es-line"><span class="es-key">Режим</span><span class="es-note" id="fillEmpDays">—</span></div>
+                </div>
+            </div>
+            <div class="form-group">
+                <label for="fillFrom">С даты</label>
+                <input type="date" id="fillFrom" />
+            </div>
+            <div class="form-group">
+                <span class="field-label" id="wkLabel">Выходные</span>
+                <button type="button" class="wk-field" id="wkField" aria-expanded="false" aria-controls="wkPanel" aria-labelledby="wkLabel wkSummary">
+                    <span class="wk-sum none" id="wkSummary">Не отмечены — смены встанут на все дни подряд</span>
+                    <i class="fas fa-chevron-down" aria-hidden="true"></i>
+                </button>
+                <div class="wk-panel" id="wkPanel" hidden>
+                    <div class="wk-head">
+                        <span class="wk-month" id="wkMonth"></span>
+                        <button type="button" class="wk-clear" id="wkClear">Снять все</button>
+                    </div>
+                    <div class="wk-grid" id="wkGrid"></div>
+                    <p class="wk-note">Отмечайте дни, которые должны стать выходными: остальные дни диапазона получат смену. Заполняется только этот месяц — для следующего переключите месяц в таблице.</p>
+                </div>
+            </div>
+            <div class="fill-preview">
+                <span id="fillPreviewText"></span>
+                <div class="fill-warn" id="fillWarn" hidden></div>
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-ghost" id="fillCancelBtn">Отмена</button>
+                <button type="button" class="btn btn-primary" id="fillApplyBtn">Заполнить</button>
+            </div>
         </div>
     </div>
 

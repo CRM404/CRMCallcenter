@@ -6,6 +6,9 @@ const { distributePendingLeads } = require('../services/leadDistribution');
 const {
     SELECTABLE_STATES, isValidState, setWorkState, getWorkState, clearReleasedLeadNotice
 } = require('../services/operatorState');
+const {
+    isBlank, parseWorkDays, parseTimeOfDay, parseShiftTimes, DAYS_FORMAT_ERROR
+} = require('../services/scheduleFormat');
 
 const router = express.Router();
 
@@ -32,6 +35,14 @@ const FIELD_COLUMNS = [
     ['terminationDate', 'termination_date'],
     ['lineType', 'line_type'],
     ['workSchedule', 'work_schedule'],
+    // Блок «График работы»: work_schedule переиспользован под «Дни», время смены
+    // приезжает двумя ключами (в форме это одно поле, разбирается на клиенте).
+    // ВНИМАНИЕ: любое поле здесь обязано быть и в rowToEmployee ниже —
+    // massActions.js отправляет обратно ВЕСЬ объект из rowToEmployee, а PUT
+    // перезаписывает все колонки из этого списка. Забытое поле = молчаливое
+    // обнуление при массовом переводе в неактивные (dialog.md, Ф2).
+    ['shiftStart', 'shift_start'],
+    ['shiftEnd', 'shift_end'],
     ['password', 'password'],
     ['country', 'country'],
     ['registration', 'registration'],
@@ -63,6 +74,10 @@ function rowToEmployee(row) {
         terminationDate: row.termination_date,
         lineType: row.line_type,
         workSchedule: row.work_schedule,
+        // TIME приезжает из pg как '21:00:00' — секунд в интерфейсе нет нигде,
+        // подрезаем здесь, а не в трёх местах фронта.
+        shiftStart: parseTimeOfDay(row.shift_start),
+        shiftEnd: parseTimeOfDay(row.shift_end),
         onLine: row.on_line,
         onLineSince: row.on_line_since,
         workState: row.work_state,
@@ -85,6 +100,15 @@ function normalizeValue(key, value) {
     }
     if (key === 'status') {
         return value === undefined || value === null || String(value).trim() === '' ? 'active' : value;
+    }
+    // Формат этих трёх проверен в validateRequiredFields, здесь только приводим
+    // к каноническому виду ('5 / 2' -> '5/2', '9:00' -> '09:00'), чтобы в базе
+    // не копились варианты записи одного и того же.
+    if (key === 'workSchedule') {
+        return parseWorkDays(value);
+    }
+    if (key === 'shiftStart' || key === 'shiftEnd') {
+        return parseTimeOfDay(value);
     }
     if (value === undefined) return null;
     if (typeof value === 'string' && value.trim() === '') return null;
@@ -118,6 +142,16 @@ function validateRequiredFields(body) {
     if (body.lineType !== undefined && body.lineType !== null && String(body.lineType).trim() !== ''
         && !LINE_TYPES.includes(body.lineType)) {
         return `Тип линии должен быть одним из: ${LINE_TYPES.join(', ')}`;
+    }
+    // Блок «График работы». Оба поля необязательные, но заполненное непонятно —
+    // не сохраняем: проверка есть и в форме, и здесь, потому что этот эндпоинт
+    // доступен в обход формы. Тексты ошибок дословные из макета.
+    if (!isBlank(body.workSchedule) && !parseWorkDays(body.workSchedule)) {
+        return DAYS_FORMAT_ERROR;
+    }
+    const shiftTimes = parseShiftTimes(body.shiftStart, body.shiftEnd);
+    if (shiftTimes.error) {
+        return shiftTimes.error;
     }
     return null;
 }
