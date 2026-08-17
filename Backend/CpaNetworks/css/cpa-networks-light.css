@@ -152,6 +152,17 @@
 .param-add-row input { flex: 1; padding: 8px 12px; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); font-size: 13px; background: rgba(255, 255, 255, .8); font-family: inherit; }
 .param-add-row input:focus { outline: none; border-color: var(--accent-soft); box-shadow: 0 0 0 3px rgba(0, 0, 255, .12); }
 
+/* Подсказка внутри метки поля и подзаголовок модалки. Оба класса приехали из
+   старого файла вместе с разметкой, а правила под них при переносе ушли как
+   «отданные общему слою» — но в слое их нет: там подсказка это отдельный
+   .ui-field__hint ПОД полем, а не приписка к метке. Форма оффера пользуется
+   припиской в двух десятках мест («пусто = бессрочно», «можно несколько»), и
+   без правила она читалась как продолжение самой метки. */
+.hint { font-size: 11px; font-weight: 400; color: var(--ink-faint); text-transform: none; letter-spacing: 0; margin-left: 4px; }
+.modal-sub { font-size: 12.5px; color: var(--ink-faint); margin-top: 3px; }
+/* Ползунок «Настройка списков» и крестик стоят в шапке модалки рядом. */
+.modal-head-actions { display: flex; align-items: center; gap: 14px; flex-shrink: 0; }
+
 .section-divider { display: flex; align-items: center; gap: 10px; margin: 18px 0 12px; }
 .section-divider:first-child { margin-top: 0; }
 .section-divider .s-icon { width: 28px; height: 28px; border-radius: 9px; background: rgba(0, 0, 255, .08); color: var(--accent); display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 13px; }

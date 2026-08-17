@@ -585,7 +585,7 @@ function renderParamsPanel() {
                 <div class="param-tags" id="ptags-${m.key}"></div>
                 <div class="param-add-row">
                     <input type="text" id="padd-${m.key}" placeholder="Новое значение…">
-                    <button type="button" class="btn btn-secondary btn-sm" data-add="${m.key}">Добавить</button>
+                    <button type="button" class="ui-btn ui-btn--secondary ui-btn--sm" data-add="${m.key}">Добавить</button>
                 </div>
             </div>
         </div>`).join('');
