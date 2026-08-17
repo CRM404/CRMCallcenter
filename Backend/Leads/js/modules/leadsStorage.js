@@ -1,132 +1,68 @@
-// --- leadsStorage.js: клиент REST API для страницы "Лиды" ---
+// --- leadsStorage.js: доменные методы раздела «Лиды» ---
+//
+// Транспорта здесь больше нет: request/buildQuery живут в /api.js, один на
+// проект. Storage раздела стал фабрикой — она получает ctx.api, привязанный к
+// жизни ОДНОЙ панели, и все запросы раздела отменяются вместе с её закрытием.
+//
+//     const storage = createStorage(ctx.api);
+//     const leads = await storage.fetchLeads({ limit: 30 });
 
-export const API_BASE_URL = '/api';
+export function createStorage(api) {
+    return {
+        // --- Лиды (админский слой, routes/leadsAdmin.js) ---
 
-async function request(path, options = {}) {
-    let response;
-    try {
-        response = await fetch(`${API_BASE_URL}${path}`, {
-            headers: { 'Content-Type': 'application/json' },
-            ...options
-        });
-    } catch (e) {
-        throw new Error('Не удалось связаться с сервером. Проверьте подключение.');
-    }
+        fetchLeads: ({ fio, phone, sourceId, employeeId, funnelStatusId, limit, offset } = {}) =>
+            api.get('/leads-admin', { fio, phone, sourceId, employeeId, funnelStatusId, limit, offset }),
 
-    if (response.status === 204) return null;
+        fetchLeadStats: () => api.get('/leads-admin/stats'),
 
-    let body = null;
-    try {
-        body = await response.json();
-    } catch (e) {
-        // тело может отсутствовать при некоторых ошибках — игнорируем
-    }
+        checkPhoneDuplicate: (phone) => api.get('/leads-admin/check-phone', { phone }),
 
-    if (!response.ok) {
-        const err = new Error((body && body.error) || 'Произошла ошибка на сервере');
-        err.status = response.status;
-        throw err;
-    }
-    return body;
-}
+        fetchLeadById: (id) => api.get(`/leads-admin/${id}`),
 
-function buildQuery(params) {
-    const usp = new URLSearchParams();
-    Object.entries(params).forEach(([key, value]) => {
-        if (value !== undefined && value !== null && value !== '') {
-            usp.set(key, value);
-        }
-    });
-    const query = usp.toString();
-    return query ? `?${query}` : '';
-}
+        createLead: (data) => api.post('/leads-admin', data),
 
-// --- Лиды (админский слой, routes/leadsAdmin.js) ---
+        updateLead: (id, data) => api.put(`/leads-admin/${id}`, data),
 
-export function fetchLeads({ fio, phone, sourceId, employeeId, funnelStatusId, limit, offset } = {}) {
-    return request(`/leads-admin${buildQuery({ fio, phone, sourceId, employeeId, funnelStatusId, limit, offset })}`);
-}
+        deleteLead: (id) => api.del(`/leads-admin/${id}`),
 
-export function fetchLeadStats() {
-    return request('/leads-admin/stats');
-}
+        // Один набор параметров подбора на всю партию + строки файла.
+        bulkImportLeads: (params) => api.post('/leads-admin/bulk-import', params),
 
-export function checkPhoneDuplicate(phone) {
-    return request(`/leads-admin/check-phone${buildQuery({ phone })}`);
-}
+        // Лёгкая PATCH-семантика под массовые действия списка: полное тело лида
+        // не нужно, поэтому массово править можно и старых лидов, у которых ещё
+        // не заполнены обязательные для PUT поля (линия/скрипт/офферы/статусы).
+        bulkUpdateLeads: (leadIds, patch) => api.post('/leads-admin/bulk-update', { leadIds, patch }),
 
-export function fetchLeadById(id) {
-    return request(`/leads-admin/${id}`);
-}
+        // --- Справочники, переиспользуемые с других разделов (только чтение) ---
 
-export function createLead(data) {
-    return request('/leads-admin', { method: 'POST', body: JSON.stringify(data) });
-}
+        fetchAllSources: () => api.get('/sources'),
 
-export function updateLead(id, data) {
-    return request(`/leads-admin/${id}`, { method: 'PUT', body: JSON.stringify(data) });
-}
+        fetchAllEmployees: () => api.get('/employees'),
 
-export function deleteLead(id) {
-    return request(`/leads-admin/${id}`, { method: 'DELETE' });
-}
+        // Офферы — ТОЛЬКО серверный поиск: в базе ≈38 000, полный справочник
+        // (GET /real-estate-offers, им живёт раздел CPA-сетей) этот раздел не
+        // запрашивает никогда.
+        searchOffers: ({ search, rootSource, platformId, region, city, district, locality, limit } = {}) =>
+            api.get('/real-estate-offers/search', { search, rootSource, platformId, region, city, district, locality, limit }),
 
-// Один набор параметров подбора на всю партию + строки файла.
-export function bulkImportLeads(params) {
-    return request('/leads-admin/bulk-import', { method: 'POST', body: JSON.stringify(params) });
-}
+        // Транспорт кнопки «Добавить все (N)»: id всего отбора, а не видимой страницы.
+        searchOfferIds: ({ search, rootSource, platformId, region, city, district, locality } = {}) =>
+            api.get('/real-estate-offers/search-ids', { search, rootSource, platformId, region, city, district, locality }),
 
-// Лёгкая PATCH-семантика под массовые действия списка: полное тело лида не
-// нужно, поэтому массово править можно и старых лидов, у которых ещё не
-// заполнены обязательные для PUT поля (линия/скрипт/офферы/статусы показа).
-export function bulkUpdateLeads(leadIds, patch) {
-    return request('/leads-admin/bulk-update', { method: 'POST', body: JSON.stringify({ leadIds, patch }) });
-}
+        // Гео-уровни каскадные: выбранные верхние сужают списки нижних, поэтому
+        // эндпоинт принимает их параметрами и перезапрашивается при смене уровня.
+        fetchOfferFilters: ({ region, city, district } = {}) =>
+            api.get('/real-estate-offers/search-filters', { region, city, district }),
 
-// --- Справочники, переиспользуемые с других страниц (только чтение) ---
+        // Только активные скрипты — черновики в выборе на «Лидах» не участвуют.
+        fetchActiveScripts: () => api.get('/admin/scripts', { status: 'active' }),
 
-export function fetchAllSources() {
-    return request('/sources');
-}
+        fetchFunnelStatuses: () => api.get('/lead-funnel-statuses'),
 
-export function fetchAllEmployees() {
-    return request('/employees');
-}
+        fetchParamLists: () => api.get('/param-lists'),
 
-// Офферы — ТОЛЬКО серверный поиск: в базе ≈38 000, полный справочник
-// (GET /real-estate-offers, им живёт страница CPA-сетей) эта страница не
-// запрашивает никогда.
-export function searchOffers({ search, rootSource, platformId, region, city, district, locality, limit } = {}) {
-    return request(`/real-estate-offers/search${buildQuery({ search, rootSource, platformId, region, city, district, locality, limit })}`);
-}
-
-// Транспорт кнопки «Добавить все (N)»: id всего отбора, а не видимой страницы.
-export function searchOfferIds({ search, rootSource, platformId, region, city, district, locality } = {}) {
-    return request(`/real-estate-offers/search-ids${buildQuery({ search, rootSource, platformId, region, city, district, locality })}`);
-}
-
-// Гео-уровни каскадные: выбранные верхние сужают списки нижних, поэтому
-// эндпоинт принимает их параметрами и перезапрашивается при смене уровня.
-export function fetchOfferFilters({ region, city, district } = {}) {
-    return request(`/real-estate-offers/search-filters${buildQuery({ region, city, district })}`);
-}
-
-// Только активные скрипты — черновики в выборе на «Лидах» не участвуют.
-export function fetchActiveScripts() {
-    return request('/admin/scripts?status=active');
-}
-
-export function fetchFunnelStatuses() {
-    return request('/lead-funnel-statuses');
-}
-
-export function fetchParamLists() {
-    return request('/param-lists');
-}
-
-export function fetchGeoSuggest(query, { bound, regionFiasId } = {}) {
-    const params = new URLSearchParams({ q: query });
-    if (bound) params.set('bound', bound);
-    if (regionFiasId) params.set('regionFiasId', regionFiasId);
-    return request(`/geo-suggest?${params.toString()}`);
+        fetchGeoSuggest: (query, { bound, regionFiasId } = {}) =>
+            api.get('/geo-suggest', { q: query, bound, regionFiasId })
+    };
 }

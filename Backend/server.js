@@ -90,6 +90,7 @@ app.use('/api/schedule', scheduleRouter);
 // На 301 переведём в конце задачи, если это вообще понадобится.
 app.get('/main.html', (req, res) => res.redirect(302, '/#/requisites'));
 app.get('/cpa-networks.html', (req, res) => res.redirect(302, '/#/cpa'));
+app.get('/leads.html', (req, res) => res.redirect(302, '/#/leads'));
 
 const shellDir = path.join(__dirname, 'Shell');
 const employeesDir = path.join(__dirname, 'Employees');

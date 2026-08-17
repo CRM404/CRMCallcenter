@@ -1,0 +1,404 @@
+<!-- Фрагмент раздела «Лиды». Грузится оболочкой при первом открытии панели
+     и кэшируется.
+
+     ЧЕГО ЗДЕСЬ НЕТ по сравнению со старым leads.html:
+       - каркаса страницы и каркаса хаба (навигации-рейки в проекте нет);
+       - #toastContainer — тост один на приложение, создаётся вызовом;
+       - модалки подтверждения — удаление необратимо и подтверждается окном
+         на весь экран через ctx.confirmDanger;
+       - <script src="…xlsx.full.min.js"> — скрипты во фрагменте не
+         выполняются вовсе (фрагмент вставляется через innerHTML). Библиотека
+         разбора файла грузится по требованию, при открытии окна загрузки
+         (leadsUpload.js, loadXlsx). Побочно это и лучше: раньше 900 КБ
+         тянулись при каждом заходе на страницу, даже если базу не грузили.
+
+     ID ОСТАВЛЕНЫ ТОЛЬКО ТАМ, ГДЕ ЕСТЬ label[for]. Всё остальное переведено на
+     data-role. Причина конкретная: в одном документе живут две панели, а
+     #massActions, #selectedCount, #emptyState, #headCheckbox и #filterModal
+     есть ещё у «Сотрудников» и «Источников». Совпавший id ломает связь
+     метки с полем — браузер свяжет метку с первым найденным полем, то есть с
+     чужим. Собственные поля лида (ld*/up*/flt*/oflt*) проверены машинно: с
+     перенесёнными разделами не пересекаются ни одним именем.
+
+     ВИД — ИЗ СЛОЯ. Таблица, полоса массовых действий, вкладки, поля, кнопки,
+     окна и пустое состояние взяты как есть: .ui-table, .ui-mass-bar,
+     .ui-tabs, .ui-field, .ui-btn, .ui-modal, .ui-empty. Раздел объявляет
+     только то, чего в слое нет: поле телефона, предупреждение о дубле,
+     подсказки адреса, бейдж этапа воронки, сводку загрузки.
+-->
+
+<div class="leads-wrap">
+
+    <div class="identity-strip">
+        <div class="identity-copy">
+            <div class="eyebrow">CRM · Все лиды</div>
+            <h1>Лиды</h1>
+            <p>Полный список лидов со всех источников — создание, редактирование, назначение оператора, массовая загрузка базы.</p>
+        </div>
+        <dl class="ui-chips">
+            <div class="ui-chip"><dt class="ui-chip__label">Всего</dt><dd class="ui-chip__value" data-role="stat-total">0</dd></div>
+            <div class="ui-chip ui-chip--warn"><dt class="ui-chip__label">Без оператора</dt><dd class="ui-chip__value" data-role="stat-queue">0</dd></div>
+            <div class="ui-chip ui-chip--ok"><dt class="ui-chip__label">За сегодня</dt><dd class="ui-chip__value" data-role="stat-today">0</dd></div>
+        </dl>
+    </div>
+
+    <div class="toolbar">
+        <div class="filter-btn-wrap">
+            <button type="button" class="ui-btn ui-btn--ghost" data-role="filter-toggle"><i class="fas fa-filter" aria-hidden="true"></i>Фильтры</button>
+            <span class="filter-badge" data-role="filter-badge" hidden>0</span>
+        </div>
+        <button type="button" class="ui-btn ui-btn--ghost ui-btn--icon" data-role="columns-btn" aria-label="Настройка колонок" title="Настройка колонок"><i class="fas fa-gear" aria-hidden="true"></i></button>
+        <div class="toolbar-spacer"></div>
+        <button type="button" class="ui-btn ui-btn--secondary" data-role="upload-btn"><i class="fas fa-upload" aria-hidden="true"></i>Загрузить базу</button>
+        <button type="button" class="ui-btn" data-role="add-lead"><i class="fas fa-plus" aria-hidden="true"></i>Добавить лида</button>
+    </div>
+
+    <div class="ui-table-wrap" data-role="table-wrap">
+        <table class="ui-table ui-table--wide">
+            <thead>
+                <tr>
+                    <th class="ui-table__sel"><input type="checkbox" data-role="head-checkbox" aria-label="Выделить все"></th>
+                    <th>ID</th>
+                    <th>ФИО</th>
+                    <th>Номер</th>
+                    <th data-col="source">Источник</th>
+                    <th data-col="employee">Сотрудник</th>
+                    <th data-col="funnelStatus">Статус</th>
+                    <th data-col="lineType">Линия</th>
+                    <th data-col="script">Скрипт</th>
+                    <th data-col="offers">Офферы</th>
+                    <th data-col="propertyType">Тип объекта</th>
+                    <th data-col="propertyClass">Класс объекта</th>
+                    <th data-col="roomCount">Комнатность</th>
+                    <th data-col="priceFrom">Цена от</th>
+                    <th data-col="priceTo">Цена до</th>
+                    <th data-col="areaFrom">Площадь от</th>
+                    <th data-col="areaTo">Площадь до</th>
+                    <th data-col="deliveryDeadline">Срок сдачи</th>
+                    <th data-col="region">Область</th>
+                    <th data-col="city">Город</th>
+                    <th data-col="district">Район</th>
+                    <th data-col="locality">Нас. пункт</th>
+                    <th data-col="purchaseMethod">Способ покупки</th>
+                    <th data-col="mortgageType">Вид ипотеки</th>
+                    <th data-col="downPaymentPercent">ПВ %</th>
+                    <th data-col="purchaseTimeframe">Срок покупки</th>
+                    <th data-col="notes">Комментарии</th>
+                    <th data-col="createdAt">Создан</th>
+                    <th data-col="updatedAt">Обновлён</th>
+                    <th class="ui-table__acts">Действия</th>
+                </tr>
+            </thead>
+            <tbody data-role="leads-body"></tbody>
+        </table>
+    </div>
+
+    <div class="ui-empty ui-empty--inline" data-role="empty-state" hidden>
+        <p class="ui-empty__text">Ничего не найдено по текущим фильтрам.</p>
+    </div>
+
+    <div class="ui-table-foot" data-role="load-more-row" hidden>
+        <span></span>
+        <button type="button" class="ui-btn ui-btn--ghost ui-btn--sm" data-role="load-more">Показать ещё</button>
+    </div>
+
+    <!-- Полоса массовых операций. В старой странице это был плавающий остров
+         position:fixed по центру экрана — в оболочке он висел бы поверх
+         соседней панели. Здесь .ui-mass-bar из слоя: sticky у нижнего края
+         своей панели, то есть ровно там, где выделены строки. -->
+    <div class="ui-mass-bar" data-role="mass-bar" hidden>
+        <span class="ui-mass-bar__count" data-role="selected-count">Выбрано: 0</span>
+        <select class="ui-field__control mass-select" data-role="mass-action" aria-label="Массовое действие">
+            <option value="">Выберите действие</option>
+            <option value="employee">Сменить оператора</option>
+            <option value="status">Сменить статус</option>
+            <option value="script">Сменить скрипт</option>
+            <option value="repeatScript">Сменить скрипт для повторных</option>
+            <option value="delete">Удалить</option>
+        </select>
+        <select class="ui-field__control mass-select" data-role="mass-employee" aria-label="Оператор" hidden><option value="">— не назначен —</option></select>
+        <select class="ui-field__control mass-select" data-role="mass-status" aria-label="Статус" hidden></select>
+        <select class="ui-field__control mass-select" data-role="mass-script" aria-label="Скрипт" hidden></select>
+        <select class="ui-field__control mass-select" data-role="mass-repeat-script" aria-label="Скрипт для повторных" hidden></select>
+        <button type="button" class="ui-btn ui-btn--sm" data-role="mass-apply">Применить</button>
+        <button type="button" class="ui-btn ui-btn--ghost ui-btn--icon ui-btn--sm" data-role="mass-clear" aria-label="Сбросить выделение" title="Сбросить выделение"><i class="fas fa-xmark" aria-hidden="true"></i></button>
+    </div>
+
+    <!-- ================= ОКНО «ФИЛЬТРЫ» ================= -->
+    <div class="ui-modal leads-modal" data-role="filter-modal" hidden>
+        <div class="ui-modal__box">
+            <div class="ui-modal__head">
+                <div>
+                    <h2 class="ui-modal__title">Фильтры</h2>
+                    <p class="modal-sub">По тем же полям, что и колонки по умолчанию</p>
+                </div>
+                <button type="button" class="ui-modal__close" data-role="filter-close" aria-label="Закрыть"><i class="fas fa-xmark" aria-hidden="true"></i></button>
+            </div>
+            <div class="ui-modal__body">
+                <div class="ui-form-grid">
+                    <div class="ui-field"><label class="ui-field__label" for="fltFio">ФИО</label><input class="ui-field__control" type="text" id="fltFio" placeholder="Фамилия Имя"></div>
+                    <div class="ui-field"><label class="ui-field__label" for="fltPhone">Номер</label><input class="ui-field__control" type="text" id="fltPhone" placeholder="+7 900…"></div>
+                    <div class="ui-field"><label class="ui-field__label" for="fltSource">Источник</label><select class="ui-field__control" id="fltSource"><option value="">Все источники</option></select></div>
+                    <div class="ui-field"><label class="ui-field__label" for="fltEmployee">Сотрудник</label><select class="ui-field__control" id="fltEmployee"><option value="">Все сотрудники</option><option value="none">— без оператора —</option></select></div>
+                    <div class="ui-field ui-field--wide"><label class="ui-field__label" for="fltStatus">Статус воронки</label><select class="ui-field__control" id="fltStatus"><option value="">Все статусы</option></select></div>
+                </div>
+            </div>
+            <div class="ui-modal__actions">
+                <button type="button" class="ui-btn ui-btn--secondary" data-role="filter-clear">Сбросить</button>
+                <button type="button" class="ui-btn" data-role="filter-apply">Применить</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= ОКНО «НАСТРОЙКА КОЛОНОК» ================= -->
+    <div class="ui-modal leads-modal" data-role="columns-modal" hidden>
+        <div class="ui-modal__box">
+            <div class="ui-modal__head">
+                <div>
+                    <h2 class="ui-modal__title">Настройка колонок</h2>
+                    <p class="modal-sub">ID/ФИО/Номер/Действия — всегда видны</p>
+                </div>
+                <button type="button" class="ui-modal__close" data-role="columns-close" aria-label="Закрыть"><i class="fas fa-xmark" aria-hidden="true"></i></button>
+            </div>
+            <div class="ui-modal__body" data-role="columns-body"></div>
+            <div class="ui-modal__actions">
+                <button type="button" class="ui-btn ui-btn--secondary" data-role="columns-reset">Сбросить</button>
+                <button type="button" class="ui-btn" data-role="columns-apply">Применить</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= ОКНО ЛИДА: создание/редактирование ================= -->
+    <div class="ui-modal leads-modal" data-role="lead-modal" hidden>
+        <div class="ui-modal__box ui-modal__box--wide">
+            <div class="ui-modal__head">
+                <div>
+                    <h2 class="ui-modal__title" data-role="lead-modal-title">Новый лид</h2>
+                    <p class="modal-sub">Обязательные поля: номер, линия, источник, офферы, скрипт и статусы показа — остальное можно заполнить позже</p>
+                </div>
+                <button type="button" class="ui-modal__close" data-role="lead-close" aria-label="Закрыть"><i class="fas fa-xmark" aria-hidden="true"></i></button>
+            </div>
+
+            <div class="ui-tabs" role="tablist">
+                <button type="button" class="ui-tabs__tab ui-tabs__tab--active" data-role="tab-main" role="tab" aria-selected="true">Данные лида</button>
+                <button type="button" class="ui-tabs__tab" data-role="tab-offers" role="tab" aria-selected="false">Офферы <span class="ui-tabs__count ui-tabs__count--badge" data-role="offer-tab-count">0</span></button>
+            </div>
+
+            <div class="ui-modal__body">
+            <div data-role="tab-panel-main">
+
+                <div class="phone-field">
+                    <i class="fas fa-phone" aria-hidden="true"></i>
+                    <input type="tel" id="ldPhone" placeholder="+7 (___) ___-__-__" aria-label="Номер телефона">
+                </div>
+                <div class="dup-warning" data-role="dup-warning" hidden>
+                    <i class="fas fa-triangle-exclamation" aria-hidden="true"></i>
+                    <span>Возможный дубль: лид <b data-role="dup-warning-id">#—</b> уже с этим номером. Сохранение не заблокировано — проверьте перед тем, как продолжить.</span>
+                </div>
+
+                <div class="form-section">
+                    <h3>Назначение</h3>
+                    <p class="section-hint">Линия — перед сотрудником: раздача лида идёт только операторам выбранной линии.</p>
+                    <div class="ui-form-grid">
+                        <div class="ui-field"><label class="ui-field__label ui-field__label--required" for="ldSource">Источник</label><select class="ui-field__control" id="ldSource"><option value="">— не выбран —</option></select></div>
+                        <div class="ui-field"><label class="ui-field__label ui-field__label--required" for="ldLine">Линия</label><select class="ui-field__control" id="ldLine"><option value="">— не выбрана —</option><option>Входящая</option><option>Исходящая</option></select></div>
+                        <div class="ui-field"><label class="ui-field__label" for="ldEmployee">Сотрудник</label><select class="ui-field__control" id="ldEmployee"><option value="">— не назначен —</option></select></div>
+                        <div class="ui-field"><label class="ui-field__label" for="ldFunnelStatus">Текущий статус воронки</label><select class="ui-field__control" id="ldFunnelStatus"></select></div>
+                    </div>
+                    <p class="section-hint section-hint--after">Офферы лида — на вкладке «Офферы» (обязателен минимум один).</p>
+                </div>
+
+                <div class="form-section">
+                    <h3>Скрипт звонка</h3>
+                    <p class="section-hint">Оператор увидит основной скрипт, пока текущий статус лида входит в выбранные; на статусах этапов 5–6 — скрипт для повторных.</p>
+                    <div class="ui-form-grid form-grid--top">
+                        <div class="ui-field"><label class="ui-field__label ui-field__label--required" for="ldScript">Скрипт</label><select class="ui-field__control" id="ldScript"></select></div>
+                        <div class="ui-field">
+                            <span class="ui-field__label ui-field__label--required">Статусы показа скрипта</span>
+                            <div class="pick-list" data-role="status-pick"></div>
+                        </div>
+                        <div class="ui-field" data-role="repeat-wrap" hidden>
+                            <label class="ui-field__label ui-field__label--required" for="ldRepeatScript">Скрипт для повторных</label>
+                            <select class="ui-field__control" id="ldRepeatScript"></select>
+                            <span class="cond-hint">Обязателен: среди статусов показа есть этапы 5–6</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-section">
+                    <h3>Контакты</h3>
+                    <div class="ui-form-grid">
+                        <div class="ui-field"><label class="ui-field__label" for="ldLastName">Фамилия</label><input class="ui-field__control" type="text" id="ldLastName"></div>
+                        <div class="ui-field"><label class="ui-field__label" for="ldFirstName">Имя</label><input class="ui-field__control" type="text" id="ldFirstName"></div>
+                        <div class="ui-field"><label class="ui-field__label" for="ldMiddleName">Отчество</label><input class="ui-field__control" type="text" id="ldMiddleName"></div>
+                        <div class="ui-field"><label class="ui-field__label" for="ldDecisionMaker">ЛПР</label><select class="ui-field__control" id="ldDecisionMaker"></select></div>
+                    </div>
+                </div>
+
+                <div class="form-section">
+                    <h3>Что ищет</h3>
+                    <div class="ui-form-grid">
+                        <div class="ui-field"><label class="ui-field__label" for="ldCategory">Категория</label><select class="ui-field__control" id="ldCategory"></select></div>
+                        <div class="ui-field"><label class="ui-field__label" for="ldPropertyType">Тип объекта</label><select class="ui-field__control" id="ldPropertyType"></select></div>
+                        <div class="ui-field"><label class="ui-field__label" for="ldPropertyClass">Класс объекта</label><select class="ui-field__control" id="ldPropertyClass"></select></div>
+                        <div class="ui-field"><label class="ui-field__label" for="ldRoomCount">Комнатность</label><select class="ui-field__control" id="ldRoomCount"></select></div>
+                        <div class="ui-field"><label class="ui-field__label" for="ldFinish">Отделка</label><select class="ui-field__control" id="ldFinish"></select></div>
+                        <div class="ui-field"><label class="ui-field__label" for="ldDeliveryDeadline">Срок сдачи <span class="hint">— не позже</span></label><select class="ui-field__control" id="ldDeliveryDeadline"></select></div>
+                        <div class="ui-field"><label class="ui-field__label" for="ldPriceFrom">Цена от</label><input class="ui-field__control" type="number" id="ldPriceFrom"></div>
+                        <div class="ui-field"><label class="ui-field__label" for="ldPriceTo">Цена до</label><input class="ui-field__control" type="number" id="ldPriceTo"></div>
+                        <div class="ui-field"><label class="ui-field__label" for="ldAreaFrom">Площадь от</label><input class="ui-field__control" type="number" id="ldAreaFrom"></div>
+                        <div class="ui-field"><label class="ui-field__label" for="ldAreaTo">Площадь до</label><input class="ui-field__control" type="number" id="ldAreaTo"></div>
+                    </div>
+                </div>
+
+                <div class="form-section">
+                    <h3>География</h3>
+                    <p class="section-hint">Подсказки адреса — тот же сервис (DaData), что уже используется в гео-критериях оффера CPA-сетей: начните вводить, выберите из списка. Два адреса независимы: сужение по региону у каждого своё.</p>
+                    <div class="geo-block">
+                        <div class="geo-block-title"><i class="fas fa-location-dot" aria-hidden="true"></i>Гео объекта</div>
+                        <div class="ui-form-grid">
+                            <div class="ui-field geo-field"><label class="ui-field__label" for="ldRegion">Регион</label><input class="ui-field__control" type="text" id="ldRegion" data-geo-level="region" placeholder="Начните вводить…" autocomplete="off"></div>
+                            <div class="ui-field geo-field"><label class="ui-field__label" for="ldCity">Город</label><input class="ui-field__control" type="text" id="ldCity" data-geo-level="city" placeholder="Начните вводить…" autocomplete="off"></div>
+                            <div class="ui-field geo-field"><label class="ui-field__label" for="ldDistrict">Район</label><input class="ui-field__control" type="text" id="ldDistrict" data-geo-level="district" placeholder="Начните вводить…" autocomplete="off"></div>
+                            <div class="ui-field geo-field"><label class="ui-field__label" for="ldLocality">Населённый пункт</label><input class="ui-field__control" type="text" id="ldLocality" data-geo-level="locality" placeholder="Начните вводить…" autocomplete="off"></div>
+                        </div>
+                    </div>
+                    <div class="geo-block">
+                        <div class="geo-block-title"><i class="fas fa-location-dot" aria-hidden="true"></i>Гео клиента</div>
+                        <div class="ui-form-grid">
+                            <div class="ui-field geo-field"><label class="ui-field__label" for="ldClientRegion">Регион</label><input class="ui-field__control" type="text" id="ldClientRegion" data-geo-level="region" placeholder="Начните вводить…" autocomplete="off"></div>
+                            <div class="ui-field geo-field"><label class="ui-field__label" for="ldClientCity">Город</label><input class="ui-field__control" type="text" id="ldClientCity" data-geo-level="city" placeholder="Начните вводить…" autocomplete="off"></div>
+                            <div class="ui-field geo-field"><label class="ui-field__label" for="ldClientDistrict">Район</label><input class="ui-field__control" type="text" id="ldClientDistrict" data-geo-level="district" placeholder="Начните вводить…" autocomplete="off"></div>
+                            <div class="ui-field geo-field"><label class="ui-field__label" for="ldClientLocality">Населённый пункт</label><input class="ui-field__control" type="text" id="ldClientLocality" data-geo-level="locality" placeholder="Начните вводить…" autocomplete="off"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-section">
+                    <h3>Покупка</h3>
+                    <div class="ui-form-grid">
+                        <div class="ui-field"><label class="ui-field__label" for="ldPurchaseMethod">Способ покупки</label><select class="ui-field__control" id="ldPurchaseMethod"></select></div>
+                        <div class="ui-field" data-role="down-payment-wrap"><label class="ui-field__label" for="ldDownPaymentPercent">Первоначальный взнос, %</label><select class="ui-field__control" id="ldDownPaymentPercent"></select></div>
+                        <div class="ui-field" data-role="mortgage-wrap"><label class="ui-field__label" for="ldMortgageType">Вид ипотеки</label><select class="ui-field__control" id="ldMortgageType"></select></div>
+                        <div class="ui-field"><label class="ui-field__label" for="ldClientType">Вид клиента</label><select class="ui-field__control" id="ldClientType"></select></div>
+                        <div class="ui-field"><label class="ui-field__label" for="ldPurchaseTimeframe">Срок покупки</label><select class="ui-field__control" id="ldPurchaseTimeframe"></select></div>
+                    </div>
+                    <div class="lead-checkbox-row" data-role="other-borrower-wrap">
+                        <label for="ldOtherBorrower">
+                            <input type="checkbox" id="ldOtherBorrower">
+                            <span class="txt">Заёмщик может быть другим человеком
+                                <span class="sub">Показано, потому что вид клиента «Пенсионер» и способ покупки — ипотека</span>
+                            </span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="form-section">
+                    <h3>Комментарии</h3>
+                    <div class="ui-field"><textarea class="ui-field__control" id="ldNotes" rows="3" aria-label="Комментарии"></textarea></div>
+                </div>
+
+            </div>
+
+            <!-- Вкладка «Офферы»: фильтры + серверный поиск по базе ≈38 000 -->
+            <div data-role="tab-panel-offers" hidden>
+                <div class="ui-form-grid offers-filters">
+                    <div class="ui-field"><label class="ui-field__label" for="ofltRoot">Корневой источник</label><select class="ui-field__control" id="ofltRoot"><option value="">Все</option></select></div>
+                    <div class="ui-field"><label class="ui-field__label" for="ofltPlat">Площадка</label><select class="ui-field__control" id="ofltPlat"><option value="">Все</option></select></div>
+                </div>
+                <!-- География оффера (real_estate_offer_geo, kind='object'), а не
+                     география источника: 4 уровня, каскадом сверху вниз -->
+                <div class="ui-form-grid offers-filters">
+                    <div class="ui-field"><label class="ui-field__label" for="ofltRegion">Область</label><select class="ui-field__control" id="ofltRegion"><option value="">Все</option></select></div>
+                    <div class="ui-field"><label class="ui-field__label" for="ofltCity">Город</label><select class="ui-field__control" id="ofltCity"><option value="">Все</option></select></div>
+                    <div class="ui-field"><label class="ui-field__label" for="ofltDistrict">Район</label><select class="ui-field__control" id="ofltDistrict"><option value="">Все</option></select></div>
+                    <div class="ui-field"><label class="ui-field__label" for="ofltLocality">Населённый пункт</label><select class="ui-field__control" id="ofltLocality"><option value="">Все</option></select></div>
+                </div>
+                <div class="ui-field">
+                    <label class="ui-field__label ui-field__label--required" for="offerSearchInput">Поиск по базе офферов</label>
+                    <input class="ui-field__control" type="text" id="offerSearchInput" placeholder="Начните вводить название ЖК или оффера…" autocomplete="off">
+                </div>
+                <div class="offer-search-row">
+                    <div class="offer-search-hint">Значения фильтров подтягиваются из базы источников. Фильтры работают и без текста поиска.</div>
+                    <button type="button" class="ui-btn ui-btn--ghost ui-btn--sm" data-role="offer-filters-reset">Сбросить фильтры</button>
+                </div>
+                <div class="offer-results" data-role="offer-results" hidden></div>
+                <div class="form-section form-section--offers">
+                    <div class="form-section-head">
+                        <h3>Выбранные офферы (<span data-role="offer-sel-count">0</span>)</h3>
+                        <button type="button" class="ui-btn ui-btn--ghost ui-btn--sm" data-role="offer-clear-all" hidden>Убрать все</button>
+                    </div>
+                    <div class="ui-fchips" data-role="offer-sel-tags"></div>
+                    <div class="pick-empty" data-role="offer-sel-empty">Пока не выбран ни один оффер — обязателен минимум один.</div>
+                </div>
+            </div>
+
+            </div>
+            <div class="ui-modal__actions">
+                <button type="button" class="ui-btn ui-btn--secondary" data-role="lead-cancel">Отмена</button>
+                <button type="button" class="ui-btn" data-role="lead-save">Сохранить</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= ОКНО МАССОВОЙ ЗАГРУЗКИ ================= -->
+    <div class="ui-modal leads-modal" data-role="upload-modal" hidden>
+        <div class="ui-modal__box">
+            <div class="ui-modal__head">
+                <div>
+                    <h2 class="ui-modal__title">Загрузить базу</h2>
+                    <p class="modal-sub">Excel или CSV — каждая строка станет лидом. Один набор параметров на всю партию</p>
+                </div>
+                <button type="button" class="ui-modal__close" data-role="upload-close" aria-label="Закрыть"><i class="fas fa-xmark" aria-hidden="true"></i></button>
+            </div>
+            <div class="ui-modal__body">
+                <div class="ui-form-grid form-grid--top">
+                    <div class="ui-field"><label class="ui-field__label ui-field__label--required" for="upSource">Источник</label><select class="ui-field__control" id="upSource"><option value="">— выберите источник —</option></select></div>
+                    <div class="ui-field"><label class="ui-field__label ui-field__label--required" for="upLine">Линия</label><select class="ui-field__control" id="upLine"><option value="">— не выбрана —</option><option>Входящая</option><option>Исходящая</option></select></div>
+                    <div class="ui-field"><label class="ui-field__label ui-field__label--required" for="upScript">Скрипт</label><select class="ui-field__control" id="upScript"></select></div>
+                    <div class="ui-field">
+                        <span class="ui-field__label ui-field__label--required">Статусы показа скрипта</span>
+                        <div class="pick-list" data-role="up-status-pick"></div>
+                    </div>
+                    <div class="ui-field" data-role="up-repeat-wrap" hidden>
+                        <label class="ui-field__label ui-field__label--required" for="upRepeatScript">Скрипт для повторных</label>
+                        <select class="ui-field__control" id="upRepeatScript"></select>
+                        <span class="cond-hint">Обязателен: среди статусов показа есть этапы 5–6</span>
+                    </div>
+                    <div class="ui-field ui-field--wide">
+                        <span class="ui-field__label ui-field__label--required">Офферы</span>
+                        <div class="pick-search" data-role="up-offer-pick"></div>
+                        <span class="ui-field__hint">Живой поиск по базе офферов: начните вводить, выберите из списка.</span>
+                    </div>
+                    <div class="ui-field ui-field--wide">
+                        <span class="ui-field__label">Сотрудники — пул раздачи</span>
+                        <div class="pick-list" data-role="up-pool-pick"></div>
+                        <span class="ui-field__hint">В списке — только сотрудники выбранной линии. Пусто — партия раздаётся всем подходящим по линии.</span>
+                    </div>
+                    <div class="ui-field ui-field--wide">
+                        <span class="ui-field__label ui-field__label--required">Файл (.xlsx / .xls / .csv)</span>
+                        <div class="file-upload-area">
+                            <i class="fas fa-upload" aria-hidden="true"></i>
+                            <span class="file-name" data-role="up-file-name"></span>
+                            <button type="button" class="ui-btn ui-btn--secondary ui-btn--sm" data-role="up-file-trigger">Выбрать файл</button>
+                            <input type="file" data-role="up-file-input" class="hidden-file-input" accept=".xlsx,.xls,.csv" aria-label="Файл базы">
+                        </div>
+                    </div>
+                </div>
+                <p class="upload-note">Первая строка файла — заголовок (пропускается). Колонки читаются по порядку: Фамилия, Имя, Отчество, Телефон — обязателен только телефон. Всем лидам партии присваиваются статус «Новый», выбранные источник, линия, скрипты, офферы и статусы показа. Распределение запускается сразу после загрузки: по очереди, только операторам линии партии со включённым «На линии»; если задан пул — только между выбранными.</p>
+
+                <dl class="ui-chips upload-summary" data-role="upload-summary" hidden>
+                    <div class="ui-chip"><dt class="ui-chip__label">Загружено</dt><dd class="ui-chip__value" data-role="up-total">0</dd></div>
+                    <div class="ui-chip ui-chip--ok"><dt class="ui-chip__label">Распределено сразу</dt><dd class="ui-chip__value" data-role="up-assigned">0</dd></div>
+                    <div class="ui-chip"><dt class="ui-chip__label">В очереди</dt><dd class="ui-chip__value" data-role="up-queued">0</dd></div>
+                    <div class="ui-chip ui-chip--warn"><dt class="ui-chip__label">Дублей по номеру</dt><dd class="ui-chip__value" data-role="up-dupes">0</dd></div>
+                </dl>
+            </div>
+            <div class="ui-modal__actions">
+                <button type="button" class="ui-btn ui-btn--secondary" data-role="upload-cancel">Закрыть</button>
+                <button type="button" class="ui-btn" data-role="upload-go">Загрузить</button>
+            </div>
+        </div>
+    </div>
+
+</div>
