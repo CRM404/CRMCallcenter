@@ -205,7 +205,10 @@ export function createUpload(root, deps) {
             $('[data-role="up-total"]').textContent = result.imported;
             $('[data-role="up-assigned"]').textContent = result.distributed;
             $('[data-role="up-queued"]').textContent = result.queued;
-            $('[data-role="up-dupes"]').textContent = result.duplicates.length;
+            // Массив страхуем: партия к этому моменту УЖЕ загружена, и падать
+            // из-за одного отсутствующего поля в ответе нельзя — человек
+            // увидел бы красную ошибку сразу после успешной загрузки.
+            $('[data-role="up-dupes"]').textContent = (result.duplicates || []).length;
             $('[data-role="upload-summary"]').hidden = false;
             toast(`Загружено лидов: ${result.imported}`, 'success');
             if (onImported) await onImported();

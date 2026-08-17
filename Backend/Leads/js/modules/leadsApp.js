@@ -197,6 +197,14 @@ let selectedIds = new Set();
 let offset = 0;
 let hasMore = true;
 
+// Идёт ли уже догрузка и идёт ли массовое действие. Смещение следующей
+// страницы известно только ПОСЛЕ ответа сервера, поэтому два щелчка подряд
+// отправляли два запроса с одним и тем же смещением: страница добавлялась в
+// список дважды, а смещение уезжало на две страницы вперёд — и пропущенная
+// между ними страница становилась недостижимой вовсе.
+let loadingMore = false;
+let massApplying = false;
+
 const $ = (sel) => (root ? root.querySelector(sel) : null);
 const $$ = (sel) => (root ? Array.from(root.querySelectorAll(sel)) : []);
 
@@ -210,6 +218,13 @@ function alive(mountId) {
 function fail(mountId, err) {
     if (!alive(mountId) || isAbort(err)) return;
     shell.toast(err.message, 'error');
+}
+
+// Блокировка кнопки на время запроса. Панель могли уже закрыть — тогда узла
+// нет, и снимать блокировку не с чего.
+function setBusy(selector, busy) {
+    const btn = $(selector);
+    if (btn) btn.disabled = busy;
 }
 
 // ---------------------------------------------------------------- данные
@@ -293,10 +308,15 @@ function renderTable() {
 
     if (!leads.length) {
         $('[data-role="leads-body"]').innerHTML = '';
+        // Обёртку таблицы прячем целиком: она забирает всю оставшуюся высоту
+        // панели, и над сообщением «ничего не найдено» висела бы пустая рамка
+        // в треть экрана.
+        $('[data-role="table-wrap"]').hidden = true;
         $('[data-role="empty-state"]').hidden = false;
         updateMassActionsUI();
         return;
     }
+    $('[data-role="table-wrap"]').hidden = false;
     $('[data-role="empty-state"]').hidden = true;
     $('[data-role="leads-body"]').innerHTML = leads.map(rowHtml).join('');
     // Догрузка добавляет невыделенные строки — значит «выделено всё» могло
@@ -393,52 +413,73 @@ function handleMassActionChange() {
 }
 
 async function handleMassApply() {
+    // Второй щелчок, пока идёт первый, отправлял действие ещё раз: для правки
+    // это лишний запрос, а для удаления — второй проход по тем же лидам, где
+    // сервер на каждого отвечает «не найден», и человек получает «Не удалось
+    // удалить: N» сразу после успешного удаления.
+    if (massApplying) return;
+
     const my = generation;
     const action = $('[data-role="mass-action"]').value;
     if (!action) { shell.toast('Выберите действие', 'error'); return; }
     if (selectedIds.size === 0) { shell.toast('Выберите хотя бы одного лида', 'error'); return; }
     const ids = Array.from(selectedIds);
 
-    if (action === 'delete') {
-        const ok = await shell.confirmDanger({
-            title: 'Удаление лидов',
-            message: `Будет удалено: ${ids.length}. Действие необратимо.`
-        });
-        if (!ok || !alive(my)) return;
-        let deleted = 0;
-        let failed = 0;
-        for (const id of ids) {
-            try {
-                await storage.deleteLead(id);
-                deleted++;
-            } catch (e) {
-                // Отмена = панель закрыли посреди пачки: оставшиеся запросы
-                // отбиваются мгновенно, и досчитывать их до конца незачем.
-                if (isAbort(e)) return;
-                failed++;
-            }
-            if (!alive(my)) return;
-        }
-        clearSelection();
-        await reloadAll();
-        if (!alive(my)) return;
-        if (deleted > 0) shell.toast(`Удалено лидов: ${deleted}`, 'success');
-        if (failed > 0) shell.toast(`Не удалось удалить: ${failed}`, 'error');
-        return;
-    }
-
     const config = MASS_PATCH_ACTIONS[action];
-    if (!config) return;
-
-    // Выделение могли изменить уже после выбора действия — перепроверяем.
-    if (action === 'employee') {
-        const { error } = selectedLeadsLine();
-        if (error) { shell.toast(error, 'error'); return; }
+    let select = null;
+    if (action !== 'delete') {
+        if (!config) return;
+        // Выделение могли изменить уже после выбора действия — перепроверяем.
+        if (action === 'employee') {
+            const { error } = selectedLeadsLine();
+            if (error) { shell.toast(error, 'error'); return; }
+        }
+        select = $(`[data-role="${config.role}"]`);
+        if (config.required && !select.value) { shell.toast(config.prompt, 'error'); return; }
     }
 
-    const select = $(`[data-role="${config.role}"]`);
-    if (config.required && !select.value) { shell.toast(config.prompt, 'error'); return; }
+    massApplying = true;
+    setBusy('[data-role="mass-apply"]', true);
+    try {
+        if (action === 'delete') {
+            await runMassDelete(ids, my);
+        } else {
+            await runMassPatch(config, select, ids, my);
+        }
+    } finally {
+        massApplying = false;
+        setBusy('[data-role="mass-apply"]', false);
+    }
+}
 
+async function runMassDelete(ids, my) {
+    const ok = await shell.confirmDanger({
+        title: 'Удаление лидов',
+        message: `Будет удалено: ${ids.length}. Действие необратимо.`
+    });
+    if (!ok || !alive(my)) return;
+    let deleted = 0;
+    let failed = 0;
+    for (const id of ids) {
+        try {
+            await storage.deleteLead(id);
+            deleted++;
+        } catch (e) {
+            // Отмена = панель закрыли посреди пачки: оставшиеся запросы
+            // отбиваются мгновенно, и досчитывать их до конца незачем.
+            if (isAbort(e)) return;
+            failed++;
+        }
+        if (!alive(my)) return;
+    }
+    clearSelection();
+    await reloadAll();
+    if (!alive(my)) return;
+    if (deleted > 0) shell.toast(`Удалено лидов: ${deleted}`, 'success');
+    if (failed > 0) shell.toast(`Не удалось удалить: ${failed}`, 'error');
+}
+
+async function runMassPatch(config, select, ids, my) {
     try {
         const { updated } = await storage.bulkUpdateLeads(ids, { [config.key]: select.value || null });
         if (!alive(my)) return;
@@ -522,6 +563,8 @@ export async function mount(container, ctx) {
     selectedIds = new Set();
     offset = 0;
     hasMore = true;
+    loadingMore = false;
+    massApplying = false;
 
     const isAlive = () => alive(my);
 
@@ -622,12 +665,18 @@ function bindHandlers() {
     });
 
     $('[data-role="load-more"]').addEventListener('click', async () => {
+        if (loadingMore) return;
+        loadingMore = true;
+        setBusy('[data-role="load-more"]', true);
         try {
             await loadLeads({ reset: false });
             if (!alive(my)) return;
             renderTable();
         } catch (e) {
             fail(my, e);
+        } finally {
+            loadingMore = false;
+            setBusy('[data-role="load-more"]', false);
         }
     });
 
