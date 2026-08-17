@@ -64,8 +64,11 @@ export function openSection(key, meta = {}) {
     if (visible.length >= 2) {
         const victim = panels.find((p) => p.id === activeId && !p.minimized) || visible[visible.length - 1];
         const victimTitle = victim.meta.title || victim.key;
+        // Новая панель встаёт НА МЕСТО закрытой, а не в конец: иначе соседняя
+        // панель прыгает слева направо, и человек теряет ту, которую не трогал.
+        const slot = panels.indexOf(victim);
         closePanel(victim.id, { silent: true });
-        const panel = createPanel(key, meta);
+        const panel = createPanel(key, meta, { at: slot });
         emit({
             type: 'notice',
             message: `Открыто вместо «${victimTitle}» — свободных панелей нет`
@@ -74,6 +77,26 @@ export function openSection(key, meta = {}) {
     }
 
     return createPanel(key, meta);
+}
+
+/**
+ * Переставить видимые панели в заданном порядке ключей. Нужно, когда адрес
+ * описывает тот же набор разделов, но в другой последовательности: экран
+ * обязан соответствовать адресу, а не наоборот.
+ */
+export function reorderPanels(keys) {
+    const visible = panels.filter((p) => !p.minimized);
+    if (visible.length !== keys.length) return;
+
+    const ordered = keys.map((key) => visible.find((p) => p.key === key)).filter(Boolean);
+    if (ordered.length !== keys.length) return;
+
+    // Массив держим в том же порядке, что и документ: раскладка и адрес
+    // читают его, и разъехавшись, они начнут врать друг про друга.
+    // Порядок узлов подтянет layout().
+    panels = ordered.concat(panels.filter((p) => p.minimized));
+    layout();
+    emit({ type: 'change', reason: 'reorder' });
 }
 
 /** Разделить экран: доступно, только когда открыта ровно одна панель. */
@@ -181,7 +204,7 @@ export function setShare(value) {
 
 // ---------------------------------------------------------------- внутреннее
 
-function createPanel(key, meta) {
+function createPanel(key, meta, place = {}) {
     const panel = {
         id: `panel-${++seq}`,
         key,
@@ -247,7 +270,16 @@ function createPanel(key, meta) {
 
     panel.el = el;
     panel.bodyEl = body;
-    panels.push(panel);
+
+    // Позиция задаётся явно только при замене активной панели — тогда новая
+    // встаёт на место закрытой. В остальных случаях панель добавляется в конец.
+    if (Number.isInteger(place.at) && place.at >= 0 && place.at <= panels.length) {
+        panels.splice(place.at, 0, panel);
+    } else {
+        panels.push(panel);
+    }
+    // Порядок в документе приводит в соответствие layout() — привязываться к
+    // соседнему узлу нельзя: он пересоздаёт границу, и якорь исчезает.
     workspace.appendChild(el);
 
     activeId = panel.id;
@@ -273,6 +305,7 @@ function toolButton(act, icon, label) {
 
 /** Пересборка раскладки: ширины, разделитель, состояние кнопок, активность. */
 function layout() {
+    syncDomOrder();
     const visible = panels.filter((p) => !p.minimized);
 
     // Разделитель существует, только когда панели две.
@@ -303,6 +336,19 @@ function layout() {
     paintActive();
 }
 
+/**
+ * Порядок узлов в документе приводится к порядку массива — и только если он
+ * реально разошёлся. Перестановка узла роняет фокус внутри панели, поэтому
+ * делать её на каждую перерисовку нельзя.
+ */
+function syncDomOrder() {
+    const inDom = Array.from(workspace.querySelectorAll(':scope > .shell-panel'));
+    const wanted = panels.map((p) => p.el);
+    const same = inDom.length === wanted.length && inDom.every((node, i) => node === wanted[i]);
+    if (same) return;
+    wanted.forEach((el) => workspace.appendChild(el));
+}
+
 function paintActive() {
     panels.forEach((p) => p.el.classList.toggle('is-active', p.id === activeId && !p.minimized));
 }
@@ -315,7 +361,7 @@ function makeSplitter() {
     el.setAttribute('aria-orientation', 'vertical');
     el.setAttribute('aria-label', 'Граница панелей');
     el.tabIndex = 0;
-    el.addEventListener('mousedown', startDrag);
+    el.addEventListener('pointerdown', startDrag);
     // С клавиатуры — тоже: границу двигают стрелками по 2 % за нажатие.
     el.addEventListener('keydown', (event) => {
         if (event.key === 'ArrowLeft') { setShare(share - 0.02); event.preventDefault(); }
@@ -330,6 +376,15 @@ function startDrag(event) {
     splitter.classList.add('is-dragging');
     workspace.classList.add('is-resizing');
 
+    // Захват указателя: без него отпускание кнопки за пределами окна браузера
+    // не приходит, слушатели не снимаются, и граница «залипает» — панель
+    // продолжает ездить за курсором, хотя кнопку давно отпустили.
+    if (event.pointerId !== undefined && splitter.setPointerCapture) {
+        try { splitter.setPointerCapture(event.pointerId); } catch (e) { /* не критично */ }
+    }
+
+    // Слушаем ИМЕННО pointermove, а не mousemove: preventDefault выше отменяет
+    // совместимые mouse-события, и на mousemove граница просто не поедет.
     const move = (e) => {
         const box = workspace.getBoundingClientRect();
         if (!box.width) return;
@@ -338,13 +393,18 @@ function startDrag(event) {
     const stop = () => {
         splitter.classList.remove('is-dragging');
         workspace.classList.remove('is-resizing');
-        document.removeEventListener('mousemove', move);
-        document.removeEventListener('mouseup', stop);
+        document.removeEventListener('pointermove', move);
+        document.removeEventListener('pointerup', stop);
+        document.removeEventListener('pointercancel', stop);
+        window.removeEventListener('blur', stop);
         emit({ type: 'change', reason: 'resize' });
     };
 
-    document.addEventListener('mousemove', move);
-    document.addEventListener('mouseup', stop);
+    document.addEventListener('pointermove', move);
+    document.addEventListener('pointerup', stop);
+    document.addEventListener('pointercancel', stop);
+    // Уход фокуса из окна (Alt+Tab посреди таскания) — тоже конец жеста.
+    window.addEventListener('blur', stop);
 }
 
 function clampShare(value) {
