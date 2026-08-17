@@ -8,6 +8,9 @@ import { initConfirmModals } from './confirmModal.js';
 import { initColumnSettings } from './columnSettings.js';
 import { initHubNav } from './employeesNav.js';
 import { initDepartments } from './departments.js';
+import { initScheduleView } from './scheduleView.js';
+import { initScheduleDayMenu } from './scheduleDayMenu.js';
+import { initScheduleFillModal } from './scheduleFillModal.js';
 
 document.addEventListener('DOMContentLoaded', async function() {
 
@@ -19,6 +22,13 @@ document.addEventListener('DOMContentLoaded', async function() {
 
     // 1c. Модалка "Управление отделами"
     initDepartments();
+
+    // 1d. Режим "График" — сам режим, поповер дня и модалка заполнения.
+    // Данные графика грузятся лениво, при первом переключении: страница
+    // "Сотрудники" по умолчанию открывается в режиме "Список".
+    initScheduleView();
+    initScheduleDayMenu();
+    initScheduleFillModal();
 
     // 2. Данные и таблица
     await renderTable();

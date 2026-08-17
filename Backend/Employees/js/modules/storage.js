@@ -134,3 +134,26 @@ export function updateDepartment(id, data) {
 export function deleteDepartment(id) {
     return request(`/departments/${id}`, { method: 'DELETE' });
 }
+
+// --- График работы (режим «График» на этой же странице) ---
+//
+// Весь доступ к API — только отсюда: прямых fetch вне storage-модуля в проекте
+// нет и заводить их не надо.
+
+// Месяц целиком одним запросом: сотрудники, их дни и серверное «сегодня» в
+// поясе приложения (по нему считаются подсветка колонки и счётчики шапки).
+export function fetchSchedule(month) {
+    return request(`/schedule${buildQuery({ month })}`);
+}
+
+export function saveScheduleDay(payload) {
+    return request('/schedule/day', { method: 'PUT', body: JSON.stringify(payload) });
+}
+
+export function clearScheduleDay(employeeId, day) {
+    return request(`/schedule/day${buildQuery({ employeeId, day })}`, { method: 'DELETE' });
+}
+
+export function fillSchedule(payload) {
+    return request('/schedule/fill', { method: 'POST', body: JSON.stringify(payload) });
+}
