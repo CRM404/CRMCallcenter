@@ -89,6 +89,7 @@ app.use('/api/schedule', scheduleRouter);
 // вернуть людей на старую страницу, пока они не почистят кэш вручную.
 // На 301 переведём в конце задачи, если это вообще понадобится.
 app.get('/main.html', (req, res) => res.redirect(302, '/#/requisites'));
+app.get('/cpa-networks.html', (req, res) => res.redirect(302, '/#/cpa'));
 
 const shellDir = path.join(__dirname, 'Shell');
 const employeesDir = path.join(__dirname, 'Employees');

@@ -127,6 +127,11 @@ function renderSubRecordsVisibility() {
 
 function renderBankAccounts() {
     if (organization === null) return;
+    // Массивы страхуем: сервер их гарантирует (GET и POST отдают вложенные
+    // bankAccounts/taxes), но раздел падал целиком от одного отсутствующего
+    // поля — и падал молча, панель показывала «раздел не открылся». Цена
+    // страховки — два символа, цена падения — весь раздел.
+    if (!Array.isArray(organization.bankAccounts)) organization.bankAccounts = [];
     renderRecordsSection(nodes.bankAccounts, {
         title: 'Банковские счета',
         records: organization.bankAccounts,
@@ -152,6 +157,7 @@ function renderBankAccounts() {
 
 function renderTaxes() {
     if (organization === null) return;
+    if (!Array.isArray(organization.taxes)) organization.taxes = [];
     renderRecordsSection(nodes.taxes, {
         title: 'Налоги',
         records: organization.taxes,
