@@ -85,6 +85,7 @@ app.use('/api/schedule', scheduleRouter);
 // /operator.html и /operator-login.html редиректу не подлежат никогда:
 // страница оператора в задачу не входит и остаётся отдельной.
 app.get('/main.html', (req, res) => res.redirect(301, '/#/requisites'));
+app.get('/sources.html', (req, res) => res.redirect(301, '/#/sources'));
 
 const shellDir = path.join(__dirname, 'Shell');
 const employeesDir = path.join(__dirname, 'Employees');

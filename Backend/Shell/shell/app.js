@@ -47,7 +47,7 @@ export const registry = [
     { key: 'requisites', title: 'Реквизиты',  icon: 'fas fa-building',       module: '/js/modules/mainApp.js', template: '/main-section.html', styles: '/css/main-light.css', legacyUrl: '/main.html' },
     { key: 'employees',  title: 'Сотрудники', icon: 'fas fa-users',          module: null, template: null, stub: true, legacyUrl: '/emploees.html' },
     { key: 'leads',      title: 'Лиды',       icon: 'fas fa-address-book',   module: null, template: null, stub: true, legacyUrl: '/leads.html' },
-    { key: 'sources',    title: 'Источники',  icon: 'fas fa-diagram-project',module: null, template: null, stub: true, legacyUrl: '/sources.html' },
+    { key: 'sources',    title: 'Источники',  icon: 'fas fa-diagram-project',module: '/js/modules/sourcesSection.js', template: '/sources-section.html', styles: '/css/sources-light.css', legacyUrl: '/sources.html' },
     { key: 'cpa',        title: 'CPA-сети',   icon: 'fas fa-handshake',      module: null, template: null, stub: true, legacyUrl: '/cpa-networks.html' },
     { key: 'scripts',    title: 'Скрипты',    icon: 'fas fa-file-lines',     module: null, template: null, stub: true, legacyUrl: '/scripts-admin.html' }
 ];
