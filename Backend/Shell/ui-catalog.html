@@ -76,6 +76,9 @@
     .type-row { display: flex; align-items: baseline; gap: var(--ui-space-5); padding: var(--ui-space-2) 0; border-bottom: 1px solid var(--ui-color-line); }
     .type-row span:last-child { margin-left: auto; font-size: 10.5px; color: var(--ui-color-ink-faint); }
 
+    .tok-box { width: 56px; height: 34px; background: var(--ui-color-surface); border: 1px solid var(--ui-color-line); }
+    .tok-space { height: 20px; background: var(--ui-color-accent); border-radius: 2px; }
+
     /* Демо-панель: то, что на этапе 1 станет .shell-panel. Нужна здесь по
        делу — на ней видно оба правила разом: модалка накрывает свою панель, а
        поповер не выходит за её границы. */
@@ -123,6 +126,27 @@
             <div class="sw"><div class="sw-color" style="background: var(--ui-color-danger)"></div><div class="sw-meta"><b>danger</b>удаление</div></div>
         </div>
         <div class="cat-rule" style="margin-top: var(--ui-space-4)"><b>Правило.</b> Синий — только интерактив: фокус, наведение, активный пункт, выбранный день. Зелёный, жёлтый, красный — только статус.</div>
+
+        <div class="cat-cap" style="margin: var(--ui-space-5) 0 var(--ui-space-2)">радиусы, тени, отступы — тоже токены, и раздел их не объявляет</div>
+        <div class="cat-row" data-role="tokens-shape">
+            <span class="cat-item"><span class="cat-cap">radius-sm</span><span class="tok-box" style="border-radius: var(--ui-radius-sm)"></span></span>
+            <span class="cat-item"><span class="cat-cap">radius-md</span><span class="tok-box" style="border-radius: var(--ui-radius-md)"></span></span>
+            <span class="cat-item"><span class="cat-cap">radius-lg</span><span class="tok-box" style="border-radius: var(--ui-radius-lg)"></span></span>
+            <span class="cat-item"><span class="cat-cap">radius-pill</span><span class="tok-box" style="border-radius: var(--ui-radius-pill)"></span></span>
+            <span class="cat-item"><span class="cat-cap">shadow-card</span><span class="tok-box" style="box-shadow: var(--ui-shadow-card)"></span></span>
+            <span class="cat-item"><span class="cat-cap">shadow-panel</span><span class="tok-box" style="box-shadow: var(--ui-shadow-panel)"></span></span>
+            <span class="cat-item"><span class="cat-cap">shadow-pop</span><span class="tok-box" style="box-shadow: var(--ui-shadow-pop)"></span></span>
+        </div>
+        <div class="cat-row" style="align-items: flex-end">
+            <span class="cat-item"><span class="cat-cap">space-1 · 4</span><span class="tok-space" style="width: var(--ui-space-1)"></span></span>
+            <span class="cat-item"><span class="cat-cap">space-2 · 6</span><span class="tok-space" style="width: var(--ui-space-2)"></span></span>
+            <span class="cat-item"><span class="cat-cap">space-3 · 8</span><span class="tok-space" style="width: var(--ui-space-3)"></span></span>
+            <span class="cat-item"><span class="cat-cap">space-4 · 12</span><span class="tok-space" style="width: var(--ui-space-4)"></span></span>
+            <span class="cat-item"><span class="cat-cap">space-5 · 16</span><span class="tok-space" style="width: var(--ui-space-5)"></span></span>
+            <span class="cat-item"><span class="cat-cap">space-6 · 20</span><span class="tok-space" style="width: var(--ui-space-6)"></span></span>
+            <span class="cat-item"><span class="cat-cap">space-7 · 24</span><span class="tok-space" style="width: var(--ui-space-7)"></span></span>
+            <span class="cat-item"><span class="cat-cap">space-8 · 32</span><span class="tok-space" style="width: var(--ui-space-8)"></span></span>
+        </div>
     </section>
 
     <!-- ======================== ТИПОГРАФИКА ======================== -->
@@ -133,6 +157,7 @@
         <div class="type-row"><span style="font-size: var(--ui-text-md)">Основной текст: строка таблицы, значение поля.</span><span>--ui-text-md</span></div>
         <div class="type-row"><span style="font-size: var(--ui-text-sm); color: var(--ui-color-ink-soft)">Вторичный текст: подпись под значением.</span><span>--ui-text-sm / ink-soft</span></div>
         <div class="type-row"><span style="font-size: var(--ui-text-xs); color: var(--ui-color-ink-faint)">Третьестепенное: подсказка, единицы, «показано 6 из 14».</span><span>--ui-text-xs / ink-faint</span></div>
+        <div class="cat-rule" style="margin-top: var(--ui-space-4)"><b>Правило.</b> Уровней три: значение, подпись к нему и третьестепенное. Четвёртого размера «чуть меньше» в разделе не появляется — если текст нужно приглушить, меняется цвет, а не кегль.</div>
     </section>
 
     <!-- ========================== КНОПКИ ========================== -->
@@ -234,6 +259,13 @@
             <button type="button" class="ui-tabs__tab ui-tabs__tab--quiet">Архив <span class="ui-tabs__count">0</span></button>
         </div>
 
+        <div class="cat-cap" style="margin-bottom: var(--ui-space-2)">вкладки внутри окна — число капсулой (настройка колонок группами)</div>
+        <div class="ui-tabs" data-role="tabs-badge">
+            <button type="button" class="ui-tabs__tab ui-tabs__tab--active">Основное <span class="ui-tabs__count ui-tabs__count--badge">6</span></button>
+            <button type="button" class="ui-tabs__tab">Что ищет <span class="ui-tabs__count ui-tabs__count--badge">9</span></button>
+            <button type="button" class="ui-tabs__tab">География <span class="ui-tabs__count ui-tabs__count--badge">4</span></button>
+        </div>
+
         <div class="cat-cap" style="margin-bottom: var(--ui-space-2)">вкладки-пилюли — узкие места (категории офферов)</div>
         <div class="ui-tabs ui-tabs--pills" style="margin-bottom: var(--ui-space-5)">
             <button type="button" class="ui-tabs__tab ui-tabs__tab--active">Все <span class="ui-tabs__count">12</span></button>
@@ -319,6 +351,14 @@
             <button type="button" class="ui-btn ui-btn--ghost ui-btn--sm">Снять выделение</button>
         </div>
 
+        <div class="cat-cap" style="margin: var(--ui-space-5) 0 var(--ui-space-2)">длинная и широкая таблица: шапка остаётся на месте при прокрутке вниз, первая колонка — при прокрутке вбок, действия появляются по наведению</div>
+        <div class="ui-table-wrap ui-table-wrap--tall" data-role="table-tall" style="max-height: 220px">
+            <table class="ui-table ui-table--wide ui-table--freeze-first ui-table--acts-on-hover" data-role="table-wide">
+                <thead data-role="wide-head"></thead>
+                <tbody data-role="wide-body"></tbody>
+            </table>
+        </div>
+
         <div class="cat-cap" style="margin: var(--ui-space-5) 0 var(--ui-space-2)">пустое состояние: заголовок, причина, следующий шаг</div>
         <div class="ui-empty" data-role="empty">
             <span class="ui-empty__icon"><i class="fas fa-search"></i></span>
@@ -327,7 +367,15 @@
             <button type="button" class="ui-btn ui-btn--ghost ui-btn--sm ui-empty__action">Очистить фильтры</button>
         </div>
 
+        <div class="cat-cap" style="margin: var(--ui-space-5) 0 var(--ui-space-2)">тот же состав в тихом варианте — для окон и узких колонок, где рамка съедает всё место</div>
+        <div class="ui-empty ui-empty--inline" data-role="empty-inline">
+            <b class="ui-empty__title">Счетов пока нет</b>
+            <span class="ui-empty__text">Реквизиты организации заполнены, банковский счёт ещё не добавлен.</span>
+            <button type="button" class="ui-btn ui-btn--ghost ui-btn--sm ui-empty__action">Добавить счёт</button>
+        </div>
+
         <div class="cat-rule" style="margin-top: var(--ui-space-4)"><b>Правило.</b> Таблица прокручивается внутри своей обёртки, а не растягивает панель. Числовые колонки вправо, первая колонка закрепляется классом.</div>
+        <div class="cat-rule"><b>Правило.</b> Действия в строке по умолчанию видны всегда. Наведение — отдельный класс: на «Сотрудниках» их сделали постоянными по прямому замечанию владельца, и перенос раздела не должен молча это отменить.</div>
     </section>
 
     <!-- ==================== ОКНА И СООБЩЕНИЯ ==================== -->
@@ -344,9 +392,13 @@
         <div class="cat-cap" style="margin-bottom: var(--ui-space-2)">панель раздела: модалка накрывает только её, поповер не выходит за её границы</div>
         <div class="cat-panel shell-panel" data-role="panel">
             <div class="cat-panel__body">
-                <div class="cat-row" style="margin: 0">
+                <div class="cat-row" style="margin: 0; flex-wrap: nowrap">
                     <button type="button" class="ui-btn ui-btn--sm" data-role="panel-modal">Окно этой панели</button>
-                    <button type="button" class="ui-btn ui-btn--sm ui-btn--ghost" data-role="panel-pop" aria-expanded="false">Меню у нижнего края панели</button>
+                    <span class="cat-cap">кнопка справа открывает меню у самой границы</span>
+                    <!-- Кнопка прижата к ПРАВОМУ краю панели намеренно: поповер,
+                         который не умеет прижиматься к границе, вылезет отсюда
+                         на соседнюю панель — и это будет видно. -->
+                    <button type="button" class="ui-btn ui-btn--icon ui-btn--sm" data-role="panel-pop" aria-expanded="false" aria-label="Меню дня у правого края панели" style="margin-left: auto"><i class="fas fa-ellipsis-v"></i></button>
                 </div>
                 <p style="font-size: var(--ui-text-sm); color: var(--ui-color-ink-soft); line-height: var(--ui-line-base)">
                     Панель сама не прокручивается — прокручивается этот контейнер, иначе окно уползёт вместе с текстом.
@@ -508,6 +560,36 @@
         showToast('Белов Д. С.: 15 августа — выходной', 'success');
         showToast('Не удалось сохранить: проверьте время смены', 'error');
     });
+
+    // Длинная и широкая таблица: строки-заполнитель собираются кодом. Образцом
+    // разметки служит таблица выше — здесь показывается ПОВЕДЕНИЕ (шапка при
+    // прокрутке вниз, первая колонка при прокрутке вбок, действия по наведению),
+    // а его на трёх строках не увидеть.
+    const wideCols = ['Сотрудник', 'Отдел', 'Линия', 'Дни', 'Смена', 'Статус', 'Смен', 'Часов', 'Действия'];
+    document.querySelector('[data-role="wide-head"]').innerHTML =
+        '<tr>' + wideCols.map((name, i) => {
+            if (i === wideCols.length - 1) return `<th class="ui-table__acts">${name}</th>`;
+            if (i >= wideCols.length - 3) return `<th class="ui-table__num">${name}</th>`;
+            return `<th>${name}</th>`;
+        }).join('') + '</tr>';
+
+    const wideNames = ['Абрамова Т. И.', 'Белов Д. С.', 'Гусева М. А.', 'Дроздов И. П.', 'Ежова С. В.',
+        'Жуков А. Н.', 'Зимина Н. К.', 'Ильин П. Р.', 'Котова Е. Д.', 'Лапшин В. В.'];
+    document.querySelector('[data-role="wide-body"]').innerHTML = wideNames.map((name, i) => `
+        <tr>
+            <td><span class="ui-table__main">${name}</span><span class="ui-table__sub">Оператор</span></td>
+            <td>Отдел продаж</td>
+            <td>${i % 2 ? 'Исходящая' : 'Входящая'}</td>
+            <td><span class="ui-tag">${i % 3 ? '5/2' : '3/3'}</span></td>
+            <td>${i % 4 ? '12:00–21:00' : '<span class="ui-table__muted">—</span>'}</td>
+            <td><span class="ui-pill ui-pill--${i % 5 ? 'ok' : 'mute'} ui-pill--dot">${i % 5 ? 'Активен' : 'Неактивен'}</span></td>
+            <td class="ui-table__num">${12 + i}</td>
+            <td class="ui-table__num">${(12 + i) * 9}</td>
+            <td class="ui-table__acts">
+                <button type="button" class="ui-btn ui-btn--icon ui-btn--sm" aria-label="Изменить"><i class="fas fa-pen"></i></button>
+                <button type="button" class="ui-btn ui-btn--icon ui-btn--sm" aria-label="Удалить"><i class="fas fa-trash"></i></button>
+            </td>
+        </tr>`).join('');
 
     // Переключатель и вкладки — чтобы активное состояние можно было увидеть,
     // а не только прочитать в разметке.

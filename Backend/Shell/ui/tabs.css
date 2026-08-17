@@ -72,7 +72,12 @@
     border-color: var(--ui-color-accent);
     color: var(--ui-color-ink-invert);
 }
-.ui-tabs--pills .ui-tabs__tab--active .ui-tabs__count { color: rgba(255, 255, 255, .8); }
+/* Число на залитой вкладке — тот же белый, что и подпись, но тише. Своего
+   цвета здесь не объявляем: раздел не объявляет цветов, и слой тоже. */
+.ui-tabs--pills .ui-tabs__tab--active .ui-tabs__count {
+    color: var(--ui-color-ink-invert);
+    opacity: .78;
+}
 
 /* ----- Переключатель режимов: «Список | График» ----- */
 .ui-switch {

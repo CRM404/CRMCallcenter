@@ -22,8 +22,6 @@
     box-shadow: var(--ui-shadow-pop);
     font-family: var(--ui-font-ui);
 }
-.ui-popover--wide { width: 288px; }
-
 .ui-popover__title {
     padding: var(--ui-space-1) var(--ui-space-3) var(--ui-space-3);
     margin-bottom: var(--ui-space-2);
