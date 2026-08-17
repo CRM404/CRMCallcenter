@@ -48,6 +48,12 @@ const STATUS_PILL = {
 const instances = [];
 
 export async function mount(container, ctx) {
+    // Панель могли закрыть, пока прошлый экземпляр грузил данные: оболочка в
+    // этом случае не успевает получить ссылку на unmount и не зовёт его,
+    // экземпляр остаётся в списке с живым таймером поиска. Подчищаем таких по
+    // признаку «контейнер уже вырезан из документа».
+    purgeDetached();
+
     const state = {
         container,
         ctx,
@@ -70,12 +76,27 @@ export async function mount(container, ctx) {
 
 export function unmount() {
     const state = instances.pop();
-    if (!state) return;
+    if (state) destroyInstance(state);
+    purgeDetached();
+}
+
+/**
+ * Слушатели висят на узлах контейнера — оболочка очищает контейнер сразу
+ * после unmount, поэтому снимать их поимённо не нужно. Таймер поиска — нужно:
+ * он переживёт удаление узлов и разбудит мёртвый раздел.
+ */
+function destroyInstance(state) {
     state.destroyed = true;
     clearTimeout(state.searchTimer);
-    // Слушатели висят на узлах контейнера — оболочка очищает контейнер сразу
-    // после unmount, поэтому снимать их поимённо не нужно. Таймер поиска —
-    // нужно: он переживёт удаление узлов и разбудит мёртвый раздел.
+}
+
+function purgeDetached() {
+    for (let i = instances.length - 1; i >= 0; i--) {
+        if (!document.contains(instances[i].container)) {
+            destroyInstance(instances[i]);
+            instances.splice(i, 1);
+        }
+    }
 }
 
 // ---------------------------------------------------------------- данные
@@ -130,12 +151,22 @@ function fail(state, err) {
 
 const $ = (state, role) => state.container.querySelector(`[data-role="${role}"]`);
 
+/**
+ * Экранирование для вставки в разметку. Кавычки экранируются ОБЯЗАТЕЛЬНО:
+ * значения подставляются не только в текст, но и в атрибуты (value="…",
+ * title="…"). Прежняя версия, унаследованная от страницы, кавычки не трогала,
+ * и источник с именем «БАГ "кавычка" источник» обрывал атрибут — в форме
+ * правки оставалось «БАГ », а следом за кавычкой в разметку попадало то, что
+ * человек написал в названии. Найдено собственной проверкой на живых данных.
+ */
 function escapeHtml(value) {
     if (value === null || value === undefined) return '';
     return String(value)
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;');
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
 }
 
 function visibleSources(state) {
@@ -336,9 +367,17 @@ function renderSelection(state) {
     const visibleIds = visibleSources(state).map((s) => s.id);
     // Выделение живёт только среди видимых строк: строка ушла из выборки —
     // ушла и из выделения, иначе «Применить» тронет невидимое.
+    //
+    // И об этом говорим: человек выделил две строки, переключил вкладку
+    // статуса, вернулся — а выделения нет. Молча пропавшее выделение читается
+    // как сбой интерфейса.
+    let dropped = 0;
     Array.from(state.selected).forEach((id) => {
-        if (!visibleIds.includes(id)) state.selected.delete(id);
+        if (!visibleIds.includes(id)) { state.selected.delete(id); dropped++; }
     });
+    if (dropped > 0) {
+        state.ctx.toast(`Выделение снято с ${dropped} ${pluralRows(dropped)}: они ушли из текущей выборки`);
+    }
 
     const count = state.selected.size;
     $(state, 'mass-bar').hidden = count === 0;
@@ -348,6 +387,12 @@ function renderSelection(state) {
     const checkAll = $(state, 'check-all');
     checkAll.checked = visibleIds.length > 0 && visibleIds.every((id) => state.selected.has(id));
     checkAll.indeterminate = count > 0 && !checkAll.checked;
+}
+
+function pluralRows(n) {
+    const tens = n % 100;
+    if (tens >= 11 && tens <= 14) return 'строк';
+    return n % 10 === 1 ? 'строки' : 'строк';
 }
 
 // ---------------------------------------------------------------- события
@@ -362,6 +407,12 @@ function bindEvents(state) {
         if (platformBtn && container.contains(platformBtn)) {
             const raw = platformBtn.dataset.platform;
             state.platformId = raw === '' ? null : Number(raw);
+            // Отложенный поиск обязан быть снят вместе с полем: набрать текст
+            // и, не дожидаясь задержки, выбрать площадку — обычное движение.
+            // Без этого таймер срабатывал уже ПОСЛЕ смены площадки, возвращал
+            // результаты поиска и перебивал выбор: в списке площадок горела
+            // одна, а в таблице лежала другая. Найдено собственной проверкой.
+            clearTimeout(state.searchTimer);
             state.search = '';
             $(state, 'search').value = '';
             state.selected.clear();
@@ -448,8 +499,8 @@ function bindEvents(state) {
         }
     });
 
-    $(state, 'search').addEventListener('input', (event) => {
-        const value = event.target.value.trim();
+    const searchField = $(state, 'search');
+    const scheduleSearch = (value) => {
         clearTimeout(state.searchTimer);
         state.searchTimer = setTimeout(async () => {
             if (state.destroyed) return;
@@ -457,10 +508,18 @@ function bindEvents(state) {
             state.selected.clear();
             await refresh(state);
         }, SEARCH_DEBOUNCE_MS);
-    });
+    };
+    searchField.addEventListener('input', (event) => scheduleSearch(event.target.value.trim()));
+    // У type="search" есть свой крестик и Esc: браузер чистит поле, а события
+    // input при этом может и не быть. Без этого поле пустое, а список остаётся
+    // отфильтрованным — и непонятно почему.
+    searchField.addEventListener('search', (event) => scheduleSearch(event.target.value.trim()));
 }
 
 async function applyClear(state, what) {
+    // Тот же случай, что и при выборе площадки: снятый фильтр не должен
+    // вернуться из отложенного таймера через треть секунды.
+    clearTimeout(state.searchTimer);
     if (what === 'status') {
         state.status = 'all';
         renderTabs(state);
