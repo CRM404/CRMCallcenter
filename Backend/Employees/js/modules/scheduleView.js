@@ -12,7 +12,7 @@ import { showToast } from './toast.js';
 import {
     shiftMinutes, formatHours, formatRangeCompact, formatRangeSpaced,
     daysInMonth, dayKey, monthKeyOf, shiftMonth, weekdayShort, isWeekend,
-    monthLabel, monthLabelLower, formatDayGenitive,
+    monthLabel, monthLabelLower, formatDayGenitive, formatDateGenitive,
     shortName, fullName, initialsOf
 } from './scheduleTime.js';
 
@@ -170,7 +170,10 @@ function renderHead() {
     document.getElementById('schedHead').innerHTML = html;
 }
 
-function renderEmployeeCell(employee) {
+// gaps — какие границы занятости реально видны в открытом месяце. Считаются в
+// том же проходе по дням, что и сами ячейки, поэтому метка не может разойтись с
+// тем, что нарисовано в строке (замечание куратора про границы месяца).
+function renderEmployeeCell(employee, gaps) {
     const parts = [escapeHtml(employee.lineType || '')];
     if (hasShiftTime(employee)) {
         parts.push(`<span class="tpl-tag">${escapeHtml(formatRangeCompact(employee.shiftStart, employee.shiftEnd))}</span>`);
@@ -180,11 +183,15 @@ function renderEmployeeCell(employee) {
     } else {
         parts.push('<span class="tpl-tag empty" title="Время смены не указано в карточке сотрудника">без времени смены</span>');
     }
-    // Дата увольнения внутри открытого месяца — иначе полстроки прочерков без
-    // единого объяснения читаются как поломка (замечание дизайн-сессии).
-    if (employee.terminationDate && monthKeyOf(employee.terminationDate) === state.month) {
-        const label = formatDayGenitive(state.month, Number(employee.terminationDate.slice(8)));
-        parts.push(`<span class="tpl-fired">уволен ${escapeHtml(label)}</span>`);
+    // Метка стоит в ЛЮБОМ месяце, где есть дни вне периода работы, а не только
+    // в месяце самой даты: иначе строка из сплошных бледных точек остаётся без
+    // единого объяснения и читается как поломка (решение владельца 17.08.2026).
+    // Причин может быть две сразу — тогда обе метки, в хронологическом порядке.
+    if (gaps.hire && employee.hireDate) {
+        parts.push(`<span class="tpl-fired">принят ${escapeHtml(formatDateGenitive(employee.hireDate, state.month))}</span>`);
+    }
+    if (gaps.termination && employee.terminationDate) {
+        parts.push(`<span class="tpl-fired">уволен ${escapeHtml(formatDateGenitive(employee.terminationDate, state.month))}</span>`);
     }
     return `
         <div class="emp-cell">
@@ -203,6 +210,7 @@ function renderBody() {
         let shifts = 0;
         let minutes = 0;
         let cells = '';
+        const gaps = { hire: false, termination: false };
         for (let d = 1; d <= total; d++) {
             const key = dayKey(state.month, d);
             const cell = cellStateOf(employee, key);
@@ -210,6 +218,7 @@ function renderBody() {
                 shifts++;
                 minutes += shiftMinutes(cell.day.shiftStart, cell.day.shiftEnd);
             }
+            if (cell.state === 'none') gaps[cell.reason] = true;
             const tdClasses = ['day'];
             if (isWeekend(state.month, d)) tdClasses.push('wend');
             if (state.today === key) tdClasses.push('today');
@@ -219,7 +228,7 @@ function renderBody() {
         }
         // «Итого» при отсутствии смен — прочерк, а не «0 ч».
         html += `<tr data-emp="${employee.id}">
-            <td class="col-emp">${renderEmployeeCell(employee)}</td>
+            <td class="col-emp">${renderEmployeeCell(employee, gaps)}</td>
             ${cells}
             <td class="col-total"><div class="total-main">${shifts} см.</div><div class="total-sub">${minutes ? formatHours(minutes) : '—'}</div></td>
         </tr>`;

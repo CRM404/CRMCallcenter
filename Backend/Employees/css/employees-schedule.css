@@ -456,6 +456,20 @@ table.sched {
 .sched-modal select:focus,
 .sched-modal input[type="date"]:focus { outline: 2px solid var(--e-accent); outline-offset: 1px; }
 .sched-modal .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
+/* Неактивная «Заполнить» обязана выглядеть неактивной: без этого правила у неё
+   тот же серый фон и тот же курсор, что у рабочей кнопки, — человек жмёт и
+   получает «ничего не происходит», ровно то, ради устранения чего кнопку и
+   гасили вместо ошибки после нажатия (приёмка дизайн-сессии, п.1).
+   Область ограничена модалкой графика: режим «Список» не задет.
+
+   Одного фона мало: у .btn в employees-light.css два декоративных слоя —
+   :after с непрозрачным #696969 под кнопкой (z-index: -2) и :before, который
+   на hover заливает её #555555. Полупрозрачный фон поверх непрозрачного слоя
+   даёт ровно прежний серый, и кнопка выглядит рабочей. Поэтому оба слоя тоже
+   гасятся — иначе правило есть, а на экране ничего не меняется. */
+.sched-modal .btn-primary:disabled { background: rgba(105, 105, 105, .38); cursor: not-allowed; }
+.sched-modal .btn-primary:disabled::after { background-color: transparent; }
+.sched-modal .btn-primary:disabled:hover::before { width: 0; }
 
 /* Данные выбранного сотрудника — читаются, не редактируются. */
 .emp-schedule {

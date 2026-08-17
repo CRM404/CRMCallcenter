@@ -92,7 +92,10 @@ function summaryText() {
     }
     const shown = list.slice(0, 6).join(', ');
     const tail = list.length > 6 ? ` и ещё ${list.length - 6}` : '';
-    return { text: `${list.length} ${pluralDays(list.length)}: ${shown}${tail} ${monthGenitive(month)}`, none: false };
+    // Месяц стоит ПЕРЕД перечислением, а не в конце: «…и ещё 2 августа»
+    // читается как «и ещё 2-е августа», то есть как дата, а не как счёт
+    // (приёмка дизайн-сессии, п.3).
+    return { text: `${list.length} ${pluralDays(list.length)} ${monthGenitive(month)}: ${shown}${tail}`, none: false };
 }
 
 // Пересчитывается на каждое действие в форме. Числа считаются по тем же

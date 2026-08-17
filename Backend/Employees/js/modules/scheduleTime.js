@@ -164,6 +164,19 @@ export function formatDayGenitive(monthKey, day) {
     return `${day} ${monthGenitive(monthKey)}`;
 }
 
+// Дата целиком, с месяцем ИЗ САМОЙ ДАТЫ, а не из открытого месяца: метки о
+// границах занятости показываются во всех месяцах, и «уволен 20 августа» при
+// открытом сентябре не должно превращаться в «уволен 20 сентября». Неверная
+// дата в интерфейсе хуже отсутствующей — её не перепроверяют.
+//
+// Год добавляется, только если он отличается от года открытого месяца:
+// открыт январь 2027, уволен 20 августа 2026 — «уволен 20 августа 2026».
+export function formatDateGenitive(dateKey, openMonthKey) {
+    const base = formatDayGenitive(monthKeyOf(dateKey), dayOf(dateKey));
+    const year = dateKey.slice(0, 4);
+    return year === openMonthKey.slice(0, 4) ? base : `${base} ${year}`;
+}
+
 // день / дня / дней
 export function pluralDays(n) {
     const tens = n % 100;
