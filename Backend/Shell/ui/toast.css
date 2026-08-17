@@ -1,0 +1,89 @@
+/* --- ui/toast.css: БЛОК 3 — составные элементы ---------------------------
+   Тост ОДИН НА ПРИЛОЖЕНИЕ, снизу справа, поверх всего — включая обе панели и
+   любую открытую модалку. Сегодня в проекте семь копий этого блока и семь
+   контейнеров #toastContainer; здесь он один.
+
+   Текст тоста всегда называет объект: «Белов Д. С.: 15 августа — выходной»,
+   а не «Сохранено». Это правило дизайн-сессии, оно проверяется на приёмке.
+   ------------------------------------------------------------------------ */
+
+.ui-toasts {
+    position: fixed;
+    right: var(--ui-space-6);
+    bottom: var(--ui-space-6);
+    z-index: var(--ui-z-toast);
+    display: flex;
+    flex-direction: column;
+    gap: var(--ui-space-3);
+    max-width: 350px;
+    /* Контейнер не должен перехватывать клики по интерфейсу под собой —
+       кликабельны только сами тосты. */
+    pointer-events: none;
+}
+
+.ui-toast {
+    display: flex;
+    align-items: center;
+    gap: var(--ui-space-4);
+    padding: 14px var(--ui-space-6);
+    border-radius: var(--ui-radius-md);
+    border-left: 4px solid var(--ui-color-info-edge);
+    background: var(--ui-color-inkwell);
+    color: var(--ui-color-inkwell-text);
+    box-shadow: var(--ui-shadow-toast);
+    font-family: var(--ui-font-ui);
+    font-size: var(--ui-text-md);
+    line-height: var(--ui-line-base);
+    pointer-events: auto;
+    animation: ui-toast-in var(--ui-dur-base) ease;
+}
+
+.ui-toast--success { border-left-color: var(--ui-color-ok-edge); }
+.ui-toast--error { border-left-color: var(--ui-color-off-edge); }
+
+.ui-toast__icon { font-size: var(--ui-icon-md); flex-shrink: 0; }
+.ui-toast--info .ui-toast__icon { color: var(--ui-color-info-edge); }
+.ui-toast--success .ui-toast__icon { color: var(--ui-color-ok-edge); }
+.ui-toast--error .ui-toast__icon { color: var(--ui-color-off-edge); }
+
+.ui-toast__text {
+    flex: 1 1 auto;
+    /* Длинное название объекта не должно рвать раскладку тоста. */
+    overflow-wrap: anywhere;
+}
+
+.ui-toast__close {
+    flex-shrink: 0;
+    margin-left: auto;
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--ui-color-ink-faint);
+    font-size: var(--ui-icon-sm);
+    line-height: 1;
+    cursor: pointer;
+    transition: color var(--ui-dur-fast);
+}
+.ui-toast__close:hover { color: var(--ui-color-ink-invert); }
+.ui-toast__close:focus-visible {
+    outline: 2px solid var(--ui-color-accent);
+    outline-offset: 2px;
+}
+
+/* Уход по истечении срока жизни: задаётся классом из toast.js, чтобы момент
+   удаления узла и момент окончания анимации не расходились. */
+.ui-toast.is-leaving {
+    opacity: 0;
+    transform: translateX(100%);
+    transition: opacity var(--ui-dur-base), transform var(--ui-dur-base);
+}
+
+@keyframes ui-toast-in {
+    from { transform: translateX(100%); opacity: 0; }
+    to { transform: none; opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .ui-toast { animation: none; }
+    .ui-toast.is-leaving { transition: opacity var(--ui-dur-fast); transform: none; }
+}

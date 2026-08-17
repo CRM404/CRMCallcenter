@@ -1,0 +1,142 @@
+/* --- ui/field.css: БЛОК 2 — базовые элементы -----------------------------
+   Поле ввода: текст, дата, время, список, многострочное.
+   Состояния: обычное, фокус, ошибка, неактивное, с подсказкой.
+
+   Раздел не объявляет своих .form-group. Сегодня этот класс продублирован в
+   восьми файлах из восьми — здесь он заменяется одним .ui-field.
+
+   ПРАВИЛО ДИЗАЙН-СЕССИИ: ошибка живёт ПОД ПОЛЕМ, а не в тосте. Тост исчезает
+   через три секунды, а поле остаётся — человек должен видеть, что именно
+   исправлять, пока он это исправляет.
+   ------------------------------------------------------------------------ */
+
+.ui-field {
+    display: flex;
+    flex-direction: column;
+    font-family: var(--ui-font-ui);
+}
+
+.ui-field__label {
+    margin-bottom: var(--ui-space-1);
+    font-size: var(--ui-text-md);
+    font-weight: var(--ui-weight-bold);
+    color: var(--ui-color-ink-soft);
+}
+
+/* Обязательное поле помечается на метке, а не звёздочкой внутри плейсхолдера:
+   плейсхолдер исчезает при вводе вместе с пометкой. */
+.ui-field__label--required::after {
+    content: ' *';
+    color: var(--ui-color-danger);
+}
+
+.ui-field__control {
+    box-sizing: border-box;
+    width: 100%;
+    min-height: var(--ui-control-h);
+    padding: var(--ui-space-3) var(--ui-space-4);
+    border: 1px solid var(--ui-color-line-field);
+    border-radius: var(--ui-radius-sm);
+    background: var(--ui-color-surface);
+    color: var(--ui-color-ink);
+    font-family: inherit;
+    font-size: var(--ui-text-md);
+    line-height: var(--ui-line-base);
+    transition: border-color var(--ui-dur-fast), box-shadow var(--ui-dur-fast),
+                background-color var(--ui-dur-fast);
+}
+
+.ui-field__control::placeholder { color: var(--ui-color-ink-faint); }
+
+.ui-field__control:focus {
+    outline: none;
+    border-color: var(--ui-color-accent-soft);
+    box-shadow: 0 0 0 3px var(--ui-color-focus-ring);
+}
+
+/* ----- Тип: многострочное ------------------------------------------------ */
+textarea.ui-field__control {
+    min-height: 96px;
+    resize: vertical;
+}
+
+/* ----- Тип: список --------------------------------------------------------
+   Своя стрелка вместо системной — иначе список визуально ниже соседнего поля
+   ввода в Windows-браузерах. */
+select.ui-field__control {
+    appearance: none;
+    -webkit-appearance: none;
+    padding-right: var(--ui-space-8);
+    background-image: linear-gradient(45deg, transparent 50%, var(--ui-color-ink-faint) 50%),
+                      linear-gradient(135deg, var(--ui-color-ink-faint) 50%, transparent 50%);
+    background-position: calc(100% - 18px) 52%, calc(100% - 13px) 52%;
+    background-size: 5px 5px, 5px 5px;
+    background-repeat: no-repeat;
+}
+
+/* ----- Типы: дата и время -------------------------------------------------
+   Ширина по содержимому: растянутое на всю строку поле даты выглядит как
+   текстовое и провоцирует ввод произвольного текста. */
+input[type="date"].ui-field__control,
+input[type="time"].ui-field__control {
+    width: auto;
+    min-width: 150px;
+}
+input[type="time"].ui-field__control { min-width: 110px; }
+
+/* ----- Состояние: с подсказкой -------------------------------------------- */
+.ui-field__hint {
+    margin-top: var(--ui-space-1);
+    font-size: var(--ui-text-sm);
+    color: var(--ui-color-ink-faint);
+    line-height: var(--ui-line-base);
+}
+
+/* ----- Состояние: ошибка --------------------------------------------------
+   Текст ошибки скрыт, пока поле не помечено ошибкой. Скрытие через [hidden]
+   намеренно не используется: см. комментарий в конце файла. */
+.ui-field__error {
+    display: none;
+    margin-top: var(--ui-space-1);
+    font-size: var(--ui-text-sm);
+    color: var(--ui-color-danger);
+    line-height: var(--ui-line-base);
+}
+
+.ui-field--error .ui-field__control {
+    border-color: var(--ui-color-danger);
+    background: var(--ui-color-off-bg);
+}
+.ui-field--error .ui-field__control:focus {
+    box-shadow: 0 0 0 3px rgba(231, 76, 60, .2);
+}
+.ui-field--error .ui-field__error { display: block; }
+/* Подсказка уступает место ошибке — два текста под полем читаются как один. */
+.ui-field--error .ui-field__hint { display: none; }
+
+/* ----- Состояние: неактивное ---------------------------------------------- */
+.ui-field__control:disabled,
+.ui-field__control[readonly] {
+    background: var(--ui-color-surface-sunken);
+    color: var(--ui-color-ink-faint);
+    cursor: not-allowed;
+}
+.ui-field__control[readonly] { cursor: default; }
+.ui-field--disabled .ui-field__label { opacity: .6; }
+
+/* ----- Раскладка форм ------------------------------------------------------
+   Сетка полей — это ещё базовый уровень: раскладку конкретной формы задаёт
+   раздел, но сама сетка одна на проект. */
+.ui-form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: var(--ui-space-5);
+}
+.ui-field--wide { grid-column: 1 / -1; }
+
+/* ----- Скрытие: одна общая ловушка проекта --------------------------------
+   Атрибут [hidden] задаёт display:none с НУЛЕВОЙ специфичностью, поэтому любой
+   класс с display:flex/grid его перебивает, и элемент остаётся видимым. В
+   проекте это чинили дважды у оператора и один раз обходили в графике.
+   Правило ниже закрывает случай навсегда — для всего приложения сразу. */
+[hidden] { display: none !important; }
