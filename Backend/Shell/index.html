@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CRM</title>
+
+    <!-- Иконки: Font Awesome, тот же CDN и та же версия, что на страницах
+         проекта. Второго набора не заводим — решение куратора (tokens.css). -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"
+          integrity="sha512-Fo3rlrZj/k7ujTnHg4CGR2D7kSs0v4LLanw2qksYuRlEzO+tcaEPQogQ0KaoGN26/zrn20ImR1DfuLWnOo7aBA=="
+          crossorigin="anonymous" referrerpolicy="no-referrer">
+
+    <!-- Порядок подключения = порядок блоков CSS, заданный дизайн-сессией:
+         1 токены → 2 базовые элементы → 3 составные → 4 оболочка → 5 раскладка
+         разделов. Раскладка разделов появится вместе с первым перенесённым
+         разделом (этап 2) — своим файлом рядом с ним. -->
+
+    <!-- 1. Токены -->
+    <link rel="stylesheet" href="/ui/tokens.css">
+
+    <!-- 2. Базовые элементы -->
+    <link rel="stylesheet" href="/ui/button.css">
+    <link rel="stylesheet" href="/ui/field.css">
+    <link rel="stylesheet" href="/ui/chip.css">
+    <link rel="stylesheet" href="/ui/tabs.css">
+
+    <!-- 3. Составные элементы -->
+    <link rel="stylesheet" href="/ui/modal.css">
+    <link rel="stylesheet" href="/ui/toast.css">
+    <link rel="stylesheet" href="/ui/table.css">
+    <link rel="stylesheet" href="/ui/popover.css">
+    <link rel="stylesheet" href="/ui/empty-state.css">
+    <link rel="stylesheet" href="/ui/skeleton.css">
+
+    <!-- 4. Оболочка -->
+    <link rel="stylesheet" href="/shell/panels.css">
+    <link rel="stylesheet" href="/shell/desktop.css">
+    <link rel="stylesheet" href="/shell/minimized.css">
+</head>
+<body>
+
+<!-- Каркас приложения. Разметки разделов, окон и тостов здесь нет намеренно:
+     разделы монтируются в панель, окна и тосты создаются вызовом. Именно это
+     лечит #toastContainer на восьми страницах и #confirmModal на пяти. -->
+<div class="shell" data-role="shell">
+    <main class="shell-main">
+        <!-- Стол лежит в потоке и виден, когда панелей нет. -->
+        <div class="shell-desktop" data-role="desktop"></div>
+
+        <!-- Сцена панелей накрывает стол целиком. Панели создаёт shell/panels.js,
+             сюда он кладёт свой .shell-workspace. -->
+        <div class="shell-stage" data-role="workspace-root" hidden></div>
+    </main>
+
+    <!-- Полоса свёрнутых. Скрыта, пока сворачивать нечего. -->
+    <div class="shell-minimized" data-role="minimized" hidden></div>
+</div>
+
+<script type="module">
+    import { shell } from '/shell/app.js';
+    import { initDesktop } from '/shell/desktop.js';
+    import { initMinimized } from '/shell/minimized.js';
+
+    const desktop = document.querySelector('[data-role="desktop"]');
+    const stage = document.querySelector('[data-role="workspace-root"]');
+    const bar = document.querySelector('[data-role="minimized"]');
+
+    // Стол и полоса подписываются на оболочку ДО старта: старт разбирает адрес
+    // и может сразу открыть панели — на пустой странице это выглядело бы как
+    // мигание пустого стола.
+    initDesktop({ shell, desktop, stage });
+    initMinimized({ shell, bar, stage });
+
+    shell.start({ workspace: stage });
+</script>
+
+</body>
+</html>

@@ -92,9 +92,13 @@ app.use(express.static(mainDir));
 app.use(express.static(cpaNetworksDir));
 app.use(express.static(sourcesDir));
 app.use(express.static(leadsDir));
-app.get('/', (req, res) => {
-    res.redirect('/main.html');
-});
+// Редиректа с «/» на /main.html больше нет: с этапа 1 корень отдаёт
+// Shell/index.html — единую точку входа. Строка не удалена «заодно», она
+// перестала работать в тот момент, когда появился Shell/index.html:
+// express.static отвечает на «/» раньше, чем доходит до app.get('/'), и
+// оставленный редирект врал бы читателю кода. Старые адреса разделов
+// (/main.html, /leads.html, …) продолжают работать до своего этапа переноса,
+// редиректы на них добавляются по одному (бриф, 3.1).
 
 app.use((req, res) => {
     res.status(404).json({ error: 'Маршрут не найден' });
