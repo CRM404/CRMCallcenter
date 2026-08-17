@@ -182,21 +182,30 @@ async function saveNetwork() {
         shell.toast('Заполните обязательное поле: Юрлицо', 'error');
         return;
     }
+    const my = generation;
     try {
         if (editingNetworkId === null) {
             await storage.createCpaNetwork(data);
+            if (!alive(my)) return;
             shell.toast('Сеть добавлена', 'success');
         } else {
             await storage.updateCpaNetwork(editingNetworkId, data);
+            if (!alive(my)) return;
             shell.toast('Изменения сохранены', 'success');
         }
     } catch (err) {
-        shell.toast(err.message, 'error');
+        if (!alive(my)) return;
+        if (!isAbort(err)) shell.toast(err.message, 'error');
         return;
     }
+    // Панель могли закрыть, пока шло сохранение: без этой проверки $ вернёт
+    // null и раздел упадёт на .hidden уже после успешного запроса.
+    if (!alive(my)) return;
     $('#netInlineForm').hidden = true;
     await loadNetworks();
+    if (!alive(my)) return;
     await loadOffers();
+    if (!alive(my)) return;
     renderNetList();
     renderTabs();
     renderMeta();
@@ -423,13 +432,22 @@ function attachGeoAutocomplete(containerId, store) {
             if (!q) return;
 
             const requestId = ++geoSuggestRequestId;
+            const my = generation;
             geoSuggestTimer = setTimeout(async () => {
+                // Таймер переживает закрытие панели: без этой проверки он
+                // сработает, когда storage уже null, и раздел упадёт на
+                // ровном месте — через полсекунды после того, как человек
+                // закрыл панель.
+                if (!alive(my)) return;
                 let suggestions;
                 try {
                     const regionFiasId = field !== 'region' ? store[i].regionFiasId : undefined;
                     const result = await storage.fetchGeoSuggest(q, { bound, regionFiasId });
+                    if (!alive(my)) return;
                     suggestions = result?.suggestions || [];
                 } catch (err) {
+                    if (!alive(my)) return;
+                    if (isAbort(err)) return;
                     shell.toast('Подсказки адреса недоступны — сервис не отвечает. Введите вручную.', 'error');
                     return;
                 }
@@ -514,12 +532,15 @@ async function handleAddParamValue(key) {
         shell.toast('Такое значение уже есть в списке', 'error');
         return;
     }
+    const my = generation;
     try {
         await storage.addParamValue(key, value);
     } catch (err) {
-        shell.toast(err.message, 'error');
+        if (!alive(my)) return;
+        if (!isAbort(err)) shell.toast(err.message, 'error');
         return;
     }
+    if (!alive(my)) return;
     paramLists[key].push(value);
     input.value = '';
     renderParamTags(key);
@@ -529,12 +550,15 @@ async function handleAddParamValue(key) {
 
 async function handleRemoveParamValue(key, index) {
     const value = paramLists[key][index];
+    const my = generation;
     try {
         await storage.deleteParamValue(key, value);
     } catch (err) {
-        shell.toast(err.message, 'error');
+        if (!alive(my)) return;
+        if (!isAbort(err)) shell.toast(err.message, 'error');
         return;
     }
+    if (!alive(my)) return;
     paramLists[key].splice(index, 1);
     renderParamTags(key);
     refreshParamField(key);
@@ -706,20 +730,26 @@ async function saveOffer() {
         shell.toast('Выберите сеть перед добавлением оффера', 'error');
         return;
     }
+    const my = generation;
     try {
         if (editingOfferId === null) {
             await storage.createRealEstateOffer(data);
+            if (!alive(my)) return;
             shell.toast(savingAsCopy ? 'Копия оффера создана' : 'Оффер добавлен', 'success');
         } else {
             await storage.updateRealEstateOffer(editingOfferId, data);
+            if (!alive(my)) return;
             shell.toast('Изменения сохранены', 'success');
         }
     } catch (err) {
-        shell.toast(err.message, 'error');
+        if (!alive(my)) return;
+        if (!isAbort(err)) shell.toast(err.message, 'error');
         return;
     }
+    if (!alive(my)) return;
     $('#offerModal').hidden = true;
     await loadOffers();
+    if (!alive(my)) return;
     renderTabs();
     renderOffersTable();
 }
@@ -880,6 +910,10 @@ export async function mount(container, ctx) {
 
 export function unmount() {
     generation += 1;   // всё, что было в полёте, теперь чужое
+
+    // Отложенный запрос подсказок адреса — иначе он сработает уже после
+    // закрытия панели.
+    clearTimeout(geoSuggestTimer);
 
     if (onDocKeydown) document.removeEventListener('keydown', onDocKeydown);
     if (onDocClick) document.removeEventListener('click', onDocClick);
