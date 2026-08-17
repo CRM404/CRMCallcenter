@@ -113,9 +113,16 @@ function syncFill() {
         ? formatRangeSpaced(employee.shiftStart, employee.shiftEnd)
         : 'не заполнено в карточке сотрудника — заполните его там, тогда месяц можно будет проставить разом';
     // Режим — отдельной строкой без плашки: он справочный и на заполнение не влияет.
-    document.getElementById('fillEmpDays').innerHTML = employee.workSchedule
-        ? `${employee.workSchedule} <i>— справочно, выходные отмечаете вы</i>`
-        : '<i>не указан</i>';
+    //
+    // Собирается узлами, а не innerHTML: workSchedule — единственное значение
+    // здесь, которое вводит человек. Сегодня оно безопасно (сервер нормализует
+    // его до «5/2» из двух чисел), но защита держалась бы целиком на валидации
+    // в другом слое — расширят формат «Дней», и разметка поедет вслед за вводом.
+    const daysBox = document.getElementById('fillEmpDays');
+    daysBox.textContent = employee.workSchedule ? `${employee.workSchedule} ` : '';
+    const daysNote = document.createElement('i');
+    daysNote.textContent = employee.workSchedule ? '— справочно, выходные отмечаете вы' : 'не указан';
+    daysBox.appendChild(daysNote);
     applyBtn.disabled = !ready || submitting;
 
     // Отметки, выпавшие из диапазона после сдвига даты, снимаются — но не
