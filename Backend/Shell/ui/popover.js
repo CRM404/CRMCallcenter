@@ -12,6 +12,11 @@
 // оболочки нет, границей становится окно — каталог элементов работает без
 // панелей, и это не должно быть отдельным случаем в коде разделов.
 //
+// Поповер ПЕРЕЕЗЖАЕТ в свою панель при открытии — так же, как modal.js кладёт
+// панельное окно в scope (требование куратора, dialog.md 17.08.2026). Оставить
+// его в document.body нельзя: он окажется вне контекста наложения панели и
+// вылезет на соседнюю.
+//
 // Слушатели снимаются методом destroy(): раздел обязан уметь размонтироваться
 // (контракт mount/unmount), а поповер, переживший свой раздел, — это чужой
 // обработчик на document.
@@ -36,8 +41,10 @@ function firstFocusable(root) {
 /**
  * @param {HTMLElement} el       корневой элемент поповера (.ui-popover, hidden)
  * @param {Object}      [options]
- * @param {HTMLElement|Function} [options.boundary] граница; по умолчанию —
- *        ближайшая к якорю панель, иначе окно
+ * @param {HTMLElement|Function} [options.scope] панель, внутрь которой класть
+ *        поповер; по умолчанию — ближайшая к якорю .shell-panel, иначе body
+ * @param {HTMLElement|Function} [options.boundary] граница, за которую нельзя
+ *        выходить; по умолчанию — та же панель, иначе окно
  * @param {Function}    [options.onClose] вызывается после закрытия
  * @returns {{open: Function, close: Function, isOpen: Function, step: Function,
  *            currentStep: Function, reposition: Function, destroy: Function,
@@ -52,10 +59,19 @@ export function createPopover(el, options = {}) {
     let stepName = firstStep;
     let destroyed = false;
 
+    function resolvePanel() {
+        return anchor ? anchor.closest('.shell-panel') : null;
+    }
+
+    function resolveScope() {
+        const given = typeof options.scope === 'function' ? options.scope(anchor) : options.scope;
+        return given || resolvePanel() || document.body;
+    }
+
     function resolveBoundary() {
         const given = typeof options.boundary === 'function' ? options.boundary(anchor) : options.boundary;
         if (given) return given;
-        return anchor ? anchor.closest('.shell-panel') : null;
+        return resolvePanel();
     }
 
     function place() {
@@ -98,6 +114,8 @@ export function createPopover(el, options = {}) {
     function open(nextAnchor) {
         if (destroyed || !nextAnchor) return;
         anchor = nextAnchor;
+        const host = resolveScope();
+        if (el.parentElement !== host) host.appendChild(el);
         if (steps.length) showStep(firstStep);
         el.hidden = false;
         if (anchor.hasAttribute('aria-expanded')) anchor.setAttribute('aria-expanded', 'true');

@@ -1,45 +1,48 @@
-/* ============================================================
-   ui/empty-state.css — пустое состояние. Блок 3 «составные элементы».
-   Автор: исполнитель.
+/* --- ui/empty-state.css: БЛОК 3 — составные элементы ---------------------
+   Пустое состояние. Обязательный состав (бриф, п.4): заголовок + ПРИЧИНА +
+   СЛЕДУЮЩИЙ ШАГ.
 
-   Обязательный состав (бриф, п.4): заголовок + ПРИЧИНА + СЛЕДУЮЩИЙ ШАГ.
-   Сегодня пустые состояния в проекте — это одна строка серого текста
+   Сегодня пустые состояния в проекте — одна строка серого текста
    (.sa-empty-state, .m-empty-state, .geo-suggest-empty): человек видит, что
    пусто, и не понимает, это фильтр или в разделе действительно ничего нет.
-   ============================================================ */
+   ------------------------------------------------------------------------ */
 
 .ui-empty {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: var(--ui-space-2);
-    padding: 30px var(--ui-space-5);
+    gap: var(--ui-space-3);
+    padding: var(--ui-space-8) var(--ui-space-6);
     border: 1px dashed var(--ui-color-line-strong);
     border-radius: var(--ui-radius-md);
-    background: rgba(255, 255, 255, .45);
+    background: var(--ui-color-surface-sunken);
     text-align: center;
 }
-.ui-empty__icon { color: var(--ui-color-ink-faint); }
+.ui-empty__icon {
+    color: var(--ui-color-ink-faint);
+    font-size: var(--ui-icon-lg);
+    line-height: 1;
+}
 .ui-empty__title {
-    font-size: 14px;
-    font-weight: 700;
+    font-size: var(--ui-text-md);
+    font-weight: var(--ui-weight-bold);
     color: var(--ui-color-ink);
 }
-/* Причина. Ширина ограничена намеренно: строка на всю панель не читается. */
+/* Причина. Ширина ограничена намеренно: строка во всю панель не читается. */
 .ui-empty__text {
     max-width: 360px;
-    font-size: 12.5px;
-    line-height: 1.5;
+    font-size: var(--ui-text-sm);
+    line-height: var(--ui-line-base);
     color: var(--ui-color-ink-soft);
 }
 /* Следующий шаг — кнопка из ui/button.css, здесь только отступ. */
 .ui-empty__action { margin-top: var(--ui-space-1); }
 
-/* Внутри окна и узкой боковой колонки рамка с отступом в 30px съедает всё
+/* Внутри окна и в узкой боковой колонке рамка с большим отступом съедает всё
    место, поэтому есть тихий вариант — тот же состав, меньше веса. */
 .ui-empty--inline {
     align-items: flex-start;
-    padding: var(--ui-space-3) 0 14px;
+    padding: var(--ui-space-4) 0 var(--ui-space-5);
     border: none;
     background: none;
     text-align: left;

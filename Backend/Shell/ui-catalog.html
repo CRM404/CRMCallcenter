@@ -5,13 +5,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Каталог элементов — CRM</title>
 
+    <!-- Иконки: Font Awesome, тот же CDN и та же версия, что на всех страницах
+         проекта. Второго набора не заводим — решение куратора (tokens.css). -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"
+          integrity="sha512-Fo3rlrZj/k7ujTnHg4CGR2D7kSs0v4LLanw2qksYuRlEzO+tcaEPQogQ0KaoGN26/zrn20ImR1DfuLWnOo7aBA=="
+          crossorigin="anonymous" referrerpolicy="no-referrer">
+
     <!-- Порядок подключения = порядок блоков CSS, который задала дизайн-сессия:
          1 токены → 2 базовые элементы → 3 составные → 4 оболочка → 5 раскладка.
-         Раздел, который начал объявлять кнопку, выбрал не тот блок. -->
+         Порядок не косметика: раздел, который начал объявлять кнопку, выбрал
+         не тот блок. -->
 
-    <!-- 1. Токены. tokens.css — файл куратора; пока его нет, подключён
-         черновик исполнителя. Обе строки заменяются одной при слиянии. -->
-    <link rel="stylesheet" href="/ui/tokens-draft.css">
+    <!-- 1. Токены -->
     <link rel="stylesheet" href="/ui/tokens.css">
 
     <!-- 2. Базовые элементы -->
@@ -21,98 +26,75 @@
     <link rel="stylesheet" href="/ui/tabs.css">
 
     <!-- 3. Составные элементы -->
+    <link rel="stylesheet" href="/ui/modal.css">
+    <link rel="stylesheet" href="/ui/toast.css">
     <link rel="stylesheet" href="/ui/table.css">
     <link rel="stylesheet" href="/ui/popover.css">
     <link rel="stylesheet" href="/ui/empty-state.css">
     <link rel="stylesheet" href="/ui/skeleton.css">
-    <link rel="stylesheet" href="/ui/modal.css">
-    <link rel="stylesheet" href="/ui/toast.css">
 </head>
 <body>
 
 <!-- Раскладка самого каталога (блок 5). Живёт здесь, а не в файле слоя:
-     каталог — служебная страница, и её раскладку никто не переиспользует. -->
+     каталог — служебная страница, её раскладку никто не переиспользует. -->
 <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; font-family: var(--ui-font-ui); }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
         min-height: 100vh;
-        padding: 26px 30px 60px;
+        padding: var(--ui-space-7) var(--ui-space-8) 60px;
         background: linear-gradient(-45deg, var(--ui-color-canvas-a), var(--ui-color-canvas-b), #e0eafc, #f0f4ff);
+        background-color: var(--ui-color-canvas-fallback);
         color: var(--ui-color-ink);
+        font-family: var(--ui-font-ui);
         font-variant-numeric: tabular-nums;
     }
     .cat-wrap { max-width: 1100px; margin: 0 auto; }
 
-    /* Иконки: одна толщина и один размер по всему приложению. Чем рисовать —
-       Font Awesome или SVG — решает куратор (бриф, п.4); в каталоге инлайновый
-       спрайт, как в макете. Правило переезжает в слой вместе с решением. */
-    .ui-ic { width: 20px; height: 20px; display: block; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
-    .ui-ic--sm { width: 15px; height: 15px; }
-    .ui-ic--lg { width: 26px; height: 26px; }
+    .cat-head { display: flex; align-items: baseline; gap: var(--ui-space-4); flex-wrap: wrap; margin-bottom: var(--ui-space-2); }
+    .cat-head h1 { font-size: var(--ui-text-title); font-weight: var(--ui-weight-bold); }
+    .cat-head span { font-size: var(--ui-text-xs); color: var(--ui-color-ink-faint); }
+    .cat-lead { max-width: 680px; margin-bottom: var(--ui-space-6); font-size: var(--ui-text-sm); line-height: var(--ui-line-base); color: var(--ui-color-ink-soft); }
 
-    .cat-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 6px; }
-    .cat-head h1 { font-size: 22px; font-weight: 700; }
-    .cat-head span { font-size: 12.5px; color: var(--ui-color-ink-faint); }
-    .cat-lead { font-size: 12.5px; line-height: 1.55; color: var(--ui-color-ink-soft); max-width: 680px; margin-bottom: 18px; }
-
-    .cat-sec { margin-bottom: 26px; }
-    .cat-sec > h2 { font-size: 12.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--ui-color-ink-faint); padding-bottom: 8px; border-bottom: 1px solid var(--ui-color-line); margin-bottom: 13px; }
-    .cat-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; margin-bottom: 12px; }
-    .cat-item { display: flex; flex-direction: column; gap: 6px; }
+    .cat-sec { margin-bottom: var(--ui-space-8); }
+    .cat-sec > h2 { padding-bottom: var(--ui-space-3); margin-bottom: var(--ui-space-5); border-bottom: 1px solid var(--ui-color-line); font-size: var(--ui-text-xs); font-weight: var(--ui-weight-bold); letter-spacing: .06em; text-transform: uppercase; color: var(--ui-color-ink-faint); }
+    .cat-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--ui-space-4); margin-bottom: var(--ui-space-4); }
+    .cat-item { display: flex; flex-direction: column; gap: var(--ui-space-2); }
     .cat-cap { font-size: 10.5px; color: var(--ui-color-ink-faint); }
-    .cat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; }
-    .cat-demos { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 16px; margin: 14px 0 6px; }
-    .cat-demo { display: flex; flex-direction: column; gap: 7px; }
-    .cat-frame { padding: 14px; border: 1px dashed var(--ui-color-line-strong); border-radius: var(--ui-radius-md); background: rgba(96, 112, 148, .07); }
-    .cat-rule { display: flex; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--ui-color-line); font-size: 12.5px; line-height: 1.55; color: var(--ui-color-ink-soft); }
-    .cat-rule b { color: var(--ui-color-ink); font-weight: 600; }
-    .cat-note { font-size: 12px; line-height: 1.55; color: var(--ui-color-ink-faint); margin-bottom: 10px; }
+    .cat-demos { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: var(--ui-space-5); margin: var(--ui-space-5) 0 var(--ui-space-2); }
+    .cat-demo { display: flex; flex-direction: column; gap: var(--ui-space-2); }
+    .cat-frame { padding: var(--ui-space-5); border: 1px dashed var(--ui-color-line-strong); border-radius: var(--ui-radius-md); background: var(--ui-color-glass); }
+    .cat-rule { display: flex; gap: var(--ui-space-4); padding: var(--ui-space-3) 0; border-bottom: 1px solid var(--ui-color-line); font-size: var(--ui-text-sm); line-height: var(--ui-line-base); color: var(--ui-color-ink-soft); }
+    .cat-rule b { color: var(--ui-color-ink); font-weight: var(--ui-weight-bold); }
+    .cat-note { margin-bottom: var(--ui-space-4); font-size: var(--ui-text-xs); line-height: var(--ui-line-base); color: var(--ui-color-ink-faint); }
 
-    .swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(126px, 1fr)); gap: 10px; }
-    .sw { border: 1px solid var(--ui-color-line); border-radius: var(--ui-radius-sm); overflow: hidden; background: #fff; }
+    .swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(126px, 1fr)); gap: var(--ui-space-4); }
+    .sw { border: 1px solid var(--ui-color-line); border-radius: var(--ui-radius-sm); overflow: hidden; background: var(--ui-color-surface); }
     .sw-color { height: 38px; }
-    .sw-meta { padding: 6px 8px; font-size: 10.5px; color: var(--ui-color-ink-soft); }
+    .sw-meta { padding: var(--ui-space-2) var(--ui-space-3); font-size: 10.5px; color: var(--ui-color-ink-soft); }
     .sw-meta b { display: block; font-size: 11px; color: var(--ui-color-ink); }
 
-    .type-row { display: flex; align-items: baseline; gap: 14px; padding: 7px 0; border-bottom: 1px solid var(--ui-color-line); }
-    .type-row span:last-child { font-size: 10.5px; color: var(--ui-color-ink-faint); margin-left: auto; }
-    .t-h1 { font-size: 22px; font-weight: 700; }
-    .t-h2 { font-size: 18px; font-weight: 700; }
-    .t-body { font-size: 13px; }
-    .t-sub { font-size: 12.5px; color: var(--ui-color-ink-soft); }
-    .t-faint { font-size: 11.5px; color: var(--ui-color-ink-faint); }
+    .type-row { display: flex; align-items: baseline; gap: var(--ui-space-5); padding: var(--ui-space-2) 0; border-bottom: 1px solid var(--ui-color-line); }
+    .type-row span:last-child { margin-left: auto; font-size: 10.5px; color: var(--ui-color-ink-faint); }
 
-    /* Временная плашка. Уходит вместе с черновиком токенов — одним коммитом
-       после слияния с shell-core-dev. */
-    .cat-pending {
-        display: grid;
-        gap: 6px;
-        padding: 12px 14px;
-        margin-bottom: 20px;
-        border: 1px dashed var(--ui-color-warn-ink);
-        border-radius: var(--ui-radius-md);
-        background: var(--ui-color-warn-bg);
-        font-size: 12.5px;
-        line-height: 1.55;
-        color: var(--ui-color-warn-ink);
+    /* Демо-панель: то, что на этапе 1 станет .shell-panel. Нужна здесь по
+       делу — на ней видно оба правила разом: модалка накрывает свою панель, а
+       поповер не выходит за её границы. */
+    .cat-panel {
+        position: relative;
+        overflow: hidden;
+        height: 260px;
+        padding: var(--ui-space-5);
+        border: 1px solid var(--ui-color-line);
+        border-radius: var(--ui-radius-lg);
+        background: var(--ui-color-surface);
+        box-shadow: var(--ui-shadow-panel);
     }
-    .cat-pending b { font-weight: 700; }
+    .cat-panel__body { height: 100%; overflow: auto; display: flex; flex-direction: column; gap: var(--ui-space-4); }
 
     /* Кнопка прижата к нижнему краю окна намеренно: поповер обязан
        переворачиваться вверх, и проверить это можно только у самого края. */
-    .cat-pop-bottom { position: fixed; left: 30px; bottom: 14px; z-index: 10; }
+    .cat-pop-bottom { position: fixed; left: var(--ui-space-8); bottom: var(--ui-space-4); z-index: 10; }
 </style>
-
-<!-- Спрайт иконок: одна толщина (1.7) и три размера (20/15/26), как в макете. -->
-<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
-    <symbol id="ic-edit" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></symbol>
-    <symbol id="ic-trash" viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/></symbol>
-    <symbol id="ic-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol>
-    <symbol id="ic-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
-    <symbol id="ic-close" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
-    <symbol id="ic-calendar" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 10h18"/></symbol>
-    <symbol id="ic-dots" viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="12" cy="19" r="1.4"/></symbol>
-</svg>
 
 <div class="cat-wrap">
 
@@ -124,16 +106,6 @@
         Всё, из чего собираются разделы. Раздел не объявляет своих кнопок, полей, модалок, тостов и таблиц;
         нужен вид, которого здесь нет, — он добавляется сюда, а не рядом.
     </p>
-
-    <div class="cat-pending" data-role="pending-note">
-        <b>Временно: половина слоя ещё не приехала.</b>
-        <span>Блоки «Кнопки», «Поля», «Окна» и «Сообщения» показаны разметкой, но без оформления:
-            <code>ui/button.css</code>, <code>ui/field.css</code>, <code>ui/modal.css</code>,
-            <code>ui/toast.css</code> и <code>ui/tokens.css</code> — файлы куратора, ветки
-            <code>shell-core-dev</code> на момент сборки каталога не существует.</span>
-        <span>Значения токенов подставлены черновиком <code>ui/tokens-draft.css</code>. Плашка, черновик и
-            лишняя строка подключения убираются одним коммитом после слияния.</span>
-    </div>
 
     <!-- ============================ ЦВЕТ ============================ -->
     <section class="cat-sec">
@@ -147,53 +119,81 @@
             <div class="sw"><div class="sw-color" style="background: var(--ui-color-accent)"></div><div class="sw-meta"><b>accent</b>только интерактив</div></div>
             <div class="sw"><div class="sw-color" style="background: var(--ui-color-ok-ink)"></div><div class="sw-meta"><b>ok</b>норма</div></div>
             <div class="sw"><div class="sw-color" style="background: var(--ui-color-warn-ink)"></div><div class="sw-meta"><b>warn</b>внимание</div></div>
-            <div class="sw"><div class="sw-color" style="background: var(--ui-color-bad-ink)"></div><div class="sw-meta"><b>bad</b>проблема</div></div>
+            <div class="sw"><div class="sw-color" style="background: var(--ui-color-off-ink)"></div><div class="sw-meta"><b>off</b>проблема</div></div>
             <div class="sw"><div class="sw-color" style="background: var(--ui-color-danger)"></div><div class="sw-meta"><b>danger</b>удаление</div></div>
         </div>
-        <div class="cat-rule" style="margin-top:12px"><b>Правило.</b> Синий — только интерактив: фокус, наведение, активный пункт, выбранный день. Зелёный, жёлтый, красный — только статус.</div>
+        <div class="cat-rule" style="margin-top: var(--ui-space-4)"><b>Правило.</b> Синий — только интерактив: фокус, наведение, активный пункт, выбранный день. Зелёный, жёлтый, красный — только статус.</div>
     </section>
 
     <!-- ======================== ТИПОГРАФИКА ======================== -->
     <section class="cat-sec">
         <h2>Типографика</h2>
-        <div class="type-row"><span class="t-h1">Заголовок раздела</span><span>22px / 700</span></div>
-        <div class="type-row"><span class="t-h2">Заголовок окна</span><span>18px / 700</span></div>
-        <div class="type-row"><span class="t-body">Основной текст: строка таблицы, значение поля.</span><span>13px / 400</span></div>
-        <div class="type-row"><span class="t-sub">Вторичный текст: подпись под значением.</span><span>12,5px / ink-soft</span></div>
-        <div class="type-row"><span class="t-faint">Третьестепенное: подсказка, единицы, «показано 6 из 14».</span><span>11,5px / ink-faint</span></div>
+        <div class="type-row"><span style="font-size: var(--ui-text-title); font-weight: var(--ui-weight-bold)">Заголовок раздела</span><span>--ui-text-title / bold</span></div>
+        <div class="type-row"><span style="font-size: var(--ui-text-xl); font-weight: var(--ui-weight-bold)">Заголовок окна</span><span>--ui-text-xl / bold</span></div>
+        <div class="type-row"><span style="font-size: var(--ui-text-md)">Основной текст: строка таблицы, значение поля.</span><span>--ui-text-md</span></div>
+        <div class="type-row"><span style="font-size: var(--ui-text-sm); color: var(--ui-color-ink-soft)">Вторичный текст: подпись под значением.</span><span>--ui-text-sm / ink-soft</span></div>
+        <div class="type-row"><span style="font-size: var(--ui-text-xs); color: var(--ui-color-ink-faint)">Третьестепенное: подсказка, единицы, «показано 6 из 14».</span><span>--ui-text-xs / ink-faint</span></div>
     </section>
 
     <!-- ========================== КНОПКИ ========================== -->
     <section class="cat-sec" data-role="sec-buttons">
-        <h2>Кнопки — ui/button.css, куратор</h2>
+        <h2>Кнопки</h2>
         <div class="cat-row">
-            <span class="cat-item"><span class="cat-cap">основная</span><button type="button" class="ui-btn ui-btn--primary">Сохранить</button></span>
+            <span class="cat-item"><span class="cat-cap">основная</span><button type="button" class="ui-btn">Сохранить</button></span>
             <span class="cat-item"><span class="cat-cap">вторичная</span><button type="button" class="ui-btn ui-btn--secondary">Отмена</button></span>
             <span class="cat-item"><span class="cat-cap">тихая</span><button type="button" class="ui-btn ui-btn--ghost">Фильтры</button></span>
             <span class="cat-item"><span class="cat-cap">опасная</span><button type="button" class="ui-btn ui-btn--danger">Удалить</button></span>
-            <span class="cat-item"><span class="cat-cap">только иконка</span><button type="button" class="ui-btn ui-btn--secondary ui-btn--icon" aria-label="Добавить"><svg class="ui-ic ui-ic--sm"><use href="#ic-plus"></use></svg></button></span>
-            <span class="cat-item"><span class="cat-cap">мелкая</span><button type="button" class="ui-btn ui-btn--primary ui-btn--sm">Изменить</button></span>
+            <span class="cat-item"><span class="cat-cap">только иконка</span><button type="button" class="ui-btn ui-btn--icon" aria-label="Добавить"><i class="fas fa-plus"></i></button></span>
+            <span class="cat-item"><span class="cat-cap">мелкая</span><button type="button" class="ui-btn ui-btn--sm">Изменить</button></span>
         </div>
         <div class="cat-row">
-            <span class="cat-item"><span class="cat-cap">неактивная</span><button type="button" class="ui-btn ui-btn--primary" disabled>Загрузить</button></span>
-            <span class="cat-item"><span class="cat-cap">в процессе</span><button type="button" class="ui-btn ui-btn--primary ui-btn--busy"><span class="ui-btn__spinner"></span>Сохраняем</button></span>
-            <span class="cat-item"><span class="cat-cap">в строке таблицы</span><button type="button" class="ui-btn--row" aria-label="Изменить"><svg class="ui-ic ui-ic--sm"><use href="#ic-edit"></use></svg></button></span>
+            <span class="cat-item"><span class="cat-cap">неактивная</span><button type="button" class="ui-btn" disabled>Загрузить</button></span>
+            <span class="cat-item"><span class="cat-cap">в процессе</span><button type="button" class="ui-btn is-busy" disabled>Сохраняем</button></span>
+            <span class="cat-item"><span class="cat-cap">в строке таблицы</span><button type="button" class="ui-btn ui-btn--icon ui-btn--sm" aria-label="Изменить"><i class="fas fa-pen"></i></button></span>
         </div>
-        <div class="cat-rule"><b>Правило.</b> Неактивная кнопка обязана читаться как неактивная — бледная, курсор «нельзя». Атрибута <code>disabled</code> мало: у кнопки два декоративных слоя, и полупрозрачный фон поверх непрозрачного композитится обратно в сплошной серый. Это уже стоило круга приёмки.</div>
+        <div class="cat-rule"><b>Правило.</b> Неактивная кнопка обязана читаться как неактивная — бледная, курсор «нельзя». Атрибута <code>disabled</code> мало: у старой кнопки был непрозрачный декоративный слой, из-за которого приглушение не работало. Это уже стоило круга приёмки.</div>
+        <div class="cat-rule"><b>Правило.</b> «В процессе» — класс <code>is-busy</code> вместе с <code>disabled</code>: без второго действие уйдёт дважды.</div>
     </section>
 
     <!-- =========================== ПОЛЯ =========================== -->
     <section class="cat-sec" data-role="sec-fields">
-        <h2>Поля — ui/field.css, куратор</h2>
-        <div class="cat-grid">
-            <div class="ui-field"><label>Обычное</label><input value="Абрамова Т. И."></div>
-            <div class="ui-field"><label>С подсказкой</label><input placeholder="5/2"><span class="ui-field__hint">Рабочих дней подряд и выходных подряд.</span></div>
-            <div class="ui-field ui-field--error"><label>Ошибка</label><input value="5 через 2"><span class="ui-field__hint">Нужно два числа через дробь: 5/2, 3/3, 2/2.</span></div>
-            <div class="ui-field"><label>Неактивное</label><input value="Заполняется автоматически" disabled></div>
-            <div class="ui-field"><label>Список</label><select><option>Входящая</option><option>Исходящая</option></select></div>
-            <div class="ui-field"><label>Дата</label><input type="date" value="2026-08-17"></div>
-            <div class="ui-field"><label>Время</label><input type="time" value="21:00"></div>
-            <div class="ui-field"><label>Многострочное</label><textarea rows="2">Комментарий к лиду</textarea></div>
+        <h2>Поля</h2>
+        <div class="ui-form-grid">
+            <div class="ui-field">
+                <label class="ui-field__label" for="fName">Обычное</label>
+                <input id="fName" class="ui-field__control" value="Абрамова Т. И.">
+            </div>
+            <div class="ui-field">
+                <label class="ui-field__label" for="fDays">С подсказкой</label>
+                <input id="fDays" class="ui-field__control" placeholder="5/2">
+                <span class="ui-field__hint">Рабочих дней подряд и выходных подряд.</span>
+            </div>
+            <div class="ui-field ui-field--error">
+                <label class="ui-field__label" for="fBad">Ошибка</label>
+                <input id="fBad" class="ui-field__control" value="5 через 2">
+                <span class="ui-field__hint">Эта подсказка уступает место ошибке.</span>
+                <span class="ui-field__error">Нужно два числа через дробь: 5/2, 3/3, 2/2.</span>
+            </div>
+            <div class="ui-field ui-field--disabled">
+                <label class="ui-field__label" for="fOff">Неактивное</label>
+                <input id="fOff" class="ui-field__control" value="Заполняется автоматически" disabled>
+            </div>
+            <div class="ui-field">
+                <label class="ui-field__label ui-field__label--required" for="fLine">Список</label>
+                <select id="fLine" class="ui-field__control"><option>Входящая</option><option>Исходящая</option></select>
+            </div>
+            <div class="ui-field">
+                <label class="ui-field__label" for="fDate">Дата</label>
+                <input id="fDate" type="date" class="ui-field__control" value="2026-08-17">
+            </div>
+            <div class="ui-field">
+                <label class="ui-field__label" for="fTime">Время</label>
+                <input id="fTime" type="time" class="ui-field__control" value="21:00">
+            </div>
+            <div class="ui-field ui-field--wide">
+                <label class="ui-field__label" for="fNote">Многострочное</label>
+                <textarea id="fNote" class="ui-field__control" rows="2">Комментарий к лиду</textarea>
+            </div>
         </div>
         <div class="cat-rule"><b>Правило.</b> Ошибка живёт под полем, а не в тосте: тост исчезает, поле остаётся.</div>
     </section>
@@ -218,7 +218,7 @@
             <li class="ui-chip ui-chip--muted"><span class="ui-chip__value">—</span><span class="ui-chip__label">Другой месяц</span></li>
         </ul>
 
-        <div class="cat-row" style="margin-top:12px">
+        <div class="cat-row" style="margin-top: var(--ui-space-5)">
             <span class="cat-item"><span class="cat-cap">переключатель режимов</span>
                 <span class="ui-switch" data-role="switch">
                     <button type="button" class="ui-switch__option ui-switch__option--active">Список</button>
@@ -227,28 +227,28 @@
             </span>
         </div>
 
-        <div class="cat-cap" style="margin-bottom:6px">вкладки с числами</div>
+        <div class="cat-cap" style="margin-bottom: var(--ui-space-2)">вкладки с числами</div>
         <div class="ui-tabs" data-role="tabs">
             <button type="button" class="ui-tabs__tab ui-tabs__tab--active">Данные лида</button>
             <button type="button" class="ui-tabs__tab">Офферы <span class="ui-tabs__count">3</span></button>
             <button type="button" class="ui-tabs__tab ui-tabs__tab--quiet">Архив <span class="ui-tabs__count">0</span></button>
         </div>
 
-        <div class="cat-cap" style="margin-bottom:6px">вкладки-пилюли — узкие места (категории офферов)</div>
-        <div class="ui-tabs ui-tabs--pills" style="margin-bottom:14px">
+        <div class="cat-cap" style="margin-bottom: var(--ui-space-2)">вкладки-пилюли — узкие места (категории офферов)</div>
+        <div class="ui-tabs ui-tabs--pills" style="margin-bottom: var(--ui-space-5)">
             <button type="button" class="ui-tabs__tab ui-tabs__tab--active">Все <span class="ui-tabs__count">12</span></button>
             <button type="button" class="ui-tabs__tab">Новостройки <span class="ui-tabs__count">7</span></button>
             <button type="button" class="ui-tabs__tab">Вторичка <span class="ui-tabs__count">5</span></button>
         </div>
 
-        <div class="cat-cap" style="margin-bottom:6px">чипы активных фильтров</div>
+        <div class="cat-cap" style="margin-bottom: var(--ui-space-2)">чипы активных фильтров</div>
         <div class="ui-fchips">
-            <span class="ui-fchip">Статус: <b>Активные</b><button type="button" class="ui-fchip__remove" aria-label="Снять фильтр «Статус»"><svg class="ui-ic ui-ic--sm"><use href="#ic-close"></use></svg></button></span>
-            <span class="ui-fchip">Линия: <b>Входящая</b><button type="button" class="ui-fchip__remove" aria-label="Снять фильтр «Линия»"><svg class="ui-ic ui-ic--sm"><use href="#ic-close"></use></svg></button></span>
+            <span class="ui-fchip">Статус: <b>Активные</b><button type="button" class="ui-fchip__remove" aria-label="Снять фильтр «Статус»"><i class="fas fa-times"></i></button></span>
+            <span class="ui-fchip">Линия: <b>Входящая</b><button type="button" class="ui-fchip__remove" aria-label="Снять фильтр «Линия»"><i class="fas fa-times"></i></button></span>
             <button type="button" class="ui-fchips__clear">Очистить всё</button>
         </div>
 
-        <div class="cat-rule" style="margin-top:12px"><b>Правило.</b> Прочерк вместо нуля, когда данных нет.</div>
+        <div class="cat-rule" style="margin-top: var(--ui-space-4)"><b>Правило.</b> Прочерк вместо нуля, когда данных нет.</div>
         <div class="cat-rule"><b>Правило.</b> Счётчики внутри разделов остаются. Числа владелец убрал с плиток рабочего стола — и только оттуда.</div>
     </section>
 
@@ -267,43 +267,43 @@
                 <div class="ui-skeleton__note">Загружаем раздел…</div>
             </div>
         </div>
-        <div class="cat-rule" style="margin-top:12px"><b>Правило.</b> Панель не остаётся пустой ни одного кадра: сначала скелет, потом содержимое. Спиннер по центру не используем — он не показывает, что именно грузится.</div>
+        <div class="cat-rule" style="margin-top: var(--ui-space-4)"><b>Правило.</b> Панель не остаётся пустой ни одного кадра: сначала скелет, потом содержимое. Спиннер по центру не используем — он не показывает, что именно грузится.</div>
     </section>
 
     <!-- ================ ТАБЛИЦА И ПУСТОЕ СОСТОЯНИЕ ================ -->
     <section class="cat-sec">
         <h2>Таблица и пустое состояние</h2>
 
-        <div class="ui-table-wrap" style="margin-bottom:12px">
+        <div class="ui-table-wrap" style="margin-bottom: var(--ui-space-4)">
             <table class="ui-table ui-table--freeze-first" data-role="table">
                 <thead>
                     <tr>
-                        <th class="ui-table__sel"><input type="checkbox" aria-label="Выделить все"></th>
                         <th>Сотрудник</th>
-                        <th class="ui-table__sortable">Статус <span class="ui-table__sort-icon">▲</span></th>
+                        <th class="ui-table__sel"><input type="checkbox" aria-label="Выделить все"></th>
+                        <th class="ui-table__sortable">Статус <i class="fas fa-caret-up ui-table__sort-icon"></i></th>
                         <th class="ui-table__num">Смен</th>
                         <th class="ui-table__acts">Действия</th>
                     </tr>
                 </thead>
                 <tbody>
                     <tr>
-                        <td class="ui-table__sel"><input type="checkbox" aria-label="Выделить строку"></td>
                         <td><span class="ui-table__main">Белов Д. С.</span><span class="ui-table__sub">Оператор · 21:00–23:30</span></td>
+                        <td class="ui-table__sel"><input type="checkbox" aria-label="Выделить строку"></td>
                         <td><span class="ui-pill ui-pill--ok ui-pill--dot">Активен</span></td>
                         <td class="ui-table__num">12</td>
                         <td class="ui-table__acts">
-                            <button type="button" class="ui-btn--row" aria-label="Изменить"><svg class="ui-ic ui-ic--sm"><use href="#ic-edit"></use></svg></button>
-                            <button type="button" class="ui-btn--row" aria-label="Удалить"><svg class="ui-ic ui-ic--sm"><use href="#ic-trash"></use></svg></button>
+                            <button type="button" class="ui-btn ui-btn--icon ui-btn--sm" aria-label="Изменить"><i class="fas fa-pen"></i></button>
+                            <button type="button" class="ui-btn ui-btn--icon ui-btn--sm" aria-label="Удалить"><i class="fas fa-trash"></i></button>
                         </td>
                     </tr>
                     <tr class="ui-table__row--selected">
-                        <td class="ui-table__sel"><input type="checkbox" checked aria-label="Выделить строку"></td>
                         <td><span class="ui-table__main">Гусева М. А.</span><span class="ui-table__sub">Оператор · без времени смены</span></td>
+                        <td class="ui-table__sel"><input type="checkbox" checked aria-label="Выделить строку"></td>
                         <td><span class="ui-pill ui-pill--mute">Неактивен</span></td>
                         <td class="ui-table__num ui-table__muted">—</td>
                         <td class="ui-table__acts">
-                            <button type="button" class="ui-btn--row" aria-label="Изменить"><svg class="ui-ic ui-ic--sm"><use href="#ic-edit"></use></svg></button>
-                            <button type="button" class="ui-btn--row" aria-label="Удалить"><svg class="ui-ic ui-ic--sm"><use href="#ic-trash"></use></svg></button>
+                            <button type="button" class="ui-btn ui-btn--icon ui-btn--sm" aria-label="Изменить"><i class="fas fa-pen"></i></button>
+                            <button type="button" class="ui-btn ui-btn--icon ui-btn--sm" aria-label="Удалить"><i class="fas fa-trash"></i></button>
                         </td>
                     </tr>
                 </tbody>
@@ -312,95 +312,79 @@
 
         <div class="ui-table-foot"><span>Показано 2 из 14</span><span>Выделено: 1</span></div>
 
-        <div class="ui-mass-bar" data-role="mass-bar" style="position:static;margin:14px 0 0">
+        <div class="ui-mass-bar" data-role="mass-bar" style="position: static; margin-top: var(--ui-space-5)">
             <span class="ui-mass-bar__count">Выбрано: 1</span>
-            <select class="ui-mass-bar__act"><option>Сменить статус</option><option>Сменить отдел</option></select>
-            <button type="button" class="ui-btn ui-btn--primary ui-btn--sm">Применить</button>
+            <select class="ui-field__control" style="width:auto" aria-label="Массовое действие"><option>Сменить статус</option><option>Сменить отдел</option></select>
+            <button type="button" class="ui-btn ui-btn--sm">Применить</button>
             <button type="button" class="ui-btn ui-btn--ghost ui-btn--sm">Снять выделение</button>
         </div>
 
-        <div class="cat-cap" style="margin:16px 0 6px">пустое состояние: заголовок, причина, следующий шаг</div>
+        <div class="cat-cap" style="margin: var(--ui-space-5) 0 var(--ui-space-2)">пустое состояние: заголовок, причина, следующий шаг</div>
         <div class="ui-empty" data-role="empty">
-            <span class="ui-empty__icon"><svg class="ui-ic ui-ic--lg"><use href="#ic-search"></use></svg></span>
+            <span class="ui-empty__icon"><i class="fas fa-search"></i></span>
             <b class="ui-empty__title">Ничего не нашлось</b>
             <span class="ui-empty__text">Проверьте написание или очистите фильтры — в разделе есть записи, просто не по этому запросу.</span>
             <button type="button" class="ui-btn ui-btn--ghost ui-btn--sm ui-empty__action">Очистить фильтры</button>
         </div>
 
-        <div class="cat-rule" style="margin-top:12px"><b>Правило.</b> Таблица прокручивается внутри своей обёртки, а не растягивает панель. Числовые колонки вправо, первая колонка закрепляется классом.</div>
+        <div class="cat-rule" style="margin-top: var(--ui-space-4)"><b>Правило.</b> Таблица прокручивается внутри своей обёртки, а не растягивает панель. Числовые колонки вправо, первая колонка закрепляется классом.</div>
     </section>
 
     <!-- ==================== ОКНА И СООБЩЕНИЯ ==================== -->
     <section class="cat-sec">
         <h2>Окна и сообщения</h2>
-        <p class="cat-note">Поповер — рабочий, открывается кнопкой ниже. Модалка и тосты показаны образцами: их файлы ещё не приехали.</p>
+        <p class="cat-note">Всё здесь настоящее: кнопки открывают те самые окна, поповер и тосты, которыми пользуются разделы. Разметки модалки и тоста в HTML нет — окно создаётся вызовом и удаляется при закрытии.</p>
 
         <div class="cat-row">
+            <button type="button" class="ui-btn ui-btn--ghost" data-role="demo-modal">Модалка раздела</button>
+            <button type="button" class="ui-btn ui-btn--ghost" data-role="demo-confirm">Подтверждение на весь экран</button>
+            <button type="button" class="ui-btn ui-btn--ghost" data-role="demo-toasts">Три тоста</button>
+        </div>
+
+        <div class="cat-cap" style="margin-bottom: var(--ui-space-2)">панель раздела: модалка накрывает только её, поповер не выходит за её границы</div>
+        <div class="cat-panel shell-panel" data-role="panel">
+            <div class="cat-panel__body">
+                <div class="cat-row" style="margin: 0">
+                    <button type="button" class="ui-btn ui-btn--sm" data-role="panel-modal">Окно этой панели</button>
+                    <button type="button" class="ui-btn ui-btn--sm ui-btn--ghost" data-role="panel-pop" aria-expanded="false">Меню у нижнего края панели</button>
+                </div>
+                <p style="font-size: var(--ui-text-sm); color: var(--ui-color-ink-soft); line-height: var(--ui-line-base)">
+                    Панель сама не прокручивается — прокручивается этот контейнер, иначе окно уползёт вместе с текстом.
+                    Соседняя часть страницы во время открытого окна панели остаётся рабочей.
+                </p>
+                <div class="ui-table-wrap">
+                    <table class="ui-table">
+                        <thead><tr><th>Строка</th><th class="ui-table__num">Число</th></tr></thead>
+                        <tbody>
+                            <tr><td>Первая</td><td class="ui-table__num">1</td></tr>
+                            <tr><td>Вторая</td><td class="ui-table__num">2</td></tr>
+                            <tr><td>Третья</td><td class="ui-table__num">3</td></tr>
+                            <tr><td>Четвёртая</td><td class="ui-table__num">4</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="cat-row" style="margin-top: var(--ui-space-5)">
             <button type="button" class="ui-btn ui-btn--ghost" data-role="pop-open" aria-expanded="false">Поповер у элемента</button>
             <button type="button" class="ui-btn ui-btn--ghost cat-pop-bottom" data-role="pop-bottom" aria-expanded="false">Поповер у нижнего края</button>
             <span class="cat-cap">вторая кнопка прижата к нижнему краю окна — там поповер переворачивается вверх</span>
         </div>
 
         <div class="cat-demos">
-            <div class="cat-demo">
-                <div class="cat-cap">Модалка — внутри своей панели</div>
-                <div class="cat-frame">
-                    <div class="ui-modal" style="max-width:none">
-                        <div class="ui-modal__head">
-                            <div><h3>Изменение сотрудника</h3><p>Соседняя панель остаётся рабочей</p></div>
-                            <button type="button" class="ui-modal__close" aria-label="Закрыть"><svg class="ui-ic ui-ic--sm"><use href="#ic-close"></use></svg></button>
-                        </div>
-                        <div class="ui-modal__body">
-                            <div class="ui-field"><label>Время смены</label><input value="12:00-21:00"><span class="ui-field__hint">С минутами, 24 часа.</span></div>
-                        </div>
-                        <div class="ui-modal__foot">
-                            <button type="button" class="ui-btn ui-btn--ghost">Отмена</button>
-                            <button type="button" class="ui-btn ui-btn--primary">Сохранить</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="cat-demo">
-                <div class="cat-cap">Подтверждение — на весь экран</div>
-                <div class="cat-frame">
-                    <div class="ui-modal ui-modal--narrow" style="max-width:none">
-                        <div class="ui-modal__head">
-                            <div><h3>Удалить сотрудника?</h3><p>Действие необратимо</p></div>
-                            <button type="button" class="ui-modal__close" aria-label="Закрыть"><svg class="ui-ic ui-ic--sm"><use href="#ic-close"></use></svg></button>
-                        </div>
-                        <div class="ui-modal__body">Гусева М. А. будет удалена вместе со своими днями графика.</div>
-                        <div class="ui-modal__foot">
-                            <button type="button" class="ui-btn ui-btn--ghost">Отмена</button>
-                            <button type="button" class="ui-btn ui-btn--danger">Удалить</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="cat-demo">
-                <div class="cat-cap">Поповер — меню у элемента, второй шаг внутри</div>
+            <div class="cat-demo" style="max-width: 340px">
+                <div class="cat-cap">Поповер — меню у элемента, второй шаг внутри того же окна</div>
                 <div class="cat-frame">
                     <div class="ui-popover ui-popover--static">
                         <div class="ui-popover__title">Чт, 13 августа — Белов Д. С.</div>
                         <div class="ui-popover__step">
-                            <button type="button" class="ui-popover__option"><span class="ui-popover__dot" style="background:#fff;border:1px solid var(--ui-color-line-strong)"></span>Смена 12:00 – 21:00</button>
+                            <button type="button" class="ui-popover__option"><span class="ui-popover__dot" style="background: var(--ui-color-surface); border: 1px solid var(--ui-color-line-strong)"></span>Смена 12:00 – 21:00</button>
                             <button type="button" class="ui-popover__option"><span class="ui-popover__dot"></span>Выходной</button>
                             <button type="button" class="ui-popover__option ui-popover__option--off"><span class="ui-popover__dot"></span><span>Отпуск<span class="ui-popover__option-sub">недоступен в прошлом</span></span></button>
                             <hr class="ui-popover__sep">
-                            <button type="button" class="ui-popover__option"><span class="ui-popover__dot" style="background:transparent;border:1px dashed var(--ui-color-line-strong)"></span>Очистить</button>
+                            <button type="button" class="ui-popover__option"><span class="ui-popover__dot" style="background: transparent; border: 1px dashed var(--ui-color-line-strong)"></span>Очистить</button>
                         </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="cat-demo">
-                <div class="cat-cap">Тосты — три вида</div>
-                <div class="cat-frame" style="background:#2b3547">
-                    <div style="display:flex;flex-direction:column;gap:10px">
-                        <div class="ui-toast">Панели свёрнуты — они внизу</div>
-                        <div class="ui-toast ui-toast--ok">Белов Д. С.: 15 августа — выходной</div>
-                        <div class="ui-toast ui-toast--error">Не удалось сохранить: проверьте время смены</div>
                     </div>
                 </div>
             </div>
@@ -418,39 +402,53 @@
 <div class="ui-popover" id="catPop" hidden>
     <div class="ui-popover__title">Чт, 13 августа — Белов Д. С.</div>
     <div class="ui-popover__step" data-ui-pop-step="main">
-        <button type="button" class="ui-popover__option" data-act="shift"><span class="ui-popover__dot" style="background:#fff;border:1px solid var(--ui-color-line-strong)"></span>Смена 12:00 – 21:00</button>
+        <button type="button" class="ui-popover__option" data-act="shift"><span class="ui-popover__dot" style="background: var(--ui-color-surface); border: 1px solid var(--ui-color-line-strong)"></span>Смена 12:00 – 21:00</button>
         <button type="button" class="ui-popover__option" data-act="off"><span class="ui-popover__dot"></span>Выходной</button>
         <button type="button" class="ui-popover__option ui-popover__option--off"><span class="ui-popover__dot"></span><span>Отпуск<span class="ui-popover__option-sub">недоступен в прошлом</span></span></button>
         <hr class="ui-popover__sep">
-        <button type="button" class="ui-popover__option" data-act="extra"><span class="ui-popover__dot" style="background:transparent;border:1px dashed var(--ui-color-line-strong)"></span>Доп. смена…</button>
+        <button type="button" class="ui-popover__option" data-act="extra"><span class="ui-popover__dot" style="background: transparent; border: 1px dashed var(--ui-color-line-strong)"></span>Доп. смена…</button>
     </div>
     <div class="ui-popover__step" data-ui-pop-step="extra" hidden>
-        <div class="ui-field"><label>Начало</label><input type="time" value="12:00"></div>
-        <div class="ui-field"><label>Конец</label><input type="time" value="21:00"></div>
+        <div class="ui-field">
+            <label class="ui-field__label" for="popFrom">Начало</label>
+            <input id="popFrom" type="time" class="ui-field__control" value="12:00">
+        </div>
+        <div class="ui-field">
+            <label class="ui-field__label" for="popTo">Конец</label>
+            <input id="popTo" type="time" class="ui-field__control" value="21:00">
+        </div>
         <div class="ui-popover__foot ui-popover__foot--end">
             <button type="button" class="ui-btn ui-btn--ghost ui-btn--sm" data-act="back">Назад</button>
-            <button type="button" class="ui-btn ui-btn--primary ui-btn--sm">Поставить</button>
+            <button type="button" class="ui-btn ui-btn--sm" data-act="apply">Поставить</button>
         </div>
     </div>
 </div>
 
 <script type="module">
-    // Каталогу нужен ровно один живой элемент — поповер: у него есть поведение
-    // (переворот, прижатие к краю, второй шаг), и статичным образцом оно не
-    // проверяется. Остальное на странице — разметка и CSS.
+    // Каталогу нужно немного живого кода: у поповера, окон и тостов есть
+    // поведение, и статичной картинкой оно не проверяется.
     import { createPopover } from '/ui/popover.js';
+    import { openModal, confirmDanger } from '/ui/modal.js';
+    import { showToast } from '/ui/toast.js';
 
+    const panel = document.querySelector('[data-role="panel"]');
+
+    // Поповер один на страницу и сам находит свою панель по якорю: кнопка
+    // внутри .shell-panel — поповер переезжает в панель и границей берёт её,
+    // кнопка вне панели — граница окно. Второй экземпляр на тот же элемент
+    // заводить нельзя: два контроллера делят одно состояние hidden.
     const pop = createPopover(document.getElementById('catPop'));
 
-    document.querySelectorAll('[data-role="pop-open"], [data-role="pop-bottom"]').forEach((button) => {
-        button.addEventListener('click', () => {
-            if (pop.isOpen() && pop.anchor() === button) {
-                pop.close();
-                return;
-            }
-            pop.open(button);
+    document.querySelectorAll('[data-role="pop-open"], [data-role="pop-bottom"], [data-role="panel-pop"]')
+        .forEach((button) => {
+            button.addEventListener('click', () => {
+                if (pop.isOpen() && pop.anchor() === button) {
+                    pop.close();
+                    return;
+                }
+                pop.open(button);
+            });
         });
-    });
 
     document.getElementById('catPop').addEventListener('click', (event) => {
         const option = event.target.closest('[data-act]');
@@ -458,6 +456,57 @@
         if (option.dataset.act === 'extra') { pop.step('extra'); return; }
         if (option.dataset.act === 'back') { pop.step('main'); return; }
         pop.close();
+        if (option.dataset.act === 'apply') {
+            showToast('Белов Д. С.: 13 августа — доп. смена 12:00 – 21:00', 'success');
+            return;
+        }
+        showToast(option.dataset.act === 'off'
+            ? 'Белов Д. С.: 13 августа — выходной'
+            : 'Белов Д. С.: 13 августа — смена 12:00 – 21:00', 'success');
+    });
+
+    // Окна. Тексты — образцы того, как они выглядят у разделов.
+    const employeeForm = () => {
+        const box = document.createElement('div');
+        box.className = 'ui-form-grid';
+        box.innerHTML = `
+            <div class="ui-field">
+                <label class="ui-field__label" for="mShift">Время смены</label>
+                <input id="mShift" class="ui-field__control" value="12:00-21:00">
+                <span class="ui-field__hint">С минутами, 24 часа.</span>
+            </div>
+            <div class="ui-field">
+                <label class="ui-field__label" for="mDays">Дни</label>
+                <input id="mDays" class="ui-field__control" value="5/2">
+            </div>`;
+        return box;
+    };
+
+    const modalActions = [
+        { label: 'Отмена', variant: 'ghost', value: false },
+        { label: 'Сохранить', value: true, autofocus: true }
+    ];
+
+    document.querySelector('[data-role="demo-modal"]').addEventListener('click', () => {
+        openModal({ title: 'Изменение сотрудника', body: employeeForm(), actions: modalActions });
+    });
+
+    document.querySelector('[data-role="panel-modal"]').addEventListener('click', () => {
+        openModal({ title: 'Изменение сотрудника', body: employeeForm(), actions: modalActions, scope: panel });
+    });
+
+    document.querySelector('[data-role="demo-confirm"]').addEventListener('click', async () => {
+        const yes = await confirmDanger({
+            title: 'Удалить сотрудника?',
+            message: 'Гусева М. А. будет удалена вместе со своими днями графика. Восстановить их из интерфейса нельзя.'
+        });
+        if (yes) showToast('Гусева М. А. удалена', 'success');
+    });
+
+    document.querySelector('[data-role="demo-toasts"]').addEventListener('click', () => {
+        showToast('Панели свёрнуты — они внизу');
+        showToast('Белов Д. С.: 15 августа — выходной', 'success');
+        showToast('Не удалось сохранить: проверьте время смены', 'error');
     });
 
     // Переключатель и вкладки — чтобы активное состояние можно было увидеть,

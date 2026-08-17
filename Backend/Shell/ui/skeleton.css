@@ -1,31 +1,33 @@
-/* ============================================================
-   ui/skeleton.css — скелет загрузки раздела. Блок 3 «составные элементы».
-   Автор: исполнитель.
+/* --- ui/skeleton.css: БЛОК 3 — составные элементы ------------------------
+   Скелет загрузки раздела.
 
-   Этого файла нет в разделении файлов брифа: правило «панель не остаётся
-   пустой ни одного кадра» дизайн-сессия добавила уже после того, как бриф был
-   закрыт (report_designer.md, п.2а; каталог, блок «Загрузка раздела»).
-   Вопрос о принадлежности файла — в dialog.md, Т2.
+   Файла нет в разделении файлов брифа: правило «панель не остаётся пустой ни
+   одного кадра» дизайн-сессия добавила уже после того, как бриф был закрыт
+   (report_designer.md, п.2а). Куратор подтвердил принадлежность файла моей
+   зоне (dialog.md, 17.08.2026).
 
    Скелет повторяет ФОРМУ будущего содержимого: шапка, чипы, строка фильтров,
    строки таблицы. Спиннера по центру нет намеренно — он не показывает, что
    именно грузится, и на медленной сети читается как «зависло».
-   ============================================================ */
 
-.ui-skeleton { display: grid; gap: var(--ui-space-3); }
+   --ui-color-skeleton / --ui-color-skeleton-hi запрошены у куратора
+   (dialog.md, Т1); до их появления работает запасное значение в var().
+   ------------------------------------------------------------------------ */
+
+.ui-skeleton { display: grid; gap: var(--ui-space-4); }
 .ui-skeleton__row {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: var(--ui-space-4);
 }
 
 .ui-sk {
     background: linear-gradient(90deg,
-        rgba(96, 112, 148, .10) 25%,
-        rgba(96, 112, 148, .18) 37%,
-        rgba(96, 112, 148, .10) 63%);
+        var(--ui-color-skeleton, rgba(96, 112, 148, .10)) 25%,
+        var(--ui-color-skeleton-hi, rgba(96, 112, 148, .18)) 37%,
+        var(--ui-color-skeleton, rgba(96, 112, 148, .10)) 63%);
     background-size: 400% 100%;
-    border-radius: 6px;
+    border-radius: var(--ui-radius-sm);
     animation: ui-sk-shimmer 1.4s ease infinite;
 }
 @keyframes ui-sk-shimmer {
@@ -33,21 +35,21 @@
     100% { background-position: 0 50%; }
 }
 
-.ui-sk--title { height: 20px; width: 190px; }
-.ui-sk--btn { height: 30px; width: 120px; border-radius: var(--ui-radius-sm); margin-left: auto; }
+.ui-sk--title { height: var(--ui-space-6); width: 190px; }
+.ui-sk--btn { height: var(--ui-control-h-sm); width: 120px; border-radius: var(--ui-radius-pill); margin-left: auto; }
 .ui-sk--chip { height: 46px; width: 96px; border-radius: var(--ui-radius-md); }
 .ui-sk--line { height: 38px; }
 .ui-sk--cell { height: 14px; }
 
 .ui-skeleton__note {
     padding-top: var(--ui-space-1);
-    font-size: 12px;
+    font-size: var(--ui-text-xs);
     color: var(--ui-color-ink-faint);
     text-align: center;
 }
 
-/* Бесконечная анимация — первое, что мешает при укачивании и на слабой
-   машине. Форма скелета от этого не страдает. */
+/* Бесконечная анимация — первое, что мешает при укачивании и на слабой машине.
+   Форма скелета от этого не страдает. */
 @media (prefers-reduced-motion: reduce) {
     .ui-sk { animation: none; }
 }
