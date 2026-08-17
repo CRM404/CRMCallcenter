@@ -17,7 +17,7 @@ import { confirm, confirmDanger } from '../ui/modal.js';
 import { startRouter, setRoute } from './router.js';
 import {
     initPanels, openSection as openPanelFor, closePanel, minimizePanel,
-    restorePanel, minimizeAll, setActive, canSplit,
+    restorePanel, minimizeAll, setActive, canSplit, reorderPanels as reorderTo,
     getState as getPanelsState, getVisibleKeys, getMinimized, setShare
 } from './panels.js';
 
@@ -32,23 +32,25 @@ import {
 //   legacyUrl  — старый адрес: пока раздел не перенесён, открывается там,
 //                в новой вкладке, и плитка это честно показывает
 
-export const registry = [
-    { key: 'requisites', title: 'Реквизиты',  icon: 'fas fa-building',       module: null, template: null, legacyUrl: '/main.html' },
-    { key: 'employees',  title: 'Сотрудники', icon: 'fas fa-users',          module: null, template: null, legacyUrl: '/emploees.html' },
-    { key: 'leads',      title: 'Лиды',       icon: 'fas fa-address-book',   module: null, template: null, legacyUrl: '/leads.html' },
-    { key: 'sources',    title: 'Источники',  icon: 'fas fa-diagram-project',module: null, template: null, legacyUrl: '/sources.html' },
-    { key: 'cpa',        title: 'CPA-сети',   icon: 'fas fa-handshake',      module: null, template: null, legacyUrl: '/cpa-networks.html' },
-    { key: 'scripts',    title: 'Скрипты',    icon: 'fas fa-file-lines',     module: null, template: null, legacyUrl: '/scripts-admin.html' }
-];
-
-// ВРЕМЕННО НА ЭТАП 1. Пока не перенесён ни один раздел, открывать нечего, и
-// оболочку не на чем проверить. Флаг заставляет панель показывать заглушку
-// вместо перехода по старому адресу.
+// ВРЕМЕННОЕ ПОЛЕ `stub` — только на этап 1. Пока не перенесён ни один раздел,
+// открывать нечего, и оболочку не на чем проверить: раздел со `stub: true`
+// показывает в панели заглушку вместо перехода по старому адресу.
 //
-// СНИМАЕТСЯ НА ЭТАПЕ 2, вместе с переносом «Реквизитов». Если он дожил до
-// этапа 3 — это дефект: половина разделов будет показывать пустышку вместо
-// работающей страницы.
-const STAGE_1_STUBS = true;
+// СНИМАЕТСЯ ПОРАЗДЕЛЬНО при переносе: у «Реквизитов» на этапе 2 появляется
+// module и уходит stub. Если stub дожил до этапа 7 — это дефект.
+//
+// Почему поле у раздела, а не общий флаг: общий флаг делал ВСЕ разделы
+// «перенесёнными», и поведение неперенесённого нельзя было ни проверить, ни
+// увидеть глазами — оно всплыло бы только на этапе 2, у людей.
+
+export const registry = [
+    { key: 'requisites', title: 'Реквизиты',  icon: 'fas fa-building',       module: null, template: null, stub: true, legacyUrl: '/main.html' },
+    { key: 'employees',  title: 'Сотрудники', icon: 'fas fa-users',          module: null, template: null, stub: true, legacyUrl: '/emploees.html' },
+    { key: 'leads',      title: 'Лиды',       icon: 'fas fa-address-book',   module: null, template: null, stub: true, legacyUrl: '/leads.html' },
+    { key: 'sources',    title: 'Источники',  icon: 'fas fa-diagram-project',module: null, template: null, stub: true, legacyUrl: '/sources.html' },
+    { key: 'cpa',        title: 'CPA-сети',   icon: 'fas fa-handshake',      module: null, template: null, stub: true, legacyUrl: '/cpa-networks.html' },
+    { key: 'scripts',    title: 'Скрипты',    icon: 'fas fa-file-lines',     module: null, template: null, stub: true, legacyUrl: '/scripts-admin.html' }
+];
 
 const STORAGE_KEY = 'shellDesktopState';
 
@@ -57,6 +59,12 @@ const mounted = new Map();      // panelId → { key, api, unmount, container }
 const templates = new Map();    // путь фрагмента → текст разметки
 
 let started = false;
+
+// Пока идёт восстановление из sessionStorage, адрес трогать НЕЛЬЗЯ. Иначе
+// заход по ссылке /#/leads+employees со свёрнутыми панелями в хранилище
+// затирает адрес на «#/» ещё до того, как маршрутизатор его прочитает, — и
+// присланная коллегой ссылка открывает пустой стол.
+let restoring = false;
 
 export const shell = {
     registry,
@@ -99,13 +107,13 @@ function start(roots = {}) {
 
 function isMigrated(key) {
     const section = find(key);
-    return !!section && (STAGE_1_STUBS || !!section.module);
+    return !!section && (!!section.module || section.stub === true);
 }
 
 /**
- * Открыть раздел. Неперенесённый уходит в новую вкладку по старому адресу —
- * это осознанное поведение на время миграции, и плитка предупреждает о нём
- * заранее, чтобы человек не счёл переход поломкой.
+ * Открыть раздел ПО ДЕЙСТВИЮ ЧЕЛОВЕКА — клик по плитке, по чипу, по пункту
+ * выбора. Неперенесённый уходит в новую вкладку по старому адресу; плитка
+ * предупреждает об этом заранее, чтобы переход не сочли поломкой.
  */
 function openSection(key) {
     const section = find(key);
@@ -114,6 +122,27 @@ function openSection(key) {
     if (!isMigrated(key)) {
         showToast(`«${section.title}» ещё не перенесён — откроется по старому адресу в новой вкладке`);
         window.open(section.legacyUrl, '_blank', 'noopener');
+        return;
+    }
+
+    openPanelFor(key, { title: section.title, icon: section.icon });
+}
+
+/**
+ * Открытие ПО АДРЕСУ — заход по ссылке, правка адреса, кнопка «назад».
+ *
+ * Отличается от openSection одним, но важным: новую вкладку здесь открывать
+ * нельзя. Пользовательского жеста нет, браузер такое всплывающее окно
+ * заблокирует, и человек получит предупреждение о блокировке вместо раздела.
+ * Поэтому неперенесённый раздел из адреса — только объяснение тостом и
+ * ссылка, по которой можно перейти самому.
+ */
+function openFromAddress(key) {
+    const section = find(key);
+    if (!section) return;
+
+    if (!isMigrated(key)) {
+        showToast(`«${section.title}» ещё не перенесён — он открывается по старому адресу ${section.legacyUrl}`);
         return;
     }
 
@@ -140,8 +169,10 @@ function handlePanelEvent(event) {
         return;
     }
     if (event.type === 'change') {
-        setRoute(getVisibleKeys());
-        saveState();
+        if (!restoring) {
+            setRoute(getVisibleKeys());
+            saveState();
+        }
         emit('change', event);
         return;
     }
@@ -171,18 +202,21 @@ async function mountSection(panelId, key, container) {
 
     // Заглушка этапа 1: панели проверяются до того, как появится первый
     // перенесённый раздел.
-    if (!section.module) {
+    if (!section.module && section.stub) {
         renderStub(container, section);
         return;
     }
 
     try {
         if (section.template) {
+            const fragment = await loadTemplate(section.template);
+            // Панель могли закрыть, пока грузилась разметка.
+            if (!mounted.has(panelId)) return;
             container.innerHTML = '';
-            container.appendChild(await loadTemplate(section.template));
+            container.appendChild(fragment);
         }
         const module = await import(section.module);
-        // Панель могли закрыть, пока грузился модуль.
+        // И пока грузился модуль — тоже.
         if (!mounted.has(panelId)) return;
         await module.mount(container, ctx);
         const record = mounted.get(panelId);
@@ -272,19 +306,24 @@ function syncToKeys(keys) {
     const current = getVisibleKeys();
     if (current.join('+') === keys.join('+')) return;
 
+    // Тот же набор разделов, но в другом порядке. Открывать и закрывать
+    // нечего — а расхождение между адресом и экраном оставлять нельзя: адрес
+    // обещал «слева Сотрудники», и это должно быть правдой.
+    if (current.length === keys.length && current.every((key) => keys.includes(key))) {
+        reorderTo(keys);
+        return;
+    }
+
     // Разделы, которых в адресе больше нет, закрываем; недостающие открываем.
-    getMinimized(); // состояние свёрнутых адрес не описывает — не трогаем
+    // Свёрнутые не трогаем: адрес их не описывает.
     current.filter((key) => !keys.includes(key)).forEach((key) => {
         const panel = findPanelByKey(key);
         if (panel) closePanel(panel.panelId, { silent: true });
     });
-    keys.filter((key) => !current.includes(key)).forEach((key) => openSection(key));
+    keys.filter((key) => !current.includes(key)).forEach((key) => openFromAddress(key));
 }
 
 function findPanelByKey(key) {
-    const state = getPanelsState();
-    const index = state.panels.findIndex((p) => p.key === key && !p.minimized);
-    if (index === -1) return null;
     const node = document.querySelector(`.shell-panel[data-section-key="${key}"]:not([hidden])`);
     return node ? { panelId: node.dataset.panelId } : null;
 }
@@ -314,12 +353,17 @@ function restoreState() {
 
     // Восстанавливаем только свёрнутые: открытые панели задаёт адрес, и он
     // главнее — иначе ссылка, присланная коллегой, открывала бы чужой набор.
-    (saved.panels || []).filter((p) => p.minimized).forEach((p) => {
-        const section = find(p.key);
-        if (!section) return;
-        const panel = openPanelFor(p.key, { title: section.title, icon: section.icon });
-        if (panel) minimizePanel(panel.id);
-    });
+    restoring = true;
+    try {
+        (saved.panels || []).filter((p) => p.minimized).forEach((p) => {
+            const section = find(p.key);
+            if (!section) return;
+            const panel = openPanelFor(p.key, { title: section.title, icon: section.icon });
+            if (panel) minimizePanel(panel.id);
+        });
+    } finally {
+        restoring = false;
+    }
 }
 
 // ---------------------------------------------------------------- подписки

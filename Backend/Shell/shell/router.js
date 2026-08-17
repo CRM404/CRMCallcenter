@@ -22,7 +22,6 @@ const SEPARATOR = '+';
 
 let known = [];
 let onRoute = null;
-let selfWrite = false;
 
 /**
  * @param {Object}   opts
@@ -35,6 +34,17 @@ export function startRouter(opts = {}) {
     window.addEventListener('hashchange', handleHashChange);
     emit('start');
 }
+
+// ЗАМЕТКА ПРО СОБСТВЕННЫЕ ЗАПИСИ АДРЕСА.
+// Первой редакцией здесь стоял флаг «сейчас пишем сами», гасивший ответ на
+// собственное событие hashchange. Флаг убран намеренно: он снимался только в
+// обработчике события, и любой сценарий, где событие не приходило или
+// приходило дважды, оставлял его поднятым — а поднятый флаг глушит уже
+// НАСТОЯЩЕЕ изменение адреса, и приложение перестаёт слушать кнопку «назад».
+//
+// Вместо этого приведение панелей к адресу сделано идемпотентным: получив
+// маршрут, который уже открыт, оболочка ничего не делает. Ответ на своё же
+// событие безвреден, и специальный случай не нужен.
 
 export function stopRouter() {
     window.removeEventListener('hashchange', handleHashChange);
@@ -57,13 +67,9 @@ export function setRoute(keys, replace = false) {
     const next = buildHash(keys);
     if (next === window.location.hash) return;
 
-    // Пока пишем сами — не отвечаем на собственное событие hashchange, иначе
-    // оболочка получит команду перерисовать то, что только что нарисовала.
-    selfWrite = true;
     if (replace) {
         const url = window.location.pathname + window.location.search + next;
         window.history.replaceState(null, '', url);
-        selfWrite = false;
     } else {
         window.location.hash = next;
     }
@@ -101,7 +107,6 @@ export function buildHash(keys) {
 }
 
 function handleHashChange() {
-    if (selfWrite) { selfWrite = false; return; }
     emit('address');
 }
 
