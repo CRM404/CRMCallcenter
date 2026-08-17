@@ -66,6 +66,17 @@ app.use('/api/schedule', scheduleRouter);
 // с префиксом operator*/scriptsAdmin*/main*/cpa*/sources*/leads*, чтобы не
 // пересекаться по имени с одноимённой структурой Employees/ — все семь
 // каталогов монтируются в корень "/".
+// Shell/ — общая оболочка и слой элементов (задача «единая оболочка CRM»).
+// Смонтирована ПЕРВОЙ намеренно: со временем в ней появится index.html, и
+// именно она должна отвечать на корневые пути, а не одна из шести папок
+// разделов. Пути /ui/…, /shell/…, /api.js, /ui-catalog.html, /index.html
+// проверены на уникальность относительно остальных семи папок — коллизия
+// статики не даёт ошибки, она молча отдаёт чужой файл.
+// ВНИМАНИЕ на этап 1: как только появится Shell/index.html, express.static
+// начнёт отдавать его на «/» раньше, чем сработает app.get('/') ниже, и
+// редирект на /main.html умрёт сам собой. Это нужное поведение, но оно должно
+// быть снято сознательно, а не обнаружено постфактум.
+const shellDir = path.join(__dirname, 'Shell');
 const employeesDir = path.join(__dirname, 'Employees');
 const operatorDir = path.join(__dirname, 'Operator');
 const scriptsAdminDir = path.join(__dirname, 'ScriptsAdmin');
@@ -73,6 +84,7 @@ const mainDir = path.join(__dirname, 'Main');
 const cpaNetworksDir = path.join(__dirname, 'CpaNetworks');
 const sourcesDir = path.join(__dirname, 'Sources');
 const leadsDir = path.join(__dirname, 'Leads');
+app.use(express.static(shellDir));
 app.use(express.static(employeesDir));
 app.use(express.static(operatorDir));
 app.use(express.static(scriptsAdminDir));

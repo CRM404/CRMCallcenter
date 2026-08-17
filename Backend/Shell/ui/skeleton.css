@@ -1,0 +1,53 @@
+/* ============================================================
+   ui/skeleton.css — скелет загрузки раздела. Блок 3 «составные элементы».
+   Автор: исполнитель.
+
+   Этого файла нет в разделении файлов брифа: правило «панель не остаётся
+   пустой ни одного кадра» дизайн-сессия добавила уже после того, как бриф был
+   закрыт (report_designer.md, п.2а; каталог, блок «Загрузка раздела»).
+   Вопрос о принадлежности файла — в dialog.md, Т2.
+
+   Скелет повторяет ФОРМУ будущего содержимого: шапка, чипы, строка фильтров,
+   строки таблицы. Спиннера по центру нет намеренно — он не показывает, что
+   именно грузится, и на медленной сети читается как «зависло».
+   ============================================================ */
+
+.ui-skeleton { display: grid; gap: var(--ui-space-3); }
+.ui-skeleton__row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.ui-sk {
+    background: linear-gradient(90deg,
+        rgba(96, 112, 148, .10) 25%,
+        rgba(96, 112, 148, .18) 37%,
+        rgba(96, 112, 148, .10) 63%);
+    background-size: 400% 100%;
+    border-radius: 6px;
+    animation: ui-sk-shimmer 1.4s ease infinite;
+}
+@keyframes ui-sk-shimmer {
+    0% { background-position: 100% 50%; }
+    100% { background-position: 0 50%; }
+}
+
+.ui-sk--title { height: 20px; width: 190px; }
+.ui-sk--btn { height: 30px; width: 120px; border-radius: var(--ui-radius-sm); margin-left: auto; }
+.ui-sk--chip { height: 46px; width: 96px; border-radius: var(--ui-radius-md); }
+.ui-sk--line { height: 38px; }
+.ui-sk--cell { height: 14px; }
+
+.ui-skeleton__note {
+    padding-top: var(--ui-space-1);
+    font-size: 12px;
+    color: var(--ui-color-ink-faint);
+    text-align: center;
+}
+
+/* Бесконечная анимация — первое, что мешает при укачивании и на слабой
+   машине. Форма скелета от этого не страдает. */
+@media (prefers-reduced-motion: reduce) {
+    .ui-sk { animation: none; }
+}

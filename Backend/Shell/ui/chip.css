@@ -1,0 +1,133 @@
+/* ============================================================
+   ui/chip.css — чип-счётчик, пилюля-статус, чип активного фильтра, метка.
+   Блок 2 «базовые элементы». Автор: исполнитель.
+
+   Сегодня .stat-chip объявлен на шести страницах (Сотрудники, График,
+   Скрипты, CPA-сети, Источники + Главная под именем .m-chip), статус-пилюля
+   живёт под четырьмя разными именами: .status-badge, .status-chip,
+   .src-badge, .pf-badge. Здесь они сводятся к двум видам.
+
+   ВАЖНО: счётчики внутри разделов остаются. Владелец убрал числа с плиток
+   рабочего стола — и только оттуда (бриф, п.6).
+   ============================================================ */
+
+/* ----- Чип-счётчик: «Всего 3», «В смене 2» ----- */
+.ui-chip {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 82px;
+    padding: 8px 13px;
+    background: var(--ui-color-surface-quiet);
+    border: 1px solid var(--ui-color-line);
+    border-radius: var(--ui-radius-md);
+}
+.ui-chip__value {
+    font-size: 18px;
+    font-weight: 700;
+    line-height: 1.15;
+    color: var(--ui-color-ink);
+}
+.ui-chip__label {
+    font-size: 10.5px;
+    color: var(--ui-color-ink-faint);
+    white-space: nowrap;
+}
+.ui-chip--ok .ui-chip__value { color: var(--ui-color-ok-ink); }
+.ui-chip--warn .ui-chip__value { color: var(--ui-color-warn-ink); }
+.ui-chip--bad .ui-chip__value { color: var(--ui-color-bad-ink); }
+/* Приглушённый — «данных нет», а не «ноль»: значение в нём прочерк. */
+.ui-chip--muted .ui-chip__value { color: var(--ui-color-ink-faint); }
+
+.ui-chips {
+    display: flex;
+    gap: var(--ui-space-2);
+    flex-wrap: wrap;
+    list-style: none;
+}
+
+/* ----- Пилюля-статус: «Активен», «Перезвон 14:30» ----- */
+.ui-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+.ui-pill--ok { background: var(--ui-color-ok-bg); color: var(--ui-color-ok-ink); }
+.ui-pill--warn { background: var(--ui-color-warn-bg); color: var(--ui-color-warn-ink); }
+.ui-pill--bad { background: var(--ui-color-bad-bg); color: var(--ui-color-bad-ink); }
+.ui-pill--mute { background: rgba(96, 112, 148, .13); color: var(--ui-color-ink-soft); }
+/* Точка перед текстом — как в .status-chip и .src-badge сегодня. Не вид, а
+   вариант той же пилюли: раздел включает её классом, а не своим правилом. */
+.ui-pill--dot::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+    flex-shrink: 0;
+}
+
+/* ----- Метка: «5/2», короткое значение без статуса ----- */
+.ui-tag {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: rgba(96, 112, 148, .12);
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--ui-color-ink-soft);
+    white-space: nowrap;
+}
+
+/* ----- Чип активного фильтра: что именно сейчас отфильтровано -----
+   Крестик снимает один фильтр, «Очистить всё» — сразу все. */
+.ui-fchips {
+    display: flex;
+    align-items: center;
+    gap: var(--ui-space-2);
+    flex-wrap: wrap;
+}
+.ui-fchip {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 4px 6px 4px 11px;
+    border: 1px solid rgba(0, 0, 255, .22);
+    border-radius: 20px;
+    background: rgba(0, 0, 255, .05);
+    font-size: 12px;
+    color: var(--ui-color-ink-soft);
+}
+.ui-fchip b {
+    font-weight: 600;
+    color: var(--ui-color-ink);
+}
+.ui-fchip__remove {
+    width: 18px;
+    height: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--ui-color-ink-faint);
+    cursor: pointer;
+}
+.ui-fchip__remove:hover { background: rgba(0, 0, 255, .12); color: var(--ui-color-accent); }
+.ui-fchip__remove:focus-visible { outline: 2px solid var(--ui-color-accent); outline-offset: 1px; }
+.ui-fchips__clear {
+    border: none;
+    background: transparent;
+    font-family: var(--ui-font-ui);
+    font-size: 12px;
+    color: var(--ui-color-ink-faint);
+    text-decoration: underline;
+    cursor: pointer;
+}
+.ui-fchips__clear:hover { color: var(--ui-color-accent); }

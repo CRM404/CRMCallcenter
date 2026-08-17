@@ -1,0 +1,47 @@
+/* ============================================================
+   ui/empty-state.css — пустое состояние. Блок 3 «составные элементы».
+   Автор: исполнитель.
+
+   Обязательный состав (бриф, п.4): заголовок + ПРИЧИНА + СЛЕДУЮЩИЙ ШАГ.
+   Сегодня пустые состояния в проекте — это одна строка серого текста
+   (.sa-empty-state, .m-empty-state, .geo-suggest-empty): человек видит, что
+   пусто, и не понимает, это фильтр или в разделе действительно ничего нет.
+   ============================================================ */
+
+.ui-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--ui-space-2);
+    padding: 30px var(--ui-space-5);
+    border: 1px dashed var(--ui-color-line-strong);
+    border-radius: var(--ui-radius-md);
+    background: rgba(255, 255, 255, .45);
+    text-align: center;
+}
+.ui-empty__icon { color: var(--ui-color-ink-faint); }
+.ui-empty__title {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--ui-color-ink);
+}
+/* Причина. Ширина ограничена намеренно: строка на всю панель не читается. */
+.ui-empty__text {
+    max-width: 360px;
+    font-size: 12.5px;
+    line-height: 1.5;
+    color: var(--ui-color-ink-soft);
+}
+/* Следующий шаг — кнопка из ui/button.css, здесь только отступ. */
+.ui-empty__action { margin-top: var(--ui-space-1); }
+
+/* Внутри окна и узкой боковой колонки рамка с отступом в 30px съедает всё
+   место, поэтому есть тихий вариант — тот же состав, меньше веса. */
+.ui-empty--inline {
+    align-items: flex-start;
+    padding: var(--ui-space-3) 0 14px;
+    border: none;
+    background: none;
+    text-align: left;
+}
+.ui-empty--inline .ui-empty__text { max-width: none; }

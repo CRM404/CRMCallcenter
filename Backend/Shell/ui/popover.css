@@ -1,0 +1,93 @@
+/* ============================================================
+   ui/popover.css — поповер. Блок 3 «составные элементы».
+   Автор: исполнитель.
+
+   Поповер привязан к элементу, не выходит за границы своей панели и умеет
+   второй шаг ВНУТРИ себя (бриф, п.4 и 5.4). Позиционирование — ui/popover.js,
+   здесь только вид.
+
+   Скрытие — атрибутом hidden. Собственного display у .ui-popover намеренно
+   нет, а у шагов он есть, поэтому базовое правило [hidden] { display: none }
+   обязано быть в слое: без него шаг с display: grid останется видимым.
+   ============================================================ */
+
+.ui-popover {
+    position: fixed;
+    z-index: 45;
+    width: 238px;
+    max-width: calc(100vw - 16px);
+    padding: var(--ui-space-2);
+    background: #fff;
+    border: 1px solid var(--ui-color-line-strong);
+    border-radius: var(--ui-radius-md);
+    box-shadow: var(--ui-shadow-pop);
+}
+.ui-popover--wide { width: 288px; }
+
+.ui-popover__title {
+    padding: 4px var(--ui-space-2) var(--ui-space-2);
+    margin-bottom: 6px;
+    border-bottom: 1px solid var(--ui-color-line);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--ui-color-ink-soft);
+}
+
+/* Шаг поповера. Второй шаг живёт здесь же — отдельная модалка ради двух
+   полей тяжела для действия, которое делают на бегу. */
+.ui-popover__step { display: grid; gap: 6px; }
+
+.ui-popover__option {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    width: 100%;
+    padding: 7px var(--ui-space-2);
+    border: none;
+    border-radius: 7px;
+    background: transparent;
+    font-family: var(--ui-font-ui);
+    font-size: 13px;
+    color: var(--ui-color-ink);
+    text-align: left;
+    cursor: pointer;
+}
+.ui-popover__option:hover { background: rgba(0, 0, 255, .06); }
+.ui-popover__option:focus-visible { outline: 2px solid var(--ui-color-accent); outline-offset: -2px; }
+/* Недоступный пункт остаётся видимым и объясняет себя подписью: пропавший
+   пункт читается как поломка. */
+.ui-popover__option--off { opacity: .5; cursor: not-allowed; }
+.ui-popover__option--off:hover { background: transparent; }
+.ui-popover__option-sub {
+    display: block;
+    font-size: 11px;
+    color: var(--ui-color-ink-faint);
+}
+.ui-popover__dot {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+    border-radius: 4px;
+    background: rgba(96, 112, 148, .2);
+}
+.ui-popover__sep {
+    border: none;
+    border-top: 1px solid var(--ui-color-line);
+    margin: 5px 4px;
+}
+.ui-popover__foot {
+    display: flex;
+    align-items: center;
+    gap: var(--ui-space-2);
+    padding-top: 6px;
+    margin-top: 2px;
+    border-top: 1px solid var(--ui-color-line);
+}
+.ui-popover__foot--end { justify-content: flex-end; }
+
+/* Статичный образец для каталога: тот же вид, но в потоке страницы. */
+.ui-popover--static {
+    position: static;
+    width: 100%;
+    box-shadow: none;
+}
