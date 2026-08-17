@@ -9,8 +9,8 @@
    ВАЖНО: счётчики ВНУТРИ разделов остаются. Владелец убрал числа с плиток
    рабочего стола — и только оттуда (бриф, п.6).
 
-   --ui-color-wash-* и --ui-color-accent-line запрошены у куратора
-   (dialog.md, Т1); до их появления работает запасное значение в var().
+   Подсветка и рамка чипа фильтра — токенами --ui-color-wash-active и
+   --ui-color-accent-line (dialog.md Т1, добавлены куратором в 475329d).
    ------------------------------------------------------------------------ */
 
 /* ----- Чип-счётчик: «Всего 3», «В смене 2» ----- */
@@ -102,9 +102,9 @@
     align-items: center;
     gap: var(--ui-space-2);
     padding: var(--ui-space-1) var(--ui-space-2) var(--ui-space-1) var(--ui-space-4);
-    border: 1px solid var(--ui-color-accent-line, rgba(0, 0, 255, .22));
+    border: 1px solid var(--ui-color-accent-line);
     border-radius: var(--ui-radius-pill);
-    background: var(--ui-color-wash-active, rgba(0, 0, 255, .07));
+    background: var(--ui-color-wash-active);
     font-size: var(--ui-text-xs);
     color: var(--ui-color-ink-soft);
 }
@@ -125,7 +125,7 @@
     font-size: var(--ui-icon-sm);
     cursor: pointer;
 }
-.ui-fchip__remove:hover { background: var(--ui-color-wash-active, rgba(0, 0, 255, .07)); color: var(--ui-color-accent); }
+.ui-fchip__remove:hover { background: var(--ui-color-wash-active); color: var(--ui-color-accent); }
 .ui-fchip__remove:focus-visible { outline: 2px solid var(--ui-color-accent); outline-offset: 1px; }
 .ui-fchips__clear {
     border: none;

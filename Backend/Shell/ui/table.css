@@ -10,10 +10,8 @@
    Кнопка действия в строке — это не «опасная кнопка», а кнопка-иконка из
    ui/button.css: .ui-btn.ui-btn--icon.ui-btn--sm. Здесь только размещение.
 
-   ЧЕТЫРЕ ЗНАЧЕНИЯ ВРЕМЕННО С ЗАПАСНЫМИ: --ui-color-wash-hover и
-   --ui-color-wash-active в tokens.css пока нет, они запрошены у куратора
-   (dialog.md, Т1). Запись var(--токен, запасное) — не объявление своего цвета:
-   как только токен появится, запасное значение перестанет применяться.
+   Подсветка строк — токенами --ui-color-wash-hover / --ui-color-wash-active
+   (запрошены в dialog.md Т1, добавлены куратором в tokens.css 475329d).
    ------------------------------------------------------------------------ */
 
 /* ----- Обёртка: вбок едет таблица, а не панель ----- */
@@ -64,7 +62,7 @@
     vertical-align: middle;
 }
 .ui-table tbody tr:last-child td { border-bottom: none; }
-.ui-table tbody tr:hover td { background: var(--ui-color-wash-hover, rgba(0, 0, 255, .04)); }
+.ui-table tbody tr:hover td { background: var(--ui-color-wash-hover); }
 
 /* ----- Сортируемая шапка ----- */
 .ui-table th.ui-table__sortable { cursor: pointer; user-select: none; }
@@ -107,7 +105,7 @@
     height: 15px;
     accent-color: var(--ui-color-accent);
 }
-.ui-table tr.ui-table__row--selected td { background: var(--ui-color-wash-active, rgba(0, 0, 255, .07)); }
+.ui-table tr.ui-table__row--selected td { background: var(--ui-color-wash-active); }
 
 /* ----- Закреплённая первая колонка -----
    Фон обязателен и обязан быть непрозрачным: сквозь полупрозрачный при
@@ -128,8 +126,8 @@
        просвечивать она не имеет права: цвет накладывается на непрозрачный
        фон, а не заменяет его. */
     background:
-        linear-gradient(var(--ui-color-wash-active, rgba(0, 0, 255, .07)),
-                        var(--ui-color-wash-active, rgba(0, 0, 255, .07))),
+        linear-gradient(var(--ui-color-wash-active),
+                        var(--ui-color-wash-active)),
         var(--ui-color-surface-sunken);
 }
 
@@ -160,7 +158,7 @@
 }
 
 /* ----- Полоса массовых действий -----
-   В составе слоя её в брифе нет (dialog.md, Т3), но она есть в макете и нужна
+   В составе слоя её в брифе нет (dialog.md, Т2), но она есть в макете и нужна
    трём разделам: Сотрудники, Лиды, Источники. Живёт при таблице с выделением,
    поэтому объявлена здесь, а не отдельным файлом. */
 .ui-mass-bar {

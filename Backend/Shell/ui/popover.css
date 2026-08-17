@@ -52,7 +52,7 @@
     text-align: left;
     cursor: pointer;
 }
-.ui-popover__option:hover { background: var(--ui-color-wash-hover, rgba(0, 0, 255, .04)); }
+.ui-popover__option:hover { background: var(--ui-color-wash-hover); }
 .ui-popover__option:focus-visible { outline: 2px solid var(--ui-color-accent); outline-offset: -2px; }
 /* Недоступный пункт остаётся видимым и объясняет себя подписью: пропавший
    пункт читается как поломка. */

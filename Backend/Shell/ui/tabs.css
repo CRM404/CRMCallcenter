@@ -8,7 +8,7 @@
      - переключатель режимов — Сотрудники, «Список | График».
 
    Синий здесь — активное состояние, то есть интерактив, а не заливка «просто
-   так». --ui-color-wash-hover запрошен у куратора (dialog.md, Т1).
+   так». Подсветка — токенами --ui-color-wash-* (dialog.md, Т1).
    ------------------------------------------------------------------------ */
 
 /* ----- Вкладки ----- */
@@ -35,7 +35,7 @@
     color: var(--ui-color-ink-soft);
     cursor: pointer;
 }
-.ui-tabs__tab:hover { color: var(--ui-color-ink); background: var(--ui-color-wash-hover, rgba(0, 0, 255, .04)); }
+.ui-tabs__tab:hover { color: var(--ui-color-ink); background: var(--ui-color-wash-hover); }
 .ui-tabs__tab:focus-visible { outline: 2px solid var(--ui-color-accent); outline-offset: -2px; }
 .ui-tabs__tab--active { color: var(--ui-color-accent); border-bottom-color: var(--ui-color-accent); }
 
@@ -49,7 +49,7 @@
     background: var(--ui-color-neutral-bg);
 }
 .ui-tabs__tab--active .ui-tabs__count--badge {
-    background: var(--ui-color-wash-active, rgba(0, 0, 255, .07));
+    background: var(--ui-color-wash-active);
     color: var(--ui-color-accent);
 }
 /* Вкладка, которой сейчас нечего показать, остаётся видимой и приглушается:
@@ -66,7 +66,7 @@
     background: var(--ui-color-surface);
     font-size: var(--ui-text-xs);
 }
-.ui-tabs--pills .ui-tabs__tab:hover { background: var(--ui-color-wash-hover, rgba(0, 0, 255, .04)); }
+.ui-tabs--pills .ui-tabs__tab:hover { background: var(--ui-color-wash-hover); }
 .ui-tabs--pills .ui-tabs__tab--active {
     background: var(--ui-color-accent);
     border-color: var(--ui-color-accent);
