@@ -5,8 +5,14 @@
 // db.js — глобальный type parser 1082) приходят строкой 'YYYY-MM-DD',
 // поэтому значение можно класть в <input type="date"> напрямую, без пересчёта.
 
-import { showToast } from './mainToast.js';
 import { ORG_FIELD_VALIDATORS, validateFields } from './mainValidation.js';
+
+// Счётчик для id полей. id нужен только ради связки <label for> — читаются
+// поля по data-field. Раньше id были предсказуемыми («mOrg-inn»), то есть
+// глобальными: два раздела с одинаковым именем поля начали бы драться за
+// один узел при двух открытых панелях. Здесь они уникальны по построению.
+let uid = 0;
+function nextFieldId() { return `m-f${++uid}`; }
 
 function escapeHtml(value) {
     if (value === null || value === undefined) return '';
@@ -57,34 +63,42 @@ export const TAX_FIELDS = [
     { key: 'periodicity', label: 'Периодичность', type: 'select', options: PERIODICITY_OPTIONS }
 ];
 
-function renderFieldGroup(field, value, idAttr) {
-    const groupClass = 'form-group' + (field.fullWidth ? ' m-field-full' : '');
+function renderFieldGroup(field, value) {
+    const groupClass = 'ui-field' + (field.fullWidth ? ' m-field-full' : '');
+    const id = nextFieldId();
     if (field.type === 'select') {
         const options = field.options.map((opt) =>
             `<option value="${escapeHtml(opt)}"${value === opt ? ' selected' : ''}>${escapeHtml(opt)}</option>`
         ).join('');
         return `
             <div class="${groupClass}">
-                <label for="${idAttr}">${field.label}</label>
-                <select id="${idAttr}">
+                <label class="ui-field__label" for="${id}">${field.label}</label>
+                <select class="ui-field__control" id="${id}" data-field="${field.key}">
                     <option value=""${!value ? ' selected' : ''}>Не указано</option>
                     ${options}
                 </select>
             </div>
         `;
     }
-    const inputClasses = [field.narrow ? 'm-input-narrow' : '', field.mono ? 'm-mono' : ''].filter(Boolean).join(' ');
-    const classAttr = inputClasses ? ` class="${inputClasses}"` : '';
+    const extra = [field.narrow ? 'm-input-narrow' : '', field.mono ? 'm-mono' : ''].filter(Boolean).join(' ');
     return `
         <div class="${groupClass}">
-            <label for="${idAttr}">${field.label}</label>
-            <input type="${field.type}" id="${idAttr}"${classAttr} value="${escapeHtml(value ?? '')}">
+            <label class="ui-field__label" for="${id}">${field.label}</label>
+            <input type="${field.type}" class="ui-field__control${extra ? ' ' + extra : ''}" id="${id}" data-field="${field.key}" value="${escapeHtml(value ?? '')}">
         </div>
     `;
 }
 
-function readFieldValue(container, idAttr) {
-    return container.querySelector(`#${idAttr}`).value;
+// Читаем по data-field В ГРАНИЦАХ переданной области: для формы организации
+// это карточка, для строки-записи — её собственная карточка. Так две
+// одновременно открытые формы не читают поля друг друга.
+function readFields(scope, fields) {
+    const data = {};
+    fields.forEach((f) => {
+        const el = scope.querySelector(`[data-field="${f.key}"]`);
+        data[f.key] = el ? el.value : '';
+    });
+    return data;
 }
 
 // organization === null — организация ещё не создана: пустая форма + пустой стейт,
@@ -103,31 +117,28 @@ export function renderOrganizationForm(container, organization, handlers) {
                     <small>Общие и юридические данные компании</small>
                 </div>
             </div>
-            <button type="button" class="btn btn-primary btn-sm" id="mOrgSaveBtn">${isNew ? 'Создать организацию' : 'Сохранить изменения'}</button>
+            <button type="button" class="ui-btn ui-btn--sm" data-action="save-org">${isNew ? 'Создать организацию' : 'Сохранить изменения'}</button>
         </div>
         ${isNew ? '<div class="m-empty-state">Организация ещё не создана.</div>' : ''}
         <div class="m-section">
             <div class="m-section-label">Общие данные</div>
             <div class="m-org-grid">
-                ${ORG_GENERAL_FIELDS.map((f) => renderFieldGroup(f, org[f.key], `mOrg-${f.key}`)).join('')}
+                ${ORG_GENERAL_FIELDS.map((f) => renderFieldGroup(f, org[f.key])).join('')}
             </div>
         </div>
         <div class="m-section">
             <div class="m-section-label">Юридические реквизиты</div>
             <div class="m-org-grid">
-                ${ORG_LEGAL_FIELDS.map((f) => renderFieldGroup(f, org[f.key], `mOrg-${f.key}`)).join('')}
+                ${ORG_LEGAL_FIELDS.map((f) => renderFieldGroup(f, org[f.key])).join('')}
             </div>
         </div>
     `;
 
-    container.querySelector('#mOrgSaveBtn').addEventListener('click', () => {
-        const data = {};
-        [...ORG_GENERAL_FIELDS, ...ORG_LEGAL_FIELDS].forEach((f) => {
-            data[f.key] = readFieldValue(container, `mOrg-${f.key}`);
-        });
+    container.querySelector('[data-action="save-org"]').addEventListener('click', () => {
+        const data = readFields(container, [...ORG_GENERAL_FIELDS, ...ORG_LEGAL_FIELDS]);
         const error = validateFields(data, ORG_FIELD_VALIDATORS);
         if (error) {
-            showToast(error, 'error');
+            handlers.toast(error, 'error');
             return;
         }
         handlers.onSave(data);
@@ -174,12 +185,12 @@ function renderRecordCard(record, fields, editing, idPrefix) {
     if (editing) {
         return `
             <div class="m-record-card m-record-card-editing" data-id="${record.id}">
-                <div class="form-grid">
-                    ${fields.map((f) => renderFieldGroup(f, record[f.key], `${idPrefix}Edit-${f.key}-${record.id}`)).join('')}
+                <div class="ui-form-grid">
+                    ${fields.map((f) => renderFieldGroup(f, record[f.key])).join('')}
                 </div>
                 <div class="m-actions">
-                    <button type="button" class="btn btn-primary btn-sm" data-action="save" data-id="${record.id}">Сохранить</button>
-                    <button type="button" class="btn btn-secondary btn-sm" data-action="cancel" data-id="${record.id}">Отмена</button>
+                    <button type="button" class="ui-btn ui-btn--sm" data-action="save" data-id="${record.id}">Сохранить</button>
+                    <button type="button" class="ui-btn ui-btn--sm ui-btn--secondary" data-action="cancel" data-id="${record.id}">Отмена</button>
                 </div>
             </div>
         `;
@@ -189,8 +200,8 @@ function renderRecordCard(record, fields, editing, idPrefix) {
             ${renderRowAvatar(record, idPrefix)}
             ${renderRowMain(record, idPrefix)}
             <div class="m-row-actions">
-                <button type="button" class="m-icon-btn" data-action="edit" data-id="${record.id}" title="Изменить" aria-label="Изменить"><i class="fas fa-pen" aria-hidden="true"></i></button>
-                <button type="button" class="m-icon-btn m-icon-btn-danger" data-action="delete" data-id="${record.id}" title="Удалить" aria-label="Удалить"><i class="fas fa-trash-can" aria-hidden="true"></i></button>
+                <button type="button" class="ui-btn ui-btn--icon ui-btn--sm" data-action="edit" data-id="${record.id}" title="Изменить" aria-label="Изменить"><i class="fas fa-pen" aria-hidden="true"></i></button>
+                <button type="button" class="ui-btn ui-btn--icon ui-btn--sm m-icon-btn-danger" data-action="delete" data-id="${record.id}" title="Удалить" aria-label="Удалить"><i class="fas fa-trash-can" aria-hidden="true"></i></button>
             </div>
         </div>
     `;
@@ -213,17 +224,17 @@ function recordsWord(count, forms) {
 // uiState = { adding, editingId }
 // handlers = { onAddStart, onAddCancel, onCreate(data), onEditStart(id),
 //              onEditCancel, onSave(record, data), onDelete(id) }
-export function renderRecordsSection(container, { title, records, fields, uiState, idPrefix, emptyText, addButtonLabel, wordForms, handlers, validators }) {
+export function renderRecordsSection(container, { title, records, fields, uiState, idPrefix, emptyText, addButtonLabel, wordForms, handlers, validators, toast }) {
     const cards = records.map((r) => renderRecordCard(r, fields, uiState.editingId === r.id, idPrefix)).join('');
     const countText = records.length && wordForms ? `${records.length} ${recordsWord(records.length, wordForms)}` : '';
     const addForm = uiState.adding ? `
-        <div class="m-record-card m-record-card-editing">
-            <div class="form-grid">
-                ${fields.map((f) => renderFieldGroup(f, '', `${idPrefix}New-${f.key}`)).join('')}
+        <div class="m-record-card m-record-card-editing" data-role="add-form">
+            <div class="ui-form-grid">
+                ${fields.map((f) => renderFieldGroup(f, '')).join('')}
             </div>
             <div class="m-actions">
-                <button type="button" class="btn btn-primary btn-sm" id="${idPrefix}CreateBtn">Добавить</button>
-                <button type="button" class="btn btn-secondary btn-sm" id="${idPrefix}CreateCancelBtn">Отмена</button>
+                <button type="button" class="ui-btn ui-btn--sm" data-action="create">Добавить</button>
+                <button type="button" class="ui-btn ui-btn--sm ui-btn--secondary" data-action="create-cancel">Отмена</button>
             </div>
         </div>
     ` : '';
@@ -237,13 +248,13 @@ export function renderRecordsSection(container, { title, records, fields, uiStat
         </div>
         ${records.length ? `<div class="m-row-list">${cards}</div>` : `<div class="m-empty-state">${emptyText}</div>`}
         ${!uiState.adding ? `
-            <div class="m-add-row" id="${idPrefix}AddBtn" role="button" tabindex="0">
+            <div class="m-add-row" data-action="add" role="button" tabindex="0">
                 <i class="fas fa-plus" aria-hidden="true"></i>${addButtonLabel}
             </div>
         ` : addForm}
     `;
 
-    const addBtn = container.querySelector(`#${idPrefix}AddBtn`);
+    const addBtn = container.querySelector('[data-action="add"]');
     if (addBtn) {
         addBtn.addEventListener('click', handlers.onAddStart);
         addBtn.addEventListener('keydown', (e) => {
@@ -251,21 +262,21 @@ export function renderRecordsSection(container, { title, records, fields, uiStat
         });
     }
 
-    const createBtn = container.querySelector(`#${idPrefix}CreateBtn`);
+    const createBtn = container.querySelector('[data-action="create"]');
     if (createBtn) {
         createBtn.addEventListener('click', () => {
-            const data = {};
-            fields.forEach((f) => {
-                data[f.key] = readFieldValue(container, `${idPrefix}New-${f.key}`);
-            });
+            // Читаем в границах формы добавления, а не всей секции: рядом
+            // может быть открыта карточка редактирования с теми же полями.
+            const form = container.querySelector('[data-role="add-form"]');
+            const data = readFields(form, fields);
             const error = validateFields(data, validators || {});
             if (error) {
-                showToast(error, 'error');
+                toast(error, 'error');
                 return;
             }
             handlers.onCreate(data);
         });
-        container.querySelector(`#${idPrefix}CreateCancelBtn`).addEventListener('click', handlers.onAddCancel);
+        container.querySelector('[data-action="create-cancel"]').addEventListener('click', handlers.onAddCancel);
     }
 
     container.querySelectorAll('[data-action="edit"]').forEach((btn) => {
@@ -278,13 +289,14 @@ export function renderRecordsSection(container, { title, records, fields, uiStat
         btn.addEventListener('click', () => {
             const id = Number(btn.dataset.id);
             const record = records.find((r) => r.id === id);
-            const data = {};
-            fields.forEach((f) => {
-                data[f.key] = readFieldValue(container, `${idPrefix}Edit-${f.key}-${id}`);
-            });
+            // Границы — карточка своей записи: раньше поля искались по
+            // составному id по всей секции, и это работало только потому, что
+            // id содержал номер записи.
+            const card = btn.closest('[data-id]');
+            const data = readFields(card, fields);
             const error = validateFields(data, validators || {});
             if (error) {
-                showToast(error, 'error');
+                toast(error, 'error');
                 return;
             }
             handlers.onSave(record, data);

@@ -44,7 +44,7 @@ import {
 // увидеть глазами — оно всплыло бы только на этапе 2, у людей.
 
 export const registry = [
-    { key: 'requisites', title: 'Реквизиты',  icon: 'fas fa-building',       module: null, template: null, stub: true, legacyUrl: '/main.html' },
+    { key: 'requisites', title: 'Реквизиты',  icon: 'fas fa-building',       module: '/js/modules/mainApp.js', template: '/main-section.html', styles: '/css/main-light.css', legacyUrl: '/main.html' },
     { key: 'employees',  title: 'Сотрудники', icon: 'fas fa-users',          module: null, template: null, stub: true, legacyUrl: '/emploees.html' },
     { key: 'leads',      title: 'Лиды',       icon: 'fas fa-address-book',   module: null, template: null, stub: true, legacyUrl: '/leads.html' },
     { key: 'sources',    title: 'Источники',  icon: 'fas fa-diagram-project',module: null, template: null, stub: true, legacyUrl: '/sources.html' },
@@ -208,6 +208,11 @@ async function mountSection(panelId, key, container) {
     }
 
     try {
+        // Стили раздела — пятый блок структуры («раскладка разделов»).
+        // Грузятся при первом открытии раздела, а не все шестью ссылками в
+        // index.html: иначе первый экран тянет раскладку всех разделов сразу.
+        if (section.styles) await loadStyles(section.styles);
+
         if (section.template) {
             const fragment = await loadTemplate(section.template);
             // Панель могли закрыть, пока грузилась разметка.
@@ -258,6 +263,28 @@ async function loadTemplate(path) {
     const fragment = document.createDocumentFragment();
     while (holder.firstChild) fragment.appendChild(holder.firstChild);
     return fragment;
+}
+
+/**
+ * Стили раздела. Ждём загрузки, а не просто вставляем ссылку: иначе раздел
+ * успевает нарисоваться раньше своей раскладки, и человек видит вспышку
+ * неоформленного содержимого.
+ */
+const styleSheets = new Map();
+function loadStyles(href) {
+    if (styleSheets.has(href)) return styleSheets.get(href);
+    const promise = new Promise((resolve) => {
+        const link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = href;
+        // Раздел без своей раскладки хуже, чем раздел с вспышкой: не даём
+        // отказу стилей заблокировать открытие.
+        link.addEventListener('load', resolve, { once: true });
+        link.addEventListener('error', resolve, { once: true });
+        document.head.appendChild(link);
+    });
+    styleSheets.set(href, promise);
+    return promise;
 }
 
 function renderStub(container, section) {

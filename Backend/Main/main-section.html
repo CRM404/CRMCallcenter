@@ -1,0 +1,36 @@
+<!-- Фрагмент раздела «Реквизиты». Грузится оболочкой при первом открытии
+     панели и кэшируется (см. Shell/shell/app.js).
+
+     ЧЕГО ЗДЕСЬ НЕТ ПО СРАВНЕНИЮ СО СТАРЫМ main.html:
+       - <html>/<head>/<body> и подключения CSS — раздел живёт внутри панели;
+       - каркаса хаба (.hub-shell / .hub-nav) — навигации-рейки в проекте нет,
+         её роль выполняет рабочий стол;
+       - #toastContainer — тост один на приложение и создаётся вызовом;
+       - модалки подтверждения — окно создаётся вызовом ctx.confirm и
+         накрывает свою панель, а не весь экран.
+
+     Глобальных id нет: раздел ищет свои узлы по data-role в границах
+     контейнера. Пропущенный id не даёт ошибки в консоли — он даёт неверное
+     поведение при двух открытых панелях, и находится не сразу. -->
+
+<div class="m-wrap">
+    <div class="m-page-head">
+        <div>
+            <h1>Реквизиты организации</h1>
+            <p class="m-page-sub">Эти данные подставляются в счета и договоры, которые CRM формирует автоматически — заполните их один раз.</p>
+        </div>
+        <div class="m-completion" data-role="completion"></div>
+    </div>
+
+    <div class="m-layout">
+        <div class="m-stack">
+            <section class="m-card" data-role="org-form"></section>
+
+            <div class="m-empty-state" data-role="locked-note">Сначала заполните и сохраните данные организации выше — банковские счета и налоги привязываются к ней.</div>
+            <section class="m-card" data-role="bank-accounts" hidden></section>
+            <section class="m-card" data-role="taxes" hidden></section>
+        </div>
+
+        <aside class="m-preview" data-role="preview"></aside>
+    </div>
+</div>

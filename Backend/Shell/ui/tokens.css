@@ -99,6 +99,10 @@
 
     /* ----- Типографика --------------------------------------------------- */
     --ui-font-ui: "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+    /* Идентификаторы и суммы — моноширинным с табличными цифрами: ИНН, БИК,
+       расчётный счёт, номера в таблицах. Пришло из «Реквизитов» на этапе 2,
+       но нужно всем разделам, где есть колонки цифр. */
+    --ui-font-mono: ui-monospace, "Cascadia Mono", Consolas, "SFMono-Regular", Menlo, monospace;
     --ui-text-xs: 12px;
     --ui-text-sm: 13px;
     --ui-text-md: 14px;
