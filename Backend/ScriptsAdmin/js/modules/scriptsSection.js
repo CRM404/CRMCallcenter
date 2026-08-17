@@ -136,6 +136,10 @@ function syncOpenStatus(state) {
 function renderNodes(state) {
     renderNodesPanel($(state, 'nodes'), state.nodes, state.nodesUi, {
         toast: state.ctx.toast,
+        // Блокировка кнопки на время запроса — та же, что у кнопок самого
+        // раздела. Панель узлов свои кнопки рисует сама, поэтому получает
+        // помощника так же, как тост: одна реализация на раздел.
+        busy: withBusy,
 
         onEditRootStart: () => { state.nodesUi.rootEditing = true; renderNodes(state); },
         onCancelRootEdit: () => { state.nodesUi.rootEditing = false; renderNodes(state); },

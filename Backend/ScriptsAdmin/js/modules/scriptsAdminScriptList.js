@@ -54,7 +54,7 @@ export function renderScriptRows(scripts, selectedId) {
             : `<button type="button" class="ui-btn ui-btn--ghost ui-btn--sm" data-action="deactivate" data-id="${script.id}">В черновик</button>`;
 
         return `
-            <tr class="${script.id === selectedId ? 'is-selected' : ''}" data-row-id="${script.id}">
+            <tr class="${script.id === selectedId ? 'ui-table__row--selected' : ''}" data-row-id="${script.id}">
                 <td>
                     <div class="scr-title">${escapeHtml(script.title)}</div>
                     <div class="scr-sub">${escapeHtml(fillSummary(script))}</div>

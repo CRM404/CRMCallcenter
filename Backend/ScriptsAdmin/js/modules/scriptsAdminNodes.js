@@ -461,7 +461,7 @@ function renderObjectionsBlock(objections, uiState) {
 }
 
 // uiState = { rootEditing, addingObjection, editingObjectionId }
-// handlers = { toast, onEditRootStart, onCancelRootEdit, onCreateRoot(html), onSaveRoot(root, html),
+// handlers = { toast, busy, onEditRootStart, onCancelRootEdit, onCreateRoot(html), onSaveRoot(root, html),
 //              onAddObjectionStart, onAddObjectionCancel, onCreateObjection({label, content}),
 //              onEditObjectionStart(id), onEditObjectionCancel, onSaveObjection(node, {label, content}),
 //              onDeleteObjection(id) }
@@ -471,12 +471,17 @@ export function renderNodesPanel(container, nodes, uiState, handlers) {
 
     container.innerHTML = renderRootBlock(root, uiState.rootEditing) + (root ? renderObjectionsBlock(objections, uiState) : '');
 
+    // Кнопки, которые шлют запрос, блокируются на время запроса (handlers.busy).
+    // Без этого двойной клик уходит дважды: по «Добавить возражение» это два
+    // одинаковых возражения в базе, по «Создать основной текст» — отказ сервера
+    // «У скрипта уже есть корневой узел» в ответ на собственный двойной клик.
     if (!root) {
         const editorEl = container.querySelector('[data-role="root-editor"]');
         initRichTextEditor(editorEl);
         attachRichTextToolbar(container, editorEl, handlers.toast);
-        container.querySelector('[data-role="root-create"]').addEventListener('click', () => {
-            handlers.onCreateRoot(getEditorHtmlForSave(editorEl));
+        const createBtn = container.querySelector('[data-role="root-create"]');
+        createBtn.addEventListener('click', () => {
+            handlers.busy(createBtn, () => handlers.onCreateRoot(getEditorHtmlForSave(editorEl)));
         });
         return;
     }
@@ -485,8 +490,9 @@ export function renderNodesPanel(container, nodes, uiState, handlers) {
         const editorEl = container.querySelector('[data-role="root-editor"]');
         initRichTextEditor(editorEl);
         attachRichTextToolbar(container, editorEl, handlers.toast);
-        container.querySelector('[data-role="root-save"]').addEventListener('click', () => {
-            handlers.onSaveRoot(root, getEditorHtmlForSave(editorEl));
+        const saveBtn = container.querySelector('[data-role="root-save"]');
+        saveBtn.addEventListener('click', () => {
+            handlers.busy(saveBtn, () => handlers.onSaveRoot(root, getEditorHtmlForSave(editorEl)));
         });
         container.querySelector('[data-role="root-cancel"]').addEventListener('click', handlers.onCancelRootEdit);
     } else {
@@ -498,8 +504,9 @@ export function renderNodesPanel(container, nodes, uiState, handlers) {
 
     const newCard = container.querySelector('[data-role="objection-new"]');
     if (newCard) {
-        newCard.querySelector('[data-role="objection-create"]').addEventListener('click', () => {
-            handlers.onCreateObjection(readObjectionFields(newCard));
+        const createObjectionBtn = newCard.querySelector('[data-role="objection-create"]');
+        createObjectionBtn.addEventListener('click', () => {
+            handlers.busy(createObjectionBtn, () => handlers.onCreateObjection(readObjectionFields(newCard)));
         });
         newCard.querySelector('[data-role="objection-create-cancel"]').addEventListener('click', handlers.onAddObjectionCancel);
     }
@@ -518,7 +525,7 @@ export function renderNodesPanel(container, nodes, uiState, handlers) {
             // панели тоже (образец куратора, п.4).
             const card = btn.closest('.scr-objection');
             const node = objections.find((o) => o.id === id);
-            handlers.onSaveObjection(node, readObjectionFields(card));
+            handlers.busy(btn, () => handlers.onSaveObjection(node, readObjectionFields(card)));
         });
     });
     container.querySelectorAll('[data-action="delete-objection"]').forEach((btn) => {
