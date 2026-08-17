@@ -49,7 +49,7 @@ export const registry = [
     { key: 'leads',      title: 'Лиды',       icon: 'fas fa-address-book',   module: null, template: null, stub: true, legacyUrl: '/leads.html' },
     { key: 'sources',    title: 'Источники',  icon: 'fas fa-diagram-project',module: '/js/modules/sourcesSection.js', template: '/sources-section.html', styles: '/css/sources-light.css', legacyUrl: '/sources.html' },
     { key: 'cpa',        title: 'CPA-сети',   icon: 'fas fa-handshake',      module: null, template: null, stub: true, legacyUrl: '/cpa-networks.html' },
-    { key: 'scripts',    title: 'Скрипты',    icon: 'fas fa-file-lines',     module: null, template: null, stub: true, legacyUrl: '/scripts-admin.html' }
+    { key: 'scripts',    title: 'Скрипты',    icon: 'fas fa-file-lines',     module: '/js/modules/scriptsSection.js', template: '/scripts-admin-section.html', styles: '/css/scripts-admin-light.css', legacyUrl: '/scripts-admin.html' }
 ];
 
 const STORAGE_KEY = 'shellDesktopState';

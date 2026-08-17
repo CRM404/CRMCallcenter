@@ -86,6 +86,7 @@ app.use('/api/schedule', scheduleRouter);
 // страница оператора в задачу не входит и остаётся отдельной.
 app.get('/main.html', (req, res) => res.redirect(301, '/#/requisites'));
 app.get('/sources.html', (req, res) => res.redirect(301, '/#/sources'));
+app.get('/scripts-admin.html', (req, res) => res.redirect(301, '/#/scripts'));
 
 const shellDir = path.join(__dirname, 'Shell');
 const employeesDir = path.join(__dirname, 'Employees');
