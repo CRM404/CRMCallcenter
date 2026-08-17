@@ -37,11 +37,19 @@ let shell = null;
 let storage = null;
 let nodes = null;
 
+// Номер монтирования. Раздел закрывают и открывают заново — а ответ на
+// запрос, отправленный ДО закрытия, может прийти уже после. Отмена запросов
+// обычно срабатывает раньше, но полагаться только на неё нельзя: гонку
+// выигрывает то один, то другой, и проявится это один раз из ста — данными
+// прошлой панели, дорисованными в новую.
+let generation = 0;
+
 let organization = null;
 let bankUiState = { adding: false, editingId: null };
 let taxUiState = { adding: false, editingId: null };
 
 export async function mount(container, ctx) {
+    const my = ++generation;
     root = container;
     shell = ctx;
     storage = createStorage(ctx.api);
@@ -60,8 +68,11 @@ export async function mount(container, ctx) {
     taxUiState = { adding: false, editingId: null };
 
     try {
-        organization = await storage.fetchOrganization();
+        const data = await storage.fetchOrganization();
+        if (my !== generation) return;   // за время запроса раздел перемонтировали
+        organization = data;
     } catch (err) {
+        if (my !== generation) return;
         // Отмена — не ошибка пользователя: панель просто закрыли во время
         // загрузки. Показывать «не удалось связаться с сервером» тут нельзя.
         if (isAbort(err)) return;
@@ -70,11 +81,12 @@ export async function mount(container, ctx) {
 
     // Панель могли закрыть, пока шёл запрос: рисовать в вырезанный из
     // документа контейнер нечего.
-    if (root !== container) return;
+    if (my !== generation || root !== container) return;
     renderAll();
 }
 
 export function unmount() {
+    generation += 1;   // всё, что было в полёте, теперь чужое
     root = null;
     shell = null;
     storage = null;
@@ -168,62 +180,70 @@ function renderTaxes() {
 // ответом её могли закрыть. Отменённый запрос молчит, остальные ошибки
 // по-прежнему показываются пользователем.
 
-function alive() {
-    return root !== null && nodes !== null;
+// Жив ли ТОТ ЖЕ раздел, из которого ушёл запрос. Проверять только «root !==
+// null» мало: панель могли закрыть и открыть заново, и тогда ответ старого
+// запроса дорисовался бы в новую панель.
+function alive(mountId) {
+    return root !== null && nodes !== null && mountId === generation;
 }
 
-function fail(err) {
-    if (isAbort(err) || !alive()) return;
+function fail(mountId, err) {
+    if (isAbort(err) || !alive(mountId)) return;
     shell.toast(err.message, 'error');
 }
 
 async function handleOrgSave(data) {
+    const my = generation;
     try {
         if (organization === null) {
-            organization = await storage.createOrganization(data);
-            if (!alive()) return;
+            const created = await storage.createOrganization(data);
+            if (!alive(my)) return;
+            organization = created;
             shell.toast('Организация создана', 'success');
         } else {
             const updated = await storage.updateOrganization(organization.id, data);
-            if (!alive()) return;
+            if (!alive(my)) return;
             organization = { ...organization, ...updated };
             shell.toast('Изменения сохранены', 'success');
         }
         renderAll();
     } catch (err) {
-        fail(err);
+        fail(my, err);
     }
 }
 
 async function handleBankCreate(data) {
+    const my = generation;
     try {
         const created = await storage.createBankAccount(organization.id, data);
-        if (!alive()) return;
+        if (!alive(my)) return;
         organization.bankAccounts.push(created);
         bankUiState.adding = false;
         shell.toast('Счёт добавлен', 'success');
         renderBankAccounts();
         renderPreviewPanel();
     } catch (err) {
-        fail(err);
+        fail(my, err);
     }
 }
 
 async function handleBankSave(record, data) {
+    const my = generation;
     try {
         const updated = await storage.updateBankAccount(organization.id, record.id, data);
-        if (!alive()) return;
+        if (!alive(my)) return;
         organization.bankAccounts = organization.bankAccounts.map((r) => (r.id === record.id ? updated : r));
         bankUiState.editingId = null;
         shell.toast('Изменения сохранены', 'success');
         renderBankAccounts();
         renderPreviewPanel();
     } catch (err) {
-        fail(err);
+        fail(my, err);
     }
 }
 
 async function handleBankDelete(id) {
+    const my = generation;
     // Удаление необратимо — подтверждение накрывает весь экран, а не только
     // свою панель (правило дизайн-сессии, бриф 5.4).
     const account = organization.bankAccounts.find((r) => r.id === id);
@@ -233,46 +253,49 @@ async function handleBankDelete(id) {
             ? `Удалить банковский счёт «${account.bankName}»? Действие необратимо.`
             : 'Удалить этот банковский счёт? Действие необратимо.'
     });
-    if (!ok || !alive()) return;
+    if (!ok || !alive(my)) return;
     try {
         await storage.deleteBankAccount(organization.id, id);
-        if (!alive()) return;
+        if (!alive(my)) return;
         organization.bankAccounts = organization.bankAccounts.filter((r) => r.id !== id);
         shell.toast('Счёт удалён', 'success');
         renderBankAccounts();
         renderPreviewPanel();
     } catch (err) {
-        fail(err);
+        fail(my, err);
     }
 }
 
 async function handleTaxCreate(data) {
+    const my = generation;
     try {
         const created = await storage.createTax(organization.id, data);
-        if (!alive()) return;
+        if (!alive(my)) return;
         organization.taxes.push(created);
         taxUiState.adding = false;
         shell.toast('Налоговая запись добавлена', 'success');
         renderTaxes();
     } catch (err) {
-        fail(err);
+        fail(my, err);
     }
 }
 
 async function handleTaxSave(record, data) {
+    const my = generation;
     try {
         const updated = await storage.updateTax(organization.id, record.id, data);
-        if (!alive()) return;
+        if (!alive(my)) return;
         organization.taxes = organization.taxes.map((r) => (r.id === record.id ? updated : r));
         taxUiState.editingId = null;
         shell.toast('Изменения сохранены', 'success');
         renderTaxes();
     } catch (err) {
-        fail(err);
+        fail(my, err);
     }
 }
 
 async function handleTaxDelete(id) {
+    const my = generation;
     const tax = organization.taxes.find((r) => r.id === id);
     const ok = await shell.confirmDanger({
         title: 'Удаление налоговой записи',
@@ -280,14 +303,14 @@ async function handleTaxDelete(id) {
             ? `Удалить налоговую запись «${tax.taxType}»? Действие необратимо.`
             : 'Удалить эту налоговую запись? Действие необратимо.'
     });
-    if (!ok || !alive()) return;
+    if (!ok || !alive(my)) return;
     try {
         await storage.deleteTax(organization.id, id);
-        if (!alive()) return;
+        if (!alive(my)) return;
         organization.taxes = organization.taxes.filter((r) => r.id !== id);
         shell.toast('Налоговая запись удалена', 'success');
         renderTaxes();
     } catch (err) {
-        fail(err);
+        fail(my, err);
     }
 }

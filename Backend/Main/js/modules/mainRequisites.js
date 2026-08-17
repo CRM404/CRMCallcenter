@@ -292,7 +292,12 @@ export function renderRecordsSection(container, { title, records, fields, uiStat
             // Границы — карточка своей записи: раньше поля искались по
             // составному id по всей секции, и это работало только потому, что
             // id содержал номер записи.
-            const card = btn.closest('[data-id]');
+            //
+            // Ищем по КЛАССУ карточки, а не по [data-id]: у самой кнопки тоже
+            // есть data-id, а closest начинает с элемента, на котором вызван, —
+            // и возвращал бы кнопку. Полей внутри кнопки нет, так что на
+            // сервер ушли бы пустые значения и затёрли запись.
+            const card = btn.closest('.m-record-card');
             const data = readFields(card, fields);
             const error = validateFields(data, validators || {});
             if (error) {

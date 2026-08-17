@@ -84,7 +84,11 @@ app.use('/api/schedule', scheduleRouter);
 //
 // /operator.html и /operator-login.html редиректу не подлежат никогда:
 // страница оператора в задачу не входит и остаётся отдельной.
-app.get('/main.html', (req, res) => res.redirect(301, '/#/requisites'));
+// Код 302, а не 301: миграция ещё идёт, и откат раздела возможен. Постоянный
+// редирект браузеры кэшируют надолго — откатив раздел, мы не смогли бы
+// вернуть людей на старую страницу, пока они не почистят кэш вручную.
+// На 301 переведём в конце задачи, если это вообще понадобится.
+app.get('/main.html', (req, res) => res.redirect(302, '/#/requisites'));
 
 const shellDir = path.join(__dirname, 'Shell');
 const employeesDir = path.join(__dirname, 'Employees');
