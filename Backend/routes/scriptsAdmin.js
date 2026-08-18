@@ -77,14 +77,47 @@ function sanitizeStyleValue(rawStyle) {
     return kept.join('; ');
 }
 
+// Текст между тегами. Экранируются только < и >, и это важно: & не трогаем,
+// иначе уже сохранённые сущности (&nbsp;, &lt;) задваивались бы при каждом
+// повторном сохранении, и текст расползался бы сам по себе при обычной правке.
+function escapeTextNode(text) {
+    return text.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+// Разбор с накоплением, а не одна сплошная замена.
+//
+// Замена вырезала тег, и соседние символы смыкались — из безобидного на вид
+// ввода получался живой тег:
+//
+//     <<x>img src=x onerror=alert(1)>
+//     разбор убирал <x>, оставалось <img …> — целый тег, который уже никто не
+//     проверит: проход идёт слева направо и позиция пройдена.
+//
+// Здесь всё, что не распознано как тег, — текст, и в нём < и > экранируются.
+// Одиночный < не может стать началом тега ни при каком вырезании: он уже не <.
 function sanitizeRichText(html) {
-    return String(html).replace(/<(\/?)([a-zA-Z0-9]+)([^>]*)>/g, (match, closingSlash, tagNameRaw, attrs) => {
-        const tag = tagNameRaw.toLowerCase();
+    const source = String(html);
+    const tagPattern = /<(\/?)([a-zA-Z0-9]+)([^>]*)>/g;
+    let out = '';
+    let lastIndex = 0;
+    let match;
+
+    while ((match = tagPattern.exec(source)) !== null) {
+        out += escapeTextNode(source.slice(lastIndex, match.index));
+        lastIndex = tagPattern.lastIndex;
+
+        const closingSlash = match[1];
+        const tag = match[2].toLowerCase();
+        const attrs = match[3];
+
         if (!ALLOWED_RICH_TEXT_TAGS.has(tag)) {
-            if (BLOCK_TAGS_AS_BREAK.has(tag)) return closingSlash ? '<br>' : '';
-            return '';
+            if (BLOCK_TAGS_AS_BREAK.has(tag)) out += closingSlash ? '<br>' : '';
+            continue;
         }
-        if (closingSlash) return `</${tag}>`;
+        if (closingSlash) {
+            out += `</${tag}>`;
+            continue;
+        }
         if (tag === 'span') {
             const styleMatch = attrs.match(/style\s*=\s*"([^"]*)"/i) || attrs.match(/style\s*=\s*'([^']*)'/i);
             if (styleMatch) {
@@ -92,14 +125,18 @@ function sanitizeRichText(html) {
                 // Одинарные кавычки для АТРИБУТА, т.к. значения font-family (SF Serif,
                 // Times New Roman) сами содержат двойные кавычки — style="...""..." было
                 // бы невалидным HTML (браузер обрывает атрибут на первой внутренней "),
-                // ломая и рендер, и повторный парсинг при редактировании. Проверено
-                // эмпирически: без этого read-режим рендерил битую разметку.
-                return cleanStyle ? `<span style='${cleanStyle}'>` : '<span>';
+                // ломая и рендер, и повторный парсинг при редактировании.
+                out += cleanStyle ? `<span style='${cleanStyle}'>` : '<span>';
+            } else {
+                out += '<span>';
             }
-            return '<span>';
+            continue;
         }
-        return `<${tag}>`;
-    });
+        out += `<${tag}>`;
+    }
+
+    out += escapeTextNode(source.slice(lastIndex));
+    return out;
 }
 
 // hasMainText/objectionsCount — подстрока наполненности в списке скриптов

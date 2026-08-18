@@ -4,17 +4,26 @@
 // отменена, скрипт назначается лиду на странице «Лиды». «Удалить» по той же
 // причине больше ничем не блокируется: у лидов привязка обнуляется сама
 // (ON DELETE SET NULL), подтверждено владельцем вместе с макетом.
+//
+// ЧТО ИЗМЕНИЛОСЬ ПРИ ПЕРЕЕЗДЕ В ОБОЛОЧКУ: модуль только рисует строки и ничего
+// не знает ни про запросы, ни про подтверждения, ни про тосты — раньше он сам
+// дёргал storage, confirmAction и showToast и вешал слушатель на каждую кнопку.
+// Теперь клики ловит раздел одним делегированием на своём контейнере: при
+// перерисовке списка не нужно снимать десятки слушателей, а раздел остаётся
+// единственным местом, которое ходит в API.
 
-import { updateScript, deleteScript } from './scriptsAdminStorage.js';
-import { confirmAction } from './scriptsAdminConfirm.js';
-import { showToast } from './scriptsAdminToast.js';
-
-function escapeHtml(value) {
+export function escapeHtml(value) {
     if (value === null || value === undefined) return '';
     return String(value)
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;');
+        .replace(/>/g, '&gt;')
+        // Кавычки — обязательно: значения попадают в атрибуты (value="…",
+        // title="…"), и без этого название с кавычкой обрывало разметку.
+        // На прежней странице этого не было видно: там значения присваивались
+        // через .value, а не собирались строкой.
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
 }
 
 function pluralObjections(count) {
@@ -25,9 +34,8 @@ function pluralObjections(count) {
     return `${count} возражений`;
 }
 
-// Подстрока наполненности — единственное добавление сверх прежней
-// функциональности: показывает уже существующие данные (агрегаты приходят из
-// GET /api/admin/scripts одним JOIN, без N+1 запросов отсюда).
+// Подстрока наполненности показывает уже существующие данные: агрегаты
+// приходят из GET /api/admin/scripts одним JOIN, без N+1 запросов отсюда.
 function fillSummary(script) {
     const parts = [];
     if (script.hasMainText) parts.push('основной текст');
@@ -35,97 +43,36 @@ function fillSummary(script) {
     return parts.length ? parts.join(' · ') : 'Пока не наполнен';
 }
 
-// onOpen(script) — открыть панель наполнения; onChanged() — перезагрузить список.
-export function renderScriptList(container, scripts, selectedId, onOpen, onChanged) {
-    if (!scripts.length) {
-        container.innerHTML = '<div class="sa-empty-state" style="padding:40px 20px; text-align:center;">Пока нет ни одного скрипта — создайте первый.</div>';
-        return;
-    }
-
-    const rows = scripts.map((script) => {
+/** Разметка строк таблицы. Клики ловит раздел по data-action / data-id. */
+export function renderScriptRows(scripts, selectedId) {
+    return scripts.map((script) => {
         const chip = script.status === 'active'
-            ? '<span class="status-chip active">Активен</span>'
-            : '<span class="status-chip draft">Черновик</span>';
+            ? '<span class="ui-pill ui-pill--ok ui-pill--dot">Активен</span>'
+            : '<span class="ui-pill ui-pill--mute ui-pill--dot">Черновик</span>';
         const statusToggleBtn = script.status === 'draft'
-            ? `<button type="button" class="btn btn-ghost btn-sm" data-action="activate" data-id="${script.id}">Активировать</button>`
-            : `<button type="button" class="btn btn-ghost btn-sm" data-action="deactivate" data-id="${script.id}">В черновик</button>`;
+            ? `<button type="button" class="ui-btn ui-btn--ghost ui-btn--sm" data-action="activate" data-id="${script.id}">Активировать</button>`
+            : `<button type="button" class="ui-btn ui-btn--ghost ui-btn--sm" data-action="deactivate" data-id="${script.id}">В черновик</button>`;
 
         return `
-            <tr class="${script.id === selectedId ? 'sa-selected' : ''}" data-row-id="${script.id}">
+            <tr class="${script.id === selectedId ? 'ui-table__row--selected' : ''}" data-row-id="${script.id}">
                 <td>
-                    <div class="script-title">${escapeHtml(script.title)}</div>
-                    <div class="script-sub">${escapeHtml(fillSummary(script))}</div>
+                    <div class="scr-title">${escapeHtml(script.title)}</div>
+                    <div class="scr-sub">${escapeHtml(fillSummary(script))}</div>
                 </td>
                 <td>${chip}</td>
-                <td class="col-actions">
-                    <div class="sa-actions">
-                        <button type="button" class="btn btn-ghost btn-sm" data-action="open" data-id="${script.id}">Открыть</button>
-                        ${statusToggleBtn}
-                        <button type="button" class="m-icon-btn danger" data-action="delete" data-id="${script.id}" title="Удалить" aria-label="Удалить"><i class="fas fa-trash" aria-hidden="true"></i></button>
-                    </div>
+                <td class="ui-table__acts">
+                    <button type="button" class="ui-btn ui-btn--ghost ui-btn--sm" data-action="open" data-id="${script.id}">Открыть</button>
+                    ${statusToggleBtn}
+                    <button type="button" class="ui-btn ui-btn--icon ui-btn--danger ui-btn--sm" data-action="delete" data-id="${script.id}" title="Удалить" aria-label="Удалить"><i class="fas fa-trash" aria-hidden="true"></i></button>
                 </td>
             </tr>
         `;
     }).join('');
-
-    container.innerHTML = `
-        <table>
-            <thead>
-                <tr><th>Скрипт</th><th>Статус</th><th class="col-actions">Действия</th></tr>
-            </thead>
-            <tbody>${rows}</tbody>
-        </table>
-    `;
-
-    container.querySelectorAll('[data-action="open"]').forEach((btn) => {
-        btn.addEventListener('click', () => {
-            const script = scripts.find((s) => s.id === Number(btn.dataset.id));
-            onOpen(script);
-        });
-    });
-
-    container.querySelectorAll('[data-action="activate"]').forEach((btn) => {
-        btn.addEventListener('click', async () => {
-            const script = scripts.find((s) => s.id === Number(btn.dataset.id));
-            const ok = await confirmAction(`Активировать скрипт «${script.title}»? Он станет доступен для выбора на странице «Лиды».`);
-            if (!ok) return;
-            try {
-                await updateScript(script.id, { title: script.title, status: 'active' });
-                showToast('Скрипт активирован', 'success');
-                onChanged();
-            } catch (e) {
-                showToast(e.message, 'error');
-            }
-        });
-    });
-
-    container.querySelectorAll('[data-action="deactivate"]').forEach((btn) => {
-        btn.addEventListener('click', async () => {
-            const script = scripts.find((s) => s.id === Number(btn.dataset.id));
-            const ok = await confirmAction(`Вернуть скрипт «${script.title}» в черновик? Он пропадёт из выбора на «Лидах»; у лидов, где он уже назначен, ничего не изменится.`);
-            if (!ok) return;
-            try {
-                await updateScript(script.id, { title: script.title, status: 'draft' });
-                showToast('Скрипт переведён в черновик', 'success');
-                onChanged();
-            } catch (e) {
-                showToast(e.message, 'error');
-            }
-        });
-    });
-
-    container.querySelectorAll('[data-action="delete"]').forEach((btn) => {
-        btn.addEventListener('click', async () => {
-            const script = scripts.find((s) => s.id === Number(btn.dataset.id));
-            const ok = await confirmAction(`Удалить скрипт «${script.title}» вместе с основным текстом и возражениями? У лидов, где он был назначен, поле скрипта очистится. Это необратимо.`);
-            if (!ok) return;
-            try {
-                await deleteScript(script.id);
-                showToast('Скрипт удалён', 'success');
-                onChanged();
-            } catch (e) {
-                showToast(e.message, 'error');
-            }
-        });
-    });
 }
+
+/** Тексты подтверждений — те же, что видел пользователь до переезда. */
+export const CONFIRM_TEXTS = {
+    activate: (title) => `Активировать скрипт «${title}»? Он станет доступен для выбора на странице «Лиды».`,
+    deactivate: (title) => `Вернуть скрипт «${title}» в черновик? Он пропадёт из выбора на «Лидах»; у лидов, где он уже назначен, ничего не изменится.`,
+    remove: (title) => `Удалить скрипт «${title}» вместе с основным текстом и возражениями? У лидов, где он был назначен, поле скрипта очистится. Это необратимо.`
+};

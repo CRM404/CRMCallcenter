@@ -88,10 +88,15 @@ app.use('/api/schedule', scheduleRouter);
 // редирект браузеры кэшируют надолго — откатив раздел, мы не смогли бы
 // вернуть людей на старую страницу, пока они не почистят кэш вручную.
 // На 301 переведём в конце задачи, если это вообще понадобится.
+//
+// Решение владельца 19.08.2026: все шесть — 302. В половине исполнителя стояло
+// 301; на бой оно не выкатывалось, поэтому ни один браузер его не закэшировал.
 app.get('/main.html', (req, res) => res.redirect(302, '/#/requisites'));
-app.get('/cpa-networks.html', (req, res) => res.redirect(302, '/#/cpa'));
-app.get('/leads.html', (req, res) => res.redirect(302, '/#/leads'));
 app.get('/emploees.html', (req, res) => res.redirect(302, '/#/employees'));
+app.get('/leads.html', (req, res) => res.redirect(302, '/#/leads'));
+app.get('/sources.html', (req, res) => res.redirect(302, '/#/sources'));
+app.get('/cpa-networks.html', (req, res) => res.redirect(302, '/#/cpa'));
+app.get('/scripts-admin.html', (req, res) => res.redirect(302, '/#/scripts'));
 
 const shellDir = path.join(__dirname, 'Shell');
 const employeesDir = path.join(__dirname, 'Employees');

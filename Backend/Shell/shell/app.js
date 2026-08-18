@@ -33,24 +33,18 @@ import {
 //   legacyUrl  — старый адрес: пока раздел не перенесён, открывается там,
 //                в новой вкладке, и плитка это честно показывает
 
-// ВРЕМЕННОЕ ПОЛЕ `stub` — только на этап 1. Пока не перенесён ни один раздел,
-// открывать нечего, и оболочку не на чем проверить: раздел со `stub: true`
-// показывает в панели заглушку вместо перехода по старому адресу.
-//
-// СНИМАЕТСЯ ПОРАЗДЕЛЬНО при переносе: у «Реквизитов» на этапе 2 появляется
-// module и уходит stub. Если stub дожил до этапа 7 — это дефект.
-//
-// Почему поле у раздела, а не общий флаг: общий флаг делал ВСЕ разделы
-// «перенесёнными», и поведение неперенесённого нельзя было ни проверить, ни
-// увидеть глазами — оно всплыло бы только на этапе 2, у людей.
+// Временного поля `stub` здесь больше нет: оно заводилось на этап 1, пока не
+// был перенесён ни один раздел и оболочку было не на чем проверить. Все шесть
+// перенесены — поле снято вместе с кодом, который его читал (бриф: «если stub
+// дожил до конца — это дефект»).
 
 export const registry = [
     { key: 'requisites', title: 'Реквизиты',  icon: 'fas fa-building',       module: '/js/modules/mainApp.js', template: '/main-section.html', styles: '/css/main-light.css', legacyUrl: '/main.html' },
     { key: 'employees',  title: 'Сотрудники', icon: 'fas fa-users',          module: '/js/modules/employeesApp.js', template: '/employees-section.html', styles: ['/css/employees-light.css', '/css/employees-schedule.css'], legacyUrl: '/emploees.html' },
     { key: 'leads',      title: 'Лиды',       icon: 'fas fa-address-book',   module: '/js/modules/leadsApp.js', template: '/leads-section.html', styles: '/css/leads-light.css', legacyUrl: '/leads.html' },
-    { key: 'sources',    title: 'Источники',  icon: 'fas fa-diagram-project',module: null, template: null, stub: true, legacyUrl: '/sources.html' },
+    { key: 'sources',    title: 'Источники',  icon: 'fas fa-diagram-project',module: '/js/modules/sourcesSection.js', template: '/sources-section.html', styles: '/css/sources-light.css', legacyUrl: '/sources.html' },
     { key: 'cpa',        title: 'CPA-сети',   icon: 'fas fa-handshake',      module: '/js/modules/cpaApp.js', template: '/cpa-networks-section.html', styles: '/css/cpa-networks-light.css', legacyUrl: '/cpa-networks.html' },
-    { key: 'scripts',    title: 'Скрипты',    icon: 'fas fa-file-lines',     module: null, template: null, stub: true, legacyUrl: '/scripts-admin.html' }
+    { key: 'scripts',    title: 'Скрипты',    icon: 'fas fa-file-lines',     module: '/js/modules/scriptsSection.js', template: '/scripts-admin-section.html', styles: '/css/scripts-admin-light.css', legacyUrl: '/scripts-admin.html' }
 ];
 
 const STORAGE_KEY = 'shellDesktopState';
@@ -108,7 +102,7 @@ function start(roots = {}) {
 
 function isMigrated(key) {
     const section = find(key);
-    return !!section && (!!section.module || section.stub === true);
+    return !!section && !!section.module;
 }
 
 /**
@@ -201,13 +195,6 @@ async function mountSection(panelId, key, container) {
 
     mounted.set(panelId, { key, api, unmount: null, container });
 
-    // Заглушка этапа 1: панели проверяются до того, как появится первый
-    // перенесённый раздел.
-    if (!section.module && section.stub) {
-        renderStub(container, section);
-        return;
-    }
-
     try {
         // Стили раздела — пятый блок структуры («раскладка разделов»).
         // Грузятся при первом открытии раздела, а не все шестью ссылками в
@@ -291,18 +278,6 @@ function loadStyles(href) {
     });
     styleSheets.set(href, promise);
     return promise;
-}
-
-function renderStub(container, section) {
-    container.innerHTML = '';
-    const box = document.createElement('div');
-    box.className = 'ui-empty';
-    const title = document.createElement('h3');
-    title.textContent = section.title;
-    const text = document.createElement('p');
-    text.textContent = 'Раздел ещё не перенесён в оболочку. Панель показана для проверки поведения окон.';
-    box.append(title, text);
-    container.appendChild(box);
 }
 
 function renderFailure(container, section, err) {

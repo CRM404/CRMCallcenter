@@ -11,16 +11,19 @@
 // здесь при отображении (read-режим и при заполнении формы редактирования)
 // content корня вставляется как HTML, БЕЗ escapeHtml, ему уже можно доверять.
 // Возражения остаются обычным plain-text textarea + escapeHtml, как раньше.
+//
+// ПЕРЕЕЗД В ОБОЛОЧКУ. Механика редактора не тронута — она выстрадана
+// эмпирически (перенос строки, ZWSP, потеря выделения при открытии палитры), и
+// бриф прямо требует «трогать только оболочку, содержимое редактора не
+// переносить». Изменилось ровно три вещи:
+//   1. Глобальные id (#saRootEditContent, #saObjectionEditLabel-12) заменены на
+//      data-role в границах контейнера: при двух открытых панелях id вернул бы
+//      узел чужой панели, и редактор писал бы в соседний скрипт.
+//   2. showToast свой удалён — сообщения идут через toast, который передаёт
+//      раздел (ctx.toast оболочки).
+//   3. Классы .sa-* → .scr-*, кнопки/поля/пустые состояния — из слоя элементов.
 
-import { showToast } from './scriptsAdminToast.js';
-
-function escapeHtml(value) {
-    if (value === null || value === undefined) return '';
-    return String(value)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;');
-}
+import { escapeHtml } from './scriptsAdminScriptList.js';
 
 // Значения строго совпадают с белым списком санитайзера в routes/scriptsAdmin.js
 // (ALLOWED_FONT_FAMILIES) — "По умолчанию" это реальное CSS-значение initial
@@ -92,19 +95,19 @@ function findCurrentFontSizePx(range, editorEl) {
     return DEFAULT_FONT_SIZE_PX;
 }
 
-function applyFontFamily(editorEl, cssValue) {
+function applyFontFamily(editorEl, cssValue, toast) {
     const range = getEditorSelectionRange(editorEl);
     if (!range) {
-        showToast('Выделите текст', 'error');
+        toast('Выделите текст', 'error');
         return;
     }
     wrapRangeInSpan(range, `font-family: ${cssValue}`);
 }
 
-function applyFontSizeDelta(editorEl, delta) {
+function applyFontSizeDelta(editorEl, delta, toast) {
     const range = getEditorSelectionRange(editorEl);
     if (!range) {
-        showToast('Выделите текст', 'error');
+        toast('Выделите текст', 'error');
         return;
     }
     const currentSize = findCurrentFontSizePx(range, editorEl);
@@ -183,7 +186,7 @@ function applyPendingColor(editorEl, hexColor, collapsedRange) {
 // схлопнутое) выделение — красит его; иначе, если курсор просто стоит внутри
 // редактора — включает режим "печатать этим цветом"; иначе (редактор вообще
 // не в фокусе) — просьба сначала кликнуть в текст.
-function applySwatchColor(editorEl, hexColor) {
+function applySwatchColor(editorEl, hexColor, toast) {
     const selectedRange = getEditorSelectionRange(editorEl);
     if (selectedRange) {
         wrapRangeInSpan(selectedRange, `color: ${hexColor}`);
@@ -194,7 +197,7 @@ function applySwatchColor(editorEl, hexColor) {
         applyPendingColor(editorEl, hexColor, collapsedRange);
         return;
     }
-    showToast('Сначала кликните в текст', 'error');
+    toast('Сначала кликните в текст', 'error');
 }
 
 function autoGrow(el) {
@@ -275,7 +278,7 @@ function initRichTextEditor(el) {
     autoGrow(el);
 }
 
-function attachRichTextToolbar(container, editorEl) {
+function attachRichTextToolbar(container, editorEl, toast) {
     container.querySelectorAll('[data-rte-cmd]').forEach((btn) => {
         btn.addEventListener('mousedown', (e) => e.preventDefault()); // не терять фокус/выделение в редакторе
         btn.addEventListener('click', () => {
@@ -285,12 +288,12 @@ function attachRichTextToolbar(container, editorEl) {
         });
     });
 
-    // Шрифт/размер — свой span-based механизм (не execCommand, см. scriptsAdminNodes.js
-    // шапку файла и бриф п.1), работает только пока выделение внутри editorEl.
+    // Шрифт/размер — свой span-based механизм (не execCommand, см. шапку файла
+    // и бриф п.1), работает только пока выделение внутри editorEl.
     container.querySelectorAll('[data-rte-size-delta]').forEach((btn) => {
         btn.addEventListener('mousedown', (e) => e.preventDefault());
         btn.addEventListener('click', () => {
-            applyFontSizeDelta(editorEl, Number(btn.dataset.rteSizeDelta));
+            applyFontSizeDelta(editorEl, Number(btn.dataset.rteSizeDelta), toast);
             autoGrow(editorEl);
         });
     });
@@ -299,7 +302,7 @@ function attachRichTextToolbar(container, editorEl) {
     if (fontSelect) {
         fontSelect.addEventListener('mousedown', (e) => e.stopPropagation());
         fontSelect.addEventListener('change', () => {
-            applyFontFamily(editorEl, fontSelect.value);
+            applyFontFamily(editorEl, fontSelect.value, toast);
             fontSelect.value = '';
             autoGrow(editorEl);
         });
@@ -316,7 +319,7 @@ function attachRichTextToolbar(container, editorEl) {
     container.querySelectorAll('[data-rte-color]').forEach((btn) => {
         btn.addEventListener('mousedown', (e) => e.preventDefault());
         btn.addEventListener('click', () => {
-            applySwatchColor(editorEl, btn.dataset.rteColor);
+            applySwatchColor(editorEl, btn.dataset.rteColor, toast);
             autoGrow(editorEl);
         });
     });
@@ -325,20 +328,20 @@ function attachRichTextToolbar(container, editorEl) {
 function renderRichTextToolbar() {
     const fontOptions = FONT_FAMILY_OPTIONS.map((o) => `<option value='${o.value}'>${escapeHtml(o.label)}</option>`).join('');
     const colorSwatches = TEXT_COLOR_SWATCHES.map((c) => `
-        <button type="button" class="sa-rte-swatch" data-rte-color="${c.value}" style="background:${c.value}" title="${escapeHtml(c.label)}" aria-label="${escapeHtml(c.label)}"></button>
+        <button type="button" class="scr-rte__swatch" data-rte-color="${c.value}" style="background:${c.value}" title="${escapeHtml(c.label)}" aria-label="${escapeHtml(c.label)}"></button>
     `).join('');
     return `
-        <div class="sa-rte-toolbar">
-            <button type="button" class="btn btn-secondary btn-sm" data-rte-cmd="bold" title="Жирный"><b>Ж</b></button>
-            <button type="button" class="btn btn-secondary btn-sm" data-rte-cmd="italic" title="Курсив"><i>К</i></button>
-            <button type="button" class="btn btn-secondary btn-sm" data-rte-cmd="insertUnorderedList" title="Список">☰ Список</button>
-            <select class="sa-rte-font-select" data-rte-font-select title="Шрифт">
+        <div class="scr-rte__toolbar">
+            <button type="button" class="ui-btn ui-btn--secondary ui-btn--sm" data-rte-cmd="bold" title="Жирный"><b>Ж</b></button>
+            <button type="button" class="ui-btn ui-btn--secondary ui-btn--sm" data-rte-cmd="italic" title="Курсив"><i>К</i></button>
+            <button type="button" class="ui-btn ui-btn--secondary ui-btn--sm" data-rte-cmd="insertUnorderedList" title="Список">☰ Список</button>
+            <select class="ui-field__control scr-rte__font" data-rte-font-select title="Шрифт" aria-label="Шрифт">
                 <option value="" disabled selected>Шрифт…</option>
                 ${fontOptions}
             </select>
-            <button type="button" class="btn btn-secondary btn-sm" data-rte-size-delta="-1" title="Уменьшить размер на 1px">A−</button>
-            <button type="button" class="btn btn-secondary btn-sm" data-rte-size-delta="1" title="Увеличить размер на 1px">A+</button>
-            <div class="sa-rte-swatches" title="Цвет текста: выделите текст и выберите цвет, либо выберите цвет и печатайте им дальше">${colorSwatches}</div>
+            <button type="button" class="ui-btn ui-btn--secondary ui-btn--sm" data-rte-size-delta="-1" title="Уменьшить размер на 1px">A−</button>
+            <button type="button" class="ui-btn ui-btn--secondary ui-btn--sm" data-rte-size-delta="1" title="Увеличить размер на 1px">A+</button>
+            <div class="scr-rte__swatches" title="Цвет текста: выделите текст и выберите цвет, либо выберите цвет и печатайте им дальше">${colorSwatches}</div>
         </div>
     `;
 }
@@ -346,46 +349,48 @@ function renderRichTextToolbar() {
 function renderRootBlock(root, editing) {
     if (!root) {
         return `
-            <div class="sa-root-box">
-                <h3>Основной текст</h3>
-                <div class="sa-empty-state">У скрипта пока нет основного текста.</div>
-                <div class="form-group">
-                    <label>Текст</label>
-                    <div class="sa-rte">
+            <div class="scr-card">
+                <h3 class="scr-card__title">Основной текст</h3>
+                <div class="ui-empty ui-empty--inline">
+                    <span class="ui-empty__text">У скрипта пока нет основного текста.</span>
+                </div>
+                <div class="ui-field">
+                    <label class="ui-field__label">Текст</label>
+                    <div class="scr-rte">
                         ${renderRichTextToolbar()}
-                        <div class="sa-rte-editor" contenteditable="true" id="saRootNewContent" data-placeholder="Текст, который видит оператор"></div>
+                        <div class="scr-rte__editor" contenteditable="true" data-role="root-editor" data-placeholder="Текст, который видит оператор"></div>
                     </div>
                 </div>
-                <div class="sa-actions">
-                    <button type="button" class="btn btn-primary btn-sm" id="saRootCreateBtn">Создать основной текст</button>
+                <div class="ui-btn-row">
+                    <button type="button" class="ui-btn ui-btn--sm" data-role="root-create">Создать основной текст</button>
                 </div>
             </div>
         `;
     }
     if (editing) {
         return `
-            <div class="sa-root-box">
-                <h3>Основной текст</h3>
-                <div class="form-group">
-                    <label>Текст</label>
-                    <div class="sa-rte">
+            <div class="scr-card">
+                <h3 class="scr-card__title">Основной текст</h3>
+                <div class="ui-field">
+                    <label class="ui-field__label">Текст</label>
+                    <div class="scr-rte">
                         ${renderRichTextToolbar()}
-                        <div class="sa-rte-editor" contenteditable="true" id="saRootEditContent" data-placeholder="Текст, который видит оператор">${root.content}</div>
+                        <div class="scr-rte__editor" contenteditable="true" data-role="root-editor" data-placeholder="Текст, который видит оператор">${root.content}</div>
                     </div>
                 </div>
-                <div class="sa-actions">
-                    <button type="button" class="btn btn-primary btn-sm" id="saRootSaveBtn">Сохранить</button>
-                    <button type="button" class="btn btn-secondary btn-sm" id="saRootCancelBtn">Отмена</button>
+                <div class="ui-btn-row">
+                    <button type="button" class="ui-btn ui-btn--sm" data-role="root-save">Сохранить</button>
+                    <button type="button" class="ui-btn ui-btn--secondary ui-btn--sm" data-role="root-cancel">Отмена</button>
                 </div>
             </div>
         `;
     }
     return `
-        <div class="sa-root-box">
-            <h3>Основной текст</h3>
-            <div class="sa-node-content">${root.content}</div>
-            <div class="sa-actions" style="margin-top:10px;">
-                <button type="button" class="btn btn-secondary btn-sm" id="saRootEditBtn">Изменить</button>
+        <div class="scr-card">
+            <h3 class="scr-card__title">Основной текст</h3>
+            <div class="scr-node__content">${root.content}</div>
+            <div class="ui-btn-row">
+                <button type="button" class="ui-btn ui-btn--secondary ui-btn--sm" data-role="root-edit">Изменить</button>
             </div>
         </div>
     `;
@@ -394,29 +399,29 @@ function renderRootBlock(root, editing) {
 function renderObjectionCard(node, editing) {
     if (editing) {
         return `
-            <div class="sa-objection-card" data-id="${node.id}">
-                <div class="form-group">
-                    <label for="saObjectionEditLabel-${node.id}">Метка</label>
-                    <input type="text" id="saObjectionEditLabel-${node.id}" value="${escapeHtml(node.label || '')}">
+            <div class="scr-objection" data-id="${node.id}">
+                <div class="ui-field">
+                    <label class="ui-field__label">Метка</label>
+                    <input type="text" class="ui-field__control" data-role="objection-label" value="${escapeHtml(node.label || '')}" aria-label="Метка возражения">
                 </div>
-                <div class="form-group">
-                    <label for="saObjectionEditContent-${node.id}">Текст</label>
-                    <textarea id="saObjectionEditContent-${node.id}" rows="3">${escapeHtml(node.content)}</textarea>
+                <div class="ui-field">
+                    <label class="ui-field__label">Текст</label>
+                    <textarea class="ui-field__control" data-role="objection-content" rows="3" aria-label="Текст возражения">${escapeHtml(node.content)}</textarea>
                 </div>
-                <div class="sa-actions">
-                    <button type="button" class="btn btn-primary btn-sm" data-action="save-objection" data-id="${node.id}">Сохранить</button>
-                    <button type="button" class="btn btn-secondary btn-sm" data-action="cancel-edit-objection" data-id="${node.id}">Отмена</button>
+                <div class="ui-btn-row">
+                    <button type="button" class="ui-btn ui-btn--sm" data-action="save-objection" data-id="${node.id}">Сохранить</button>
+                    <button type="button" class="ui-btn ui-btn--secondary ui-btn--sm" data-action="cancel-edit-objection" data-id="${node.id}">Отмена</button>
                 </div>
             </div>
         `;
     }
     return `
-        <div class="sa-objection-card" data-id="${node.id}">
-            <div class="sa-node-label">${escapeHtml(node.label || '(без метки)')}</div>
-            <div class="sa-node-content">${escapeHtml(node.content)}</div>
-            <div class="sa-actions" style="margin-top:8px;">
-                <button type="button" class="btn btn-secondary btn-sm" data-action="edit-objection" data-id="${node.id}">Изменить</button>
-                <button type="button" class="btn btn-danger btn-sm" data-action="delete-objection" data-id="${node.id}">Удалить</button>
+        <div class="scr-objection" data-id="${node.id}">
+            <div class="scr-node__label">${escapeHtml(node.label || '(без метки)')}</div>
+            <div class="scr-node__content">${escapeHtml(node.content)}</div>
+            <div class="ui-btn-row">
+                <button type="button" class="ui-btn ui-btn--secondary ui-btn--sm" data-action="edit-objection" data-id="${node.id}">Изменить</button>
+                <button type="button" class="ui-btn ui-btn--danger ui-btn--sm" data-action="delete-objection" data-id="${node.id}">Удалить</button>
             </div>
         </div>
     `;
@@ -425,36 +430,38 @@ function renderObjectionCard(node, editing) {
 function renderObjectionsBlock(objections, uiState) {
     const cards = objections.map((o) => renderObjectionCard(o, uiState.editingObjectionId === o.id)).join('');
     const addForm = uiState.addingObjection ? `
-        <div class="sa-objection-card">
-            <div class="form-group">
-                <label for="saObjectionNewLabel">Метка</label>
-                <input type="text" id="saObjectionNewLabel" placeholder="Например: Возражение: дорого">
+        <div class="scr-objection" data-role="objection-new">
+            <div class="ui-field">
+                <label class="ui-field__label">Метка</label>
+                <input type="text" class="ui-field__control" data-role="objection-label" placeholder="Например: Возражение: дорого" aria-label="Метка возражения">
             </div>
-            <div class="form-group">
-                <label for="saObjectionNewContent">Текст</label>
-                <textarea id="saObjectionNewContent" rows="3"></textarea>
+            <div class="ui-field">
+                <label class="ui-field__label">Текст</label>
+                <textarea class="ui-field__control" data-role="objection-content" rows="3" aria-label="Текст возражения"></textarea>
             </div>
-            <div class="sa-actions">
-                <button type="button" class="btn btn-primary btn-sm" id="saObjectionCreateBtn">Добавить</button>
-                <button type="button" class="btn btn-secondary btn-sm" id="saObjectionCreateCancelBtn">Отмена</button>
+            <div class="ui-btn-row">
+                <button type="button" class="ui-btn ui-btn--sm" data-role="objection-create">Добавить</button>
+                <button type="button" class="ui-btn ui-btn--secondary ui-btn--sm" data-role="objection-create-cancel">Отмена</button>
             </div>
         </div>
     ` : '';
 
     return `
-        <div class="sa-objections-box">
-            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
-                <h3 style="margin:0;">Возражения</h3>
-                ${!uiState.addingObjection ? '<button type="button" class="btn btn-secondary btn-sm" id="saObjectionAddBtn">+ Добавить возражение</button>' : ''}
+        <div class="scr-card">
+            <div class="scr-card__head">
+                <h3 class="scr-card__title">Возражения</h3>
+                ${!uiState.addingObjection ? '<button type="button" class="ui-btn ui-btn--secondary ui-btn--sm" data-role="objection-add">+ Добавить возражение</button>' : ''}
             </div>
-            ${objections.length ? `<div class="sa-objections-list">${cards}</div>` : '<div class="sa-empty-state">Пока нет возражений.</div>'}
+            ${objections.length
+                ? `<div class="scr-objections">${cards}</div>`
+                : '<div class="ui-empty ui-empty--inline"><span class="ui-empty__text">Пока нет возражений.</span></div>'}
             ${addForm}
         </div>
     `;
 }
 
 // uiState = { rootEditing, addingObjection, editingObjectionId }
-// handlers = { onEditRootStart, onCancelRootEdit, onCreateRoot(html), onSaveRoot(root, html),
+// handlers = { toast, busy, onEditRootStart, onCancelRootEdit, onCreateRoot(html), onSaveRoot(root, html),
 //              onAddObjectionStart, onAddObjectionCancel, onCreateObjection({label, content}),
 //              onEditObjectionStart(id), onEditObjectionCancel, onSaveObjection(node, {label, content}),
 //              onDeleteObjection(id) }
@@ -464,39 +471,44 @@ export function renderNodesPanel(container, nodes, uiState, handlers) {
 
     container.innerHTML = renderRootBlock(root, uiState.rootEditing) + (root ? renderObjectionsBlock(objections, uiState) : '');
 
+    // Кнопки, которые шлют запрос, блокируются на время запроса (handlers.busy).
+    // Без этого двойной клик уходит дважды: по «Добавить возражение» это два
+    // одинаковых возражения в базе, по «Создать основной текст» — отказ сервера
+    // «У скрипта уже есть корневой узел» в ответ на собственный двойной клик.
     if (!root) {
-        const editorEl = container.querySelector('#saRootNewContent');
+        const editorEl = container.querySelector('[data-role="root-editor"]');
         initRichTextEditor(editorEl);
-        attachRichTextToolbar(container, editorEl);
-        container.querySelector('#saRootCreateBtn').addEventListener('click', () => {
-            handlers.onCreateRoot(getEditorHtmlForSave(editorEl));
+        attachRichTextToolbar(container, editorEl, handlers.toast);
+        const createBtn = container.querySelector('[data-role="root-create"]');
+        createBtn.addEventListener('click', () => {
+            handlers.busy(createBtn, () => handlers.onCreateRoot(getEditorHtmlForSave(editorEl)));
         });
         return;
     }
 
     if (uiState.rootEditing) {
-        const editorEl = container.querySelector('#saRootEditContent');
+        const editorEl = container.querySelector('[data-role="root-editor"]');
         initRichTextEditor(editorEl);
-        attachRichTextToolbar(container, editorEl);
-        container.querySelector('#saRootSaveBtn').addEventListener('click', () => {
-            handlers.onSaveRoot(root, getEditorHtmlForSave(editorEl));
+        attachRichTextToolbar(container, editorEl, handlers.toast);
+        const saveBtn = container.querySelector('[data-role="root-save"]');
+        saveBtn.addEventListener('click', () => {
+            handlers.busy(saveBtn, () => handlers.onSaveRoot(root, getEditorHtmlForSave(editorEl)));
         });
-        container.querySelector('#saRootCancelBtn').addEventListener('click', handlers.onCancelRootEdit);
+        container.querySelector('[data-role="root-cancel"]').addEventListener('click', handlers.onCancelRootEdit);
     } else {
-        container.querySelector('#saRootEditBtn').addEventListener('click', handlers.onEditRootStart);
+        container.querySelector('[data-role="root-edit"]').addEventListener('click', handlers.onEditRootStart);
     }
 
-    const addBtn = container.querySelector('#saObjectionAddBtn');
+    const addBtn = container.querySelector('[data-role="objection-add"]');
     if (addBtn) addBtn.addEventListener('click', handlers.onAddObjectionStart);
 
-    const createBtn = container.querySelector('#saObjectionCreateBtn');
-    if (createBtn) {
-        createBtn.addEventListener('click', () => {
-            const label = container.querySelector('#saObjectionNewLabel').value;
-            const content = container.querySelector('#saObjectionNewContent').value;
-            handlers.onCreateObjection({ label, content });
+    const newCard = container.querySelector('[data-role="objection-new"]');
+    if (newCard) {
+        const createObjectionBtn = newCard.querySelector('[data-role="objection-create"]');
+        createObjectionBtn.addEventListener('click', () => {
+            handlers.busy(createObjectionBtn, () => handlers.onCreateObjection(readObjectionFields(newCard)));
         });
-        container.querySelector('#saObjectionCreateCancelBtn').addEventListener('click', handlers.onAddObjectionCancel);
+        newCard.querySelector('[data-role="objection-create-cancel"]').addEventListener('click', handlers.onAddObjectionCancel);
     }
 
     container.querySelectorAll('[data-action="edit-objection"]').forEach((btn) => {
@@ -508,13 +520,22 @@ export function renderNodesPanel(container, nodes, uiState, handlers) {
     container.querySelectorAll('[data-action="save-objection"]').forEach((btn) => {
         btn.addEventListener('click', () => {
             const id = Number(btn.dataset.id);
-            const label = container.querySelector(`#saObjectionEditLabel-${id}`).value;
-            const content = container.querySelector(`#saObjectionEditContent-${id}`).value;
+            // Поля читаются в границах СВОЕЙ карточки, а не по составному id по
+            // всей панели: в оболочке одинаковые data-role живут и в соседней
+            // панели тоже (образец куратора, п.4).
+            const card = btn.closest('.scr-objection');
             const node = objections.find((o) => o.id === id);
-            handlers.onSaveObjection(node, { label, content });
+            handlers.busy(btn, () => handlers.onSaveObjection(node, readObjectionFields(card)));
         });
     });
     container.querySelectorAll('[data-action="delete-objection"]').forEach((btn) => {
         btn.addEventListener('click', () => handlers.onDeleteObjection(Number(btn.dataset.id)));
     });
+}
+
+function readObjectionFields(card) {
+    return {
+        label: card.querySelector('[data-role="objection-label"]').value,
+        content: card.querySelector('[data-role="objection-content"]').value
+    };
 }

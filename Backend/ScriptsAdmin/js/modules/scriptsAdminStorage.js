@@ -1,67 +1,24 @@
-// --- scriptsAdminStorage.js: клиент REST API для страницы управления скриптом ---
-
-export const API_BASE_URL = '/api';
-
-async function request(path, options = {}) {
-    let response;
-    try {
-        response = await fetch(`${API_BASE_URL}${path}`, {
-            headers: { 'Content-Type': 'application/json' },
-            ...options
-        });
-    } catch (e) {
-        throw new Error('Не удалось связаться с сервером. Проверьте подключение.');
-    }
-
-    if (response.status === 204) return null;
-
-    let body = null;
-    try {
-        body = await response.json();
-    } catch (e) {
-        // тело может отсутствовать при некоторых ошибках — игнорируем
-    }
-
-    if (!response.ok) {
-        const err = new Error((body && body.error) || 'Произошла ошибка на сервере');
-        err.status = response.status;
-        throw err;
-    }
-    return body;
-}
-
-export function fetchScripts() {
-    return request('/admin/scripts');
-}
-
-export function createScript(data) {
-    return request('/admin/scripts', { method: 'POST', body: JSON.stringify(data) });
-}
-
-export function updateScript(id, data) {
-    return request(`/admin/scripts/${id}`, { method: 'PUT', body: JSON.stringify(data) });
-}
-
-export function deleteScript(id) {
-    return request(`/admin/scripts/${id}`, { method: 'DELETE' });
-}
-
-export function fetchScriptNodes(scriptId) {
-    return request(`/admin/scripts/${scriptId}/nodes`);
-}
-
-export function createScriptNode(scriptId, data) {
-    return request(`/admin/scripts/${scriptId}/nodes`, { method: 'POST', body: JSON.stringify(data) });
-}
-
-export function updateScriptNode(nodeId, data) {
-    return request(`/admin/script-nodes/${nodeId}`, { method: 'PUT', body: JSON.stringify(data) });
-}
-
-export function deleteScriptNode(nodeId) {
-    return request(`/admin/script-nodes/${nodeId}`, { method: 'DELETE' });
-}
-
+// --- scriptsAdminStorage.js: доменные методы API раздела «Скрипты» ---
+//
+// Своя копия request() удалена: транспорт теперь общий и привязан к жизни
+// панели (Shell/api.js, ctx.api). Раздел строит хранилище от ctx.api в mount —
+// закрытие панели обрывает незавершённые запросы, и ответ не приходит в
+// разобранный раздел.
+//
 // Здесь были fetchEmployees / addScriptToEmployee / removeScriptFromEmployee —
 // удалены вместе с панелью назначения операторов (13.08.2026). Скрипт теперь
 // привязывается к лиду на странице «Лиды», а не к оператору здесь.
+
+export function createStorage(api) {
+    return {
+        fetchScripts: () => api.get('/admin/scripts'),
+        createScript: (data) => api.post('/admin/scripts', data),
+        updateScript: (id, data) => api.put(`/admin/scripts/${id}`, data),
+        deleteScript: (id) => api.del(`/admin/scripts/${id}`),
+
+        fetchScriptNodes: (scriptId) => api.get(`/admin/scripts/${scriptId}/nodes`),
+        createScriptNode: (scriptId, data) => api.post(`/admin/scripts/${scriptId}/nodes`, data),
+        updateScriptNode: (nodeId, data) => api.put(`/admin/script-nodes/${nodeId}`, data),
+        deleteScriptNode: (nodeId) => api.del(`/admin/script-nodes/${nodeId}`)
+    };
+}

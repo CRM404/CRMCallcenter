@@ -1,0 +1,97 @@
+<!-- Фрагмент раздела «Скрипты». Грузится оболочкой при первом монтировании
+     панели и кэшируется в памяти (shell/app.js).
+
+     ЗДЕСЬ НЕТ ГЛОБАЛЬНЫХ id: при двух открытых панелях getElementById вернул бы
+     первый попавшийся, и раздел стал бы управлять чужим элементом. Поиск идёт
+     только по data-role в границах своего контейнера.
+
+     Своих кнопок, полей, таблиц, чипов, модалок и тостов раздел не объявляет —
+     всё из слоя элементов. В scripts-admin-light.css остаётся только раскладка.
+
+     Наполнение открытого скрипта (основной текст + возражения) рисуется из
+     scriptsAdminNodes.js: там редактор, который зависит от состояния, и
+     держать его половину здесь значило бы разорвать разметку надвое. -->
+
+<div class="scr-section">
+
+    <div class="scr-head">
+        <div class="scr-head__titles">
+            <div class="scr-head__eyebrow">CRM · Скрипты звонков</div>
+            <h2 class="scr-head__title">Скрипты</h2>
+            <p class="scr-head__sub">Сценарии разговора для операторов: основной текст и ответы на возражения. К лиду скрипт привязывается на странице «Лиды» — здесь только содержимое и статус.</p>
+        </div>
+
+        <ul class="ui-chips scr-head__stats">
+            <li class="ui-chip"><span class="ui-chip__value" data-role="stat-total">—</span><span class="ui-chip__label">Всего</span></li>
+            <li class="ui-chip ui-chip--ok"><span class="ui-chip__value" data-role="stat-active">—</span><span class="ui-chip__label">Активных</span></li>
+            <li class="ui-chip ui-chip--muted"><span class="ui-chip__value" data-role="stat-draft">—</span><span class="ui-chip__label">Черновиков</span></li>
+        </ul>
+
+        <div class="scr-head__acts">
+            <button type="button" class="ui-btn ui-btn--sm" data-role="new-script">
+                <i class="fas fa-plus" aria-hidden="true"></i>Новый скрипт
+            </button>
+        </div>
+    </div>
+
+    <!-- Список скриптов. Прячется целиком, пока открыт скрипт или панель
+         создания — как и на прежней странице. -->
+    <div data-role="list-wrap">
+        <div class="ui-table-wrap">
+            <table class="ui-table">
+                <thead>
+                    <tr>
+                        <th>Скрипт</th>
+                        <th>Статус</th>
+                        <th class="ui-table__acts">Действия</th>
+                    </tr>
+                </thead>
+                <tbody data-role="rows"></tbody>
+            </table>
+        </div>
+
+        <div class="ui-empty" data-role="empty" hidden>
+            <span class="ui-empty__icon"><i class="fas fa-file-lines" aria-hidden="true"></i></span>
+            <b class="ui-empty__title">Пока нет ни одного скрипта</b>
+            <span class="ui-empty__text">Создайте первый — название можно будет изменить позже.</span>
+            <button type="button" class="ui-btn ui-btn--ghost ui-btn--sm ui-empty__action" data-role="empty-action">Новый скрипт</button>
+        </div>
+    </div>
+
+    <!-- Создание: единственное поле — название, после создания скрипт сразу
+         открывается на наполнение. -->
+    <div class="scr-card" data-role="create-panel" hidden>
+        <h3 class="scr-card__title">Новый скрипт</h3>
+        <div class="scr-inline">
+            <div class="ui-field scr-inline__field">
+                <label class="ui-field__label">Название</label>
+                <input type="text" class="ui-field__control" data-role="new-title"
+                       placeholder="Например: Первичный обзвон — новостройки" aria-label="Название скрипта">
+            </div>
+            <div class="ui-btn-row scr-inline__acts">
+                <button type="button" class="ui-btn ui-btn--sm" data-role="create">Создать</button>
+                <button type="button" class="ui-btn ui-btn--ghost ui-btn--sm" data-role="create-cancel">Отмена</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Открытый скрипт: шапка (название + статус) → наполнение. -->
+    <section data-role="opened" hidden>
+        <div class="scr-card">
+            <div class="scr-inline">
+                <div class="ui-field scr-inline__field">
+                    <label class="ui-field__label">Название</label>
+                    <input type="text" class="ui-field__control" data-role="meta-title" aria-label="Название скрипта">
+                </div>
+                <div class="ui-btn-row scr-inline__acts">
+                    <span class="ui-pill ui-pill--dot" data-role="open-status">—</span>
+                    <button type="button" class="ui-btn ui-btn--sm" data-role="meta-save">Сохранить</button>
+                    <button type="button" class="ui-btn ui-btn--ghost ui-btn--sm" data-role="hide-nodes">Скрыть</button>
+                </div>
+            </div>
+        </div>
+
+        <div data-role="nodes"></div>
+    </section>
+
+</div>
