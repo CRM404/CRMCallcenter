@@ -91,6 +91,7 @@ app.use('/api/schedule', scheduleRouter);
 app.get('/main.html', (req, res) => res.redirect(302, '/#/requisites'));
 app.get('/cpa-networks.html', (req, res) => res.redirect(302, '/#/cpa'));
 app.get('/leads.html', (req, res) => res.redirect(302, '/#/leads'));
+app.get('/emploees.html', (req, res) => res.redirect(302, '/#/employees'));
 
 const shellDir = path.join(__dirname, 'Shell');
 const employeesDir = path.join(__dirname, 'Employees');

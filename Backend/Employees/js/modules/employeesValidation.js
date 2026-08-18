@@ -1,4 +1,7 @@
-// --- validation.js: форматирование и валидация телефона/email ---
+// Переименован из validation.js при переносе в оболочку. Код не тронут:
+// модуль чистый, только проверки и форматирование строк.
+//
+// --- employeesValidation.js: форматирование и валидация телефона/email ---
 
 function normalizeRussian8(digits) {
     if (digits.length === 11 && digits.startsWith('8')) {

@@ -1,0 +1,487 @@
+<!-- Фрагмент раздела «Сотрудники». Грузится оболочкой при первом открытии
+     панели и кэшируется.
+
+     ДВА РЕЖИМА В ОДНОЙ ПАНЕЛИ: «Список» и «График». Переключатель виден в
+     обоих и всегда на одном месте — иначе из графика не выйти, а прыгающая
+     шапка дёргается при переключении (dialog.md, Б2). Данные графика грузятся
+     лениво, при первом переходе в него.
+
+     ЧЕГО ЗДЕСЬ НЕТ по сравнению со старой страницей:
+       - каркаса страницы и каркаса хаба (навигации-рейки в проекте нет);
+       - #toastContainer — тост один на приложение, создаётся вызовом;
+       - двух окон подтверждения (удаление и «закрыть без сохранения») — оба
+         приходят из слоя вызовом ctx.confirmDanger / ctx.confirm.
+
+     ID ТОЛЬКО ТАМ, ГДЕ ЕСТЬ label[for], и все с префиксом emp. Раньше поля
+     звались lastName, email, status, department — в одном документе с другими
+     разделами такие имена столкнутся первыми же. Служебные узлы переведены на
+     data-role.
+
+     ВИД — ИЗ СЛОЯ: .ui-table, .ui-mass-bar, .ui-switch, .ui-chips, .ui-field,
+     .ui-btn, .ui-modal, .ui-popover, .ui-empty. Раздел объявляет только своё:
+     сетку графика, поповер дня, календарь выходных, загрузку документов.
+-->
+
+<div class="emp-wrap">
+
+    <div class="emp-head">
+        <div class="emp-head-identity">
+            <div class="eyebrow">CRM · Кадровый учёт</div>
+            <h1>Сотрудники</h1>
+        </div>
+
+        <div class="ui-switch" role="tablist" aria-label="Режим раздела">
+            <button type="button" role="tab" aria-selected="true" class="ui-switch__option ui-switch__option--active" data-role="view-list"><i class="fas fa-list" aria-hidden="true"></i>Список</button>
+            <button type="button" role="tab" aria-selected="false" class="ui-switch__option" data-role="view-schedule"><i class="fas fa-calendar-days" aria-hidden="true"></i>График</button>
+        </div>
+
+        <dl class="ui-chips" data-role="list-chips">
+            <div class="ui-chip"><dd class="ui-chip__value" data-role="stat-total">0</dd><dt class="ui-chip__label">Всего</dt></div>
+            <div class="ui-chip ui-chip--ok"><dd class="ui-chip__value" data-role="stat-active">0</dd><dt class="ui-chip__label">Активны</dt></div>
+            <div class="ui-chip ui-chip--muted"><dd class="ui-chip__value" data-role="stat-inactive">0</dd><dt class="ui-chip__label">Неактивны</dt></div>
+        </dl>
+
+        <!-- Счётчики графика: по колонке сегодняшнего дня и по ВИДИМЫМ строкам.
+             В месяце без «сегодня» показывают «—», а не нули: ноль — это
+             утверждение «никто не в смене», а тут просто другой месяц. -->
+        <dl class="ui-chips" data-role="sched-chips" hidden>
+            <div class="ui-chip ui-chip--ok"><dd class="ui-chip__value" data-role="chip-shift">0</dd><dt class="ui-chip__label">Сегодня в смене</dt></div>
+            <div class="ui-chip"><dd class="ui-chip__value" data-role="chip-off">0</dd><dt class="ui-chip__label">Выходной</dt></div>
+            <div class="ui-chip ui-chip--warn"><dd class="ui-chip__value" data-role="chip-vac">0</dd><dt class="ui-chip__label">Отпуск</dt></div>
+            <div class="ui-chip ui-chip--bad"><dd class="ui-chip__value" data-role="chip-sick">0</dd><dt class="ui-chip__label">Больничный</dt></div>
+        </dl>
+
+        <!-- Сотрудников заводят в «Списке» — в графике эта кнопка ведёт не туда,
+             куда человек в этот момент смотрит. -->
+        <div data-role="add-wrap">
+            <button type="button" class="ui-btn" data-role="add-employee"><i class="fas fa-user-plus" aria-hidden="true"></i>Добавить сотрудника</button>
+        </div>
+    </div>
+
+    <!-- ================= РЕЖИМ «СПИСОК» ================= -->
+    <section data-role="list-section">
+        <div class="toolbar">
+            <div class="search-wrap">
+                <i class="fas fa-magnifying-glass" aria-hidden="true"></i>
+                <input type="text" data-role="search" placeholder="Поиск по имени, телефону, email…" aria-label="Поиск сотрудника">
+            </div>
+            <div class="filter-btn-wrap">
+                <button type="button" class="ui-btn ui-btn--ghost" data-role="filter-toggle"><i class="fas fa-sliders" aria-hidden="true"></i>Фильтры</button>
+                <span class="filter-badge" data-role="filter-badge" hidden>0</span>
+            </div>
+            <button type="button" class="ui-btn ui-btn--ghost ui-btn--icon" data-role="columns-btn" aria-label="Настроить видимые колонки" title="Настроить видимые колонки"><i class="fas fa-table-columns" aria-hidden="true"></i></button>
+            <button type="button" class="ui-btn ui-btn--ghost ui-btn--icon" data-role="departments-btn" aria-label="Управление отделами" title="Управление отделами"><i class="fas fa-building" aria-hidden="true"></i></button>
+        </div>
+
+        <div class="ui-table-wrap" data-role="table-wrap">
+            <table class="ui-table ui-table--wide">
+                <thead>
+                    <tr>
+                        <th class="ui-table__sel"><input type="checkbox" data-role="select-all" aria-label="Выделить всех"></th>
+                        <th data-field="id">ID</th>
+                        <th data-field="lastName">Сотрудник</th>
+                        <th data-col="department" data-field="department">Отдел</th>
+                        <th>Контакты</th>
+                        <th>Мессенджеры</th>
+                        <th data-col="managerName" data-field="managerName">Руководитель</th>
+                        <th data-col="hireDate" data-field="hireDate">Дата найма</th>
+                        <th data-col="status" data-field="status">Статус</th>
+                        <th data-col="terminationDate" data-field="terminationDate">Дата увольнения</th>
+                        <th data-col="lineType" data-field="lineType">Тип линии</th>
+                        <th data-col="workSchedule" data-field="workSchedule">График работы</th>
+                        <th class="ui-table__acts">Действия</th>
+                    </tr>
+                </thead>
+                <tbody data-role="table-body"></tbody>
+            </table>
+        </div>
+
+        <div class="ui-empty ui-empty--inline" data-role="empty-state" hidden>
+            <p class="ui-empty__text">Нет сотрудников. Добавьте первого!</p>
+        </div>
+
+        <div class="ui-table-foot" data-role="pagination-row">
+            <span data-role="pagination-note"></span>
+            <div class="pagination" data-role="pagination"></div>
+        </div>
+
+        <!-- Полоса массовых операций. В старой странице это был плавающий
+             остров position:fixed по центру ЭКРАНА — в оболочке он висел бы
+             поверх соседней панели. -->
+        <div class="ui-mass-bar" data-role="mass-bar" hidden>
+            <span class="ui-mass-bar__count" data-role="selected-count">Выбрано: 0</span>
+            <select class="ui-field__control mass-select" data-role="mass-action" aria-label="Массовое действие">
+                <option value="">Выберите действие</option>
+                <option value="inactive">Перевести в неактивные</option>
+                <option value="delete">Удалить</option>
+            </select>
+            <button type="button" class="ui-btn ui-btn--sm" data-role="mass-apply">Применить</button>
+            <button type="button" class="ui-btn ui-btn--ghost ui-btn--icon ui-btn--sm" data-role="mass-clear" aria-label="Сбросить выделение" title="Сбросить выделение"><i class="fas fa-xmark" aria-hidden="true"></i></button>
+        </div>
+    </section>
+
+    <!-- ================= РЕЖИМ «ГРАФИК» ================= -->
+    <section data-role="schedule-section" hidden>
+        <div class="toolbar sched-toolbar">
+            <div class="month-nav">
+                <div class="month-pill">
+                    <button type="button" data-role="sched-prev" aria-label="Предыдущий месяц"><i class="fas fa-chevron-left" aria-hidden="true"></i></button>
+                    <span class="month-label" data-role="sched-month">—</span>
+                    <button type="button" data-role="sched-next" aria-label="Следующий месяц"><i class="fas fa-chevron-right" aria-hidden="true"></i></button>
+                </div>
+                <button type="button" class="ui-btn ui-btn--ghost ui-btn--sm" data-role="sched-today">Сегодня</button>
+            </div>
+            <div class="search-wrap">
+                <i class="fas fa-magnifying-glass" aria-hidden="true"></i>
+                <input type="text" data-role="sched-search" placeholder="Поиск по сотруднику…" aria-label="Поиск в графике">
+            </div>
+            <select class="ui-field__control sched-dept" data-role="sched-dept" aria-label="Отдел"></select>
+            <button type="button" class="ui-btn" data-role="sched-fill"><i class="fas fa-calendar-plus" aria-hidden="true"></i>Добавить график</button>
+        </div>
+
+        <div class="sched-legend" aria-label="Обозначения">
+            <span class="legend-item"><span class="legend-swatch sw-shift"><span>9:00</span><span class="t2">18:00</span></span>Смена и доп. смена — своё время</span>
+            <span class="legend-item"><span class="legend-swatch sw-off">Вых</span>Выходной</span>
+            <span class="legend-item"><span class="legend-swatch sw-vac">ОТ</span>Отпуск</span>
+            <span class="legend-item"><span class="legend-swatch sw-sick">Б</span>Больничный</span>
+            <span class="legend-item"><span class="legend-swatch sw-empty"></span>Не заполнено</span>
+        </div>
+
+        <!-- Пустой месяц: плашка появляется, но сетка всё равно рисуется —
+             экран без таблицы читался бы как поломка, а кликать было бы некуда. -->
+        <div class="sched-empty-note" data-role="sched-empty-note" hidden>
+            <i class="fas fa-circle-info" aria-hidden="true"></i>
+            <span>
+                <b data-role="sched-empty-title"></b>
+                Нажмите «Добавить график», чтобы проставить месяц целиком по одному сотруднику, или заполните дни по одному — кликом в сетке.
+            </span>
+        </div>
+
+        <div class="ui-table-wrap sched-wrap">
+            <table class="ui-table sched">
+                <thead><tr data-role="sched-head"></tr></thead>
+                <tbody data-role="sched-body"></tbody>
+                <tfoot><tr data-role="sched-foot"></tr></tfoot>
+            </table>
+        </div>
+    </section>
+
+    <!-- ================= ОКНО СОТРУДНИКА ================= -->
+    <div class="ui-modal emp-modal" data-role="employee-modal" hidden>
+        <div class="ui-modal__box ui-modal__box--wide">
+            <div class="ui-modal__head">
+                <div>
+                    <h2 class="ui-modal__title" data-role="employee-modal-title">Новый сотрудник</h2>
+                    <p class="modal-sub" data-role="step-indicator">Шаг 1 из 2</p>
+                </div>
+                <button type="button" class="ui-modal__close" data-role="employee-close" aria-label="Закрыть"><i class="fas fa-xmark" aria-hidden="true"></i></button>
+            </div>
+            <form data-role="employee-form">
+                <div class="ui-modal__body">
+                    <!-- Шаг 1: общие данные. Видны всегда — на втором шаге они
+                         скрываются целиком вместе с этим блоком. -->
+                    <div data-role="step-1-fields">
+                        <div class="ui-form-grid">
+                            <div class="ui-field"><label class="ui-field__label ui-field__label--required" for="empLastName">Фамилия</label><input class="ui-field__control" type="text" id="empLastName" placeholder="Петров"></div>
+                            <div class="ui-field"><label class="ui-field__label ui-field__label--required" for="empFirstName">Имя</label><input class="ui-field__control" type="text" id="empFirstName" placeholder="Иван"></div>
+                            <div class="ui-field"><label class="ui-field__label" for="empMiddleName">Отчество</label><input class="ui-field__control" type="text" id="empMiddleName" placeholder="Иванович"></div>
+                            <div class="ui-field"><label class="ui-field__label ui-field__label--required" for="empEmail">Email</label><input class="ui-field__control" type="email" id="empEmail" placeholder="ivan@company.ru"></div>
+                            <div class="ui-field"><label class="ui-field__label ui-field__label--required" for="empPhone">Телефон</label><input class="ui-field__control" type="tel" id="empPhone" placeholder="+7 900 123-45-67"></div>
+                            <div class="ui-field"><label class="ui-field__label" for="empWhatsapp"><i class="fab fa-whatsapp msg-wa" aria-hidden="true"></i> WhatsApp</label><input class="ui-field__control" type="tel" id="empWhatsapp" placeholder="+7 900 111-22-33"></div>
+                            <div class="ui-field"><label class="ui-field__label" for="empTelegram"><i class="fab fa-telegram-plane msg-tg" aria-hidden="true"></i> Telegram</label><input class="ui-field__control" type="text" id="empTelegram" placeholder="@username или номер"></div>
+                            <div class="ui-field"><label class="ui-field__label" for="empPosition">Должность</label><input class="ui-field__control" type="text" id="empPosition" placeholder="Оператор"></div>
+                            <div class="ui-field"><label class="ui-field__label" for="empDepartment">Отдел</label><input class="ui-field__control" type="text" id="empDepartment" placeholder="Отдел продаж"></div>
+                            <div class="ui-field"><label class="ui-field__label" for="empManager">Руководитель</label><select class="ui-field__control" id="empManager"><option value="">Без руководителя</option></select></div>
+                            <div class="ui-field"><label class="ui-field__label" for="empHireDate">Дата найма</label><input class="ui-field__control" type="date" id="empHireDate"></div>
+                            <div class="ui-field"><label class="ui-field__label" for="empStatus">Статус</label><select class="ui-field__control" id="empStatus"><option value="active">Активен</option><option value="inactive">Неактивен</option></select></div>
+                            <div class="ui-field"><label class="ui-field__label" for="empTerminationDate">Дата увольнения</label><input class="ui-field__control" type="date" id="empTerminationDate"></div>
+                            <div class="ui-field"><label class="ui-field__label" for="empLineType">Тип линии</label><select class="ui-field__control" id="empLineType"><option value="">— не выбран —</option><option value="Входящая">Входящая</option><option value="Исходящая">Исходящая</option></select></div>
+
+                            <!-- Блок «График работы»: «Дни» — справочная запись о
+                                 режиме, автоматика её не читает; «Время смены» —
+                                 одно поле «начало-конец», разбирается на две
+                                 колонки TIME (dialog.md, Б1). -->
+                            <div class="ui-field ui-field--wide schedule-field" data-role="work-days-field">
+                                <label class="ui-field__label" for="empWorkSchedule">Дни</label>
+                                <input class="ui-field__control" type="text" id="empWorkSchedule" placeholder="5/2">
+                                <span class="ui-field__hint field-hint">Рабочих дней подряд и выходных подряд: 5/2, 3/3, 2/2, 4/2. Справочная запись: выходные при заполнении месяца отмечает администратор, из этого поля они не считаются.</span>
+                            </div>
+                            <div class="ui-field ui-field--wide schedule-field" data-role="shift-time-field">
+                                <label class="ui-field__label" for="empShiftTime">Время смены</label>
+                                <input class="ui-field__control" type="text" id="empShiftTime" placeholder="09:00-18:00">
+                                <span class="ui-field__hint field-hint">С минутами, 24 часа. Смена через полночь — 22:00-06:00.</span>
+                            </div>
+
+                            <div class="ui-field ui-field--wide">
+                                <label class="ui-field__label" for="empPassword">Пароль</label>
+                                <div class="password-row">
+                                    <input class="ui-field__control" type="text" id="empPassword" placeholder="Сгенерируйте пароль" readonly>
+                                    <button type="button" class="ui-btn ui-btn--secondary" data-role="generate-password"><i class="fas fa-dice" aria-hidden="true"></i>Сгенерировать</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Шаг 2: документы и реквизиты -->
+                    <div data-role="step-2-fields" hidden>
+                        <div class="ui-form-grid">
+                            <div class="ui-field"><label class="ui-field__label" for="empCountry">Страна</label>
+                                <select class="ui-field__control" id="empCountry">
+                                    <option value="Российская Федерация">Российская Федерация</option>
+                                    <option value="Узбекистан">Узбекистан</option>
+                                    <option value="Казахстан">Казахстан</option>
+                                    <option value="Кыргызстан">Кыргызстан</option>
+                                </select>
+                            </div>
+                            <div class="ui-field"><label class="ui-field__label" for="empRegistration">Прописка</label><input class="ui-field__control" type="text" id="empRegistration" placeholder="Адрес прописки"></div>
+                            <div class="ui-field"><label class="ui-field__label" for="empPassportSeries">Серия паспорта</label><input class="ui-field__control" type="text" id="empPassportSeries" placeholder="1234"></div>
+                            <div class="ui-field"><label class="ui-field__label" for="empPassportNumber">Номер паспорта</label><input class="ui-field__control" type="text" id="empPassportNumber" placeholder="567890"></div>
+                            <div class="ui-field"><label class="ui-field__label" for="empIssuedBy">Орган выдачи</label><input class="ui-field__control" type="text" id="empIssuedBy" placeholder="ОУФМС по …"></div>
+                            <div class="ui-field"><label class="ui-field__label" for="empIssueDate">Дата выдачи</label><input class="ui-field__control" type="date" id="empIssueDate"></div>
+                            <div class="ui-field"><label class="ui-field__label" for="empInn">ИНН/ПИНФЛ</label><input class="ui-field__control" type="text" id="empInn" placeholder="1234567890"></div>
+                            <div class="ui-field"><label class="ui-field__label" for="empBank">Банк</label><input class="ui-field__control" type="text" id="empBank" placeholder="Сбербанк"></div>
+                            <div class="ui-field"><label class="ui-field__label" for="empAccount">Р/С</label><input class="ui-field__control" type="text" id="empAccount" placeholder="40817810…"></div>
+
+                            <div class="ui-field ui-field--wide">
+                                <span class="ui-field__label">Документы</span>
+                                <div class="docs-list">
+                                    <div class="file-upload-wrapper">
+                                        <label class="doc-label" for="empPassportFront">Паспорт (лицевая сторона)</label>
+                                        <div class="file-upload-area">
+                                            <input type="file" id="empPassportFront" class="hidden-file-input" accept="image/*,.pdf" data-doc="passportFront">
+                                            <i class="fas fa-file doc-file-icon" aria-hidden="true"></i>
+                                            <button type="button" class="ui-btn ui-btn--secondary ui-btn--sm file-trigger">Выбрать файл</button>
+                                            <span class="file-name"></span>
+                                            <span class="file-status-icon" hidden><i class="fas fa-circle-check" aria-hidden="true"></i></span>
+                                        </div>
+                                    </div>
+                                    <div class="file-upload-wrapper">
+                                        <label class="doc-label" for="empPassportBack">Паспорт (оборотная сторона)</label>
+                                        <div class="file-upload-area">
+                                            <input type="file" id="empPassportBack" class="hidden-file-input" accept="image/*,.pdf" data-doc="passportBack">
+                                            <i class="fas fa-file doc-file-icon" aria-hidden="true"></i>
+                                            <button type="button" class="ui-btn ui-btn--secondary ui-btn--sm file-trigger">Выбрать файл</button>
+                                            <span class="file-name"></span>
+                                            <span class="file-status-icon" hidden><i class="fas fa-circle-check" aria-hidden="true"></i></span>
+                                        </div>
+                                    </div>
+                                    <div class="file-upload-wrapper">
+                                        <label class="doc-label" for="empPatent">Патент/Самозанятость</label>
+                                        <div class="file-upload-area">
+                                            <input type="file" id="empPatent" class="hidden-file-input" accept="image/*,.pdf" data-doc="patent">
+                                            <i class="fas fa-file doc-file-icon" aria-hidden="true"></i>
+                                            <button type="button" class="ui-btn ui-btn--secondary ui-btn--sm file-trigger">Выбрать файл</button>
+                                            <span class="file-name"></span>
+                                            <span class="file-status-icon" hidden><i class="fas fa-circle-check" aria-hidden="true"></i></span>
+                                        </div>
+                                    </div>
+                                    <div class="file-upload-wrapper">
+                                        <label class="doc-label" for="empContract">Договор</label>
+                                        <div class="file-upload-area">
+                                            <input type="file" id="empContract" class="hidden-file-input" accept="image/*,.pdf" data-doc="contract">
+                                            <i class="fas fa-file doc-file-icon" aria-hidden="true"></i>
+                                            <button type="button" class="ui-btn ui-btn--secondary ui-btn--sm file-trigger">Выбрать файл</button>
+                                            <span class="file-name"></span>
+                                            <span class="file-status-icon" hidden><i class="fas fa-circle-check" aria-hidden="true"></i></span>
+                                        </div>
+                                    </div>
+                                    <div class="file-upload-wrapper">
+                                        <label class="doc-label" for="empAdditionalAgreement">Доп. соглашение</label>
+                                        <div class="file-upload-area">
+                                            <input type="file" id="empAdditionalAgreement" class="hidden-file-input" accept="image/*,.pdf" data-doc="additionalAgreement">
+                                            <i class="fas fa-file doc-file-icon" aria-hidden="true"></i>
+                                            <button type="button" class="ui-btn ui-btn--secondary ui-btn--sm file-trigger">Выбрать файл</button>
+                                            <span class="file-name"></span>
+                                            <span class="file-status-icon" hidden><i class="fas fa-circle-check" aria-hidden="true"></i></span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="ui-modal__actions">
+                    <button type="button" class="ui-btn ui-btn--secondary" data-role="employee-cancel">Отмена</button>
+                    <button type="button" class="ui-btn ui-btn--secondary" data-role="prev-step" hidden><i class="fas fa-arrow-left" aria-hidden="true"></i>Назад</button>
+                    <button type="button" class="ui-btn" data-role="next-step">Далее<i class="fas fa-arrow-right" aria-hidden="true"></i></button>
+                    <button type="submit" class="ui-btn" data-role="employee-save" hidden>Сохранить</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ================= ОКНО ФИЛЬТРОВ ================= -->
+    <div class="ui-modal emp-modal" data-role="filter-modal" hidden>
+        <div class="ui-modal__box">
+            <div class="ui-modal__head">
+                <h2 class="ui-modal__title">Фильтры</h2>
+                <button type="button" class="ui-modal__close" data-role="filter-close" aria-label="Закрыть"><i class="fas fa-xmark" aria-hidden="true"></i></button>
+            </div>
+            <div class="ui-modal__body">
+                <div class="ui-form-grid">
+                    <div class="ui-field"><label class="ui-field__label" for="empFilterStatus">Статус</label>
+                        <select class="ui-field__control" id="empFilterStatus">
+                            <option value="">Все статусы</option>
+                            <option value="active">Активен</option>
+                            <option value="inactive">Неактивен</option>
+                        </select>
+                    </div>
+                    <div class="ui-field"><label class="ui-field__label" for="empFilterDepartment">Отдел</label><select class="ui-field__control" id="empFilterDepartment"><option value="">Все отделы</option></select></div>
+                    <div class="ui-field"><label class="ui-field__label" for="empFilterPosition">Должность</label><select class="ui-field__control" id="empFilterPosition"><option value="">Все должности</option></select></div>
+                    <div class="ui-field">
+                        <span class="ui-field__label">Контакты</span>
+                        <div class="filter-checks">
+                            <label class="filter-checkbox"><input type="checkbox" id="empFilterWhatsapp"> WhatsApp</label>
+                            <label class="filter-checkbox"><input type="checkbox" id="empFilterTelegram"> Telegram</label>
+                        </div>
+                    </div>
+                    <div class="ui-field"><label class="ui-field__label" for="empFilterHireFrom">Дата найма (с)</label><input class="ui-field__control" type="date" id="empFilterHireFrom"></div>
+                    <div class="ui-field"><label class="ui-field__label" for="empFilterHireTo">Дата найма (по)</label><input class="ui-field__control" type="date" id="empFilterHireTo"></div>
+                </div>
+            </div>
+            <div class="ui-modal__actions">
+                <button type="button" class="ui-btn ui-btn--secondary" data-role="filter-clear">Сбросить</button>
+                <button type="button" class="ui-btn" data-role="filter-apply">Применить</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= ОКНО «ПОДТВЕРДИТЕ ЛИЧНОСТЬ» ================= -->
+    <div class="ui-modal emp-modal" data-role="identity-modal" hidden>
+        <div class="ui-modal__box ui-modal__box--narrow">
+            <div class="ui-modal__head">
+                <div>
+                    <h2 class="ui-modal__title">Подтвердите личность</h2>
+                    <p class="modal-sub">Настройки колонок — свои у каждого сотрудника</p>
+                </div>
+                <button type="button" class="ui-modal__close" data-role="identity-close" aria-label="Закрыть"><i class="fas fa-xmark" aria-hidden="true"></i></button>
+            </div>
+            <form data-role="identity-form">
+                <div class="ui-modal__body">
+                    <div class="ui-form-grid ui-form-grid--single">
+                        <div class="ui-field"><label class="ui-field__label" for="empIdentityEmployee">Вы</label><select class="ui-field__control" id="empIdentityEmployee" required><option value="">Выберите себя…</option></select></div>
+                        <div class="ui-field"><label class="ui-field__label" for="empIdentityPassword">Пароль</label><input class="ui-field__control" type="password" id="empIdentityPassword" required></div>
+                    </div>
+                </div>
+                <div class="ui-modal__actions">
+                    <button type="button" class="ui-btn ui-btn--secondary" data-role="identity-cancel">Отмена</button>
+                    <button type="submit" class="ui-btn">Войти</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ================= ОКНО «ВИДИМЫЕ КОЛОНКИ» ================= -->
+    <div class="ui-modal emp-modal" data-role="columns-modal" hidden>
+        <div class="ui-modal__box">
+            <div class="ui-modal__head">
+                <h2 class="ui-modal__title">Видимые колонки таблицы</h2>
+                <button type="button" class="ui-modal__close" data-role="columns-close" aria-label="Закрыть"><i class="fas fa-xmark" aria-hidden="true"></i></button>
+            </div>
+            <div class="ui-modal__body">
+                <div class="column-checkbox-list" data-role="columns-list"></div>
+            </div>
+            <div class="ui-modal__actions ui-modal__actions--spread">
+                <button type="button" class="ui-btn ui-btn--secondary ui-btn--sm" data-role="columns-reset">Сбросить</button>
+                <div class="actions-right">
+                    <button type="button" class="ui-btn ui-btn--secondary ui-btn--sm" data-role="columns-cancel">Отмена</button>
+                    <button type="button" class="ui-btn ui-btn--sm" data-role="columns-apply">Применить</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= ОКНО «УПРАВЛЕНИЕ ОТДЕЛАМИ» ================= -->
+    <div class="ui-modal emp-modal" data-role="departments-modal" hidden>
+        <div class="ui-modal__box">
+            <div class="ui-modal__head">
+                <h2 class="ui-modal__title">Управление отделами</h2>
+                <button type="button" class="ui-modal__close" data-role="departments-close" aria-label="Закрыть"><i class="fas fa-xmark" aria-hidden="true"></i></button>
+            </div>
+            <div class="ui-modal__body">
+                <div class="departments-list" data-role="departments-list"></div>
+                <div class="ui-empty ui-empty--inline" data-role="departments-empty" hidden>
+                    <p class="ui-empty__text">Пока нет отделов. Добавьте первый!</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= ПОПОВЕР ДНЯ ================= -->
+    <!-- Шаг 1 — состояния, шаг 2 — время доп. смены. Не отдельное окно:
+         действие делают на бегу, окно ради двух полей тяжело. -->
+    <div class="ui-popover cell-pop" data-role="cell-pop" role="menu" hidden>
+        <div class="ui-popover__title" data-role="cell-pop-title"></div>
+        <div class="ui-popover__step" data-role="pop-main">
+            <button type="button" class="ui-popover__option" data-set="shift" data-role="opt-shift"><span class="ui-popover__dot dot-shift"></span><span data-role="opt-shift-text">Смена</span></button>
+            <button type="button" class="ui-popover__option" data-set="day_off"><span class="ui-popover__dot dot-off"></span>Выходной</button>
+            <button type="button" class="ui-popover__option" data-set="vacation"><span class="ui-popover__dot dot-vac"></span>Отпуск</button>
+            <button type="button" class="ui-popover__option" data-set="sick"><span class="ui-popover__dot dot-sick"></span>Больничный</button>
+            <hr class="ui-popover__sep">
+            <button type="button" class="ui-popover__option" data-set="extra"><span class="ui-popover__dot dot-extra"></span><span>Доп. смена<span class="ui-popover__option-sub">разовая, со своим временем</span></span></button>
+            <hr class="ui-popover__sep">
+            <button type="button" class="ui-popover__option opt-clear" data-set="clear"><span class="ui-popover__dot dot-clear"></span>Очистить</button>
+        </div>
+        <div class="ui-popover__step" data-role="pop-extra" hidden>
+            <div class="time-row">
+                <input class="ui-field__control" type="time" data-role="extra-from" aria-label="Начало доп. смены">
+                <span class="dash">–</span>
+                <input class="ui-field__control" type="time" data-role="extra-to" aria-label="Конец доп. смены">
+            </div>
+            <div class="pop-note">Смена через полночь относится к дню, в котором началась.</div>
+            <div class="ui-popover__foot ui-popover__foot--end">
+                <button type="button" class="ui-btn ui-btn--ghost ui-btn--sm" data-role="extra-back">Назад</button>
+                <button type="button" class="ui-btn ui-btn--sm" data-role="extra-apply">Поставить</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= ОКНО «ДОБАВИТЬ ГРАФИК» ================= -->
+    <div class="ui-modal emp-modal" data-role="fill-modal" hidden>
+        <div class="ui-modal__box">
+            <div class="ui-modal__head">
+                <h2 class="ui-modal__title">Добавить график</h2>
+                <button type="button" class="ui-modal__close" data-role="fill-close" aria-label="Закрыть"><i class="fas fa-xmark" aria-hidden="true"></i></button>
+            </div>
+            <div class="ui-modal__body">
+                <div class="ui-field">
+                    <label class="ui-field__label" for="empFillEmployee">Сотрудник</label>
+                    <select class="ui-field__control" id="empFillEmployee"></select>
+                    <div class="emp-schedule" data-role="fill-emp-schedule">
+                        <div class="es-line"><span class="es-key">Время смены</span><span class="es-val" data-role="fill-emp-time">—</span></div>
+                        <div class="es-line"><span class="es-key">Режим</span><span class="es-note" data-role="fill-emp-days">—</span></div>
+                    </div>
+                </div>
+                <div class="ui-field">
+                    <label class="ui-field__label" for="empFillFrom">С даты</label>
+                    <input class="ui-field__control" type="date" id="empFillFrom">
+                </div>
+                <div class="ui-field">
+                    <span class="ui-field__label">Выходные</span>
+                    <button type="button" class="wk-field" data-role="wk-field" aria-expanded="false">
+                        <span class="wk-sum none" data-role="wk-summary">Не отмечены — смены встанут на все дни подряд</span>
+                        <i class="fas fa-chevron-down" aria-hidden="true"></i>
+                    </button>
+                    <div class="wk-panel" data-role="wk-panel" hidden>
+                        <div class="wk-head">
+                            <span class="wk-month" data-role="wk-month"></span>
+                            <button type="button" class="wk-clear" data-role="wk-clear">Снять все</button>
+                        </div>
+                        <div class="wk-grid" data-role="wk-grid"></div>
+                        <p class="wk-note">Отмечайте дни, которые должны стать выходными: остальные дни диапазона получат смену. Заполняется только этот месяц — для следующего переключите месяц в таблице.</p>
+                    </div>
+                </div>
+                <div class="fill-preview">
+                    <span data-role="fill-preview-text"></span>
+                    <div class="fill-warn" data-role="fill-warn" hidden></div>
+                </div>
+            </div>
+            <div class="ui-modal__actions">
+                <button type="button" class="ui-btn ui-btn--ghost" data-role="fill-cancel">Отмена</button>
+                <button type="button" class="ui-btn" data-role="fill-apply">Заполнить</button>
+            </div>
+        </div>
+    </div>
+
+</div>

@@ -29,6 +29,7 @@ import {
 //   icon       — класс иконки Font Awesome
 //   module     — путь к модулю раздела; пока раздел не перенесён — null
 //   template   — путь к фрагменту разметки; грузится при первом монтировании
+//   styles     — файл раскладки раздела или список файлов
 //   legacyUrl  — старый адрес: пока раздел не перенесён, открывается там,
 //                в новой вкладке, и плитка это честно показывает
 
@@ -45,7 +46,7 @@ import {
 
 export const registry = [
     { key: 'requisites', title: 'Реквизиты',  icon: 'fas fa-building',       module: '/js/modules/mainApp.js', template: '/main-section.html', styles: '/css/main-light.css', legacyUrl: '/main.html' },
-    { key: 'employees',  title: 'Сотрудники', icon: 'fas fa-users',          module: null, template: null, stub: true, legacyUrl: '/emploees.html' },
+    { key: 'employees',  title: 'Сотрудники', icon: 'fas fa-users',          module: '/js/modules/employeesApp.js', template: '/employees-section.html', styles: ['/css/employees-light.css', '/css/employees-schedule.css'], legacyUrl: '/emploees.html' },
     { key: 'leads',      title: 'Лиды',       icon: 'fas fa-address-book',   module: '/js/modules/leadsApp.js', template: '/leads-section.html', styles: '/css/leads-light.css', legacyUrl: '/leads.html' },
     { key: 'sources',    title: 'Источники',  icon: 'fas fa-diagram-project',module: null, template: null, stub: true, legacyUrl: '/sources.html' },
     { key: 'cpa',        title: 'CPA-сети',   icon: 'fas fa-handshake',      module: '/js/modules/cpaApp.js', template: '/cpa-networks-section.html', styles: '/css/cpa-networks-light.css', legacyUrl: '/cpa-networks.html' },
@@ -211,7 +212,12 @@ async function mountSection(panelId, key, container) {
         // Стили раздела — пятый блок структуры («раскладка разделов»).
         // Грузятся при первом открытии раздела, а не все шестью ссылками в
         // index.html: иначе первый экран тянет раскладку всех разделов сразу.
-        if (section.styles) await loadStyles(section.styles);
+        // styles — строка или список: у «Сотрудников» два файла, режим
+        // «График» намеренно живёт в своём (режим «Список» им не задет).
+        if (section.styles) {
+            const sheets = Array.isArray(section.styles) ? section.styles : [section.styles];
+            await Promise.all(sheets.map(loadStyles));
+        }
 
         if (section.template) {
             const fragment = await loadTemplate(section.template);
