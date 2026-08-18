@@ -67,7 +67,7 @@ export async function mount(container, ctx) {
         ...deps,
         // Настройки колонок меняют только вид таблицы — данные перезапрашивать
         // незачем, но перерисовать нужно.
-        onApplied: () => table.render()
+        onApplied: () => table.draw()
     });
 
     table = createTable(container, {
@@ -124,9 +124,9 @@ export async function mount(container, ctx) {
     document.addEventListener('keydown', onDocKeydown);
 
     try {
-        await table.reloadAllForFilters();
-        if (!isAlive()) return;
-        await table.render();
+        // Один запрос, а не два: при пустом отборе список для таблицы и полный
+        // список для выпадающих фильтров — это одно и то же.
+        await table.reload();
     } catch (err) {
         if (!isAlive() || isAbort(err)) return;
         shell.toast(err.message, 'error');

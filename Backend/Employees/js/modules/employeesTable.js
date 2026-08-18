@@ -60,6 +60,9 @@ export function createTable(root, deps) {
     let sortDirection = 'asc';
     let currentPage = 1;
     let rows = [];
+    // Отбор, с которым реально сходили на сервер. Поля окна фильтров — это
+    // ещё не отбор: их можно заполнить и закрыть окно, не нажимая «Применить».
+    let appliedFilters = {};
     let selectedIds = new Set();
     let massApplying = false;
     // Полный список — только для наполнения списков «Отдел» и «Должность» в
@@ -235,7 +238,7 @@ export function createTable(root, deps) {
         };
     }
 
-    function updateFilterBadge(filters) {
+    function updateFilterBadge(filters = {}) {
         const badge = $('[data-role="filter-badge"]');
         const activeCount = [filters.status, filters.department, filters.position, filters.hireDateFrom, filters.hireDateTo]
             .filter(Boolean).length + (filters.hasWhatsapp ? 1 : 0) + (filters.hasTelegram ? 1 : 0);
@@ -271,22 +274,53 @@ export function createTable(root, deps) {
         }
     }
 
-    async function render() {
+    // Задан ли хоть один фильтр в наборе. При пустом отборе список сотрудников
+    // совпадает с полным — значит второй запрос за «полным списком для
+    // выпадающих фильтров» не нужен вовсе.
+    function isFilterSet(f) {
+        return Boolean(f.search || f.status || f.department || f.position
+            || f.hasWhatsapp || f.hasTelegram || f.hireDateFrom || f.hireDateTo);
+    }
+
+    function hasActiveFilters() {
+        return isFilterSet(appliedFilters);
+    }
+
+    /**
+     * Сходить за данными. Вызывается только когда отбор мог измениться:
+     * поиск, фильтры, обновление после правки. Сортировка, страница и
+     * настройка колонок сюда не ходят — они меняют лишь то, КАК показан уже
+     * загруженный список.
+     */
+    async function load() {
         const filters = currentFilters();
-        let list;
         try {
-            list = await storage.fetchEmployees(filters);
-            if (!isAlive()) return;
+            const list = await storage.fetchEmployees(filters);
+            if (!isAlive()) return false;
+            rows = list;
+            appliedFilters = filters;
+            if (!isFilterSet(filters)) {
+                allEmployees = list;
+                populateFilterOptions();
+            }
+            return true;
         } catch (err) {
             if (!isAbort(err)) toast(err.message, 'error');
-            return;
+            return false;
         }
+    }
+
+    /** Нарисовать уже загруженный список: сортировка, страница, колонки. */
+    async function draw() {
+        const list = rows.slice();
 
         const hidden = await getHiddenColumns();
         if (!isAlive()) return;
 
         applyColumnVisibility(hidden);
-        updateFilterBadge(filters);
+        // По применённому отбору, а не по полям окна: иначе счётчик загорается
+        // от значения, которое человек выбрал и не применил.
+        updateFilterBadge(appliedFilters);
         renderStatChips(list);
 
         // Колонка, по которой шла сортировка, скрыта — откатываем на дефолтную.
@@ -305,7 +339,6 @@ export function createTable(root, deps) {
             return 0;
         });
 
-        rows = list;
         const totalPages = Math.ceil(list.length / PAGE_SIZE) || 1;
         if (currentPage > totalPages) currentPage = totalPages;
 
@@ -446,15 +479,29 @@ export function createTable(root, deps) {
         }
     }
 
-    /** Перерисовка после изменения данных: списки фильтров тоже могли устареть. */
+    /** Сходить за данными и нарисовать — когда отбор изменился. */
+    async function reload() {
+        const ok = await load();
+        if (!ok || !isAlive()) return;
+        await draw();
+    }
+
+    /**
+     * Обновление после изменения данных. Списки «Отдел» и «Должность» строятся
+     * по полному набору, поэтому при заданном отборе он перечитывается
+     * отдельно; при пустом хватает одного запроса — его делает load().
+     */
     async function refresh() {
-        await reloadAllForFilters();
+        if (hasActiveFilters()) {
+            await reloadAllForFilters();
+            if (!isAlive()) return;
+        }
+        await reload();
         if (!isAlive()) return;
-        await render();
         if (onDataChanged) await onDataChanged();
     }
 
-    const renderDebounced = createDebounced(() => { currentPage = 1; render(); }, SEARCH_DEBOUNCE_MS);
+    const renderDebounced = createDebounced(() => { currentPage = 1; reload(); }, SEARCH_DEBOUNCE_MS);
 
     function init() {
         $('[data-role="search"]').addEventListener('input', renderDebounced);
@@ -466,7 +513,7 @@ export function createTable(root, deps) {
             if (sortField === field) sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
             else { sortField = field; sortDirection = 'asc'; }
             currentPage = 1;
-            render();
+            draw();
         });
 
         $('[data-role="pagination"]').addEventListener('click', (e) => {
@@ -475,7 +522,7 @@ export function createTable(root, deps) {
             const page = Number(btn.dataset.page);
             if (page === currentPage) return;
             currentPage = page;
-            render();
+            draw();
         });
 
         const body = $('[data-role="table-body"]');
@@ -518,7 +565,7 @@ export function createTable(root, deps) {
         $('[data-role="filter-apply"]').addEventListener('click', () => {
             currentPage = 1;
             filterModal.hidden = true;
-            render();
+            reload();
         });
         $('[data-role="filter-clear"]').addEventListener('click', () => {
             ['#empFilterStatus', '#empFilterDepartment', '#empFilterPosition', '#empFilterHireFrom', '#empFilterHireTo']
@@ -527,15 +574,17 @@ export function createTable(root, deps) {
             $('#empFilterTelegram').checked = false;
             currentPage = 1;
             filterModal.hidden = true;
-            render();
+            reload();
         });
     }
 
     return {
         init,
-        render,
+        // reload — сходить за данными и нарисовать; draw — только перерисовать
+        // уже загруженное (настройка колонок ничего не перезапрашивает).
+        reload,
+        draw,
         refresh,
-        reloadAllForFilters,
         getRows: () => rows,
         destroy() {
             renderDebounced.cancel();

@@ -52,6 +52,12 @@ export function createSchedule(root, deps) {
         loaded: false
     };
 
+    // Месяц, который сейчас грузится, и номер запроса. Переключатели считают
+    // от него, а не от state.month: тот обновляется только после ответа, и два
+    // быстрых щелчка «вперёд» оба просили бы один и тот же месяц.
+    let pendingMonth = null;
+    let monthRequest = 0;
+
     // Клики по ячейке, на которые ещё не пришёл ответ. Оптимистичной отрисовки
     // нет, поэтому повторный клик до ответа обязан игнорироваться — иначе
     // двойной клик уходит двумя запросами (dialog.md, Н17).
@@ -291,15 +297,23 @@ export function createSchedule(root, deps) {
     // ------------------------------------------------------------ данные
 
     async function loadMonth(month) {
+        const my = ++monthRequest;
+        pendingMonth = month || null;
         let data;
         try {
             data = await storage.fetchSchedule(month);
             if (!isAlive()) return false;
         } catch (err) {
+            if (my === monthRequest) pendingMonth = null;
             if (!isAlive() || isAbort(err)) return false;
             toast(err.message, 'error');
             return false;
         }
+        // Пока грузили этот месяц, попросили другой — ответ уже не нужен:
+        // нарисованный поверх нового, он показал бы чужие данные под чужой
+        // подписью.
+        if (my !== monthRequest) return false;
+        pendingMonth = null;
         state.month = data.month;
         state.today = data.today || null;
         state.employees = data.employees || [];
@@ -385,11 +399,16 @@ export function createSchedule(root, deps) {
             scrollToToday();
         });
 
+        // От pendingMonth, если загрузка ещё идёт: иначе второй щелчок
+        // отсчитывает от месяца, который на экране, но уже не актуален.
+        const currentMonth = () => pendingMonth || state.month;
         $('[data-role="sched-prev"]').addEventListener('click', () => {
-            if (state.month) loadMonth(shiftMonth(state.month, -1));
+            const base = currentMonth();
+            if (base) loadMonth(shiftMonth(base, -1));
         });
         $('[data-role="sched-next"]').addEventListener('click', () => {
-            if (state.month) loadMonth(shiftMonth(state.month, 1));
+            const base = currentMonth();
+            if (base) loadMonth(shiftMonth(base, 1));
         });
         $('[data-role="sched-today"]').addEventListener('click', async () => {
             if (!state.today) return;
