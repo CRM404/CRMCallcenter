@@ -1,326 +1,175 @@
-// --- mainRequisites.js: раздел "Реквизиты" — карточка организации (подсекции)
-// + карточки-списки банковских счетов и налогов в виде "строк-карточек"
-// (аватар-иконка + заголовок + чип/моноширинные подполя + иконки действий
-// в конце строки, паттерн из демо-макета редизайна). DATE-колонки БД (см.
-// db.js — глобальный type parser 1082) приходят строкой 'YYYY-MM-DD',
-// поэтому значение можно класть в <input type="date"> напрямую, без пересчёта.
+// --- mainRequisites.js: организация — чтение и правка -----------------------
+//
+// Один и тот же набор полей показывается двумя способами:
+//   ЧТЕНИЕ — пары «метка → значение» (<dl>), значения-идентификаторы
+//            моноширинно и с кнопкой «Скопировать», незаполненное — курсивом;
+//   ПРАВКА — та же сетка полями ввода, с подсказкой ошибки под полем.
+//
+// Почему это один модуль, а не два: состав и порядок полей обязаны совпадать
+// в обоих режимах. Разложенные по разным файлам, они разъезжаются на первой же
+// правке — ровно так в проекте разъехались шесть копий чипа-счётчика.
 
-import { ORG_FIELD_VALIDATORS, validateFields } from './mainValidation.js';
-
-// Счётчик для id полей. id нужен только ради связки <label for> — читаются
-// поля по data-field. Раньше id были предсказуемыми («mOrg-inn»), то есть
-// глобальными: два раздела с одинаковым именем поля начали бы драться за
-// один узел при двух открытых панелях. Здесь они уникальны по построению.
-let uid = 0;
-function nextFieldId() { return `m-f${++uid}`; }
+import { ORG_FIELD_VALIDATORS } from './mainValidation.js';
 
 function escapeHtml(value) {
     if (value === null || value === undefined) return '';
     return String(value)
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;');
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
 }
 
-// "Общие данные" — фиксированная сетка (см. m-org-grid в CSS): ОПФ —
-// короткая подпись + узкий инпут, Юридический адрес — осознанно full-width
-// отдельной строкой.
-//
-// Название тоже во всю строку: это самое длинное значение блока, и в узкой
-// колонке оно обрезалось — «КУРАТОР-ТЕСТ ООО» читалось как «КУРАТОР-ТЕСТ ООС»
-// (находка дизайн-сессии Д7). Правило п. 35: широкое поле занимает всю ширину
-// сетки, а не подгоняется по месту.
-const ORG_GENERAL_FIELDS = [
-    { key: 'name', label: 'Название', type: 'text', required: true, fullWidth: true },
-    { key: 'legalForm', label: 'ОПФ', type: 'text', narrow: true },
-    { key: 'generalDirector', label: 'Генеральный директор', type: 'text' },
-    { key: 'registrationCountry', label: 'Страна регистрации', type: 'text' },
-    { key: 'registrationDate', label: 'Дата регистрации', type: 'date' },
-    { key: 'legalAddress', label: 'Юридический адрес', type: 'text', fullWidth: true }
-];
-
-// Идентификаторы/числа — моноширинный шрифт с табличными цифрами (mono),
-// как в остальных полях-идентификаторах проекта (см. CSS .m-mono).
-const ORG_LEGAL_FIELDS = [
-    { key: 'inn', label: 'ИНН', type: 'text', mono: true },
-    { key: 'kpp', label: 'КПП', type: 'text', mono: true },
-    { key: 'ogrn', label: 'ОГРН', type: 'text', mono: true },
-    { key: 'okved', label: 'ОКВЭД', type: 'text', mono: true },
-    { key: 'authorizedCapital', label: 'Уставный капитал', type: 'number', mono: true }
-];
-
-export const BANK_ACCOUNT_FIELDS = [
-    { key: 'bankName', label: 'Название банка', type: 'text', required: true },
-    { key: 'checkingAccount', label: 'Расчётный счёт', type: 'text', mono: true },
-    { key: 'correspondentAccount', label: 'Корреспондентский счёт', type: 'text', mono: true },
-    { key: 'bik', label: 'БИК', type: 'text', mono: true },
-    { key: 'currency', label: 'Валюта', type: 'text' },
-    { key: 'openedAt', label: 'Дата открытия', type: 'date' }
-];
-
-// Периодичность — фиксированный список (dialog.md, п.4), rate остаётся
-// свободным текстом, это разные поля.
-const PERIODICITY_OPTIONS = ['Неделя', 'Месяц', 'Квартал', 'Год'];
-
-export const TAX_FIELDS = [
-    { key: 'taxType', label: 'Вид налога', type: 'text', required: true },
-    { key: 'rate', label: 'Ставка', type: 'text' },
-    { key: 'periodicity', label: 'Периодичность', type: 'select', options: PERIODICITY_OPTIONS }
-];
-
-function renderFieldGroup(field, value) {
-    const groupClass = 'ui-field' + (field.fullWidth ? ' m-field-full' : '');
-    const id = nextFieldId();
-    if (field.type === 'select') {
-        const options = field.options.map((opt) =>
-            `<option value="${escapeHtml(opt)}"${value === opt ? ' selected' : ''}>${escapeHtml(opt)}</option>`
-        ).join('');
-        return `
-            <div class="${groupClass}">
-                <label class="ui-field__label" for="${id}">${field.label}</label>
-                <select class="ui-field__control" id="${id}" data-field="${field.key}">
-                    <option value=""${!value ? ' selected' : ''}>Не указано</option>
-                    ${options}
-                </select>
-            </div>
-        `;
+// Секции и поля — по макету. `mono` — моноширинное начертание (идентификаторы
+// и числа), `copy` — кнопка копирования в режиме чтения: ИНН, КПП и ОГРН
+// переносят в чужие формы руками чаще всего.
+export const ORG_SECTIONS = [
+    {
+        title: 'Общие данные',
+        fields: [
+            { key: 'name', label: 'Название', type: 'text', required: true },
+            { key: 'legalForm', label: 'ОПФ', type: 'text' },
+            { key: 'generalDirector', label: 'Генеральный директор', type: 'text' },
+            { key: 'registrationCountry', label: 'Страна регистрации', type: 'text' },
+            { key: 'registrationDate', label: 'Дата регистрации', type: 'date' }
+        ]
+    },
+    {
+        title: 'Регистрационные данные',
+        fields: [
+            { key: 'inn', label: 'ИНН', type: 'text', mono: true, copy: true },
+            { key: 'kpp', label: 'КПП', type: 'text', mono: true, copy: true },
+            { key: 'ogrn', label: 'ОГРН', type: 'text', mono: true, copy: true },
+            { key: 'okved', label: 'ОКВЭД', type: 'text', mono: true },
+            { key: 'authorizedCapital', label: 'Уставный капитал', type: 'number', mono: true }
+        ]
+    },
+    {
+        title: 'Адреса',
+        fields: [
+            { key: 'legalAddress', label: 'Юридический адрес', type: 'text', wide: true },
+            { key: 'actualAddress', label: 'Фактический адрес', type: 'text', wide: true,
+                placeholder: 'совпадает с юридическим' }
+        ]
     }
-    const extra = [field.narrow ? 'm-input-narrow' : '', field.mono ? 'm-mono' : ''].filter(Boolean).join(' ');
-    return `
-        <div class="${groupClass}">
-            <label class="ui-field__label" for="${id}">${field.label}</label>
-            <input type="${field.type}" class="ui-field__control${extra ? ' ' + extra : ''}" id="${id}" data-field="${field.key}" value="${escapeHtml(value ?? '')}">
-        </div>
-    `;
+];
+
+export const ORG_FIELDS = ORG_SECTIONS.flatMap((s) => s.fields);
+
+// ---------------------------------------------------------------- значения
+
+function displayValue(field, value) {
+    if (value === null || value === undefined || value === '') return null;
+    if (field.type === 'date') {
+        // Сервер отдаёт дату в ISO; человеку нужен привычный вид.
+        const date = new Date(value);
+        if (!Number.isNaN(date.getTime())) return date.toLocaleDateString('ru-RU');
+    }
+    if (field.key === 'authorizedCapital') {
+        const n = Number(value);
+        if (Number.isFinite(n)) return `${n.toLocaleString('ru-RU')} ₽`;
+    }
+    return String(value);
 }
 
-// Читаем по data-field В ГРАНИЦАХ переданной области: для формы организации
-// это карточка, для строки-записи — её собственная карточка. Так две
-// одновременно открытые формы не читают поля друг друга.
-function readFields(scope, fields) {
-    const data = {};
-    fields.forEach((f) => {
-        const el = scope.querySelector(`[data-field="${f.key}"]`);
-        data[f.key] = el ? el.value : '';
+/** Значение для поля ввода: дата в формате input[type=date], остальное как есть. */
+function inputValue(field, value) {
+    if (value === null || value === undefined) return '';
+    if (field.type === 'date') return String(value).slice(0, 10);
+    return String(value);
+}
+
+// ---------------------------------------------------------------- чтение
+
+function readSection(section, org) {
+    const rows = section.fields.map((field) => {
+        const shown = displayValue(field, org ? org[field.key] : null);
+        const cls = [field.mono ? 'm-mono' : '', shown === null ? 'm-empty-val' : ''].filter(Boolean).join(' ');
+        const copy = field.copy && shown !== null
+            ? `<button type="button" class="ui-btn ui-btn--icon ui-btn--sm m-copy" data-copy="${escapeHtml(shown)}" data-label="${escapeHtml(field.label)}" title="Скопировать"><i class="fas fa-copy" aria-hidden="true"></i></button>`
+            : '';
+        return `<dt>${escapeHtml(field.label)}</dt><dd class="${cls}">${shown === null ? 'не заполнено' : escapeHtml(shown)}${copy}</dd>`;
+    }).join('');
+
+    return `
+        <section class="m-sec">
+            <div class="m-sec-head"><h4>${escapeHtml(section.title)}</h4></div>
+            <div class="m-sec-body"><dl class="m-kv">${rows}</dl></div>
+        </section>`;
+}
+
+// ---------------------------------------------------------------- правка
+
+function editSection(section, draft, errors) {
+    const fields = section.fields.map((field) => {
+        const id = `mOrg_${field.key}`;
+        const error = errors[field.key];
+        const cls = ['ui-field', field.wide ? 'ui-field--wide' : '', error ? 'is-bad' : ''].filter(Boolean).join(' ');
+        const label = `<label class="ui-field__label${field.required ? ' ui-field__label--required' : ''}" for="${id}">${escapeHtml(field.label)}</label>`;
+        const control = `<input class="ui-field__control${field.mono ? ' m-mono' : ''}" type="${field.type}" id="${id}"
+            data-field="${field.key}" value="${escapeHtml(inputValue(field, draft[field.key]))}"
+            ${field.placeholder ? `placeholder="${escapeHtml(field.placeholder)}"` : ''}>`;
+        const hint = error ? `<span class="ui-field__hint m-hint-bad">${escapeHtml(error)}</span>` : '';
+        return `<div class="${cls}">${label}${control}${hint}</div>`;
+    }).join('');
+
+    return `
+        <section class="m-sec">
+            <div class="m-sec-head"><h4>${escapeHtml(section.title)}</h4></div>
+            <div class="m-sec-body"><div class="ui-form-grid">${fields}</div></div>
+        </section>`;
+}
+
+/**
+ * Нарисовать левую колонку.
+ *
+ * @param {HTMLElement} container колонка
+ * @param {object|null} organization данные с сервера (null — организации нет)
+ * @param {object} state { editing, draft, errors }
+ */
+export function renderOrganization(container, organization, state) {
+    container.innerHTML = ORG_SECTIONS
+        .map((section) => (state.editing
+            ? editSection(section, state.draft, state.errors)
+            : readSection(section, organization)))
+        .join('');
+}
+
+// ---------------------------------------------------------------- черновик
+
+/** Черновик правки: копия значений организации по составу полей. */
+export function makeDraft(organization) {
+    const draft = {};
+    ORG_FIELDS.forEach((field) => {
+        const value = organization ? organization[field.key] : null;
+        draft[field.key] = value === null || value === undefined ? '' : inputValue(field, value);
     });
-    return data;
+    return draft;
 }
 
-// organization === null — организация ещё не создана: пустая форма + пустой стейт,
-// кнопка "Создать организацию" (POST). Иначе — форма предзаполнена, кнопка
-// "Сохранить изменения" (PUT) — одна и та же кнопка/обработчик решает, что вызвать.
-export function renderOrganizationForm(container, organization, handlers) {
-    const isNew = organization === null;
-    const org = organization || {};
+/** Сколько полей черновика отличается от сохранённого. Число идёт в полосу. */
+export function countChanges(organization, draft) {
+    return ORG_FIELDS.filter((field) => {
+        const saved = organization ? inputValue(field, organization[field.key] ?? '') : '';
+        return String(draft[field.key] ?? '') !== String(saved ?? '');
+    }).length;
+}
 
-    container.innerHTML = `
-        <div class="m-card-head">
-            <div class="m-card-title">
-                <span class="m-card-icon"><i class="fas fa-building" aria-hidden="true"></i></span>
-                <div>
-                    <h2>Организация</h2>
-                    <small>Общие и юридические данные компании</small>
-                </div>
-            </div>
-            <button type="button" class="ui-btn ui-btn--sm" data-action="save-org">${isNew ? 'Создать организацию' : 'Сохранить изменения'}</button>
-        </div>
-        ${isNew ? `
-            <div class="ui-empty ui-empty--inline m-empty">
-                <div class="ui-empty__title">Организация ещё не создана</div>
-                <p class="ui-empty__text">Заполните поля ниже и нажмите «Создать организацию» — банковские счета и налоги привязываются к ней.</p>
-            </div>` : ''}
-        <div class="m-section">
-            <div class="m-section-label">Общие данные</div>
-            <div class="m-org-grid">
-                ${ORG_GENERAL_FIELDS.map((f) => renderFieldGroup(f, org[f.key])).join('')}
-            </div>
-        </div>
-        <div class="m-section">
-            <div class="m-section-label">Юридические реквизиты</div>
-            <div class="m-org-grid">
-                ${ORG_LEGAL_FIELDS.map((f) => renderFieldGroup(f, org[f.key])).join('')}
-            </div>
-        </div>
-    `;
-
-    container.querySelector('[data-action="save-org"]').addEventListener('click', () => {
-        const data = readFields(container, [...ORG_GENERAL_FIELDS, ...ORG_LEGAL_FIELDS]);
-        const error = validateFields(data, ORG_FIELD_VALIDATORS);
-        if (error) {
-            handlers.toast(error, 'error');
-            return;
-        }
-        handlers.onSave(data);
+/** Проверка формата. Возвращает { поле: текст ошибки } — пусто, если всё чисто. */
+export function validateDraft(draft) {
+    const errors = {};
+    Object.entries(ORG_FIELD_VALIDATORS).forEach(([key, validate]) => {
+        const error = validate(draft[key]);
+        if (error) errors[key] = error;
     });
+    return errors;
 }
 
-// Аватар строки-карточки: для банковского счёта — всегда иконка банка; для
-// налога — короткая ставка текстом (как "6%"/"30%" в демо), если она похожа
-// на короткое значение, иначе иконка-заглушка.
-function renderRowAvatar(record, idPrefix) {
-    if (idPrefix === 'mTax') {
-        const rate = (record.rate || '').trim();
-        if (rate && rate.length <= 5) {
-            return `<span class="m-row-avatar m-row-avatar-text">${escapeHtml(rate)}</span>`;
-        }
-        return '<span class="m-row-avatar"><i class="fas fa-percent" aria-hidden="true"></i></span>';
-    }
-    return '<span class="m-row-avatar"><i class="fas fa-landmark" aria-hidden="true"></i></span>';
-}
-
-function renderRowMain(record, idPrefix) {
-    if (idPrefix === 'mTax') {
-        return `
-            <div class="m-row-main m-row-main-2col">
-                <div class="m-row-title">${escapeHtml(record.taxType)}</div>
-                ${record.periodicity ? `<div class="m-row-sub"><span class="m-row-sub-lbl">Периодичность</span>${escapeHtml(record.periodicity)}</div>` : ''}
-            </div>
-        `;
-    }
-    const chip = record.currency ? `<span class="m-chip">${escapeHtml(record.currency)}</span>` : '';
-    return `
-        <div class="m-row-main">
-            <div>
-                <div class="m-row-title">${escapeHtml(record.bankName)}</div>
-                ${chip}
-            </div>
-            ${record.checkingAccount ? `<div class="m-row-sub m-mono"><span class="m-row-sub-lbl">Р/с</span>${escapeHtml(record.checkingAccount)}</div>` : ''}
-            ${record.bik ? `<div class="m-row-sub m-mono"><span class="m-row-sub-lbl">БИК</span>${escapeHtml(record.bik)}</div>` : ''}
-        </div>
-    `;
-}
-
-function renderRecordCard(record, fields, editing, idPrefix) {
-    if (editing) {
-        return `
-            <div class="m-record-card m-record-card-editing" data-id="${record.id}">
-                <div class="ui-form-grid">
-                    ${fields.map((f) => renderFieldGroup(f, record[f.key])).join('')}
-                </div>
-                <div class="m-actions">
-                    <button type="button" class="ui-btn ui-btn--sm" data-action="save" data-id="${record.id}">Сохранить</button>
-                    <button type="button" class="ui-btn ui-btn--sm ui-btn--secondary" data-action="cancel" data-id="${record.id}">Отмена</button>
-                </div>
-            </div>
-        `;
-    }
-    return `
-        <div class="m-row-card" data-id="${record.id}">
-            ${renderRowAvatar(record, idPrefix)}
-            ${renderRowMain(record, idPrefix)}
-            <div class="m-row-actions">
-                <button type="button" class="ui-btn ui-btn--icon ui-btn--sm" data-action="edit" data-id="${record.id}" title="Изменить" aria-label="Изменить"><i class="fas fa-pen" aria-hidden="true"></i></button>
-                <button type="button" class="ui-btn ui-btn--icon ui-btn--sm m-icon-btn-danger" data-action="delete" data-id="${record.id}" title="Удалить" aria-label="Удалить"><i class="fas fa-trash-can" aria-hidden="true"></i></button>
-            </div>
-        </div>
-    `;
-}
-
-const CARD_ICONS = { mBank: 'fa-landmark', mTax: 'fa-percent' };
-
-function recordsWord(count, forms) {
+/** Слово «поле» в нужном числе: 1 поле, 2 поля, 5 полей. */
+export function fieldsWord(count) {
     const mod10 = count % 10;
     const mod100 = count % 100;
-    if (mod10 === 1 && mod100 !== 11) return forms[0];
-    if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return forms[1];
-    return forms[2];
-}
-
-// Общий рендер для списка "однотипных записей" (банковские счета/налоги) —
-// карточка с заголовком (иконка + кол-во записей), список строк-карточек,
-// пунктирная строка "+ Добавить..." снизу (вместо кнопки в заголовке) и
-// инлайн-форма добавления/редактирования записи, по клику на неё/на карандаш.
-// uiState = { adding, editingId }
-// handlers = { onAddStart, onAddCancel, onCreate(data), onEditStart(id),
-//              onEditCancel, onSave(record, data), onDelete(id) }
-export function renderRecordsSection(container, { title, records, fields, uiState, idPrefix, emptyTitle, emptyText, addButtonLabel, wordForms, handlers, validators, toast }) {
-    const cards = records.map((r) => renderRecordCard(r, fields, uiState.editingId === r.id, idPrefix)).join('');
-    const countText = records.length && wordForms ? `${records.length} ${recordsWord(records.length, wordForms)}` : '';
-    const addForm = uiState.adding ? `
-        <div class="m-record-card m-record-card-editing" data-role="add-form">
-            <div class="ui-form-grid">
-                ${fields.map((f) => renderFieldGroup(f, '')).join('')}
-            </div>
-            <div class="m-actions">
-                <button type="button" class="ui-btn ui-btn--sm" data-action="create">Добавить</button>
-                <button type="button" class="ui-btn ui-btn--sm ui-btn--secondary" data-action="create-cancel">Отмена</button>
-            </div>
-        </div>
-    ` : '';
-
-    container.innerHTML = `
-        <div class="m-card-head">
-            <div class="m-card-title">
-                <span class="m-card-icon"><i class="fas ${CARD_ICONS[idPrefix] || 'fa-list'}" aria-hidden="true"></i></span>
-                <div><h2>${title}</h2>${countText ? `<small>${countText}</small>` : ''}</div>
-            </div>
-        </div>
-        ${records.length ? `<div class="m-row-list">${cards}</div>` : `
-            <div class="ui-empty ui-empty--inline m-empty">
-                <div class="ui-empty__title">${escapeHtml(emptyTitle || 'Пока пусто')}</div>
-                <p class="ui-empty__text">${escapeHtml(emptyText)}</p>
-            </div>`}
-        ${!uiState.adding ? `
-            <div class="m-add-row" data-action="add" role="button" tabindex="0">
-                <i class="fas fa-plus" aria-hidden="true"></i>${addButtonLabel}
-            </div>
-        ` : addForm}
-    `;
-
-    const addBtn = container.querySelector('[data-action="add"]');
-    if (addBtn) {
-        addBtn.addEventListener('click', handlers.onAddStart);
-        addBtn.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handlers.onAddStart(); }
-        });
-    }
-
-    const createBtn = container.querySelector('[data-action="create"]');
-    if (createBtn) {
-        createBtn.addEventListener('click', () => {
-            // Читаем в границах формы добавления, а не всей секции: рядом
-            // может быть открыта карточка редактирования с теми же полями.
-            const form = container.querySelector('[data-role="add-form"]');
-            const data = readFields(form, fields);
-            const error = validateFields(data, validators || {});
-            if (error) {
-                toast(error, 'error');
-                return;
-            }
-            handlers.onCreate(data);
-        });
-        container.querySelector('[data-action="create-cancel"]').addEventListener('click', handlers.onAddCancel);
-    }
-
-    container.querySelectorAll('[data-action="edit"]').forEach((btn) => {
-        btn.addEventListener('click', () => handlers.onEditStart(Number(btn.dataset.id)));
-    });
-    container.querySelectorAll('[data-action="cancel"]').forEach((btn) => {
-        btn.addEventListener('click', handlers.onEditCancel);
-    });
-    container.querySelectorAll('[data-action="save"]').forEach((btn) => {
-        btn.addEventListener('click', () => {
-            const id = Number(btn.dataset.id);
-            const record = records.find((r) => r.id === id);
-            // Границы — карточка своей записи: раньше поля искались по
-            // составному id по всей секции, и это работало только потому, что
-            // id содержал номер записи.
-            //
-            // Ищем по КЛАССУ карточки, а не по [data-id]: у самой кнопки тоже
-            // есть data-id, а closest начинает с элемента, на котором вызван, —
-            // и возвращал бы кнопку. Полей внутри кнопки нет, так что на
-            // сервер ушли бы пустые значения и затёрли запись.
-            const card = btn.closest('.m-record-card');
-            const data = readFields(card, fields);
-            const error = validateFields(data, validators || {});
-            if (error) {
-                toast(error, 'error');
-                return;
-            }
-            handlers.onSave(record, data);
-        });
-    });
-    container.querySelectorAll('[data-action="delete"]').forEach((btn) => {
-        btn.addEventListener('click', () => handlers.onDelete(Number(btn.dataset.id)));
-    });
+    if (mod10 === 1 && mod100 !== 11) return 'поле';
+    if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return 'поля';
+    return 'полей';
 }

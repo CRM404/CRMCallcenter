@@ -1,351 +1,231 @@
 /* ============================================================
    main-light.css — БЛОК 5: раскладка раздела «Реквизиты».
 
-   Пятый и последний блок структуры, заданной дизайн-сессией: токены →
-   базовые элементы → составные → оболочка → раскладка разделов. Здесь
-   только то, что есть у этого раздела и больше нигде: карточки-секции,
-   строки-карточки списков, кольцо заполненности, предпросмотр «Летерхед».
+   ПЕРЕПИСАН 19.08.2026 ВМЕСТЕ С ПЕРЕДЕЛКОЙ РАЗДЕЛА ПО МАКЕТУ. Прежний файл
+   описывал перенесённую страницу: карточки с формой на всю ширину, свои
+   пустые состояния, своя строка «добавить». Всё это заменено композицией
+   макета — две колонки, секции, пары «метка → значение», липкая полоса
+   сохранения.
 
-   ЧТО ОТСЮДА УШЛО ПРИ ПЕРЕЕЗДЕ В ОБОЛОЧКУ (253 строки, 52 правила):
-   кнопки, поля и сетка формы, модалка, тост, каркас хаба, сброс полей и
-   стилизация body. Всё это теперь объявлено один раз в Shell/ui/*.
+   ЧТО ЗДЕСЬ ЕСТЬ И ЧЕГО НЕТ. Здесь только раскладка этого раздела: где что
+   стоит и как ведёт себя при наведении. Кнопки, поля, окна, пилюли, пустые
+   состояния и прочерк — из общего слоя, раздел их не объявляет.
 
-   ЕСЛИ ЗДЕСЬ СНОВА ПОЯВИТСЯ .btn ИЛИ .form-group — блок выбран неверно:
-   нужного вида нет в слое, значит он добавляется В СЛОЙ, а не сюда.
+   ВСЕ СЕЛЕКТОРЫ ОГРАНИЧЕНЫ .m-wrap. В одном документе живут шесть разделов;
+   голый .sec или .kv перекрасил бы соседей молча.
    ============================================================ */
 
-/* Токены раздела — алиасы на общие. Раздел не объявляет своих цветов, теней
-   и радиусов: собственные значения здесь были бы вторым источником правды и
-   разошлись бы со слоем при первой же правке.
-   Имена --m-* оставлены, чтобы не переписывать 300 строк раскладки: они
-   теперь указывают на общий слой, а не задают свой цвет. */
 .m-wrap {
-    --m-accent: var(--ui-color-accent);
-    --m-accent-soft: var(--ui-color-wash-active);
-    --m-accent-soft-strong: var(--ui-color-accent-line);
-    --m-line: var(--ui-color-line-field);
-    --m-line-soft: var(--ui-color-line);
-    --m-ink: var(--ui-color-ink);
-    --m-ink-muted: var(--ui-color-ink-soft);
-    --m-ink-faint: var(--ui-color-ink-faint);
-    --m-surface-solid: var(--ui-color-surface);
-    --m-surface-sunken: var(--ui-color-surface-sunken);
-    --m-good: var(--ui-color-ok-ink);
-    --m-good-soft: var(--ui-color-ok-bg);
-    --m-shadow-card: var(--ui-shadow-card);
-    --m-shadow-soft: 0 2px 8px rgba(30, 42, 58, 0.06);
-    --m-radius-lg: var(--ui-radius-lg);
-    --m-radius-md: var(--ui-radius-md);
-    --m-radius-sm: var(--ui-radius-sm);
-    --m-font-mono: var(--ui-font-mono);
-}
-
-/* Заголовки ограничены своим разделом. Голые h1/h2/h3 работали, пока раздел
-   был отдельной страницей; в одном документе они красили бы заголовки всех
-   остальных разделов и каталога элементов — молча, без единой ошибки. */
-.m-wrap h1 {
-    font-size: 26px;
-    color: var(--m-ink);
-    border-bottom: 3px solid var(--m-accent);
-    padding-bottom: 10px;
-    display: inline-block;
-}
-
-.m-wrap h2 {
-    font-size: 16px;
-    font-weight: 700;
-    color: var(--m-ink);
-}
-
-.m-wrap h3 {
-    font-size: 15px;
-    color: var(--m-ink-muted);
-    margin-bottom: 10px;
-}
-
-/* ----- Обёртка страницы + шапка (заголовок + кольцо заполненности) ----- */
-.m-wrap {
-    max-width: 1240px;
-    margin: 0 auto;
-}
-.m-page-head {
-    display: flex;
-    align-items: flex-end;
-    justify-content: space-between;
-    gap: 20px;
-    flex-wrap: wrap;
-    margin-bottom: 26px;
-}
-.m-page-head h1 { border-bottom: none; padding-bottom: 0; }
-.m-page-sub {
-    margin-top: 6px;
-    font-size: 13.5px;
-    color: var(--m-ink-muted);
-    max-width: 52ch;
-}
-.m-completion {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    background: var(--m-surface-solid);
-    border: 1px solid var(--m-line-soft);
-    padding: 9px 16px 9px 9px;
-    border-radius: 999px;
-    box-shadow: var(--m-shadow-soft);
-    flex-shrink: 0;
-}
-.m-completion-ring {
-    width: 34px;
-    height: 34px;
-    border-radius: 50%;
-    flex-shrink: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-.m-completion-ring::before {
-    content: "";
-    width: 24px;
-    height: 24px;
-    border-radius: 50%;
-    background: var(--m-surface-solid);
-}
-.m-completion-text { font-size: 12.5px; line-height: 1.35; }
-.m-completion-text b { font-size: 13.5px; display: block; color: var(--m-ink); }
-.m-completion-text span { color: var(--m-ink-muted); }
-
-/* ----- Двухколоночный layout: карточки слева + предпросмотр справа ----- */
-.m-layout {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 320px;
-    gap: 24px;
-    align-items: start;
-}
-@media (max-width: 980px) {
-    .m-layout { grid-template-columns: 1fr; }
-    .m-preview { position: static; order: 99; }
-}
-.m-stack {
     display: flex;
     flex-direction: column;
-    gap: 20px;
+    min-height: 100%;
+    font-family: var(--ui-font-ui);
+    color: var(--ui-color-ink);
+}
+
+/* ----- Шапка раздела ------------------------------------------------------- */
+.m-wrap .m-page-head {
+    display: flex;
+    align-items: center;
+    gap: var(--ui-space-4);
+    flex-wrap: wrap;
+    margin-bottom: var(--ui-space-4);
+}
+.m-wrap .m-page-title { font-size: 18px; font-weight: var(--ui-weight-bold); color: var(--ui-color-ink); }
+.m-wrap .m-page-sub { font-size: var(--ui-text-sm); color: var(--ui-color-ink-faint); }
+.m-wrap .m-page-acts {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: var(--ui-space-3);
+    flex-wrap: wrap;
+}
+
+/* ----- Две колонки ---------------------------------------------------------
+   auto-fit: в половинной панели колонки встают друг под друга сами, без
+   отдельной медиа-точки — ширина панели меняется тягой границы, а не
+   размером окна, и на медиазапрос она не отвечает. */
+.m-wrap .m-page-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(310px, 1fr));
+    gap: var(--ui-space-4);
+    align-items: start;
+}
+.m-wrap .m-page-col {
+    display: grid;
+    gap: var(--ui-space-4);
+    align-content: start;
     min-width: 0;
 }
-.m-mono { font-family: var(--m-font-mono); font-variant-numeric: tabular-nums; letter-spacing: .02em; }
+/* В режиме правки правая колонка приглушена: она правится своими окнами. */
+.m-wrap .m-page-col.is-dim { opacity: .72; }
 
-.m-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
-
-/* ----- Карточка-секция (организация / счета / налоги) ----- */
-.m-card {
-    background: var(--bg-container);
-    border: 1px solid var(--m-line-soft);
-    border-radius: var(--m-radius-lg);
-    box-shadow: var(--m-shadow-card);
-    padding: 26px 28px;
-    backdrop-filter: blur(14px);
-}
-.m-card-head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 14px;
-    margin-bottom: 6px;
-}
-.m-card-title { display: flex; align-items: center; gap: 11px; }
-.m-card-icon {
-    width: 34px;
-    height: 34px;
-    border-radius: 10px;
-    flex-shrink: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: var(--m-accent-soft);
-    color: var(--m-accent);
-    font-size: 15px;
-}
-.m-card-title small { display: block; font-size: 12px; color: var(--m-ink-faint); font-weight: 500; margin-top: 1px; }
-
-/* ----- Секции формы организации ----- */
-.m-section { padding-top: 20px; margin-top: 20px; border-top: 1px solid var(--m-line-soft); }
-.m-section:first-of-type { padding-top: 14px; margin-top: 14px; }
-.m-section-label {
-    font-size: 11.5px;
-    font-weight: 700;
-    letter-spacing: .07em;
-    text-transform: uppercase;
-    color: var(--m-ink-faint);
-    margin-bottom: 14px;
-}
-
-/* Сетка "Общие данные"/"Юридические реквизиты" — фиксированная (не auto-fill,
-   dialog.md п.3): короткие поля ровными рядами, Юридический адрес — full-width
-   своей строкой. */
-.m-org-grid {
-    display: grid;
-    grid-template-columns: repeat(5, 1fr);
-    gap: 18px 20px;
-    /* Поля выравниваются по НИЗУ ячейки. Иначе двухстрочная метка («Генеральный
-       директор» на узкой колонке) опускает своё поле ниже соседних, и строка
-       выглядит сломанной (находка дизайн-сессии Д6). Подгонять ширину колонок
-       под текущие подписи бессмысленно: следующая длинная метка сломает снова. */
-    align-items: end;
-}
-@media (max-width: 900px) {
-    .m-org-grid { grid-template-columns: repeat(3, 1fr); }
-}
-@media (max-width: 600px) {
-    .m-org-grid { grid-template-columns: repeat(2, 1fr); }
-}
-.m-field-full { grid-column: 1 / -1; }
-.m-input-narrow { max-width: 140px; }
-
-/* ----- Пустое состояние -----
-   Своего больше нет: раздел пользуется .ui-empty из слоя — заголовок, причина,
-   следующий шаг (находка дизайн-сессии Д12). Остался только отступ сверху,
-   чтобы состояние не липло к шапке карточки: это раскладка, а не вид. */
-.m-empty { margin-top: 12px; }
-
-/* ----- Строки-карточки списков (счета/налоги) ----- */
-.m-row-list { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
-.m-row-card {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    background: var(--m-surface-solid);
-    border: 1px solid var(--m-line-soft);
-    border-radius: var(--m-radius-md);
-    padding: 13px 14px;
-    transition: border-color 0.15s, box-shadow 0.15s;
-}
-.m-row-card:hover { border-color: var(--m-line); box-shadow: var(--m-shadow-soft); }
-.m-row-avatar {
-    width: 38px;
-    height: 38px;
-    border-radius: 10px;
-    flex-shrink: 0;
-    background: var(--m-surface-sunken);
-    color: var(--m-ink-muted);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 15px;
-}
-.m-row-avatar-text { font-family: var(--m-font-mono); font-weight: 700; font-size: 12px; }
-.m-row-main { min-width: 0; flex: 1; display: grid; grid-template-columns: 1.3fr 1fr 1fr; gap: 4px 18px; align-items: center; }
-.m-row-main-2col { grid-template-columns: 1.3fr 1fr; }
-@media (max-width: 640px) { .m-row-main { grid-template-columns: 1fr; } }
-.m-row-title { font-size: 14px; font-weight: 700; color: var(--m-ink); }
-.m-row-sub { font-size: 12.5px; color: var(--m-ink-muted); }
-.m-row-sub-lbl { color: var(--m-ink-faint); margin-right: 4px; }
-.m-chip {
-    display: inline-flex;
-    align-items: center;
-    font-size: 11.5px;
-    font-weight: 700;
-    padding: 3px 9px;
-    border-radius: 999px;
-    background: var(--m-good-soft);
-    color: var(--m-good);
-    width: fit-content;
-    margin-top: 3px;
-}
-.m-row-actions { display: flex; gap: 2px; flex-shrink: 0; }
-
-/* Инлайн-форма добавления/редактирования записи — как обычная карточка секции,
-   но с внутренним отступом record-card (компактнее m-card). */
-.m-record-card { background: var(--m-surface-solid); border: 1px solid var(--m-line-soft); border-radius: var(--m-radius-md); padding: 14px 16px; margin-top: 16px; }
-.m-record-card-editing .form-grid { margin-bottom: 0; }
-
-/* ----- Пунктирная строка "+ Добавить..." (замена кнопки в заголовке) ----- */
-.m-add-row {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    border: 1.5px dashed var(--m-line);
-    border-radius: var(--m-radius-md);
-    padding: 13px 14px;
-    margin-top: 10px;
-    color: var(--m-ink-faint);
-    font-size: 13px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: border-color 0.15s, color 0.15s, background 0.15s;
-}
-.m-add-row:hover, .m-add-row:focus-visible {
-    border-color: var(--m-accent);
-    color: var(--m-accent);
-    background: var(--m-accent-soft);
-    outline: none;
-}
-.m-add-row i { font-size: var(--ui-icon-sm); }
-
-/* ----- Иконки-кнопки действий у строк-карточек ----- */
-.m-icon-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 30px;
-    height: 30px;
-    border-radius: 9px;
-    border: none;
-    background: transparent;
-    color: var(--m-ink-faint);
-    font-size: 13px;
-    cursor: pointer;
-    transition: background 0.2s, color 0.2s;
-}
-.m-icon-btn:hover { background: var(--m-accent-soft); color: var(--m-accent); }
-.m-icon-btn-danger:hover { background: rgba(231, 76, 60, 0.12); color: #e74c3c; }
-
-/* ----- Предпросмотр "Летерхед" (как реквизиты увидят в счёте) ----- */
-.m-preview {
-    position: sticky;
-    top: 24px;
-    background: var(--m-surface-solid);
-    border: 1px solid var(--m-line-soft);
-    border-radius: var(--m-radius-lg);
-    box-shadow: var(--m-shadow-card);
+/* ----- Секция -------------------------------------------------------------- */
+.m-wrap .m-sec {
+    background: var(--ui-color-glass);
+    border: 1px solid var(--ui-color-line);
+    border-radius: var(--ui-radius-md);
     overflow: hidden;
 }
-.m-preview-tag {
-    background: var(--m-ink);
-    color: #eef1f6;
-    font-size: 10.5px;
-    font-weight: 700;
-    letter-spacing: .08em;
+.m-wrap .m-sec-head {
+    display: flex;
+    align-items: center;
+    gap: var(--ui-space-4);
+    padding: 11px var(--ui-space-5);
+    border-bottom: 1px solid var(--ui-color-line);
+    background: var(--ui-color-glass-strong);
+}
+.m-wrap .m-sec-head h4 {
+    font-size: 11.5px;
+    font-weight: var(--ui-weight-bold);
+    letter-spacing: .05em;
     text-transform: uppercase;
-    padding: 9px 22px;
+    color: var(--ui-color-ink-faint);
 }
-.m-letterhead { padding: 24px 22px 22px; }
-.m-lh-name { font-size: 18px; font-weight: 800; line-height: 1.3; }
-.m-lh-form { font-size: 12px; color: var(--m-ink-faint); font-weight: 600; margin-top: 2px; }
-.m-lh-ids {
-    margin-top: 14px;
-    font-family: var(--m-font-mono);
-    font-variant-numeric: tabular-nums;
-    font-size: 12px;
-    color: var(--m-ink-muted);
-    line-height: 1.9;
+.m-wrap .m-sec-act { margin-left: auto; display: flex; gap: var(--ui-space-1); }
+.m-wrap .m-sec-body { padding: 13px var(--ui-space-5); }
+
+/* ----- Пары «метка → значение» ---------------------------------------------
+   Две колонки: метка узкая и фиксированная, значение занимает остальное.
+   baseline — чтобы длинное значение в две строки не сдвигало свою метку. */
+.m-wrap .m-kv {
+    display: grid;
+    grid-template-columns: minmax(96px, 130px) minmax(0, 1fr);
+    gap: 9px var(--ui-space-5);
+    align-items: baseline;
+    margin: 0;
 }
-.m-lh-ids b { color: var(--m-ink-faint); font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-weight: 600; margin-right: 5px; }
-.m-lh-addr { margin-top: 12px; font-size: 12.5px; color: var(--m-ink-muted); line-height: 1.5; }
-.m-lh-rule { height: 1px; background: var(--m-line-soft); margin: 18px 0; }
-.m-lh-sub { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--m-ink-faint); margin-bottom: 10px; }
-.m-lh-bank { font-size: 13px; font-weight: 700; margin-bottom: 6px; }
-.m-lh-bank-rows {
-    font-family: var(--m-font-mono);
-    font-variant-numeric: tabular-nums;
+.m-wrap .m-kv dt { font-size: var(--ui-text-sm); color: var(--ui-color-ink-faint); }
+.m-wrap .m-kv dd {
+    margin: 0;
+    font-size: 13.5px;
+    color: var(--ui-color-ink);
+    display: flex;
+    align-items: center;
+    gap: var(--ui-space-2);
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+.m-wrap .m-mono { font-variant-numeric: tabular-nums; letter-spacing: .02em; }
+/* Незаполненное — курсивом и приглушённо: это не значение, а его отсутствие. */
+.m-wrap .m-empty-val { color: var(--ui-color-ink-faint); font-style: italic; font-size: var(--ui-text-md); }
+
+/* Копирование — вторичное действие внутри карточки, показывается по
+   наведению (правило Т3 дизайн-сессии: наведением прячутся вторичные действия
+   в карточках-списках, а не действия в строке таблицы). */
+.m-wrap .m-copy { opacity: 0; transition: opacity var(--ui-dur-fast); }
+.m-wrap .m-kv dd:hover .m-copy,
+.m-wrap .m-copy:focus-visible { opacity: 1; }
+
+/* ----- Липкая полоса сохранения --------------------------------------------
+   Липнет к низу панели: форма организации длиннее экрана в половинной панели,
+   и уехавшая вниз кнопка «Сохранить» равносильна её отсутствию.
+   Отрицательные поля компенсируют внутренний отступ тела панели — полоса идёт
+   от края до края, как в макете. */
+.m-wrap .m-save-bar {
+    position: sticky;
+    bottom: calc(var(--ui-space-5) * -1);
+    z-index: 3;
+    margin: var(--ui-space-5) calc(var(--ui-space-5) * -1) calc(var(--ui-space-5) * -1);
+    padding: var(--ui-space-4) var(--ui-space-5);
+    background: var(--ui-color-surface);
+    border-top: 1px solid var(--ui-color-line);
+    display: flex;
+    align-items: center;
+    gap: var(--ui-space-4);
+}
+.m-wrap .m-save-bar[hidden] { display: none; }
+.m-wrap .m-save-note {
+    font-size: var(--ui-text-sm);
+    color: var(--ui-color-ink-faint);
+    margin-right: auto;
+}
+
+/* ----- Подсказки в правой колонке ------------------------------------------ */
+.m-wrap .m-aside-hint {
     font-size: 11.5px;
-    color: var(--m-ink-muted);
-    line-height: 1.85;
+    color: var(--ui-color-ink-faint);
+    line-height: var(--ui-line-base);
+    padding: 9px var(--ui-space-4);
+    background: var(--ui-color-surface-sunken);
+    border: 1px dashed var(--ui-color-line-strong);
+    border-radius: var(--ui-radius-sm);
 }
-.m-lh-bank-rows b { color: var(--m-ink-faint); font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-weight: 600; margin-right: 5px; }
-.m-lh-bank-empty { font-size: 12.5px; color: var(--m-ink-faint); }
-.m-lh-foot {
-    padding: 14px 22px;
-    background: var(--m-surface-sunken);
-    font-size: 11.5px;
-    color: var(--m-ink-faint);
-    border-top: 1px solid var(--m-line-soft);
+.m-wrap .m-aside-hint--row {
+    display: flex;
+    align-items: center;
+    gap: var(--ui-space-4);
 }
+.m-wrap .m-aside-hint--row span { flex: 1; }
+.m-wrap .m-aside-hint[hidden] { display: none; }
+
+/* ----- Строка счёта --------------------------------------------------------- */
+.m-wrap .m-acct {
+    display: flex;
+    align-items: center;
+    gap: var(--ui-space-4);
+    padding: var(--ui-space-4) 0;
+    border-bottom: 1px solid var(--ui-color-line);
+}
+.m-wrap .m-acct:last-child { border-bottom: none; padding-bottom: 0; }
+.m-wrap .m-acct:first-child { padding-top: 0; }
+.m-wrap .m-acct-main { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.m-wrap .m-acct-bank { font-size: 13.5px; font-weight: var(--ui-weight-bold); color: var(--ui-color-ink); }
+.m-wrap .m-acct-num {
+    font-size: var(--ui-text-sm);
+    color: var(--ui-color-ink-faint);
+    font-variant-numeric: tabular-nums;
+}
+.m-wrap .m-acct-acts {
+    margin-left: auto;
+    display: flex;
+    gap: var(--ui-space-1);
+    opacity: 0;
+    transition: opacity var(--ui-dur-fast);
+}
+.m-wrap .m-acct:hover .m-acct-acts,
+.m-wrap .m-acct:focus-within .m-acct-acts { opacity: 1; }
+
+/* ----- Налоговая запись ----------------------------------------------------- */
+.m-wrap .m-tax { padding: var(--ui-space-4) 0; border-bottom: 1px solid var(--ui-color-line); }
+.m-wrap .m-tax:last-child { border-bottom: none; padding-bottom: 0; }
+.m-wrap .m-tax:first-child { padding-top: 0; }
+.m-wrap .m-tax-acts {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--ui-space-1);
+    margin-top: var(--ui-space-2);
+    opacity: 0;
+    transition: opacity var(--ui-dur-fast);
+}
+.m-wrap .m-tax:hover .m-tax-acts,
+.m-wrap .m-tax:focus-within .m-tax-acts { opacity: 1; }
+
+/* ----- Бланк письма --------------------------------------------------------- */
+.m-wrap .m-letterhead {
+    font-size: var(--ui-text-sm);
+    color: var(--ui-color-ink-soft);
+    line-height: var(--ui-line-base);
+    background: var(--ui-color-surface);
+    border: 1px solid var(--ui-color-line);
+    border-radius: var(--ui-radius-sm);
+    padding: 11px var(--ui-space-4);
+}
+.m-wrap .m-lh-sign { color: var(--ui-color-ink-faint); }
+.m-wrap .m-note {
+    font-size: var(--ui-text-sm);
+    color: var(--ui-color-ink-faint);
+    line-height: var(--ui-line-base);
+    margin-top: 9px;
+}
+
+/* ----- Ошибка поля в режиме правки ------------------------------------------ */
+.m-wrap .ui-field.is-bad .ui-field__control {
+    border-color: var(--ui-color-danger);
+    background: var(--ui-color-danger-wash);
+}
+.m-wrap .m-hint-bad { color: var(--ui-color-danger); font-weight: var(--ui-weight-bold); }
+
+/* ----- Окна раздела ---------------------------------------------------------- */
+.m-wrap .m-modal-sub { font-size: var(--ui-text-sm); color: var(--ui-color-ink-faint); margin-top: 3px; }
+.m-wrap .m-textarea { height: auto; min-height: 68px; padding: 9px 11px; resize: vertical; }
