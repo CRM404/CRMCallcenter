@@ -297,6 +297,19 @@ CREATE TABLE IF NOT EXISTS organizations (
     legal_address VARCHAR
 );
 
+-- Добавлено 19.08.2026 вместе с переделкой раздела «Реквизиты» по макету.
+-- ADD COLUMN IF NOT EXISTS — та же идемпотентность, что и весь файл: migrate.js
+-- прогоняет schema.sql при каждом старте сервера.
+--
+-- actual_address: в макете секция «Адреса» содержит два поля, юридический и
+-- фактический; в базе был только юридический.
+-- letterhead_*: бланк письма в макете правится своим окном («Шапка», «Подпись»),
+-- то есть его текст надо где-то хранить. Пока поля пусты, бланк собирается из
+-- реквизитов организации, как и раньше, — прежнее поведение сохраняется.
+ALTER TABLE organizations ADD COLUMN IF NOT EXISTS actual_address VARCHAR;
+ALTER TABLE organizations ADD COLUMN IF NOT EXISTS letterhead_header TEXT;
+ALTER TABLE organizations ADD COLUMN IF NOT EXISTS letterhead_signature VARCHAR;
+
 CREATE TABLE IF NOT EXISTS organization_bank_accounts (
     id SERIAL PRIMARY KEY,
     organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,

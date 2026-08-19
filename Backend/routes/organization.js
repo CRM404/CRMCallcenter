@@ -21,7 +21,13 @@ const ORG_FIELD_COLUMNS = [
     ['registrationCountry', 'registration_country'],
     ['generalDirector', 'general_director'],
     ['registrationDate', 'registration_date'],
-    ['legalAddress', 'legal_address']
+    ['legalAddress', 'legal_address'],
+    // Добавлены 19.08.2026 вместе с переделкой раздела по макету: фактический
+    // адрес (в макете секция «Адреса» из двух полей) и текст бланка письма,
+    // который правится своим окном.
+    ['actualAddress', 'actual_address'],
+    ['letterheadHeader', 'letterhead_header'],
+    ['letterheadSignature', 'letterhead_signature']
 ];
 
 const BANK_ACCOUNT_FIELD_COLUMNS = [
@@ -58,7 +64,10 @@ function rowToOrganization(row) {
         registrationCountry: row.registration_country,
         generalDirector: row.general_director,
         registrationDate: row.registration_date,
-        legalAddress: row.legal_address
+        legalAddress: row.legal_address,
+        actualAddress: row.actual_address,
+        letterheadHeader: row.letterhead_header,
+        letterheadSignature: row.letterhead_signature
     };
 }
 
