@@ -74,7 +74,26 @@
                 <svg class="ui-ic ui-ic--sm ui-ic--quiet" aria-hidden="true"><use href="#ui-ic-search"></use></svg>
                 <input type="text" class="ui-field__control" data-role="search" placeholder="Поиск по имени, телефону, email…" aria-label="Поиск сотрудника">
             </div>
+            <!-- Два списка держат то же состояние, что окно «Фильтры»: отдел
+                 виден в обоих местах, линия живёт только здесь — в окне её
+                 никогда не было. -->
+            <div class="ui-field">
+                <select class="ui-field__control" data-role="quick-department" aria-label="Отдел">
+                    <option value="">Все отделы</option>
+                </select>
+            </div>
+            <div class="ui-field">
+                <select class="ui-field__control" data-role="quick-line" aria-label="Линия">
+                    <option value="">Все линии</option>
+                    <option value="Входящая">Входящая</option>
+                    <option value="Исходящая">Исходящая</option>
+                </select>
+            </div>
         </div>
+
+        <!-- Строка активных фильтров — элемент слоя, тот же, что в «Лидах» и
+             «Источниках». -->
+        <div class="ui-fchips" data-role="filter-chips" hidden></div>
 
         <div class="ui-table-wrap" data-role="table-wrap">
             <table class="ui-table ui-table--wide ui-table--freeze-acts">

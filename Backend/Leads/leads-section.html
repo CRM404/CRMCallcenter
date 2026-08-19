@@ -49,6 +49,30 @@
         <div class="ui-chip ui-chip--ok"><dd class="ui-chip__value" data-role="stat-today">0</dd><dt class="ui-chip__label">За сегодня</dt></div>
     </dl>
 
+    <!-- Тулбар: поиск и два списка. Это НЕ дубль окна «Фильтры» — они держат
+         одно состояние: то, что выбрано здесь, видно там, и наоборот. Окно
+         остаётся ради полей, которым в строке места нет (сотрудник). -->
+    <div class="ui-toolbar">
+        <div class="ui-field leads-search">
+            <input type="search" class="ui-field__control" data-role="search"
+                   placeholder="Поиск по имени или телефону…" aria-label="Поиск лида">
+        </div>
+        <div class="ui-field">
+            <select class="ui-field__control" data-role="quick-status" aria-label="Статус воронки">
+                <option value="">Все статусы</option>
+            </select>
+        </div>
+        <div class="ui-field">
+            <select class="ui-field__control" data-role="quick-source" aria-label="Источник">
+                <option value="">Все источники</option>
+            </select>
+        </div>
+    </div>
+
+    <!-- Строка активных фильтров: элемент слоя, тот же, что в «Источниках».
+         Без неё человек видит короткий список и не понимает, почему он короткий. -->
+    <div class="ui-fchips" data-role="filter-chips" hidden></div>
+
     <div class="ui-table-wrap" data-role="table-wrap">
         <table class="ui-table ui-table--wide ui-table--freeze-acts">
             <thead>
@@ -93,9 +117,11 @@
         <p class="ui-empty__text">Ничего не найдено по текущим фильтрам.</p>
     </div>
 
-    <div class="ui-table-foot" data-role="load-more-row" hidden>
-        <span></span>
-        <button type="button" class="ui-btn ui-btn--ghost" data-role="load-more">Показать ещё</button>
+    <!-- Подвал: сколько показано из скольких подходящих под фильтр. «M» —
+         честное число с сервера, а не длина полученной порции. -->
+    <div class="ui-table-foot" data-role="table-foot" hidden>
+        <span data-role="shown-count"></span>
+        <button type="button" class="ui-btn ui-btn--ghost" data-role="load-more" hidden>Показать ещё</button>
     </div>
 
     <!-- Полоса массовых операций. В старой странице это был плавающий остров

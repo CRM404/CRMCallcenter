@@ -51,6 +51,18 @@
                            placeholder="Поиск по корневому источнику, источнику лидов, площадке, CPA-сети, городу, статусу…"
                            aria-label="Поиск источников">
                 </div>
+                <!-- Два списка из макета. Составы собираются из самих данных:
+                     регионы — из городов источников, сети — из справочника. -->
+                <div class="ui-field">
+                    <select class="ui-field__control" data-role="filter-region" aria-label="Регион">
+                        <option value="">Все регионы</option>
+                    </select>
+                </div>
+                <div class="ui-field">
+                    <select class="ui-field__control" data-role="filter-network" aria-label="CPA-сеть">
+                        <option value="">Все CPA-сети</option>
+                    </select>
+                </div>
             </div>
 
             <div class="ui-fchips" data-role="filter-chips" hidden></div>

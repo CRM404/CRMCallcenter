@@ -78,6 +78,9 @@
 .leads-wrap .leads-filter-wrap { position: relative; display: inline-flex; }
 .leads-wrap .leads-filter-badge { position: absolute; top: -6px; right: -6px; background: var(--accent); color: #fff; font-size: 11px; font-weight: 700; min-width: 18px; height: 18px; border-radius: 999px; display: flex; align-items: center; justify-content: center; padding: 0 4px; box-shadow: 0 0 0 2px var(--surface-modal); }
 
+/* Поле поиска занимает свободное место строки, списки — по содержимому. */
+.leads-wrap .leads-search { flex: 1 1 200px; min-width: 200px; }
+
 /* ----- Ячейки списка ----- */
 .leads-wrap .lead-phone { font-variant-numeric: tabular-nums; }
 .leads-wrap .queue-tag { margin-left: 6px; vertical-align: 1px; }

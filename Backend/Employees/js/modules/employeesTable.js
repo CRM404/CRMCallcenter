@@ -172,12 +172,22 @@ export function createTable(root, deps) {
             </tr>`;
     }
 
+    // Подвал: сколько строк ВИДНО на текущей странице из скольких подходящих
+    // под фильтр. «Всего: N» отвечал на другой вопрос и не совпадал с тем, что
+    // человек видит перед собой (М28).
+    function shownRange(totalItems) {
+        if (!totalItems) return 'Ничего не найдено';
+        const from = (currentPage - 1) * PAGE_SIZE;
+        const to = Math.min(from + PAGE_SIZE, totalItems);
+        return `Показано ${to - from} из ${totalItems}`;
+    }
+
     function renderPagination(totalItems) {
         const totalPages = Math.ceil(totalItems / PAGE_SIZE) || 1;
         const box = $('[data-role="pagination"]');
         if (totalPages <= 1) {
             box.innerHTML = '';
-            $('[data-role="pagination-note"]').textContent = totalItems ? `Всего: ${totalItems}` : '';
+            $('[data-role="pagination-note"]').textContent = shownRange(totalItems);
             return;
         }
         const maxVisible = 7;
@@ -190,7 +200,8 @@ export function createTable(root, deps) {
             html += `<button type="button" class="page-btn ${i === currentPage ? 'active' : ''}" data-page="${i}">${i}</button>`;
         }
         box.innerHTML = html;
-        $('[data-role="pagination-note"]').textContent = `Страница ${currentPage} из ${totalPages} · всего ${totalItems}`;
+        $('[data-role="pagination-note"]').textContent =
+            `${shownRange(totalItems)} · страница ${currentPage} из ${totalPages}`;
     }
 
     function renderSortIcons() {
@@ -219,6 +230,7 @@ export function createTable(root, deps) {
             search: $('[data-role="search"]').value.trim(),
             status: $('#empFilterStatus').value,
             department: $('#empFilterDepartment').value,
+            lineType: $('[data-role="quick-line"]').value,
             position: $('#empFilterPosition').value,
             hasWhatsapp: $('#empFilterWhatsapp').checked,
             hasTelegram: $('#empFilterTelegram').checked,
@@ -229,7 +241,8 @@ export function createTable(root, deps) {
 
     function updateFilterBadge(filters = {}) {
         const badge = $('[data-role="filter-badge"]');
-        const activeCount = [filters.status, filters.department, filters.position, filters.hireDateFrom, filters.hireDateTo]
+        const activeCount = [filters.status, filters.department, filters.position, filters.lineType,
+            filters.hireDateFrom, filters.hireDateTo]
             .filter(Boolean).length + (filters.hasWhatsapp ? 1 : 0) + (filters.hasTelegram ? 1 : 0);
         badge.textContent = String(activeCount);
         badge.hidden = activeCount === 0;
@@ -247,8 +260,12 @@ export function createTable(root, deps) {
             });
             select.value = values.includes(previous) ? previous : '';
         };
-        fill($('#empFilterDepartment'), [...new Set(allEmployees.map((e) => e.department).filter(Boolean))], 'Все отделы');
+        const departments = [...new Set(allEmployees.map((e) => e.department).filter(Boolean))];
+        fill($('#empFilterDepartment'), departments, 'Все отделы');
         fill($('#empFilterPosition'), [...new Set(allEmployees.map((e) => e.position).filter(Boolean))], 'Все должности');
+        // Тот же список отделов в тулбаре: состав берётся из одних данных,
+        // иначе два «Все отделы» однажды разойдутся.
+        fill($('[data-role="quick-department"]'), departments, 'Все отделы');
     }
 
     // Полный список — не на каждую перерисовку, а когда данные могли измениться.
@@ -267,7 +284,7 @@ export function createTable(root, deps) {
     // совпадает с полным — значит второй запрос за «полным списком для
     // выпадающих фильтров» не нужен вовсе.
     function isFilterSet(f) {
-        return Boolean(f.search || f.status || f.department || f.position
+        return Boolean(f.search || f.status || f.department || f.position || f.lineType
             || f.hasWhatsapp || f.hasTelegram || f.hireDateFrom || f.hireDateTo);
     }
 
@@ -350,8 +367,76 @@ export function createTable(root, deps) {
         $('[data-role="table-body"]').innerHTML = pageItems.map((emp) => rowHtml(emp, hidden)).join('');
 
         renderPagination(list.length);
+        renderFilterChips();
         renderSortIcons();
         updateMassBar();
+    }
+
+    // Строка активных фильтров. Подписи человеческие: не «status=active», а
+    // «Статус: Активен». Снятие любого чипа и «Сбросить все» ходят тем же
+    // путём, что окно «Фильтры», — общего состояния два не бывает.
+    const FILTER_LABELS = {
+        search: 'Поиск',
+        status: 'Статус',
+        department: 'Отдел',
+        position: 'Должность',
+        lineType: 'Линия',
+        hireDateFrom: 'Принят с',
+        hireDateTo: 'Принят по'
+    };
+    const STATUS_LABELS = { active: 'Активен', inactive: 'Неактивен' };
+
+    function renderFilterChips() {
+        const box = $('[data-role="filter-chips"]');
+        if (!box) return;
+        const f = appliedFilters || {};
+        const chips = Object.keys(FILTER_LABELS)
+            .filter((key) => f[key])
+            .map((key) => ({
+                key,
+                label: FILTER_LABELS[key],
+                value: key === 'status' ? (STATUS_LABELS[f[key]] || f[key]) : f[key]
+            }));
+        if (f.hasWhatsapp) chips.push({ key: 'hasWhatsapp', label: '', value: 'Есть WhatsApp' });
+        if (f.hasTelegram) chips.push({ key: 'hasTelegram', label: '', value: 'Есть Telegram' });
+
+        box.hidden = chips.length === 0;
+        box.innerHTML = chips.length
+            ? chips.map((c) => `
+                <span class="ui-fchip">${c.label ? `${escapeHtml(c.label)}: ` : ''}<b>${escapeHtml(String(c.value))}</b>
+                    <button type="button" class="ui-fchip__remove" data-drop-filter="${c.key}"
+                            aria-label="Снять фильтр"></button>
+                </span>`).join('')
+                + '<button type="button" class="ui-fchips__clear" data-role="clear-filters">Сбросить все</button>'
+            : '';
+        box.querySelectorAll('.ui-fchip__remove').forEach((btn) => {
+            btn.appendChild(iconNode('close', 'sm'));
+        });
+    }
+
+    function dropFilter(key) {
+        const controls = {
+            search: '[data-role="search"]',
+            status: '#empFilterStatus',
+            department: '#empFilterDepartment',
+            position: '#empFilterPosition',
+            lineType: '[data-role="quick-line"]',
+            hireDateFrom: '#empFilterHireFrom',
+            hireDateTo: '#empFilterHireTo'
+        };
+        if (key === 'hasWhatsapp' || key === 'hasTelegram') {
+            $(key === 'hasWhatsapp' ? '#empFilterWhatsapp' : '#empFilterTelegram').checked = false;
+        } else if (controls[key]) {
+            $(controls[key]).value = '';
+        }
+        // Отдел живёт в двух местах — снимаем в обоих.
+        if (key === 'department') $('[data-role="quick-department"]').value = '';
+    }
+
+    function clearAllFilters() {
+        Object.keys(FILTER_LABELS).forEach(dropFilter);
+        dropFilter('hasWhatsapp');
+        dropFilter('hasTelegram');
     }
 
     // ------------------------------------------------------------ выделение
@@ -557,13 +642,43 @@ export function createTable(root, deps) {
             reload();
         });
         $('[data-role="filter-clear"]').addEventListener('click', () => {
-            ['#empFilterStatus', '#empFilterDepartment', '#empFilterPosition', '#empFilterHireFrom', '#empFilterHireTo']
-                .forEach((sel) => { $(sel).value = ''; });
-            $('#empFilterWhatsapp').checked = false;
-            $('#empFilterTelegram').checked = false;
+            clearAllFilters();
             currentPage = 1;
             filterModal.hidden = true;
             reload();
+        });
+
+        // --- тулбар: отдел и линия ---
+        //
+        // Отдел выбирается и здесь, и в окне «Фильтры»; состояние одно, поэтому
+        // выбор в тулбаре сразу проставляется в окне, а не живёт рядом с ним.
+        $('[data-role="quick-department"]').addEventListener('change', (e) => {
+            $('#empFilterDepartment').value = e.target.value;
+            currentPage = 1;
+            reload();
+        });
+        $('[data-role="quick-line"]').addEventListener('change', () => {
+            currentPage = 1;
+            reload();
+        });
+
+        // --- строка активных фильтров ---
+        //
+        // Слушатель на контейнере: чипы перерисовываются при каждом изменении
+        // отбора, и вешать обработчики на них пришлось бы заново.
+        $('[data-role="filter-chips"]').addEventListener('click', (e) => {
+            const drop = e.target.closest('[data-drop-filter]');
+            if (drop) {
+                dropFilter(drop.dataset.dropFilter);
+                currentPage = 1;
+                reload();
+                return;
+            }
+            if (e.target.closest('[data-role="clear-filters"]')) {
+                clearAllFilters();
+                currentPage = 1;
+                reload();
+            }
         });
     }
 

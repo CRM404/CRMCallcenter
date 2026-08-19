@@ -206,7 +206,11 @@ let paramLists = {};
 let scripts = [];
 
 let leads = [];
-let filters = { fio: '', phone: '', sourceId: '', employeeId: '', funnelStatusId: '' };
+let filters = { q: '', fio: '', phone: '', sourceId: '', employeeId: '', funnelStatusId: '' };
+// Сколько всего лидов подходит под текущий фильтр — число с сервера, для
+// подвала «Показано N из M».
+let total = 0;
+let searchTimer = null;
 let visibleColumns = { ...COLUMN_DEFAULT };
 let selectedIds = new Set();
 let offset = 0;
@@ -270,10 +274,16 @@ async function loadStats(mountId) {
 
 async function loadLeads({ reset }) {
     if (reset) offset = 0;
-    const batch = await storage.fetchLeads({ ...filters, limit: PAGE_SIZE, offset });
+    // Ответ сервера — { items, total }: total посчитан теми же фильтрами и нужен
+    // подвалу. «Есть ли ещё» тоже берётся из него, а не из длины порции:
+    // прежняя проверка «пришло ровно PAGE_SIZE» показывала «Показать ещё» и
+    // тогда, когда следующая страница пустая.
+    const page = await storage.fetchLeads({ ...filters, limit: PAGE_SIZE, offset });
+    const batch = page.items;
     leads = reset ? batch : leads.concat(batch);
-    hasMore = batch.length === PAGE_SIZE;
+    total = page.total;
     offset += batch.length;
+    hasMore = leads.length < total;
 }
 
 async function reloadAll() {
@@ -322,7 +332,8 @@ function rowHtml(lead) {
 
 function renderTable() {
     applyColumnVisibility();
-    $('[data-role="load-more-row"]').hidden = !hasMore;
+    renderFooter();
+    renderFilterChips();
 
     if (!leads.length) {
         $('[data-role="leads-body"]').innerHTML = '';
@@ -344,6 +355,92 @@ function renderTable() {
 
 function renderAll() {
     renderTable();
+}
+
+// ---------------------------------------------------------------- подвал и фильтры
+
+// «Показано 30 из 46» — сколько строк на экране из скольких подходящих под
+// фильтр. Кнопка догрузки живёт в том же подвале и прячется, когда показано
+// всё: кнопка, которая ничего не добавит, читается как поломка.
+function renderFooter() {
+    const foot = $('[data-role="table-foot"]');
+    if (!foot) return;
+    foot.hidden = total === 0;
+    $('[data-role="shown-count"]').textContent = `Показано ${leads.length} из ${total}`;
+    $('[data-role="load-more"]').hidden = !hasMore;
+}
+
+// Подписи активных фильтров: человек видит не «sourceId=4», а
+// «Источник: Яндекс.Директ».
+function activeFilterLabels() {
+    const out = [];
+    const nameById = (list, id, field) => {
+        const found = list.find((x) => String(x.id) === String(id));
+        return found ? found[field] : id;
+    };
+    if (filters.q) out.push({ key: 'q', label: 'Поиск', value: filters.q });
+    if (filters.fio) out.push({ key: 'fio', label: 'ФИО', value: filters.fio });
+    if (filters.phone) out.push({ key: 'phone', label: 'Номер', value: filters.phone });
+    if (filters.sourceId) {
+        out.push({ key: 'sourceId', label: 'Источник', value: nameById(sources, filters.sourceId, 'rootSource') });
+    }
+    if (filters.employeeId === 'none') {
+        out.push({ key: 'employeeId', label: '', value: 'Без оператора' });
+    } else if (filters.employeeId) {
+        out.push({ key: 'employeeId', label: 'Сотрудник', value: nameById(employees, filters.employeeId, 'fullName') });
+    }
+    if (filters.funnelStatusId) {
+        out.push({ key: 'funnelStatusId', label: 'Статус', value: nameById(statuses, filters.funnelStatusId, 'statusName') });
+    }
+    return out;
+}
+
+function renderFilterChips() {
+    const box = $('[data-role="filter-chips"]');
+    if (!box) return;
+    const active = activeFilterLabels();
+    box.hidden = active.length === 0;
+    const chips = active.map((f) => `
+        <span class="ui-fchip">${f.label ? `${escapeHtml(f.label)}: ` : ''}<b>${escapeHtml(String(f.value))}</b>
+            <button type="button" class="ui-fchip__remove" data-drop-filter="${f.key}"
+                    aria-label="Снять фильтр">${icon('close', 'sm')}</button>
+        </span>`).join('');
+    box.innerHTML = active.length
+        ? `${chips}<button type="button" class="ui-fchips__clear" data-role="clear-filters">Сбросить все</button>`
+        : '';
+}
+
+// Одно состояние на тулбар и окно «Фильтры»: что бы ни поменяли, поля обоих
+// приводятся к нему. Без этого окно показывало бы старое значение поверх
+// нового и «сбрасывало» бы фильтр при следующем применении.
+function syncFilterControls() {
+    const set = (sel, value) => { const node = $(sel); if (node) node.value = value; };
+    set('[data-role="search"]', filters.q);
+    set('[data-role="quick-status"]', filters.funnelStatusId);
+    set('[data-role="quick-source"]', filters.sourceId);
+    set('#fltFio', filters.fio);
+    set('#fltPhone', filters.phone);
+    set('#fltSource', filters.sourceId);
+    set('#fltEmployee', filters.employeeId);
+    set('#fltStatus', filters.funnelStatusId);
+    const badge = $('[data-role="filter-badge"]');
+    if (badge) {
+        const activeCount = Object.values(filters).filter(Boolean).length;
+        badge.hidden = activeCount === 0;
+        badge.textContent = activeCount;
+    }
+}
+
+async function applyFilterState(mountId) {
+    syncFilterControls();
+    clearSelection();
+    try {
+        await loadLeads({ reset: true });
+        if (!alive(mountId)) return;
+        renderTable();
+    } catch (e) {
+        fail(mountId, e);
+    }
 }
 
 // ---------------------------------------------------------------- массовые действия
@@ -523,29 +620,30 @@ function fillFilterSelects() {
     // остался на первом реальном статусе, выбранном браузером автоматически
     // ДО вставки плейсхолдера.
     $('#fltStatus').value = '';
+
+    // Те же два списка в тулбаре. Наполняются из тех же справочников — иначе
+    // «Все статусы» в строке и в окне однажды разойдутся по составу.
+    const quickStatus = $('[data-role="quick-status"]');
+    fillFunnelStatusSelect(quickStatus, statuses, false);
+    quickStatus.insertAdjacentHTML('afterbegin', '<option value="">Все статусы</option>');
+    quickStatus.value = '';
+
+    $('[data-role="quick-source"]').innerHTML = '<option value="">Все источники</option>'
+        + sources.map((src) => `<option value="${src.id}">${escapeHtml(src.rootSource)}</option>`).join('');
 }
 
 async function applyFilters() {
     const my = generation;
     filters = {
+        q: filters.q,
         fio: $('#fltFio').value.trim(),
         phone: $('#fltPhone').value.trim(),
         sourceId: $('#fltSource').value,
         employeeId: $('#fltEmployee').value,
         funnelStatusId: $('#fltStatus').value
     };
-    const activeCount = Object.values(filters).filter(Boolean).length;
-    $('[data-role="filter-badge"]').hidden = activeCount === 0;
-    $('[data-role="filter-badge"]').textContent = activeCount;
     $('[data-role="filter-modal"]').hidden = true;
-    clearSelection();
-    try {
-        await loadLeads({ reset: true });
-        if (!alive(my)) return;
-        renderTable();
-    } catch (e) {
-        fail(my, e);
-    }
+    await applyFilterState(my);
 }
 
 // ---------------------------------------------------------------- колонки
@@ -595,7 +693,9 @@ export async function mount(container, ctx) {
     paramLists = {};
     scripts = [];
     leads = [];
-    filters = { fio: '', phone: '', sourceId: '', employeeId: '', funnelStatusId: '' };
+    filters = { q: '', fio: '', phone: '', sourceId: '', employeeId: '', funnelStatusId: '' };
+    total = 0;
+    clearTimeout(searchTimer);
     visibleColumns = { ...COLUMN_DEFAULT };
     selectedIds = new Set();
     offset = 0;
@@ -733,6 +833,45 @@ function bindHandlers() {
         ['#fltFio', '#fltPhone', '#fltSource', '#fltEmployee', '#fltStatus'].forEach((sel) => { $(sel).value = ''; });
     });
     $('[data-role="filter-apply"]').addEventListener('click', applyFilters);
+
+    // --- тулбар: поиск и два списка ---
+    //
+    // Поиск с задержкой 300 мс: запрос на каждую букву — это по запросу на
+    // символ в общую базу, а человек печатает быстрее, чем сервер отвечает.
+    $('[data-role="search"]').addEventListener('input', (e) => {
+        const value = e.target.value.trim();
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(() => {
+            if (!alive(my)) return;
+            filters = { ...filters, q: value };
+            applyFilterState(my);
+        }, 300);
+    });
+    $('[data-role="quick-status"]').addEventListener('change', (e) => {
+        filters = { ...filters, funnelStatusId: e.target.value };
+        applyFilterState(my);
+    });
+    $('[data-role="quick-source"]').addEventListener('change', (e) => {
+        filters = { ...filters, sourceId: e.target.value };
+        applyFilterState(my);
+    });
+
+    // --- строка активных фильтров ---
+    //
+    // Обработчик на контейнере, а не на чипах: чипы перерисовываются при каждом
+    // изменении фильтра, и слушатели на них пришлось бы вешать заново.
+    $('[data-role="filter-chips"]').addEventListener('click', (e) => {
+        const drop = e.target.closest('[data-drop-filter]');
+        if (drop) {
+            filters = { ...filters, [drop.dataset.dropFilter]: '' };
+            applyFilterState(my);
+            return;
+        }
+        if (e.target.closest('[data-role="clear-filters"]')) {
+            filters = { q: '', fio: '', phone: '', sourceId: '', employeeId: '', funnelStatusId: '' };
+            applyFilterState(my);
+        }
+    });
 
     // --- настройка колонок ---
     const columnsModal = $('[data-role="columns-modal"]');

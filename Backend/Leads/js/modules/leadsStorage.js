@@ -11,8 +11,10 @@ export function createStorage(api) {
     return {
         // --- Лиды (админский слой, routes/leadsAdmin.js) ---
 
-        fetchLeads: ({ fio, phone, sourceId, employeeId, funnelStatusId, limit, offset } = {}) =>
-            api.get('/leads-admin', { fio, phone, sourceId, employeeId, funnelStatusId, limit, offset }),
+        // Ответ — { items, total }: total нужен подвалу «Показано N из M» и
+        // считается сервером по тем же фильтрам, что и выборка.
+        fetchLeads: ({ q, fio, phone, sourceId, employeeId, funnelStatusId, limit, offset } = {}) =>
+            api.get('/leads-admin', { q, fio, phone, sourceId, employeeId, funnelStatusId, limit, offset }),
 
         fetchLeadStats: () => api.get('/leads-admin/stats'),
 

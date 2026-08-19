@@ -172,7 +172,8 @@ function handleUniqueViolation(err, res) {
 // GET /api/employees — список с фильтрами
 router.get('/', async (req, res) => {
     try {
-        const { search, status, department, position, hasWhatsapp, hasTelegram, hireDateFrom, hireDateTo } = req.query;
+        const { search, status, department, position, lineType,
+            hasWhatsapp, hasTelegram, hireDateFrom, hireDateTo } = req.query;
 
         const conditions = [];
         const params = [];
@@ -201,6 +202,13 @@ router.get('/', async (req, res) => {
         if (position) {
             params.push(position);
             conditions.push(`e.position = $${params.length}`);
+        }
+        // Линия — фильтр тулбара раздела (часть 2). Считается сервером, как и
+        // остальные: список сотрудников грузится целиком, но фильтровать его на
+        // клиенте значило бы держать два разных набора правил на один экран.
+        if (lineType) {
+            params.push(lineType);
+            conditions.push(`e.line_type = $${params.length}`);
         }
         if (hasWhatsapp === 'true') {
             conditions.push(`e.whatsapp IS NOT NULL AND e.whatsapp <> ''`);

@@ -358,15 +358,29 @@ async function fetchLeadById(id) {
 
 // ================= Роуты =================
 
-// GET /api/leads-admin — список всех лидов, фильтры + LIMIT/OFFSET под
-// кнопку "Показать ещё" (фронт грузит порциями, без серверной пагинации).
+// GET /api/leads-admin — список лидов под фильтры и кнопку «Показать ещё».
+//
+// ОТВЕТ — ОБЪЕКТ { items, total }, а не массив (часть 2, подвал «Показано N из
+// M»). Раньше отдавался голый массив, и «M» фронту взять было неоткуда: он знал
+// только длину полученной порции. Считаем total ТЕМ ЖЕ условием, что и выборку,
+// — иначе подвал обещал бы одно, а фильтр показывал другое.
+//
+// Параметр q — общий поиск по ФИО И телефону сразу, под одно поле тулбара
+// «Поиск по имени или телефону». Раздельные fio и phone остались: ими
+// пользуется окно «Фильтры», где это два разных поля.
 router.get('/', async (req, res) => {
     try {
-        const { fio, phone, sourceId, employeeId, funnelStatusId, limit, offset } = req.query;
+        const { q, fio, phone, sourceId, employeeId, funnelStatusId, limit, offset } = req.query;
 
         const conditions = [];
         const params = [];
 
+        if (q && q.trim()) {
+            params.push(`%${q.trim()}%`);
+            const idx = params.length;
+            conditions.push(`(l.last_name ILIKE $${idx} OR l.first_name ILIKE $${idx}
+                              OR l.middle_name ILIKE $${idx} OR l.phone ILIKE $${idx})`);
+        }
         if (fio && fio.trim()) {
             params.push(`%${fio.trim()}%`);
             const idx = params.length;
@@ -392,17 +406,21 @@ router.get('/', async (req, res) => {
         }
 
         const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+        const filterParams = params.slice();
 
         params.push(Number(limit) > 0 ? Number(limit) : 50);
         const limitIdx = params.length;
         params.push(Number(offset) > 0 ? Number(offset) : 0);
         const offsetIdx = params.length;
 
-        const result = await pool.query(
-            `${BASE_SELECT} ${whereClause} ORDER BY l.created_at DESC, l.id DESC LIMIT $${limitIdx} OFFSET $${offsetIdx}`,
-            params
-        );
-        res.json(result.rows.map(rowToLead));
+        const [rows, totals] = await Promise.all([
+            pool.query(
+                `${BASE_SELECT} ${whereClause} ORDER BY l.created_at DESC, l.id DESC LIMIT $${limitIdx} OFFSET $${offsetIdx}`,
+                params
+            ),
+            pool.query(`SELECT count(*)::int AS total FROM leads l ${whereClause}`, filterParams)
+        ]);
+        res.json({ items: rows.rows.map(rowToLead), total: totals.rows[0].total });
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: 'Не удалось получить список лидов' });

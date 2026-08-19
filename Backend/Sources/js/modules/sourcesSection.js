@@ -63,6 +63,8 @@ export async function mount(container, ctx) {
         sources: [],
         platformId: null,      // null = «Все площадки»
         search: '',
+        region: '',            // '' = «Все регионы»
+        networkId: '',         // '' = «Все CPA-сети»
         status: 'all',
         selected: new Set(),
         searchTimer: null,
@@ -170,8 +172,37 @@ function escapeHtml(value) {
 }
 
 function visibleSources(state) {
-    if (state.status === 'all') return state.sources;
-    return state.sources.filter((s) => s.status === state.status);
+    // Фильтры тулбара считаются на клиенте: список источников площадки грузится
+    // целиком, второй запрос ради двух списков ничего не ускорит и добавил бы
+    // второй набор правил отбора на тот же экран.
+    return state.sources.filter((s) => {
+        if (state.status !== 'all' && s.status !== state.status) return false;
+        if (state.region && s.cityRegion !== state.region) return false;
+        if (state.networkId
+            && !(s.cpaNetworkIds || []).some((id) => String(id) === String(state.networkId))) return false;
+        return true;
+    });
+}
+
+/** Составы списков тулбара — из самих данных, а не «на всякий случай». */
+function fillToolbarSelects(state) {
+    const regionSelect = $(state, 'filter-region');
+    const networkSelect = $(state, 'filter-network');
+    if (!regionSelect || !networkSelect) return;
+
+    const regions = [...new Set(state.sources.map((s) => s.cityRegion).filter(Boolean))].sort();
+    regionSelect.innerHTML = '<option value="">Все регионы</option>'
+        + regions.map((r) => `<option value="${escapeHtml(r)}">${escapeHtml(r)}</option>`).join('');
+    // Выбранный регион мог исчезнуть вместе со сменой площадки — тогда фильтр
+    // снимается, иначе список молча остаётся пустым без видимой причины.
+    regionSelect.value = regions.includes(state.region) ? state.region : '';
+    state.region = regionSelect.value;
+
+    networkSelect.innerHTML = '<option value="">Все CPA-сети</option>'
+        + state.cpaNetworks.map((n) => `<option value="${n.id}">${escapeHtml(n.name)}</option>`).join('');
+    networkSelect.value = state.cpaNetworks.some((n) => String(n.id) === String(state.networkId))
+        ? state.networkId : '';
+    state.networkId = networkSelect.value;
 }
 
 /** Кросс-площадочный режим: показывается колонка площадки. */
@@ -183,6 +214,7 @@ function renderAll(state) {
     renderStats(state);
     renderPlatforms(state);
     renderTabs(state);
+    fillToolbarSelects(state);
     renderChips(state);
     renderRows(state);
     renderSelection(state);
@@ -258,6 +290,17 @@ function renderChips(state) {
                 <button type="button" class="ui-fchip__remove" data-clear="platform" aria-label="Показать все площадки"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-close"></use></svg></button></span>`);
         }
     }
+    if (state.region) {
+        chips.push(`<span class="ui-fchip">Регион: <b>${escapeHtml(state.region)}</b>
+            <button type="button" class="ui-fchip__remove" data-clear="region" aria-label="Сбросить фильтр региона"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-close"></use></svg></button></span>`);
+    }
+    if (state.networkId) {
+        const network = state.cpaNetworks.find((n) => String(n.id) === String(state.networkId));
+        if (network) {
+            chips.push(`<span class="ui-fchip">CPA-сеть: <b>${escapeHtml(network.name)}</b>
+                <button type="button" class="ui-fchip__remove" data-clear="network" aria-label="Сбросить фильтр сети"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-close"></use></svg></button></span>`);
+        }
+    }
     if (state.status !== 'all') {
         chips.push(`<span class="ui-fchip">Статус: <b>${escapeHtml(state.status)}</b>
             <button type="button" class="ui-fchip__remove" data-clear="status" aria-label="Сбросить фильтр статуса"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-close"></use></svg></button></span>`);
@@ -315,9 +358,10 @@ function renderRows(state) {
             </tr>`;
     }).join('');
 
-    $(state, 'foot-shown').textContent = rows.length === state.sources.length
-        ? `Показано ${rows.length}`
-        : `Показано ${rows.length} из ${state.sources.length}`;
+    // Формула подвала одна на все разделы: «Показано N из M», даже когда
+    // показано всё. Прежний короткий вариант «Показано 12» отвечал на другой
+    // вопрос и не давал сравнить с общим числом.
+    $(state, 'foot-shown').textContent = `Показано ${rows.length} из ${state.sources.length}`;
 }
 
 /** Пустое состояние: причина и следующий шаг, а не просто «ничего нет». */
@@ -514,18 +558,32 @@ function bindEvents(state) {
     // input при этом может и не быть. Без этого поле пустое, а список остаётся
     // отфильтрованным — и непонятно почему.
     searchField.addEventListener('search', (event) => scheduleSearch(event.target.value.trim()));
+
+    // Регион и сеть считаются на клиенте: запроса нет, перерисовки достаточно.
+    // Выделение при этом сбрасывается — строки, которых больше не видно, не
+    // должны остаться выбранными и уехать в массовое действие.
+    $(state, 'filter-region').addEventListener('change', (event) => {
+        state.region = event.target.value;
+        state.selected.clear();
+        renderAll(state);
+    });
+    $(state, 'filter-network').addEventListener('change', (event) => {
+        state.networkId = event.target.value;
+        state.selected.clear();
+        renderAll(state);
+    });
 }
 
 async function applyClear(state, what) {
     // Тот же случай, что и при выборе площадки: снятый фильтр не должен
     // вернуться из отложенного таймера через треть секунды.
     clearTimeout(state.searchTimer);
-    if (what === 'status') {
-        state.status = 'all';
-        renderTabs(state);
-        renderChips(state);
-        renderRows(state);
-        renderSelection(state);
+    // Регион, сеть и статус считаются на клиенте — перерисовываем без запроса.
+    if (what === 'status' || what === 'region' || what === 'network') {
+        if (what === 'status') state.status = 'all';
+        if (what === 'region') state.region = '';
+        if (what === 'network') state.networkId = '';
+        renderAll(state);
         return;
     }
     if (what === 'search' || what === 'all') {
@@ -533,7 +591,11 @@ async function applyClear(state, what) {
         $(state, 'search').value = '';
     }
     if (what === 'platform' || what === 'all') state.platformId = null;
-    if (what === 'all') state.status = 'all';
+    if (what === 'all') {
+        state.status = 'all';
+        state.region = '';
+        state.networkId = '';
+    }
     state.selected.clear();
     await refresh(state);
 }
