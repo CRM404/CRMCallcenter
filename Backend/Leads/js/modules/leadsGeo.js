@@ -118,7 +118,7 @@ export function createGeoAutocomplete(root, { storage, toast, isAlive, isAbort }
             const box = document.createElement('div');
             box.className = 'geo-suggest';
             box.innerHTML = items.length
-                ? items.map((data, idx) => `<div class="geo-suggest-item" data-i="${idx}"><i class="fas fa-location-dot" aria-hidden="true"></i><span>${highlightMatch(geoSuggestionDisplay(bound, data), q)}</span></div>`).join('')
+                ? items.map((data, idx) => `<div class="geo-suggest-item" data-i="${idx}"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-pin"></use></svg><span>${highlightMatch(geoSuggestionDisplay(bound, data), q)}</span></div>`).join('')
                 : '<div class="geo-suggest-empty">Ничего не найдено</div>';
             fieldEl.appendChild(box);
 

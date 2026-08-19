@@ -19,6 +19,8 @@
 // знают и кода не меняют — иначе шесть разделов дали бы шесть разных
 // формулировок, как это уже было с пустыми состояниями.
 
+import { iconNode } from './icons.js';
+
 const ROLE = 'load-error';
 
 function build(container, onRetry) {
@@ -27,9 +29,7 @@ function build(container, onRetry) {
     box.dataset.role = ROLE;
     box.setAttribute('role', 'alert');
 
-    const icon = document.createElement('i');
-    icon.className = 'fas fa-triangle-exclamation ui-load-error__icon';
-    icon.setAttribute('aria-hidden', 'true');
+    const icon = iconNode('warn', 'sm', 'ui-load-error__icon');
 
     const text = document.createElement('div');
     text.className = 'ui-load-error__text';
@@ -45,7 +45,7 @@ function build(container, onRetry) {
 
     const retry = document.createElement('button');
     retry.type = 'button';
-    retry.className = 'ui-btn ui-btn--sm ui-btn--secondary';
+    retry.className = 'ui-btn ui-btn--secondary';
     retry.textContent = 'Повторить';
     retry.addEventListener('click', () => onRetry());
 

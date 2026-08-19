@@ -11,6 +11,8 @@
 // далее переключаются целиком. Настройка колонок управляет и тем, и другим:
 // внутри составной ячейки — гранулярно, у остальных — колонкой целиком.
 
+import { iconNode } from '/ui/icons.js';
+
 const PAGE_SIZE = 20;
 const SEARCH_DEBOUNCE_MS = 300;
 
@@ -72,15 +74,9 @@ export function createTable(root, deps) {
 
     // ------------------------------------------------------------ ячейки
 
-    // Цвет аватара стабилен на сотрудника (id % 4), не зависит от позиции строки
-    // в текущей отсортированной выдаче.
-    function renderAvatar(emp) {
-        const last = (emp.lastName || '').trim().charAt(0).toUpperCase();
-        const first = (emp.firstName || '').trim().charAt(0).toUpperCase();
-        const initials = `${last}${first}` || '?';
-        const colorIndex = Math.abs(Number(emp.id) || 0) % 4;
-        return `<span class="avatar-initials av-${colorIndex}">${escapeHtml(initials)}</span>`;
-    }
+    // Аватаров-кружков с инициалами здесь больше нет (Э4): такого элемента нет
+    // ни в макете, ни в каталоге слоя, а раздел своих элементов не заводит.
+    // Понадобятся снова — заводятся в слое как вид, а не тут.
 
     function renderEmployeeCell(emp, hidden) {
         const nameParts = [];
@@ -91,11 +87,8 @@ export function createTable(root, deps) {
         const showPosition = !hidden.has('position') && emp.position;
         return `
             <div class="employee-cell">
-                ${renderAvatar(emp)}
-                <div class="employee-cell-text">
-                    <div class="employee-name">${fio}</div>
-                    ${showPosition ? `<div class="employee-position">${escapeHtml(emp.position)}</div>` : ''}
-                </div>
+                <span class="ui-table__main">${fio}</span>
+                ${showPosition ? `<span class="ui-table__sub">${escapeHtml(emp.position)}</span>` : ''}
             </div>`;
     }
 
@@ -103,26 +96,28 @@ export function createTable(root, deps) {
     function renderContactsCell(emp, hidden) {
         const lines = [];
         if (!hidden.has('phone') && emp.phone) {
-            lines.push(`<div class="contact-line contact-phone"><i class="fas fa-phone" aria-hidden="true"></i>${escapeHtml(emp.phone)}</div>`);
+            lines.push(`<div class="contact-line contact-phone"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-phone"></use></svg>${escapeHtml(emp.phone)}</div>`);
         }
         if (!hidden.has('email') && emp.email) {
-            lines.push(`<div class="contact-line"><i class="fas fa-envelope" aria-hidden="true"></i>${escapeHtml(emp.email)}</div>`);
+            lines.push(`<div class="contact-line"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-mail"></use></svg>${escapeHtml(emp.email)}</div>`);
         }
         return `<div class="contact-cell">${lines.join('')}</div>`;
     }
 
     // Чип не показывается, если поле пустое ИЛИ колонка скрыта; ни одного чипа —
     // прочерк.
+    // Метки в палитре проекта, а не фирменные зелёный и голубой (Э5): цвет в
+    // таблице означает статус, и чужой бренд в этом языке не участвует.
     function renderMessengersCell(emp, hidden) {
-        const chips = [];
+        const marks = [];
         if (!hidden.has('whatsapp') && emp.whatsapp) {
-            chips.push('<span class="messenger-chip chip-whatsapp" title="WhatsApp"><i class="fab fa-whatsapp" aria-hidden="true"></i></span>');
+            marks.push('<span class="ui-tag" title="WhatsApp">WA</span>');
         }
         if (!hidden.has('telegram') && emp.telegram) {
-            chips.push('<span class="messenger-chip chip-telegram" title="Telegram"><i class="fab fa-telegram" aria-hidden="true"></i></span>');
+            marks.push('<span class="ui-tag" title="Telegram">TG</span>');
         }
-        if (chips.length === 0) return '<div class="messenger-cell messenger-empty">—</div>';
-        return `<div class="messenger-cell">${chips.join('')}</div>`;
+        if (marks.length === 0) return '<span class="ui-table__muted">—</span>';
+        return `<div class="messenger-cell">${marks.join('')}</div>`;
     }
 
     // «3/3 · 21:00–23:30»; при одном заполненном — только оно, при пустых прочерк.
@@ -135,7 +130,7 @@ export function createTable(root, deps) {
 
     function renderManagerCell(emp) {
         if (!emp.managerName) return '<span class="manager-cell manager-empty">—</span>';
-        return `<span class="manager-cell"><i class="fas fa-share" aria-hidden="true"></i>${escapeHtml(emp.managerName)}</span>`;
+        return `<span class="manager-cell"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-share"></use></svg>${escapeHtml(emp.managerName)}</span>`;
     }
 
     function renderStatusBadge(emp) {
@@ -161,7 +156,7 @@ export function createTable(root, deps) {
                 <td class="ui-table__sel"><input type="checkbox" data-check-id="${emp.id}" aria-label="Выбрать сотрудника ${idFormatted}"${checked}></td>
                 <td>${idFormatted}</td>
                 <td>${renderEmployeeCell(emp, hidden)}</td>
-                <td data-col="department"${hiddenAttr('department')}>${emp.department ? `<span class="department-tag">${escapeHtml(emp.department)}</span>` : '—'}</td>
+                <td data-col="department"${hiddenAttr('department')}>${emp.department ? escapeHtml(emp.department) : '<span class="ui-table__muted">—</span>'}</td>
                 <td>${renderContactsCell(emp, hidden)}</td>
                 <td>${renderMessengersCell(emp, hidden)}</td>
                 <td data-col="managerName"${hiddenAttr('managerName')}>${renderManagerCell(emp)}</td>
@@ -171,8 +166,8 @@ export function createTable(root, deps) {
                 <td data-col="lineType"${hiddenAttr('lineType')}>${emp.lineType ? escapeHtml(emp.lineType) : '—'}</td>
                 <td data-col="workSchedule"${hiddenAttr('workSchedule')}>${renderWorkScheduleCell(emp)}</td>
                 <td class="ui-table__acts">
-                    <button type="button" class="ui-btn ui-btn--icon ui-btn--sm" data-edit="${emp.id}" title="Изменить" aria-label="Изменить"><i class="fas fa-pencil-alt" aria-hidden="true"></i></button>
-                    <button type="button" class="ui-btn ui-btn--icon ui-btn--sm row-del" data-del="${emp.id}" data-name="${escapeHtml(fullName)}" title="Удалить" aria-label="Удалить"><i class="fas fa-trash" aria-hidden="true"></i></button>
+                    <button type="button" class="ui-btn ui-btn--icon ui-btn--row" data-edit="${emp.id}" title="Изменить" aria-label="Изменить"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-edit"></use></svg></button>
+                    <button type="button" class="ui-btn ui-btn--icon ui-btn--row ui-btn--danger" data-del="${emp.id}" data-name="${escapeHtml(fullName)}" title="Удалить" aria-label="Удалить"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-trash"></use></svg></button>
                 </td>
             </tr>`;
     }
@@ -202,15 +197,9 @@ export function createTable(root, deps) {
         $$('thead th[data-field]').forEach((th) => {
             const icon = th.querySelector('.sort-icon');
             if (th.dataset.field === sortField) {
-                const iconClass = sortDirection === 'asc' ? 'fa-arrow-down-short-wide' : 'fa-arrow-down-wide-short';
-                if (!icon) {
-                    const i = document.createElement('i');
-                    i.className = `fas ${iconClass} sort-icon`;
-                    i.setAttribute('aria-hidden', 'true');
-                    th.appendChild(i);
-                } else {
-                    icon.className = `fas ${iconClass} sort-icon`;
-                }
+                const key = sortDirection === 'asc' ? 'sort-asc' : 'sort-desc';
+                if (icon) icon.remove();
+                th.appendChild(iconNode(key, 'sm', 'sort-icon'));
             } else if (icon) {
                 icon.remove();
             }

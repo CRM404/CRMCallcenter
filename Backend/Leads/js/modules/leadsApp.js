@@ -30,6 +30,7 @@ import { createUpload } from './leadsUpload.js';
 // Путь АБСОЛЮТНЫЙ: физическая структура папок не совпадает с адресами —
 // Backend/Shell/ монтируется в корень «/».
 import { isAbort } from '/api.js';
+import { icon } from '/ui/icons.js';
 
 const PAGE_SIZE = 30;
 
@@ -106,11 +107,16 @@ const REPEAT_STAGE_FROM = 5;
 
 // Ячейки, которые собираются в готовый HTML (пилюли/чипы), а не в текст.
 const RICH_CELLS = {
+    // Статус — ПИЛЮЛЯ СЛОЯ. Свой класс stage-badge удалён: раздел не объявляет
+    // своих пилюль, а этот к тому же нёс внутри номер этапа («0 Новый»), чего
+    // нет ни в макете, ни в языке пилюли — она называет состояние, а не
+    // нумерует его (Н7, М22; номер убран решением владельца 19.08.2026).
     funnelStatus: (l) => (l.funnelStatusId
-        ? `<span class="stage-badge ${l.stageNumber === 0 ? 'stage-0' : ''}"><span class="stage-num">${l.stageNumber}</span>${escapeHtml(l.statusName)}</span>`
+        ? `<span class="ui-pill ${l.stageNumber >= REPEAT_STAGE_FROM ? 'ui-pill--ok' : 'ui-pill--mute'}">${escapeHtml(l.statusName)}</span>`
         : null),
+    // Линия — обычный текст со значком направления, без рамки-пилюли (М23).
     lineType: (l) => (l.lineType
-        ? `<span class="line-tag"><i class="fas ${l.lineType === 'Входящая' ? 'fa-arrow-down-left' : 'fa-arrow-up-right'}" aria-hidden="true"></i>${escapeHtml(l.lineType)}</span>`
+        ? `<span class="leads-line">${icon(l.lineType === 'Входящая' ? 'arrow-down-left' : 'arrow-up-right', 'sm')}${escapeHtml(l.lineType)}</span>`
         : null),
     // Название основного скрипта + мини-чип «повт.», если задан повторный.
     // Чип синий, когда лид сейчас на этапе 5–6 — то есть оператор видит
@@ -296,8 +302,8 @@ function rowHtml(lead) {
             <td class="lead-phone">${escapeHtml(lead.phone)}</td>
             ${cells}
             <td class="ui-table__acts">
-                <button type="button" class="ui-btn ui-btn--icon ui-btn--sm" data-edit="${lead.id}" title="Изменить" aria-label="Изменить"><i class="fas fa-pen" aria-hidden="true"></i></button>
-                <button type="button" class="ui-btn ui-btn--icon ui-btn--sm row-del" data-del="${lead.id}" title="Удалить" aria-label="Удалить"><i class="fas fa-trash" aria-hidden="true"></i></button>
+                <button type="button" class="ui-btn ui-btn--icon ui-btn--row" data-edit="${lead.id}" title="Изменить" aria-label="Изменить"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-edit"></use></svg></button>
+                <button type="button" class="ui-btn ui-btn--icon ui-btn--row ui-btn--danger" data-del="${lead.id}" title="Удалить" aria-label="Удалить"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-trash"></use></svg></button>
             </td>
         </tr>`;
 }
@@ -545,6 +551,15 @@ function renderColumnsModalBody() {
 
 // ---------------------------------------------------------------- монтирование
 
+// Подпись шапки раздела: «очередь на 19 августа». Раньше здесь стоял абзац на
+// две строки, который отодвигал таблицу вниз при каждом открытии (М24).
+function fillQueueDate() {
+    const node = $('[data-role="queue-date"]');
+    if (!node) return;
+    const today = new Date().toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
+    node.textContent = `очередь на ${today}`;
+}
+
 export async function mount(container, ctx) {
     const my = ++generation;
     root = container;
@@ -567,6 +582,8 @@ export async function mount(container, ctx) {
     massApplying = false;
 
     const isAlive = () => alive(my);
+
+    fillQueueDate();
 
     leadModal = createLeadModal(container, {
         storage,

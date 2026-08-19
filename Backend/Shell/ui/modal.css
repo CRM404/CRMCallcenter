@@ -26,24 +26,30 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: var(--ui-space-6);
+    padding: var(--ui-space-5);
     background: var(--ui-color-scrim);
     z-index: var(--ui-z-modal-panel);
 }
 
 .ui-modal--screen {
     position: fixed;
+    padding: var(--ui-space-7);
     z-index: var(--ui-z-modal-screen);
 }
 
+/* Ширины и отступы — из макета. В коде окно было 560 px (широкое 860, узкое
+   450) с общим внутренним отступом 24/32 и без разделителей: рядом с макетом
+   оно выглядело крупнее и рыхлее всего остального интерфейса. Отступ теперь
+   не у коробки, а у трёх её частей — так шапка и подвал могут нести свои
+   линии на всю ширину окна. */
 .ui-modal__box {
     display: flex;
     flex-direction: column;
     box-sizing: border-box;
     width: 100%;
-    max-width: 560px;
+    max-width: 460px;
     max-height: 100%;
-    padding: var(--ui-space-7) var(--ui-space-8);
+    overflow: hidden;
     border: 1px solid var(--ui-color-line);
     border-radius: var(--ui-radius-lg);
     background: var(--ui-color-surface);
@@ -53,40 +59,66 @@
     animation: ui-modal-in var(--ui-dur-fast) ease;
 }
 
-.ui-modal__box--narrow { max-width: 450px; }
-.ui-modal__box--wide { max-width: 860px; }
+.ui-modal__box--narrow { max-width: 400px; }
+.ui-modal__box--wide { max-width: 720px; }
+
+/* Страховка для окон, собранных без .ui-modal__body: без неё содержимое
+   легло бы вплотную к рамке, потому что отступ ушёл из коробки в части. */
+.ui-modal__box > :not(.ui-modal__head):not(.ui-modal__body):not(.ui-modal__actions):not(form) {
+    padding: var(--ui-space-5) var(--ui-space-6);
+}
 
 /* ----- Шапка -------------------------------------------------------------- */
 .ui-modal__head {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--ui-space-5);
-    margin-bottom: var(--ui-space-6);
+    align-items: flex-start;
+    gap: 14px;
+    flex-shrink: 0;
+    padding: 17px var(--ui-space-6) 13px;
+    border-bottom: 1px solid var(--ui-color-line);
 }
 
 .ui-modal__title {
     margin: 0;
-    font-size: var(--ui-text-title);
+    font-size: var(--ui-text-modal-title);
     font-weight: var(--ui-weight-bold);
     line-height: var(--ui-line-tight);
     color: var(--ui-color-ink);
 }
 
+/* Подпись под заголовком окна («Название, юрлицо, условия подключения»). */
+.ui-modal__sub {
+    margin: 3px 0 0;
+    font-size: var(--ui-text-xs);
+    line-height: var(--ui-line-base);
+    color: var(--ui-color-ink-faint);
+}
+
+/* Крестик — КНОПКА 30×30 с подложкой, а не голый глиф (Н1). Голым он был
+   15×26, без фона и радиуса: по нему трудно попасть, и он не читался как
+   кнопка вовсе. */
 .ui-modal__close {
     flex-shrink: 0;
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
     padding: 0;
     border: none;
-    background: none;
-    color: var(--ui-color-ink-faint);
-    /* Числом было 28 — и это СЛОЙ, то есть каждое окно каждого раздела
-       (находка ревизора Р2). */
-    font-size: var(--ui-icon-lg);
+    border-radius: var(--ui-radius-sm);
+    background: rgba(96, 112, 148, .1);
+    color: var(--ui-color-ink-soft);
+    font-size: var(--ui-icon-sm);
     line-height: 1;
     cursor: pointer;
-    transition: color var(--ui-dur-fast);
+    transition: color var(--ui-dur-fast), background-color var(--ui-dur-fast);
 }
-.ui-modal__close:hover { color: var(--ui-color-danger); }
+.ui-modal__close:hover {
+    background: var(--ui-color-danger-wash);
+    color: var(--ui-color-danger);
+}
 .ui-modal__close:focus-visible {
     outline: 2px solid var(--ui-color-accent);
     outline-offset: 2px;
@@ -120,7 +152,8 @@
     flex: 1 1 auto;
     min-height: 0;
     overflow-y: auto;
-    font-size: var(--ui-text-xl);
+    padding: var(--ui-space-5) var(--ui-space-6);
+    font-size: var(--ui-text-md);
     line-height: var(--ui-line-base);
 }
 .ui-modal__body p { margin: 0 0 var(--ui-space-4); }
@@ -131,9 +164,23 @@
     display: flex;
     align-items: center;
     justify-content: flex-end;
-    gap: var(--ui-space-4);
-    margin-top: var(--ui-space-6);
+    flex-shrink: 0;
+    gap: 10px;
+    padding: 13px var(--ui-space-6) 17px;
+    border-top: 1px solid var(--ui-color-line);
 }
+/* Кнопка подвала окна — единственная крупная кнопка проекта (38/13.5 против
+   32/12.5 в тулбаре). Размер ставит слой, а не раздел: пока это писали в
+   разметке, он разъезжался от окна к окну. То же значение доступно классом
+   .ui-btn--lg для кнопок вне окна. */
+.ui-modal__actions .ui-btn {
+    min-height: var(--ui-btn-h-lg);
+    padding: 10px 16px;
+    font-size: var(--ui-text-lg);
+}
+.ui-modal__actions .ui-btn--icon { width: var(--ui-btn-h-lg); padding: 0; }
+/* Второстепенное действие слева («Удалить» рядом с «Сохранить»). */
+.ui-modal__actions--spread { justify-content: space-between; }
 
 @keyframes ui-modal-in {
     from { opacity: 0; transform: translateY(8px); }

@@ -31,35 +31,28 @@
 }
 
 /* ----- Шапка раздела: заголовок → счётчики → действия ----- */
-.src-head {
     display: flex;
     align-items: flex-end;
     gap: var(--ui-space-5);
     flex-wrap: wrap;
 }
-.src-head__titles { min-width: 0; }
-.src-head__eyebrow {
     font-size: 11px;
     font-weight: var(--ui-weight-bold);
     letter-spacing: .09em;
     text-transform: uppercase;
     color: var(--ui-color-ink-faint);
 }
-.src-head__title {
     margin: 2px 0 var(--ui-space-1);
     font-size: var(--ui-text-title);
     font-weight: var(--ui-weight-bold);
     line-height: var(--ui-line-tight);
 }
-.src-head__sub {
     margin: 0;
     max-width: 520px;
     font-size: var(--ui-text-sm);
     line-height: var(--ui-line-base);
     color: var(--ui-color-ink-soft);
 }
-.src-head__stats { margin-left: auto; }
-.src-head__acts {
     display: flex;
     align-items: center;
     gap: var(--ui-space-3);

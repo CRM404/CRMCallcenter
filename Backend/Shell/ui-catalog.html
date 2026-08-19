@@ -7,9 +7,6 @@
 
     <!-- Иконки: Font Awesome, тот же CDN и та же версия, что на всех страницах
          проекта. Второго набора не заводим — решение куратора (tokens.css). -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"
-          integrity="sha512-Fo3rlrZj/k7ujTnHg4CGR2D7kSs0v4LLanw2qksYuRlEzO+tcaEPQogQ0KaoGN26/zrn20ImR1DfuLWnOo7aBA=="
-          crossorigin="anonymous" referrerpolicy="no-referrer">
 
     <!-- Порядок подключения = порядок блоков CSS, который задала дизайн-сессия:
          1 токены → 2 базовые элементы → 3 составные → 4 оболочка → 5 раскладка.
@@ -20,6 +17,7 @@
     <link rel="stylesheet" href="/ui/tokens.css">
 
     <!-- 2. Базовые элементы -->
+    <link rel="stylesheet" href="/ui/icons.css">
     <link rel="stylesheet" href="/ui/button.css">
     <link rel="stylesheet" href="/ui/field.css">
     <link rel="stylesheet" href="/ui/chip.css">
@@ -29,6 +27,7 @@
     <link rel="stylesheet" href="/ui/modal.css">
     <link rel="stylesheet" href="/ui/toast.css">
     <link rel="stylesheet" href="/ui/table.css">
+    <link rel="stylesheet" href="/ui/page-head.css">
     <link rel="stylesheet" href="/ui/popover.css">
     <link rel="stylesheet" href="/ui/empty-state.css">
     <link rel="stylesheet" href="/ui/skeleton.css">
@@ -168,13 +167,13 @@
             <span class="cat-item"><span class="cat-cap">вторичная</span><button type="button" class="ui-btn ui-btn--secondary">Отмена</button></span>
             <span class="cat-item"><span class="cat-cap">тихая</span><button type="button" class="ui-btn ui-btn--ghost">Фильтры</button></span>
             <span class="cat-item"><span class="cat-cap">опасная</span><button type="button" class="ui-btn ui-btn--danger">Удалить</button></span>
-            <span class="cat-item"><span class="cat-cap">только иконка</span><button type="button" class="ui-btn ui-btn--icon" aria-label="Добавить"><i class="fas fa-plus"></i></button></span>
-            <span class="cat-item"><span class="cat-cap">мелкая</span><button type="button" class="ui-btn ui-btn--sm">Изменить</button></span>
+            <span class="cat-item"><span class="cat-cap">только иконка</span><button type="button" class="ui-btn ui-btn--icon" aria-label="Добавить"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-plus"></use></svg></button></span>
+            <span class="cat-item"><span class="cat-cap">мелкая</span><button type="button" class="ui-btn">Изменить</button></span>
         </div>
         <div class="cat-row">
             <span class="cat-item"><span class="cat-cap">неактивная</span><button type="button" class="ui-btn" disabled>Загрузить</button></span>
             <span class="cat-item"><span class="cat-cap">в процессе</span><button type="button" class="ui-btn is-busy" disabled>Сохраняем</button></span>
-            <span class="cat-item"><span class="cat-cap">в строке таблицы</span><button type="button" class="ui-btn ui-btn--icon ui-btn--sm" aria-label="Изменить"><i class="fas fa-pen"></i></button></span>
+            <span class="cat-item"><span class="cat-cap">в строке таблицы</span><button type="button" class="ui-btn ui-btn--icon ui-btn--row" aria-label="Изменить"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-edit"></use></svg></button></span>
         </div>
         <div class="cat-rule"><b>Правило.</b> Неактивная кнопка обязана читаться как неактивная — бледная, курсор «нельзя». Атрибута <code>disabled</code> мало: у старой кнопки был непрозрачный декоративный слой, из-за которого приглушение не работало. Это уже стоило круга приёмки.</div>
         <div class="cat-rule"><b>Правило.</b> «В процессе» — класс <code>is-busy</code> вместе с <code>disabled</code>: без второго действие уйдёт дважды.</div>
@@ -228,7 +227,7 @@
         <h2>Статусы, счётчики, вкладки</h2>
 
         <div class="cat-row">
-            <span class="ui-pill ui-pill--ok ui-pill--dot">Активен</span>
+            <span class="ui-pill ui-pill--ok">Активен</span>
             <span class="ui-pill ui-pill--warn">Перезвон 14:30</span>
             <span class="ui-pill ui-pill--bad">Не ответил ×4</span>
             <span class="ui-pill ui-pill--mute">Новый</span>
@@ -275,8 +274,8 @@
 
         <div class="cat-cap" style="margin-bottom: var(--ui-space-2)">чипы активных фильтров</div>
         <div class="ui-fchips">
-            <span class="ui-fchip">Статус: <b>Активные</b><button type="button" class="ui-fchip__remove" aria-label="Снять фильтр «Статус»"><i class="fas fa-times"></i></button></span>
-            <span class="ui-fchip">Линия: <b>Входящая</b><button type="button" class="ui-fchip__remove" aria-label="Снять фильтр «Линия»"><i class="fas fa-times"></i></button></span>
+            <span class="ui-fchip">Статус: <b>Активные</b><button type="button" class="ui-fchip__remove" aria-label="Снять фильтр «Статус»"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-close"></use></svg></button></span>
+            <span class="ui-fchip">Линия: <b>Входящая</b><button type="button" class="ui-fchip__remove" aria-label="Снять фильтр «Линия»"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-close"></use></svg></button></span>
             <button type="button" class="ui-fchips__clear">Очистить всё</button>
         </div>
 
@@ -296,7 +295,6 @@
                 <div class="ui-skeleton__row"><span class="ui-sk ui-sk--cell" style="flex:2"></span><span class="ui-sk ui-sk--cell" style="flex:1"></span><span class="ui-sk ui-sk--cell" style="flex:1"></span></div>
                 <div class="ui-skeleton__row"><span class="ui-sk ui-sk--cell" style="flex:2"></span><span class="ui-sk ui-sk--cell" style="flex:1"></span><span class="ui-sk ui-sk--cell" style="flex:1"></span></div>
                 <div class="ui-skeleton__row"><span class="ui-sk ui-sk--cell" style="flex:2"></span><span class="ui-sk ui-sk--cell" style="flex:1"></span><span class="ui-sk ui-sk--cell" style="flex:1"></span></div>
-                <div class="ui-skeleton__note">Загружаем раздел…</div>
             </div>
         </div>
         <div class="cat-rule" style="margin-top: var(--ui-space-4)"><b>Правило.</b> Панель не остаётся пустой ни одного кадра: сначала скелет, потом содержимое. Спиннер по центру не используем — он не показывает, что именно грузится.</div>
@@ -312,7 +310,7 @@
                     <tr>
                         <th>Сотрудник</th>
                         <th class="ui-table__sel"><input type="checkbox" aria-label="Выделить все"></th>
-                        <th class="ui-table__sortable">Статус <i class="fas fa-caret-up ui-table__sort-icon"></i></th>
+                        <th class="ui-table__sortable">Статус <svg class="ui-ic ui-ic--sm ui-table__sort-icon" aria-hidden="true"><use href="#ui-ic-chevron-up"></use></svg></th>
                         <th class="ui-table__num">Смен</th>
                         <th class="ui-table__acts">Действия</th>
                     </tr>
@@ -321,11 +319,11 @@
                     <tr>
                         <td><span class="ui-table__main">Белов Д. С.</span><span class="ui-table__sub">Оператор · 21:00–23:30</span></td>
                         <td class="ui-table__sel"><input type="checkbox" aria-label="Выделить строку"></td>
-                        <td><span class="ui-pill ui-pill--ok ui-pill--dot">Активен</span></td>
+                        <td><span class="ui-pill ui-pill--ok">Активен</span></td>
                         <td class="ui-table__num">12</td>
                         <td class="ui-table__acts">
-                            <button type="button" class="ui-btn ui-btn--icon ui-btn--sm" aria-label="Изменить"><i class="fas fa-pen"></i></button>
-                            <button type="button" class="ui-btn ui-btn--icon ui-btn--sm" aria-label="Удалить"><i class="fas fa-trash"></i></button>
+                            <button type="button" class="ui-btn ui-btn--icon ui-btn--row" aria-label="Изменить"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-edit"></use></svg></button>
+                            <button type="button" class="ui-btn ui-btn--icon ui-btn--row" aria-label="Удалить"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-trash"></use></svg></button>
                         </td>
                     </tr>
                     <tr class="ui-table__row--selected">
@@ -334,8 +332,8 @@
                         <td><span class="ui-pill ui-pill--mute">Неактивен</span></td>
                         <td class="ui-table__num ui-table__muted">—</td>
                         <td class="ui-table__acts">
-                            <button type="button" class="ui-btn ui-btn--icon ui-btn--sm" aria-label="Изменить"><i class="fas fa-pen"></i></button>
-                            <button type="button" class="ui-btn ui-btn--icon ui-btn--sm" aria-label="Удалить"><i class="fas fa-trash"></i></button>
+                            <button type="button" class="ui-btn ui-btn--icon ui-btn--row" aria-label="Изменить"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-edit"></use></svg></button>
+                            <button type="button" class="ui-btn ui-btn--icon ui-btn--row" aria-label="Удалить"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-trash"></use></svg></button>
                         </td>
                     </tr>
                 </tbody>
@@ -347,8 +345,8 @@
         <div class="ui-mass-bar" data-role="mass-bar" style="position: static; margin-top: var(--ui-space-5)">
             <span class="ui-mass-bar__count">Выбрано: 1</span>
             <select class="ui-field__control" style="width:auto" aria-label="Массовое действие"><option>Сменить статус</option><option>Сменить отдел</option></select>
-            <button type="button" class="ui-btn ui-btn--sm">Применить</button>
-            <button type="button" class="ui-btn ui-btn--ghost ui-btn--sm">Снять выделение</button>
+            <button type="button" class="ui-btn">Применить</button>
+            <button type="button" class="ui-btn ui-btn--ghost">Снять выделение</button>
         </div>
 
         <div class="cat-cap" style="margin: var(--ui-space-5) 0 var(--ui-space-2)">длинная и широкая таблица: шапка остаётся на месте при прокрутке вниз, первая колонка — при прокрутке вбок, действия появляются по наведению</div>
@@ -361,17 +359,17 @@
 
         <div class="cat-cap" style="margin: var(--ui-space-5) 0 var(--ui-space-2)">пустое состояние: заголовок, причина, следующий шаг</div>
         <div class="ui-empty" data-role="empty">
-            <span class="ui-empty__icon"><i class="fas fa-search"></i></span>
+            <span class="ui-empty__icon"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-search"></use></svg></span>
             <b class="ui-empty__title">Ничего не нашлось</b>
             <span class="ui-empty__text">Проверьте написание или очистите фильтры — в разделе есть записи, просто не по этому запросу.</span>
-            <button type="button" class="ui-btn ui-btn--ghost ui-btn--sm ui-empty__action">Очистить фильтры</button>
+            <button type="button" class="ui-btn ui-btn--ghost ui-empty__action">Очистить фильтры</button>
         </div>
 
         <div class="cat-cap" style="margin: var(--ui-space-5) 0 var(--ui-space-2)">тот же состав в тихом варианте — для окон и узких колонок, где рамка съедает всё место</div>
         <div class="ui-empty ui-empty--inline" data-role="empty-inline">
             <b class="ui-empty__title">Счетов пока нет</b>
             <span class="ui-empty__text">Реквизиты организации заполнены, банковский счёт ещё не добавлен.</span>
-            <button type="button" class="ui-btn ui-btn--ghost ui-btn--sm ui-empty__action">Добавить счёт</button>
+            <button type="button" class="ui-btn ui-btn--ghost ui-empty__action">Добавить счёт</button>
         </div>
 
         <div class="cat-rule" style="margin-top: var(--ui-space-4)"><b>Правило.</b> Таблица прокручивается внутри своей обёртки, а не растягивает панель. Числовые колонки вправо, первая колонка закрепляется классом.</div>
@@ -393,12 +391,12 @@
         <div class="cat-panel shell-panel" data-role="panel">
             <div class="cat-panel__body">
                 <div class="cat-row" style="margin: 0; flex-wrap: nowrap">
-                    <button type="button" class="ui-btn ui-btn--sm" data-role="panel-modal">Окно этой панели</button>
+                    <button type="button" class="ui-btn" data-role="panel-modal">Окно этой панели</button>
                     <span class="cat-cap">кнопка справа открывает меню у самой границы</span>
                     <!-- Кнопка прижата к ПРАВОМУ краю панели намеренно: поповер,
                          который не умеет прижиматься к границе, вылезет отсюда
                          на соседнюю панель — и это будет видно. -->
-                    <button type="button" class="ui-btn ui-btn--icon ui-btn--sm" data-role="panel-pop" aria-expanded="false" aria-label="Меню дня у правого края панели" style="margin-left: auto"><i class="fas fa-ellipsis-v"></i></button>
+                    <button type="button" class="ui-btn ui-btn--icon ui-btn--row" data-role="panel-pop" aria-expanded="false" aria-label="Меню дня у правого края панели" style="margin-left: auto"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-more"></use></svg></button>
                 </div>
                 <p style="font-size: var(--ui-text-sm); color: var(--ui-color-ink-soft); line-height: var(--ui-line-base)">
                     Панель сама не прокручивается — прокручивается этот контейнер, иначе окно уползёт вместе с текстом.
@@ -470,8 +468,8 @@
             <input id="popTo" type="time" class="ui-field__control" value="21:00">
         </div>
         <div class="ui-popover__foot ui-popover__foot--end">
-            <button type="button" class="ui-btn ui-btn--ghost ui-btn--sm" data-act="back">Назад</button>
-            <button type="button" class="ui-btn ui-btn--sm" data-act="apply">Поставить</button>
+            <button type="button" class="ui-btn ui-btn--ghost" data-act="back">Назад</button>
+            <button type="button" class="ui-btn" data-act="apply">Поставить</button>
         </div>
     </div>
 </div>
@@ -482,6 +480,9 @@
     import { createPopover } from '/ui/popover.js';
     import { openModal, confirmDanger } from '/ui/modal.js';
     import { showToast } from '/ui/toast.js';
+    import { mountIconSprite } from '/ui/icons.js';
+
+    mountIconSprite();
 
     const panel = document.querySelector('[data-role="panel"]');
 
@@ -582,12 +583,12 @@
             <td>${i % 2 ? 'Исходящая' : 'Входящая'}</td>
             <td><span class="ui-tag">${i % 3 ? '5/2' : '3/3'}</span></td>
             <td>${i % 4 ? '12:00–21:00' : '<span class="ui-table__muted">—</span>'}</td>
-            <td><span class="ui-pill ui-pill--${i % 5 ? 'ok' : 'mute'} ui-pill--dot">${i % 5 ? 'Активен' : 'Неактивен'}</span></td>
+            <td><span class="ui-pill ui-pill--${i % 5 ? 'ok' : 'mute'}">${i % 5 ? 'Активен' : 'Неактивен'}</span></td>
             <td class="ui-table__num">${12 + i}</td>
             <td class="ui-table__num">${(12 + i) * 9}</td>
             <td class="ui-table__acts">
-                <button type="button" class="ui-btn ui-btn--icon ui-btn--sm" aria-label="Изменить"><i class="fas fa-pen"></i></button>
-                <button type="button" class="ui-btn ui-btn--icon ui-btn--sm" aria-label="Удалить"><i class="fas fa-trash"></i></button>
+                <button type="button" class="ui-btn ui-btn--icon ui-btn--row" aria-label="Изменить"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-edit"></use></svg></button>
+                <button type="button" class="ui-btn ui-btn--icon ui-btn--row" aria-label="Удалить"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-trash"></use></svg></button>
             </td>
         </tr>`).join('');
 

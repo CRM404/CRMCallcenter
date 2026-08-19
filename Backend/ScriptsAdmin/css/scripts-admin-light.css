@@ -42,35 +42,28 @@
 }
 
 /* ----- Шапка раздела: заголовок → счётчики → действие ----- */
-.scr-head {
     display: flex;
     align-items: flex-end;
     gap: var(--ui-space-5);
     flex-wrap: wrap;
 }
-.scr-head__titles { min-width: 0; }
-.scr-head__eyebrow {
     font-size: 11px;
     font-weight: var(--ui-weight-bold);
     letter-spacing: .09em;
     text-transform: uppercase;
     color: var(--ui-color-ink-faint);
 }
-.scr-head__title {
     margin: 2px 0 var(--ui-space-1);
     font-size: var(--ui-text-title);
     font-weight: var(--ui-weight-bold);
     line-height: var(--ui-line-tight);
 }
-.scr-head__sub {
     margin: 0;
     max-width: 560px;
     font-size: var(--ui-text-sm);
     line-height: var(--ui-line-base);
     color: var(--ui-color-ink-soft);
 }
-.scr-head__stats { margin-left: auto; }
-.scr-head__acts {
     display: flex;
     align-items: center;
     gap: var(--ui-space-3);
@@ -245,8 +238,6 @@
    колонку: иначе поле названия ужимается до нечитаемого. Точка перелома по
    ширине КОНТЕЙНЕРА, а не окна — панель может быть узкой на широком экране. */
 @container (max-width: 720px) {
-    .scr-head { flex-direction: column; align-items: flex-start; }
-    .scr-head__stats { margin-left: 0; }
     .scr-inline { flex-direction: column; align-items: stretch; }
     .scr-inline__field { min-width: 0; }
 }

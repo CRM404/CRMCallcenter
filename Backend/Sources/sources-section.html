@@ -11,30 +11,28 @@
 
 <div class="src-section">
 
-    <div class="src-head">
-        <div class="src-head__titles">
-            <div class="src-head__eyebrow">CRM · Источники лидов</div>
-            <h2 class="src-head__title">Источники</h2>
-            <p class="src-head__sub">Рекламные площадки и вложенные в них источники — то, откуда приходят лиды.</p>
-        </div>
-
-        <!-- Счётчики раздела остаются: владелец убрал числа с плиток стола, и
-             только оттуда (бриф, п.6). -->
-        <ul class="ui-chips src-head__stats">
-            <li class="ui-chip"><span class="ui-chip__value" data-role="stat-platforms">—</span><span class="ui-chip__label">Площадок</span></li>
-            <li class="ui-chip"><span class="ui-chip__value" data-role="stat-sources">—</span><span class="ui-chip__label">Источников</span></li>
-            <li class="ui-chip ui-chip--ok"><span class="ui-chip__value" data-role="stat-active">—</span><span class="ui-chip__label">Активных</span></li>
-        </ul>
-
-        <div class="src-head__acts">
-            <button type="button" class="ui-btn ui-btn--ghost ui-btn--sm" data-role="manage-platforms">
-                <i class="fas fa-gear" aria-hidden="true"></i>Управление площадками
+    <div class="ui-page-head">
+        <h2 class="ui-page-head__title">Источники</h2>
+        <span class="ui-page-head__sub">откуда приходят лиды</span>
+        <span class="ui-page-head__acts">
+            <button type="button" class="ui-btn ui-btn--ghost" data-role="manage-platforms">
+                <svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-gear"></use></svg>Управление площадками
             </button>
-            <button type="button" class="ui-btn ui-btn--sm" data-role="add-source">
-                <i class="fas fa-plus" aria-hidden="true"></i>Добавить источник
+            <button type="button" class="ui-btn" data-role="add-source">
+                <svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-plus"></use></svg>Добавить источник
             </button>
-        </div>
+        </span>
     </div>
+
+    <!-- Чипов-счётчиков у этого раздела в макете нет (М16): числа площадок и
+         источников видны в самом мастер-детали, и второй раз их не показываем.
+         Узлы счётчиков сохранены скрытыми — модуль продолжает их наполнять, и
+         вернуть строку чипов можно снятием hidden. -->
+    <ul class="ui-chips ui-page-chips" hidden>
+        <li class="ui-chip"><span class="ui-chip__value" data-role="stat-platforms">—</span><span class="ui-chip__label">Площадок</span></li>
+        <li class="ui-chip"><span class="ui-chip__value" data-role="stat-sources">—</span><span class="ui-chip__label">Источников</span></li>
+        <li class="ui-chip ui-chip--ok"><span class="ui-chip__value" data-role="stat-active">—</span><span class="ui-chip__label">Активных</span></li>
+    </ul>
 
     <!-- Мастер-деталь: слева площадки, справа их источники (бриф, п.6). -->
     <div class="src-master">
@@ -78,10 +76,10 @@
             </div>
 
             <div class="ui-empty" data-role="empty" hidden>
-                <span class="ui-empty__icon"><i class="fas fa-diagram-project" aria-hidden="true"></i></span>
+                <span class="ui-empty__icon"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-sources"></use></svg></span>
                 <b class="ui-empty__title" data-role="empty-title"></b>
                 <span class="ui-empty__text" data-role="empty-text"></span>
-                <button type="button" class="ui-btn ui-btn--ghost ui-btn--sm ui-empty__action" data-role="empty-action" hidden></button>
+                <button type="button" class="ui-btn ui-btn--ghost ui-empty__action" data-role="empty-action" hidden></button>
             </div>
 
             <div class="ui-table-foot" data-role="foot" hidden>
@@ -98,8 +96,8 @@
                     <option value="Архив">Статус → Архив</option>
                     <option value="delete">Удалить</option>
                 </select>
-                <button type="button" class="ui-btn ui-btn--sm" data-role="mass-apply">Применить</button>
-                <button type="button" class="ui-btn ui-btn--ghost ui-btn--sm" data-role="mass-clear">Снять выделение</button>
+                <button type="button" class="ui-btn" data-role="mass-apply">Применить</button>
+                <button type="button" class="ui-btn ui-btn--ghost" data-role="mass-clear">Снять выделение</button>
             </div>
         </div>
     </div>

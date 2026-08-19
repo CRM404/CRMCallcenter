@@ -86,7 +86,7 @@ function readSection(section, org) {
         const shown = displayValue(field, org ? org[field.key] : null);
         const cls = [field.mono ? 'm-mono' : '', shown === null ? 'm-empty-val' : ''].filter(Boolean).join(' ');
         const copy = field.copy && shown !== null
-            ? `<button type="button" class="ui-btn ui-btn--icon ui-btn--sm m-copy" data-copy="${escapeHtml(shown)}" data-label="${escapeHtml(field.label)}" title="Скопировать"><i class="fas fa-copy" aria-hidden="true"></i></button>`
+            ? `<button type="button" class="ui-btn ui-btn--icon ui-btn--row m-copy" data-copy="${escapeHtml(shown)}" data-label="${escapeHtml(field.label)}" title="Скопировать"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-copy"></use></svg></button>`
             : '';
         return `<dt>${escapeHtml(field.label)}</dt><dd class="${cls}">${shown === null ? 'не заполнено' : escapeHtml(shown)}${copy}</dd>`;
     }).join('');

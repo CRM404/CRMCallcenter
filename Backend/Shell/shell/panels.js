@@ -14,6 +14,8 @@
 // с пользователем. Иначе панели потянули бы за собой зависимость от реестра
 // разделов и слоя элементов.
 
+import { iconNode } from '../ui/icons.js';
+
 const MIN_SHARE = 0.28;   // ни одна панель не уже 28 % ширины (бриф, 5.3)
 const DEFAULT_SHARE = 0.5;
 
@@ -222,9 +224,7 @@ function createPanel(key, meta, place = {}) {
     const head = document.createElement('header');
     head.className = 'shell-panel__head';
 
-    const icon = document.createElement('i');
-    icon.className = `shell-panel__icon ${meta.icon || 'fas fa-window-maximize'}`;
-    icon.setAttribute('aria-hidden', 'true');
+    const icon = iconNode(meta.icon || 'split', '', 'shell-panel__icon');
     head.appendChild(icon);
 
     const titles = document.createElement('div');
@@ -243,9 +243,9 @@ function createPanel(key, meta, place = {}) {
 
     const tools = document.createElement('div');
     tools.className = 'shell-panel__tools';
-    tools.appendChild(toolButton('split', 'fa-table-columns', 'Разделить экран'));
-    tools.appendChild(toolButton('minimize', 'fa-window-minimize', 'Свернуть'));
-    tools.appendChild(toolButton('close', 'fa-xmark', 'Закрыть'));
+    tools.appendChild(toolButton('split', 'split', 'Разделить экран'));
+    tools.appendChild(toolButton('minimize', 'min', 'Свернуть'));
+    tools.appendChild(toolButton('close', 'close', 'Закрыть'));
     head.appendChild(tools);
 
     el.appendChild(head);
@@ -292,14 +292,11 @@ function createPanel(key, meta, place = {}) {
 function toolButton(act, icon, label) {
     const btn = document.createElement('button');
     btn.type = 'button';
-    btn.className = 'ui-btn ui-btn--icon ui-btn--sm';
+    btn.className = 'ui-btn ui-btn--icon';
     btn.dataset.act = act;
     btn.setAttribute('aria-label', label);
     btn.title = label;
-    const i = document.createElement('i');
-    i.className = `fas ${icon}`;
-    i.setAttribute('aria-hidden', 'true');
-    btn.appendChild(i);
+    btn.appendChild(iconNode(icon, 'sm'));
     return btn;
 }
 

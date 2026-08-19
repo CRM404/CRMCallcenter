@@ -23,23 +23,11 @@
     color: var(--ui-color-ink);
 }
 
-/* ----- Шапка раздела ------------------------------------------------------- */
-.m-wrap .m-page-head {
-    display: flex;
-    align-items: center;
-    gap: var(--ui-space-4);
-    flex-wrap: wrap;
-    margin-bottom: var(--ui-space-4);
-}
-.m-wrap .m-page-title { font-size: 18px; font-weight: var(--ui-weight-bold); color: var(--ui-color-ink); }
-.m-wrap .m-page-sub { font-size: var(--ui-text-sm); color: var(--ui-color-ink-faint); }
-.m-wrap .m-page-acts {
-    margin-left: auto;
-    display: flex;
-    align-items: center;
-    gap: var(--ui-space-3);
-    flex-wrap: wrap;
-}
+/* ----- Шапка раздела -------------------------------------------------------
+   Своей шапки у раздела нет: заголовок, подпись и действия рисует
+   .ui-page-head из слоя (ui/page-head.css). Здесь она и была ближе всего к
+   макету — «Реквизиты» переделывали по нему, — но одинаковой её делает слой,
+   а не совпадение значений в шести файлах. */
 
 /* ----- Две колонки ---------------------------------------------------------
    auto-fit: в половинной панели колонки встают друг под друга сами, без

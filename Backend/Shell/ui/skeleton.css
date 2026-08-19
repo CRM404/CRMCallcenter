@@ -52,16 +52,28 @@
 }
 
 .ui-sk--title { height: var(--ui-space-6); width: 190px; }
-.ui-sk--btn { height: var(--ui-control-h-sm); width: 120px; border-radius: var(--ui-radius-pill); margin-left: auto; }
+.ui-sk--sub { height: 12px; width: 260px; }
+.ui-sk--btn { height: var(--ui-btn-h); width: 120px; border-radius: var(--ui-radius-sm); margin-left: auto; }
 .ui-sk--chip { height: 46px; width: 96px; border-radius: var(--ui-radius-md); }
-.ui-sk--line { height: 38px; }
+.ui-sk--line { height: var(--ui-control-h); }
 .ui-sk--cell { height: 14px; }
+/* Шапка таблицы: та же полоса, но ниже и плотнее — силуэт строки заголовков. */
+.ui-sk--head { height: 30px; border-radius: var(--ui-radius-md) var(--ui-radius-md) 0 0; }
 
+/* Подпись «Загружаем …» УБРАНА С ЭКРАНА (С9): надпись по центру пустого поля —
+   тот же спиннер, только словами, а правило проекта требует скелет ТОЙ ЖЕ
+   ФОРМЫ, что будущий контент. Для чтения с экрана она осталась: role="status"
+   без видимого текста ничего не сообщит. */
 .ui-skeleton__note {
-    padding-top: var(--ui-space-1);
-    font-size: var(--ui-text-xs);
-    color: var(--ui-color-ink-faint);
-    text-align: center;
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
 }
 
 /* Бесконечная анимация — первое, что мешает при укачивании и на слабой машине.

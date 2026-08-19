@@ -34,18 +34,24 @@ function cells(weights) {
 }
 
 function tableShape(box) {
+    // Силуэт списка ровно в том порядке, в каком он приедет: шапка раздела
+    // (заголовок + подпись + кнопки), чипы-счётчики, полоса тулбара, шапка
+    // таблицы и шесть строк.
     box.appendChild(row(el('span', 'ui-sk ui-sk--title'), el('span', 'ui-sk ui-sk--btn')));
+    box.appendChild(row(el('span', 'ui-sk ui-sk--sub')));
     box.appendChild(row(
         el('span', 'ui-sk ui-sk--chip'),
         el('span', 'ui-sk ui-sk--chip'),
         el('span', 'ui-sk ui-sk--chip')
     ));
     box.appendChild(el('div', 'ui-sk ui-sk--line'));
+    box.appendChild(el('div', 'ui-sk ui-sk--head'));
     for (let i = 0; i < 6; i += 1) box.appendChild(cells([2, 1, 1, 1]));
 }
 
 function formShape(box) {
     box.appendChild(row(el('span', 'ui-sk ui-sk--title'), el('span', 'ui-sk ui-sk--btn')));
+    box.appendChild(row(el('span', 'ui-sk ui-sk--sub')));
     for (let i = 0; i < 5; i += 1) {
         box.appendChild(row(
             el('span', 'ui-sk ui-sk--line'),
@@ -59,13 +65,13 @@ function formShape(box) {
  * смонтирован и показал первые данные.
  *
  * @param {'table'|'form'} kind форма скелета
- * @param {string} title название раздела — подпись под скелетом
+ * @param {string} title название раздела — для чтения с экрана
  */
 export function createSkeleton(kind = 'table', title = '') {
     const box = el('div', 'ui-skeleton ui-skeleton--overlay');
     box.dataset.role = 'section-skeleton';
     // Полосы — украшение, читать их с экрана нечего; состояние сообщает
-    // подпись ниже, поэтому у накладки aria-busy, а не aria-hidden.
+    // невидимая подпись ниже, поэтому у накладки aria-busy, а не aria-hidden.
     box.setAttribute('aria-busy', 'true');
 
     if (kind === 'form') formShape(box);

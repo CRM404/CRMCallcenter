@@ -192,9 +192,9 @@ function renderHead() {
     // Кнопка «Бланк письма» появляется только когда организация есть: бланк
     // привязан к ней, как счета и налоги.
     nodes.pageActs.innerHTML = `
-        ${organization ? '<button type="button" class="ui-btn ui-btn--ghost ui-btn--sm" data-role="letterhead-edit">Бланк письма</button>' : ''}
-        <button type="button" class="ui-btn ui-btn--sm" data-role="edit-start">
-            <i class="fas fa-pen" aria-hidden="true"></i>${organization ? 'Изменить' : 'Создать организацию'}
+        ${organization ? '<button type="button" class="ui-btn ui-btn--ghost" data-role="letterhead-edit">Бланк письма</button>' : ''}
+        <button type="button" class="ui-btn" data-role="edit-start">
+            <svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-edit"></use></svg>${organization ? 'Изменить' : 'Создать организацию'}
         </button>`;
 }
 

@@ -73,32 +73,19 @@
 }
 
 /* ----- Идентити-шапка ----- */
-.leads-wrap .identity-strip { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; background: var(--surface); border: 1px solid #fff6; border-radius: var(--radius-lg); padding: 20px 26px; box-shadow: var(--shadow-card); }
-.leads-wrap .identity-copy { margin-right: auto; }
-.leads-wrap .eyebrow { font-size: 11.5px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 4px; }
-.leads-wrap .identity-copy h1 { font-size: 26px; font-weight: 700; color: var(--ink); letter-spacing: -.01em; }
-.leads-wrap .identity-copy p { font-size: 13px; color: var(--ink-soft); margin-top: 3px; max-width: 64ch; }
 
 /* ----- Тулбар: фильтры / колонки / загрузка / добавить ----- */
-.leads-wrap .toolbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; background: var(--surface); border: 1px solid #fff6; border-radius: var(--radius-lg); padding: 14px 18px; box-shadow: var(--shadow-card); }
-.leads-wrap .filter-btn-wrap { position: relative; display: inline-flex; }
-.leads-wrap .filter-badge { position: absolute; top: -6px; right: -6px; background: var(--accent); color: #fff; font-size: 11px; font-weight: 700; min-width: 18px; height: 18px; border-radius: 999px; display: flex; align-items: center; justify-content: center; padding: 0 4px; box-shadow: 0 0 0 2px var(--surface-modal); }
-.leads-wrap .toolbar-spacer { flex: 1; }
+.leads-wrap .leads-filter-wrap { position: relative; display: inline-flex; }
+.leads-wrap .leads-filter-badge { position: absolute; top: -6px; right: -6px; background: var(--accent); color: #fff; font-size: 11px; font-weight: 700; min-width: 18px; height: 18px; border-radius: 999px; display: flex; align-items: center; justify-content: center; padding: 0 4px; box-shadow: 0 0 0 2px var(--surface-modal); }
 
 /* ----- Ячейки списка ----- */
 .leads-wrap .lead-phone { font-variant-numeric: tabular-nums; }
 .leads-wrap .queue-tag { margin-left: 6px; vertical-align: 1px; }
 
-/* Этап воронки: номер этапа в пилюле + название статуса. Нулевой этап
-   («Новый») выделен — это состояние, в котором лид ждёт первого звонка. */
-.leads-wrap .stage-badge { display: inline-flex; align-items: center; gap: 6px; padding: 3px 11px 3px 8px; border-radius: 20px; font-size: 12px; font-weight: 600; background: rgba(96, 112, 148, .12); color: var(--ink-soft); white-space: nowrap; }
-.leads-wrap .stage-badge .stage-num { font-size: 10.5px; font-weight: 700; background: rgba(96, 112, 148, .18); color: var(--ink); padding: 1px 6px; border-radius: 20px; }
-.leads-wrap .stage-badge.stage-0 { background: rgba(74, 144, 217, .14); color: var(--accent-soft); }
-.leads-wrap .stage-badge.stage-0 .stage-num { background: rgba(74, 144, 217, .22); color: var(--accent); }
-
-/* Линия: компактная пилюля со стрелкой */
-.leads-wrap .line-tag { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; background: rgba(96, 112, 148, .10); color: var(--ink-soft); border: 1px solid var(--line); }
-.leads-wrap .line-tag i { font-size: var(--ui-icon-xs); }
+/* Линия лида — обычный текст со значком направления. Рамка и заливка сняты:
+   пилюля в макете означает СТАТУС, а линия статусом не является (М23). */
+.leads-wrap .leads-line { display: inline-flex; align-items: center; gap: 5px; color: var(--ui-color-ink); }
+.leads-wrap .leads-line .ui-ic { color: var(--ui-color-ink-faint); }
 /* Скрипт: название + маркер «повт.». Синий — лид сейчас на этапе 5–6,
    т.е. оператор видит именно повторный скрипт. */
 .leads-wrap .rep-chip { display: inline-block; margin-left: 6px; font-size: 10.5px; font-weight: 700; color: var(--ink-faint); background: rgba(96, 112, 148, .12); padding: 2px 7px; border-radius: 20px; cursor: default; }
@@ -107,7 +94,6 @@
 .leads-wrap .offer-more { display: inline-block; margin-left: 6px; font-size: 11px; font-weight: 700; color: var(--ink-soft); background: rgba(96, 112, 148, .14); padding: 2px 7px; border-radius: 20px; cursor: default; }
 
 /* Кнопка удаления строки — единственная, что краснеет при наведении. */
-.leads-wrap .row-del:hover { color: var(--danger); }
 
 /* Списки в полосе массовых действий: рост под полосу, а не под форму. */
 .leads-wrap .mass-select { width: auto; min-width: 150px; min-height: 34px; padding: 6px 10px; font-size: 13px; }
@@ -212,5 +198,4 @@
 @media (max-width: 760px) {
     .leads-wrap .column-checkbox-list { grid-template-columns: 1fr; }
     .leads-wrap .offer-search-row { flex-direction: column; align-items: flex-start; }
-    .leads-wrap .identity-strip { flex-direction: column; align-items: flex-start; }
 }

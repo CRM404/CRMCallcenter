@@ -15,12 +15,13 @@
 
 import { getRoute } from './router.js';
 import { createPopover } from '../ui/popover.js';
+import { iconNode } from '../ui/icons.js';
 
 // Служебные плитки. В реестре разделов их нет намеренно: это не разделы CRM,
 // у них нет ни модуля, ни маршрута — просто ссылка. Каталог элементов открыт
 // со стола, потому что им пользуются и дизайн-сессия, и разработчик.
 const SERVICE_TILES = [
-    { key: 'catalog', title: 'Элементы', icon: 'fas fa-shapes', href: '/ui-catalog.html' }
+    { key: 'catalog', title: 'Элементы', icon: 'catalog', href: '/ui-catalog.html' }
 ];
 
 let shellApi = null;
@@ -122,7 +123,7 @@ function sectionTile(section) {
 
     const icon = document.createElement('span');
     icon.className = 'shell-tile__icon';
-    icon.appendChild(iconNode(section.icon));
+    icon.appendChild(iconNode(section.icon, 'lg'));
 
     const name = document.createElement('span');
     name.className = 'shell-tile__name';
@@ -142,11 +143,11 @@ function serviceTile(item) {
 
     const mark = document.createElement('span');
     mark.className = 'shell-tile__legacy-mark';
-    mark.append(iconNode('fas fa-arrow-up-right-from-square'), document.createTextNode('в новой вкладке'));
+    mark.append(iconNode('ext', '2xs'), document.createTextNode('в новой вкладке'));
 
     const icon = document.createElement('span');
     icon.className = 'shell-tile__icon';
-    icon.appendChild(iconNode(item.icon));
+    icon.appendChild(iconNode(item.icon, 'lg'));
 
     const name = document.createElement('span');
     name.className = 'shell-tile__name';
@@ -156,12 +157,8 @@ function serviceTile(item) {
     return tile;
 }
 
-function iconNode(className) {
-    const i = document.createElement('i');
-    i.className = className;
-    i.setAttribute('aria-hidden', 'true');
-    return i;
-}
+// Значок берётся из набора проекта (ui/icons.js): раньше здесь строился <i>
+// с классом Font Awesome, и стол был последним местом, где жил внешний набор.
 
 // ---------------------------------------------------------------- состояние
 
@@ -192,7 +189,7 @@ function sync() {
         } else if (legacy) {
             const mark = document.createElement('span');
             mark.className = 'shell-tile__legacy-mark';
-            mark.append(iconNode('fas fa-arrow-up-right-from-square'), document.createTextNode('в новой вкладке'));
+            mark.append(iconNode('ext', '2xs'), document.createTextNode('в новой вкладке'));
             tile.prepend(mark);
         }
     });
@@ -293,7 +290,7 @@ function buildPicker(sections) {
         option.className = 'ui-popover__option';
         option.dataset.pick = section.key;
 
-        const icon = iconNode(`${section.icon} shell-picker__icon`);
+        const icon = iconNode(section.icon, 'sm', 'shell-picker__icon');
         const label = document.createElement('span');
         label.textContent = section.title;
 

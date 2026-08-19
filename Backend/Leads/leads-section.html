@@ -29,32 +29,28 @@
 
 <div class="leads-wrap">
 
-    <div class="identity-strip">
-        <div class="identity-copy">
-            <div class="eyebrow">CRM · Все лиды</div>
-            <h1>Лиды</h1>
-            <p>Полный список лидов со всех источников — создание, редактирование, назначение оператора, массовая загрузка базы.</p>
-        </div>
-        <dl class="ui-chips">
-            <div class="ui-chip"><dd class="ui-chip__value" data-role="stat-total">0</dd><dt class="ui-chip__label">Всего</dt></div>
-            <div class="ui-chip ui-chip--warn"><dd class="ui-chip__value" data-role="stat-queue">0</dd><dt class="ui-chip__label">Без оператора</dt></div>
-            <div class="ui-chip ui-chip--ok"><dd class="ui-chip__value" data-role="stat-today">0</dd><dt class="ui-chip__label">За сегодня</dt></div>
-        </dl>
+    <div class="ui-page-head">
+        <h2 class="ui-page-head__title">Лиды</h2>
+        <span class="ui-page-head__sub" data-role="queue-date"></span>
+        <span class="ui-page-head__acts">
+            <span class="leads-filter-wrap">
+                <button type="button" class="ui-btn ui-btn--ghost" data-role="filter-toggle"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-filter"></use></svg>Фильтры</button>
+                <span class="leads-filter-badge" data-role="filter-badge" hidden>0</span>
+            </span>
+            <button type="button" class="ui-btn ui-btn--ghost" data-role="columns-btn"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-cols"></use></svg>Колонки</button>
+            <button type="button" class="ui-btn ui-btn--ghost" data-role="upload-btn"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-upload"></use></svg>Загрузить базу</button>
+            <button type="button" class="ui-btn" data-role="add-lead"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-plus"></use></svg>Добавить лида</button>
+        </span>
     </div>
 
-    <div class="toolbar">
-        <div class="filter-btn-wrap">
-            <button type="button" class="ui-btn ui-btn--ghost" data-role="filter-toggle"><i class="fas fa-filter" aria-hidden="true"></i>Фильтры</button>
-            <span class="filter-badge" data-role="filter-badge" hidden>0</span>
-        </div>
-        <button type="button" class="ui-btn ui-btn--ghost ui-btn--icon" data-role="columns-btn" aria-label="Настройка колонок" title="Настройка колонок"><i class="fas fa-gear" aria-hidden="true"></i></button>
-        <div class="toolbar-spacer"></div>
-        <button type="button" class="ui-btn ui-btn--secondary" data-role="upload-btn"><i class="fas fa-upload" aria-hidden="true"></i>Загрузить базу</button>
-        <button type="button" class="ui-btn" data-role="add-lead"><i class="fas fa-plus" aria-hidden="true"></i>Добавить лида</button>
-    </div>
+    <dl class="ui-chips ui-page-chips">
+        <div class="ui-chip"><dd class="ui-chip__value" data-role="stat-total">0</dd><dt class="ui-chip__label">Всего</dt></div>
+        <div class="ui-chip ui-chip--warn"><dd class="ui-chip__value" data-role="stat-queue">0</dd><dt class="ui-chip__label">Без оператора</dt></div>
+        <div class="ui-chip ui-chip--ok"><dd class="ui-chip__value" data-role="stat-today">0</dd><dt class="ui-chip__label">За сегодня</dt></div>
+    </dl>
 
     <div class="ui-table-wrap" data-role="table-wrap">
-        <table class="ui-table ui-table--wide">
+        <table class="ui-table ui-table--wide ui-table--freeze-acts">
             <thead>
                 <tr>
                     <th class="ui-table__sel"><input type="checkbox" data-role="head-checkbox" aria-label="Выделить все"></th>
@@ -99,7 +95,7 @@
 
     <div class="ui-table-foot" data-role="load-more-row" hidden>
         <span></span>
-        <button type="button" class="ui-btn ui-btn--ghost ui-btn--sm" data-role="load-more">Показать ещё</button>
+        <button type="button" class="ui-btn ui-btn--ghost" data-role="load-more">Показать ещё</button>
     </div>
 
     <!-- Полоса массовых операций. В старой странице это был плавающий остров
@@ -120,8 +116,8 @@
         <select class="ui-field__control mass-select" data-role="mass-status" aria-label="Статус" hidden></select>
         <select class="ui-field__control mass-select" data-role="mass-script" aria-label="Скрипт" hidden></select>
         <select class="ui-field__control mass-select" data-role="mass-repeat-script" aria-label="Скрипт для повторных" hidden></select>
-        <button type="button" class="ui-btn ui-btn--sm" data-role="mass-apply">Применить</button>
-        <button type="button" class="ui-btn ui-btn--ghost ui-btn--icon ui-btn--sm" data-role="mass-clear" aria-label="Сбросить выделение" title="Сбросить выделение"><i class="fas fa-xmark" aria-hidden="true"></i></button>
+        <button type="button" class="ui-btn" data-role="mass-apply">Применить</button>
+        <button type="button" class="ui-btn ui-btn--ghost ui-btn--icon ui-btn--row" data-role="mass-clear" aria-label="Сбросить выделение" title="Сбросить выделение"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-close"></use></svg></button>
     </div>
 
     <!-- ================= ОКНО «ФИЛЬТРЫ» ================= -->
@@ -132,7 +128,7 @@
                     <h2 class="ui-modal__title">Фильтры</h2>
                     <p class="modal-sub">По тем же полям, что и колонки по умолчанию</p>
                 </div>
-                <button type="button" class="ui-modal__close" data-role="filter-close" aria-label="Закрыть"><i class="fas fa-xmark" aria-hidden="true"></i></button>
+                <button type="button" class="ui-modal__close" data-role="filter-close" aria-label="Закрыть"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-close"></use></svg></button>
             </div>
             <div class="ui-modal__body">
                 <div class="ui-form-grid">
@@ -158,7 +154,7 @@
                     <h2 class="ui-modal__title">Настройка колонок</h2>
                     <p class="modal-sub">ID/ФИО/Номер/Действия — всегда видны</p>
                 </div>
-                <button type="button" class="ui-modal__close" data-role="columns-close" aria-label="Закрыть"><i class="fas fa-xmark" aria-hidden="true"></i></button>
+                <button type="button" class="ui-modal__close" data-role="columns-close" aria-label="Закрыть"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-close"></use></svg></button>
             </div>
             <div class="ui-modal__body" data-role="columns-body"></div>
             <div class="ui-modal__actions">
@@ -176,7 +172,7 @@
                     <h2 class="ui-modal__title" data-role="lead-modal-title">Новый лид</h2>
                     <p class="modal-sub">Обязательные поля: номер, линия, источник, офферы, скрипт и статусы показа — остальное можно заполнить позже</p>
                 </div>
-                <button type="button" class="ui-modal__close" data-role="lead-close" aria-label="Закрыть"><i class="fas fa-xmark" aria-hidden="true"></i></button>
+                <button type="button" class="ui-modal__close" data-role="lead-close" aria-label="Закрыть"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-close"></use></svg></button>
             </div>
 
             <div class="ui-tabs" role="tablist">
@@ -188,11 +184,11 @@
             <div data-role="tab-panel-main">
 
                 <div class="phone-field">
-                    <i class="fas fa-phone" aria-hidden="true"></i>
+                    <svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-phone"></use></svg>
                     <input type="tel" id="ldPhone" placeholder="+7 (___) ___-__-__" aria-label="Номер телефона">
                 </div>
                 <div class="dup-warning" data-role="dup-warning" hidden>
-                    <i class="fas fa-triangle-exclamation" aria-hidden="true"></i>
+                    <svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-warn"></use></svg>
                     <span>Возможный дубль: лид <b data-role="dup-warning-id">#—</b> уже с этим номером. Сохранение не заблокировано — проверьте перед тем, как продолжить.</span>
                 </div>
 
@@ -255,7 +251,7 @@
                     <h3>География</h3>
                     <p class="section-hint">Подсказки адреса — тот же сервис (DaData), что уже используется в гео-критериях оффера CPA-сетей: начните вводить, выберите из списка. Два адреса независимы: сужение по региону у каждого своё.</p>
                     <div class="geo-block">
-                        <div class="geo-block-title"><i class="fas fa-location-dot" aria-hidden="true"></i>Гео объекта</div>
+                        <div class="geo-block-title"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-pin"></use></svg>Гео объекта</div>
                         <div class="ui-form-grid">
                             <div class="ui-field geo-field"><label class="ui-field__label" for="ldRegion">Регион</label><input class="ui-field__control" type="text" id="ldRegion" data-geo-level="region" placeholder="Начните вводить…" autocomplete="off"></div>
                             <div class="ui-field geo-field"><label class="ui-field__label" for="ldCity">Город</label><input class="ui-field__control" type="text" id="ldCity" data-geo-level="city" placeholder="Начните вводить…" autocomplete="off"></div>
@@ -264,7 +260,7 @@
                         </div>
                     </div>
                     <div class="geo-block">
-                        <div class="geo-block-title"><i class="fas fa-location-dot" aria-hidden="true"></i>Гео клиента</div>
+                        <div class="geo-block-title"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-pin"></use></svg>Гео клиента</div>
                         <div class="ui-form-grid">
                             <div class="ui-field geo-field"><label class="ui-field__label" for="ldClientRegion">Регион</label><input class="ui-field__control" type="text" id="ldClientRegion" data-geo-level="region" placeholder="Начните вводить…" autocomplete="off"></div>
                             <div class="ui-field geo-field"><label class="ui-field__label" for="ldClientCity">Город</label><input class="ui-field__control" type="text" id="ldClientCity" data-geo-level="city" placeholder="Начните вводить…" autocomplete="off"></div>
@@ -320,13 +316,13 @@
                 </div>
                 <div class="offer-search-row">
                     <div class="offer-search-hint">Значения фильтров подтягиваются из базы источников. Фильтры работают и без текста поиска.</div>
-                    <button type="button" class="ui-btn ui-btn--ghost ui-btn--sm" data-role="offer-filters-reset">Сбросить фильтры</button>
+                    <button type="button" class="ui-btn ui-btn--ghost" data-role="offer-filters-reset">Сбросить фильтры</button>
                 </div>
                 <div class="offer-results" data-role="offer-results" hidden></div>
                 <div class="form-section form-section--offers">
                     <div class="form-section-head">
                         <h3>Выбранные офферы (<span data-role="offer-sel-count">0</span>)</h3>
-                        <button type="button" class="ui-btn ui-btn--ghost ui-btn--sm" data-role="offer-clear-all" hidden>Убрать все</button>
+                        <button type="button" class="ui-btn ui-btn--ghost" data-role="offer-clear-all" hidden>Убрать все</button>
                     </div>
                     <div class="ui-fchips" data-role="offer-sel-tags"></div>
                     <div class="pick-empty" data-role="offer-sel-empty">Пока не выбран ни один оффер — обязателен минимум один.</div>
@@ -349,7 +345,7 @@
                     <h2 class="ui-modal__title">Загрузить базу</h2>
                     <p class="modal-sub">Excel или CSV — каждая строка станет лидом. Один набор параметров на всю партию</p>
                 </div>
-                <button type="button" class="ui-modal__close" data-role="upload-close" aria-label="Закрыть"><i class="fas fa-xmark" aria-hidden="true"></i></button>
+                <button type="button" class="ui-modal__close" data-role="upload-close" aria-label="Закрыть"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-close"></use></svg></button>
             </div>
             <div class="ui-modal__body">
                 <div class="ui-form-grid form-grid--top">
@@ -378,9 +374,9 @@
                     <div class="ui-field ui-field--wide">
                         <span class="ui-field__label ui-field__label--required">Файл (.xlsx / .xls / .csv)</span>
                         <div class="file-upload-area">
-                            <i class="fas fa-upload" aria-hidden="true"></i>
+                            <svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-upload"></use></svg>
                             <span class="file-name" data-role="up-file-name"></span>
-                            <button type="button" class="ui-btn ui-btn--secondary ui-btn--sm" data-role="up-file-trigger">Выбрать файл</button>
+                            <button type="button" class="ui-btn ui-btn--secondary" data-role="up-file-trigger">Выбрать файл</button>
                             <input type="file" data-role="up-file-input" class="hidden-file-input" accept=".xlsx,.xls,.csv" aria-label="Файл базы">
                         </div>
                     </div>

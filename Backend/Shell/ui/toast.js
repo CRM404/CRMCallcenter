@@ -15,10 +15,12 @@
 //    #toastContainer и молча ничего не делали, если его не было; здесь
 //    контейнер создаётся при первом вызове.
 
+import { iconNode } from './icons.js';
+
 const ICONS = {
-    info: 'fa-circle-info',
-    success: 'fa-circle-check',
-    error: 'fa-circle-exclamation'
+    info: 'info',
+    success: 'check-circle',
+    error: 'warn'
 };
 
 let container = null;
@@ -44,10 +46,7 @@ export function showToast(message, type = 'info', opts = {}) {
     toast.className = `ui-toast ui-toast--${kind}`;
     toast.setAttribute('role', kind === 'error' ? 'alert' : 'status');
 
-    const icon = document.createElement('i');
-    icon.className = `ui-toast__icon fas ${ICONS[kind]}`;
-    icon.setAttribute('aria-hidden', 'true');
-    toast.appendChild(icon);
+    toast.appendChild(iconNode(ICONS[kind], 'sm', 'ui-toast__icon'));
 
     const text = document.createElement('span');
     text.className = 'ui-toast__text';
@@ -58,10 +57,7 @@ export function showToast(message, type = 'info', opts = {}) {
     closeBtn.type = 'button';
     closeBtn.className = 'ui-toast__close';
     closeBtn.setAttribute('aria-label', 'Закрыть уведомление');
-    const closeIcon = document.createElement('i');
-    closeIcon.className = 'fas fa-xmark';
-    closeIcon.setAttribute('aria-hidden', 'true');
-    closeBtn.appendChild(closeIcon);
+    closeBtn.appendChild(iconNode('close', 'sm'));
     toast.appendChild(closeBtn);
 
     box.appendChild(toast);

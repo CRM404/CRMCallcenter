@@ -28,6 +28,7 @@
     border-bottom: 1px solid var(--ui-color-line);
     font-size: var(--ui-text-xs);
     font-weight: var(--ui-weight-bold);
+    font-weight: var(--ui-weight-bold);
     color: var(--ui-color-ink-soft);
 }
 
@@ -40,17 +41,17 @@
     align-items: center;
     gap: var(--ui-space-3);
     width: 100%;
-    padding: var(--ui-space-2) var(--ui-space-3);
+    padding: 7px var(--ui-space-3);
     border: none;
-    border-radius: var(--ui-radius-sm);
+    border-radius: 7px;
     background: transparent;
     font-family: var(--ui-font-ui);
-    font-size: var(--ui-text-sm);
+    font-size: var(--ui-text-md);
     color: var(--ui-color-ink);
     text-align: left;
     cursor: pointer;
 }
-.ui-popover__option:hover { background: var(--ui-color-wash-hover); }
+.ui-popover__option:hover { background: rgba(0, 0, 255, .06); }
 .ui-popover__option:focus-visible { outline: 2px solid var(--ui-color-accent); outline-offset: -2px; }
 /* Недоступный пункт остаётся видимым и объясняет себя подписью: пропавший
    пункт читается как поломка. */

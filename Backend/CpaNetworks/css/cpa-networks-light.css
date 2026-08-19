@@ -58,11 +58,6 @@
 .cpa-wrap .canvas { max-width: 1360px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
 
 /* ----- Идентити-шапка ----- */
-.cpa-wrap .identity-strip { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; background: var(--surface); border: 1px solid #fff6; border-radius: var(--radius-lg); padding: 20px 26px; box-shadow: var(--shadow-card); }
-.cpa-wrap .identity-copy { margin-right: auto; }
-.cpa-wrap .eyebrow { font-size: 11.5px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 4px; }
-.cpa-wrap .identity-copy h1 { font-size: 26px; font-weight: 700; color: var(--ink); letter-spacing: -.01em; }
-.cpa-wrap .identity-copy p { font-size: 13px; color: var(--ink-soft); margin-top: 3px; }
 
 /* ----- Переключатель сетей (замена отдельной страницы списка) ----- */
 .cpa-wrap .network-bar { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; background: var(--surface); border: 1px solid #fff6; border-radius: var(--radius-lg); padding: 10px 14px; box-shadow: var(--shadow-card); }
@@ -75,9 +70,7 @@
    Поле поиска и фильтр статусов теперь из слоя (.ui-field, .ui-tabs) — здесь
    осталось только их место в строке, то есть раскладка раздела. */
 .cpa-wrap .cpa-search { flex: 1 1 240px; min-width: 0; }
-.cpa-wrap .toolbar .ui-tabs { flex: 0 1 auto; }
 
-.cpa-wrap .toolbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; background: var(--surface); border: 1px solid #fff6; border-radius: var(--radius-lg); padding: 14px 18px; box-shadow: var(--shadow-card); }
 
 /* ----- Таблица -----
    Вид таблицы теперь из слоя (.ui-table): голые table/thead th/tbody td сняты
@@ -197,7 +190,6 @@
 /* ----- Тосты ----- */
 
 @media (max-width: 760px) {
-    .cpa-wrap .identity-strip { flex-direction: column; align-items: flex-start; }
     .cpa-wrap .compact-row { flex-direction: column; }
     .cpa-wrap .geo-row, .cpa-wrap .segment-row { grid-template-columns: 1fr; }
 }

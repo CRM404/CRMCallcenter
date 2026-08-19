@@ -24,57 +24,60 @@
 
 <div class="emp-wrap">
 
-    <div class="emp-head">
-        <div class="emp-head-identity">
-            <div class="eyebrow">CRM · Кадровый учёт</div>
-            <h1>Сотрудники</h1>
-        </div>
+    <div class="ui-page-head">
+        <h2 class="ui-page-head__title">Сотрудники</h2>
 
+        <!-- Переключатель режимов стоит сразу за заголовком слева, как в макете:
+             по центру шапки он читался как заголовок раздела (М25). -->
         <div class="ui-switch" role="tablist" aria-label="Режим раздела">
-            <button type="button" role="tab" aria-selected="true" class="ui-switch__option ui-switch__option--active" data-role="view-list"><i class="fas fa-list" aria-hidden="true"></i>Список</button>
-            <button type="button" role="tab" aria-selected="false" class="ui-switch__option" data-role="view-schedule"><i class="fas fa-calendar-days" aria-hidden="true"></i>График</button>
+            <button type="button" role="tab" aria-selected="true" class="ui-switch__option ui-switch__option--active" data-role="view-list"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-list"></use></svg>Список</button>
+            <button type="button" role="tab" aria-selected="false" class="ui-switch__option" data-role="view-schedule"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-calendar"></use></svg>График</button>
         </div>
 
-        <dl class="ui-chips" data-role="list-chips">
-            <div class="ui-chip"><dd class="ui-chip__value" data-role="stat-total">0</dd><dt class="ui-chip__label">Всего</dt></div>
-            <div class="ui-chip ui-chip--ok"><dd class="ui-chip__value" data-role="stat-active">0</dd><dt class="ui-chip__label">Активны</dt></div>
-            <div class="ui-chip ui-chip--muted"><dd class="ui-chip__value" data-role="stat-inactive">0</dd><dt class="ui-chip__label">Неактивны</dt></div>
-        </dl>
-
-        <!-- Счётчики графика: по колонке сегодняшнего дня и по ВИДИМЫМ строкам.
-             В месяце без «сегодня» показывают «—», а не нули: ноль — это
-             утверждение «никто не в смене», а тут просто другой месяц. -->
-        <dl class="ui-chips" data-role="sched-chips" hidden>
-            <div class="ui-chip ui-chip--ok"><dd class="ui-chip__value" data-role="chip-shift">0</dd><dt class="ui-chip__label">Сегодня в смене</dt></div>
-            <div class="ui-chip"><dd class="ui-chip__value" data-role="chip-off">0</dd><dt class="ui-chip__label">Выходной</dt></div>
-            <div class="ui-chip ui-chip--warn"><dd class="ui-chip__value" data-role="chip-vac">0</dd><dt class="ui-chip__label">Отпуск</dt></div>
-            <div class="ui-chip ui-chip--bad"><dd class="ui-chip__value" data-role="chip-sick">0</dd><dt class="ui-chip__label">Больничный</dt></div>
-        </dl>
-
-        <!-- Сотрудников заводят в «Списке» — в графике эта кнопка ведёт не туда,
-             куда человек в этот момент смотрит. -->
-        <div data-role="add-wrap">
-            <button type="button" class="ui-btn" data-role="add-employee"><i class="fas fa-user-plus" aria-hidden="true"></i>Добавить сотрудника</button>
-        </div>
+        <span class="ui-page-head__acts">
+            <!-- «Отделы» и «Колонки» — ПОДПИСАННЫЕ кнопки, а не голые иконки:
+                 иконка 40×40 без подписи не говорит, что за ней (уточнение П2). -->
+            <button type="button" class="ui-btn ui-btn--ghost" data-role="departments-btn" title="Управление отделами"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-requisites"></use></svg>Отделы</button>
+            <span class="emp-filter-wrap">
+                <button type="button" class="ui-btn ui-btn--ghost" data-role="filter-toggle"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-filter"></use></svg>Фильтры</button>
+                <span class="emp-filter-badge" data-role="filter-badge" hidden>0</span>
+            </span>
+            <button type="button" class="ui-btn ui-btn--ghost" data-role="columns-btn" title="Настроить видимые колонки"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-cols"></use></svg>Колонки</button>
+            <!-- Сотрудников заводят в «Списке» — в графике эта кнопка ведёт не туда,
+                 куда человек в этот момент смотрит. -->
+            <span data-role="add-wrap">
+                <button type="button" class="ui-btn" data-role="add-employee"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-user-plus"></use></svg>Добавить сотрудника</button>
+            </span>
+        </span>
     </div>
+
+    <dl class="ui-chips ui-page-chips" data-role="list-chips">
+        <div class="ui-chip"><dd class="ui-chip__value" data-role="stat-total">0</dd><dt class="ui-chip__label">Всего</dt></div>
+        <div class="ui-chip ui-chip--ok"><dd class="ui-chip__value" data-role="stat-active">0</dd><dt class="ui-chip__label">Активны</dt></div>
+        <div class="ui-chip ui-chip--muted"><dd class="ui-chip__value" data-role="stat-inactive">0</dd><dt class="ui-chip__label">Неактивны</dt></div>
+    </dl>
+
+    <!-- Счётчики графика: по колонке сегодняшнего дня и по ВИДИМЫМ строкам.
+         В месяце без «сегодня» показывают «—», а не нули: ноль — это
+         утверждение «никто не в смене», а тут просто другой месяц. -->
+    <dl class="ui-chips ui-page-chips" data-role="sched-chips" hidden>
+        <div class="ui-chip ui-chip--ok"><dd class="ui-chip__value" data-role="chip-shift">0</dd><dt class="ui-chip__label">Сегодня в смене</dt></div>
+        <div class="ui-chip"><dd class="ui-chip__value" data-role="chip-off">0</dd><dt class="ui-chip__label">Выходной</dt></div>
+        <div class="ui-chip ui-chip--warn"><dd class="ui-chip__value" data-role="chip-vac">0</dd><dt class="ui-chip__label">Отпуск</dt></div>
+        <div class="ui-chip ui-chip--bad"><dd class="ui-chip__value" data-role="chip-sick">0</dd><dt class="ui-chip__label">Больничный</dt></div>
+    </dl>
 
     <!-- ================= РЕЖИМ «СПИСОК» ================= -->
     <section data-role="list-section">
-        <div class="toolbar">
-            <div class="search-wrap">
-                <i class="fas fa-magnifying-glass" aria-hidden="true"></i>
-                <input type="text" data-role="search" placeholder="Поиск по имени, телефону, email…" aria-label="Поиск сотрудника">
+        <div class="ui-toolbar">
+            <div class="emp-search">
+                <svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-search"></use></svg>
+                <input type="text" class="ui-field__control" data-role="search" placeholder="Поиск по имени, телефону, email…" aria-label="Поиск сотрудника">
             </div>
-            <div class="filter-btn-wrap">
-                <button type="button" class="ui-btn ui-btn--ghost" data-role="filter-toggle"><i class="fas fa-sliders" aria-hidden="true"></i>Фильтры</button>
-                <span class="filter-badge" data-role="filter-badge" hidden>0</span>
-            </div>
-            <button type="button" class="ui-btn ui-btn--ghost ui-btn--icon" data-role="columns-btn" aria-label="Настроить видимые колонки" title="Настроить видимые колонки"><i class="fas fa-table-columns" aria-hidden="true"></i></button>
-            <button type="button" class="ui-btn ui-btn--ghost ui-btn--icon" data-role="departments-btn" aria-label="Управление отделами" title="Управление отделами"><i class="fas fa-building" aria-hidden="true"></i></button>
         </div>
 
         <div class="ui-table-wrap" data-role="table-wrap">
-            <table class="ui-table ui-table--wide">
+            <table class="ui-table ui-table--wide ui-table--freeze-acts">
                 <thead>
                     <tr>
                         <th class="ui-table__sel"><input type="checkbox" data-role="select-all" aria-label="Выделить всех"></th>
@@ -115,28 +118,28 @@
                 <option value="inactive">Перевести в неактивные</option>
                 <option value="delete">Удалить</option>
             </select>
-            <button type="button" class="ui-btn ui-btn--sm" data-role="mass-apply">Применить</button>
-            <button type="button" class="ui-btn ui-btn--ghost ui-btn--icon ui-btn--sm" data-role="mass-clear" aria-label="Сбросить выделение" title="Сбросить выделение"><i class="fas fa-xmark" aria-hidden="true"></i></button>
+            <button type="button" class="ui-btn" data-role="mass-apply">Применить</button>
+            <button type="button" class="ui-btn ui-btn--ghost ui-btn--icon ui-btn--row" data-role="mass-clear" aria-label="Сбросить выделение" title="Сбросить выделение"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-close"></use></svg></button>
         </div>
     </section>
 
     <!-- ================= РЕЖИМ «ГРАФИК» ================= -->
     <section data-role="schedule-section" hidden>
-        <div class="toolbar sched-toolbar">
+        <div class="ui-toolbar sched-toolbar">
             <div class="month-nav">
                 <div class="month-pill">
-                    <button type="button" data-role="sched-prev" aria-label="Предыдущий месяц"><i class="fas fa-chevron-left" aria-hidden="true"></i></button>
+                    <button type="button" data-role="sched-prev" aria-label="Предыдущий месяц"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-left"></use></svg></button>
                     <span class="month-label" data-role="sched-month">—</span>
-                    <button type="button" data-role="sched-next" aria-label="Следующий месяц"><i class="fas fa-chevron-right" aria-hidden="true"></i></button>
+                    <button type="button" data-role="sched-next" aria-label="Следующий месяц"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-right"></use></svg></button>
                 </div>
-                <button type="button" class="ui-btn ui-btn--ghost ui-btn--sm" data-role="sched-today">Сегодня</button>
+                <button type="button" class="ui-btn ui-btn--ghost" data-role="sched-today">Сегодня</button>
             </div>
-            <div class="search-wrap">
-                <i class="fas fa-magnifying-glass" aria-hidden="true"></i>
-                <input type="text" data-role="sched-search" placeholder="Поиск по сотруднику…" aria-label="Поиск в графике">
+            <div class="emp-search">
+                <svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-search"></use></svg>
+                <input type="text" class="ui-field__control" data-role="sched-search" placeholder="Поиск по сотруднику…" aria-label="Поиск в графике">
             </div>
             <select class="ui-field__control sched-dept" data-role="sched-dept" aria-label="Отдел"></select>
-            <button type="button" class="ui-btn" data-role="sched-fill"><i class="fas fa-calendar-plus" aria-hidden="true"></i>Добавить график</button>
+            <button type="button" class="ui-btn" data-role="sched-fill"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-calendar-plus"></use></svg>Добавить график</button>
         </div>
 
         <div class="sched-legend" aria-label="Обозначения">
@@ -150,7 +153,7 @@
         <!-- Пустой месяц: плашка появляется, но сетка всё равно рисуется —
              экран без таблицы читался бы как поломка, а кликать было бы некуда. -->
         <div class="sched-empty-note" data-role="sched-empty-note" hidden>
-            <i class="fas fa-circle-info" aria-hidden="true"></i>
+            <svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-info"></use></svg>
             <span>
                 <b data-role="sched-empty-title"></b>
                 Нажмите «Добавить график», чтобы проставить месяц целиком по одному сотруднику, или заполните дни по одному — кликом в сетке.
@@ -174,7 +177,7 @@
                     <h2 class="ui-modal__title" data-role="employee-modal-title">Новый сотрудник</h2>
                     <p class="modal-sub" data-role="step-indicator">Шаг 1 из 2</p>
                 </div>
-                <button type="button" class="ui-modal__close" data-role="employee-close" aria-label="Закрыть"><i class="fas fa-xmark" aria-hidden="true"></i></button>
+                <button type="button" class="ui-modal__close" data-role="employee-close" aria-label="Закрыть"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-close"></use></svg></button>
             </div>
             <form data-role="employee-form">
                 <div class="ui-modal__body">
@@ -187,8 +190,8 @@
                             <div class="ui-field"><label class="ui-field__label" for="empMiddleName">Отчество</label><input class="ui-field__control" type="text" id="empMiddleName" placeholder="Иванович"></div>
                             <div class="ui-field"><label class="ui-field__label ui-field__label--required" for="empEmail">Email</label><input class="ui-field__control" type="email" id="empEmail" placeholder="ivan@company.ru"></div>
                             <div class="ui-field"><label class="ui-field__label ui-field__label--required" for="empPhone">Телефон</label><input class="ui-field__control" type="tel" id="empPhone" placeholder="+7 900 123-45-67"></div>
-                            <div class="ui-field"><label class="ui-field__label" for="empWhatsapp"><i class="fab fa-whatsapp msg-wa" aria-hidden="true"></i> WhatsApp</label><input class="ui-field__control" type="tel" id="empWhatsapp" placeholder="+7 900 111-22-33"></div>
-                            <div class="ui-field"><label class="ui-field__label" for="empTelegram"><i class="fab fa-telegram-plane msg-tg" aria-hidden="true"></i> Telegram</label><input class="ui-field__control" type="text" id="empTelegram" placeholder="@username или номер"></div>
+                            <div class="ui-field"><label class="ui-field__label" for="empWhatsapp"> WhatsApp</label><input class="ui-field__control" type="tel" id="empWhatsapp" placeholder="+7 900 111-22-33"></div>
+                            <div class="ui-field"><label class="ui-field__label" for="empTelegram"> Telegram</label><input class="ui-field__control" type="text" id="empTelegram" placeholder="@username или номер"></div>
                             <div class="ui-field"><label class="ui-field__label" for="empPosition">Должность</label><input class="ui-field__control" type="text" id="empPosition" placeholder="Оператор"></div>
                             <div class="ui-field"><label class="ui-field__label" for="empDepartment">Отдел</label><input class="ui-field__control" type="text" id="empDepartment" placeholder="Отдел продаж"></div>
                             <div class="ui-field"><label class="ui-field__label" for="empManager">Руководитель</label><select class="ui-field__control" id="empManager"><option value="">Без руководителя</option></select></div>
@@ -216,7 +219,7 @@
                                 <label class="ui-field__label" for="empPassword">Пароль</label>
                                 <div class="password-row">
                                     <input class="ui-field__control" type="text" id="empPassword" placeholder="Сгенерируйте пароль" readonly>
-                                    <button type="button" class="ui-btn ui-btn--secondary" data-role="generate-password"><i class="fas fa-dice" aria-hidden="true"></i>Сгенерировать</button>
+                                    <button type="button" class="ui-btn ui-btn--secondary" data-role="generate-password"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-shuffle"></use></svg>Сгенерировать</button>
                                 </div>
                             </div>
                         </div>
@@ -249,50 +252,50 @@
                                         <label class="doc-label" for="empPassportFront">Паспорт (лицевая сторона)</label>
                                         <div class="file-upload-area">
                                             <input type="file" id="empPassportFront" class="hidden-file-input" accept="image/*,.pdf" data-doc="passportFront">
-                                            <i class="fas fa-file doc-file-icon" aria-hidden="true"></i>
-                                            <button type="button" class="ui-btn ui-btn--secondary ui-btn--sm file-trigger">Выбрать файл</button>
+                                            <svg class="ui-ic ui-ic--sm doc-file-icon" aria-hidden="true"><use href="#ui-ic-doc"></use></svg>
+                                            <button type="button" class="ui-btn ui-btn--secondary file-trigger">Выбрать файл</button>
                                             <span class="file-name"></span>
-                                            <span class="file-status-icon" hidden><i class="fas fa-circle-check" aria-hidden="true"></i></span>
+                                            <span class="file-status-icon" hidden><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-check-circle"></use></svg></span>
                                         </div>
                                     </div>
                                     <div class="file-upload-wrapper">
                                         <label class="doc-label" for="empPassportBack">Паспорт (оборотная сторона)</label>
                                         <div class="file-upload-area">
                                             <input type="file" id="empPassportBack" class="hidden-file-input" accept="image/*,.pdf" data-doc="passportBack">
-                                            <i class="fas fa-file doc-file-icon" aria-hidden="true"></i>
-                                            <button type="button" class="ui-btn ui-btn--secondary ui-btn--sm file-trigger">Выбрать файл</button>
+                                            <svg class="ui-ic ui-ic--sm doc-file-icon" aria-hidden="true"><use href="#ui-ic-doc"></use></svg>
+                                            <button type="button" class="ui-btn ui-btn--secondary file-trigger">Выбрать файл</button>
                                             <span class="file-name"></span>
-                                            <span class="file-status-icon" hidden><i class="fas fa-circle-check" aria-hidden="true"></i></span>
+                                            <span class="file-status-icon" hidden><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-check-circle"></use></svg></span>
                                         </div>
                                     </div>
                                     <div class="file-upload-wrapper">
                                         <label class="doc-label" for="empPatent">Патент/Самозанятость</label>
                                         <div class="file-upload-area">
                                             <input type="file" id="empPatent" class="hidden-file-input" accept="image/*,.pdf" data-doc="patent">
-                                            <i class="fas fa-file doc-file-icon" aria-hidden="true"></i>
-                                            <button type="button" class="ui-btn ui-btn--secondary ui-btn--sm file-trigger">Выбрать файл</button>
+                                            <svg class="ui-ic ui-ic--sm doc-file-icon" aria-hidden="true"><use href="#ui-ic-doc"></use></svg>
+                                            <button type="button" class="ui-btn ui-btn--secondary file-trigger">Выбрать файл</button>
                                             <span class="file-name"></span>
-                                            <span class="file-status-icon" hidden><i class="fas fa-circle-check" aria-hidden="true"></i></span>
+                                            <span class="file-status-icon" hidden><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-check-circle"></use></svg></span>
                                         </div>
                                     </div>
                                     <div class="file-upload-wrapper">
                                         <label class="doc-label" for="empContract">Договор</label>
                                         <div class="file-upload-area">
                                             <input type="file" id="empContract" class="hidden-file-input" accept="image/*,.pdf" data-doc="contract">
-                                            <i class="fas fa-file doc-file-icon" aria-hidden="true"></i>
-                                            <button type="button" class="ui-btn ui-btn--secondary ui-btn--sm file-trigger">Выбрать файл</button>
+                                            <svg class="ui-ic ui-ic--sm doc-file-icon" aria-hidden="true"><use href="#ui-ic-doc"></use></svg>
+                                            <button type="button" class="ui-btn ui-btn--secondary file-trigger">Выбрать файл</button>
                                             <span class="file-name"></span>
-                                            <span class="file-status-icon" hidden><i class="fas fa-circle-check" aria-hidden="true"></i></span>
+                                            <span class="file-status-icon" hidden><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-check-circle"></use></svg></span>
                                         </div>
                                     </div>
                                     <div class="file-upload-wrapper">
                                         <label class="doc-label" for="empAdditionalAgreement">Доп. соглашение</label>
                                         <div class="file-upload-area">
                                             <input type="file" id="empAdditionalAgreement" class="hidden-file-input" accept="image/*,.pdf" data-doc="additionalAgreement">
-                                            <i class="fas fa-file doc-file-icon" aria-hidden="true"></i>
-                                            <button type="button" class="ui-btn ui-btn--secondary ui-btn--sm file-trigger">Выбрать файл</button>
+                                            <svg class="ui-ic ui-ic--sm doc-file-icon" aria-hidden="true"><use href="#ui-ic-doc"></use></svg>
+                                            <button type="button" class="ui-btn ui-btn--secondary file-trigger">Выбрать файл</button>
                                             <span class="file-name"></span>
-                                            <span class="file-status-icon" hidden><i class="fas fa-circle-check" aria-hidden="true"></i></span>
+                                            <span class="file-status-icon" hidden><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-check-circle"></use></svg></span>
                                         </div>
                                     </div>
                                 </div>
@@ -303,8 +306,8 @@
 
                 <div class="ui-modal__actions">
                     <button type="button" class="ui-btn ui-btn--secondary" data-role="employee-cancel">Отмена</button>
-                    <button type="button" class="ui-btn ui-btn--secondary" data-role="prev-step" hidden><i class="fas fa-arrow-left" aria-hidden="true"></i>Назад</button>
-                    <button type="button" class="ui-btn" data-role="next-step">Далее<i class="fas fa-arrow-right" aria-hidden="true"></i></button>
+                    <button type="button" class="ui-btn ui-btn--secondary" data-role="prev-step" hidden><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-arrow-left"></use></svg>Назад</button>
+                    <button type="button" class="ui-btn" data-role="next-step">Далее<svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-arrow-right"></use></svg></button>
                     <button type="submit" class="ui-btn" data-role="employee-save" hidden>Сохранить</button>
                 </div>
             </form>
@@ -316,7 +319,7 @@
         <div class="ui-modal__box">
             <div class="ui-modal__head">
                 <h2 class="ui-modal__title">Фильтры</h2>
-                <button type="button" class="ui-modal__close" data-role="filter-close" aria-label="Закрыть"><i class="fas fa-xmark" aria-hidden="true"></i></button>
+                <button type="button" class="ui-modal__close" data-role="filter-close" aria-label="Закрыть"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-close"></use></svg></button>
             </div>
             <div class="ui-modal__body">
                 <div class="ui-form-grid">
@@ -355,7 +358,7 @@
                     <h2 class="ui-modal__title">Подтвердите личность</h2>
                     <p class="modal-sub">Настройки колонок — свои у каждого сотрудника</p>
                 </div>
-                <button type="button" class="ui-modal__close" data-role="identity-close" aria-label="Закрыть"><i class="fas fa-xmark" aria-hidden="true"></i></button>
+                <button type="button" class="ui-modal__close" data-role="identity-close" aria-label="Закрыть"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-close"></use></svg></button>
             </div>
             <form data-role="identity-form">
                 <div class="ui-modal__body">
@@ -377,16 +380,16 @@
         <div class="ui-modal__box">
             <div class="ui-modal__head">
                 <h2 class="ui-modal__title">Видимые колонки таблицы</h2>
-                <button type="button" class="ui-modal__close" data-role="columns-close" aria-label="Закрыть"><i class="fas fa-xmark" aria-hidden="true"></i></button>
+                <button type="button" class="ui-modal__close" data-role="columns-close" aria-label="Закрыть"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-close"></use></svg></button>
             </div>
             <div class="ui-modal__body">
                 <div class="column-checkbox-list" data-role="columns-list"></div>
             </div>
             <div class="ui-modal__actions ui-modal__actions--spread">
-                <button type="button" class="ui-btn ui-btn--secondary ui-btn--sm" data-role="columns-reset">Сбросить</button>
+                <button type="button" class="ui-btn ui-btn--secondary" data-role="columns-reset">Сбросить</button>
                 <div class="actions-right">
-                    <button type="button" class="ui-btn ui-btn--secondary ui-btn--sm" data-role="columns-cancel">Отмена</button>
-                    <button type="button" class="ui-btn ui-btn--sm" data-role="columns-apply">Применить</button>
+                    <button type="button" class="ui-btn ui-btn--secondary" data-role="columns-cancel">Отмена</button>
+                    <button type="button" class="ui-btn" data-role="columns-apply">Применить</button>
                 </div>
             </div>
         </div>
@@ -397,7 +400,7 @@
         <div class="ui-modal__box">
             <div class="ui-modal__head">
                 <h2 class="ui-modal__title">Управление отделами</h2>
-                <button type="button" class="ui-modal__close" data-role="departments-close" aria-label="Закрыть"><i class="fas fa-xmark" aria-hidden="true"></i></button>
+                <button type="button" class="ui-modal__close" data-role="departments-close" aria-label="Закрыть"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-close"></use></svg></button>
             </div>
             <div class="ui-modal__body">
                 <div class="departments-list" data-role="departments-list"></div>
@@ -431,8 +434,8 @@
             </div>
             <div class="pop-note">Смена через полночь относится к дню, в котором началась.</div>
             <div class="ui-popover__foot ui-popover__foot--end">
-                <button type="button" class="ui-btn ui-btn--ghost ui-btn--sm" data-role="extra-back">Назад</button>
-                <button type="button" class="ui-btn ui-btn--sm" data-role="extra-apply">Поставить</button>
+                <button type="button" class="ui-btn ui-btn--ghost" data-role="extra-back">Назад</button>
+                <button type="button" class="ui-btn" data-role="extra-apply">Поставить</button>
             </div>
         </div>
     </div>
@@ -442,7 +445,7 @@
         <div class="ui-modal__box">
             <div class="ui-modal__head">
                 <h2 class="ui-modal__title">Добавить график</h2>
-                <button type="button" class="ui-modal__close" data-role="fill-close" aria-label="Закрыть"><i class="fas fa-xmark" aria-hidden="true"></i></button>
+                <button type="button" class="ui-modal__close" data-role="fill-close" aria-label="Закрыть"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-close"></use></svg></button>
             </div>
             <div class="ui-modal__body">
                 <div class="ui-field">
@@ -461,7 +464,7 @@
                     <span class="ui-field__label">Выходные</span>
                     <button type="button" class="wk-field" data-role="wk-field" aria-expanded="false">
                         <span class="wk-sum none" data-role="wk-summary">Не отмечены — смены встанут на все дни подряд</span>
-                        <i class="fas fa-chevron-down" aria-hidden="true"></i>
+                        <svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-chevron-down"></use></svg>
                     </button>
                     <div class="wk-panel" data-role="wk-panel" hidden>
                         <div class="wk-head">

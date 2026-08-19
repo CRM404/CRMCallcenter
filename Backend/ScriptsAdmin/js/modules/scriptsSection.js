@@ -129,7 +129,7 @@ function syncOpenStatus(state) {
     if (!state.selectedScript) return;
     const chip = $(state, 'open-status');
     const active = state.selectedScript.status === 'active';
-    chip.className = `ui-pill ui-pill--dot ${active ? 'ui-pill--ok' : 'ui-pill--mute'}`;
+    chip.className = `ui-pill ${active ? 'ui-pill--ok' : 'ui-pill--mute'}`;
     chip.textContent = active ? 'Активен' : 'Черновик';
 }
 

@@ -17,8 +17,8 @@
 }
 
 .ui-field__label {
-    margin-bottom: var(--ui-space-1);
-    font-size: var(--ui-text-md);
+    margin-bottom: 5px;
+    font-size: var(--ui-text-sm);
     font-weight: var(--ui-weight-bold);
     color: var(--ui-color-ink-soft);
 }
@@ -34,7 +34,7 @@
     box-sizing: border-box;
     width: 100%;
     min-height: var(--ui-control-h);
-    padding: var(--ui-space-3) var(--ui-space-4);
+    padding: 0 11px;
     border: 1px solid var(--ui-color-line-field);
     border-radius: var(--ui-radius-sm);
     background: var(--ui-color-surface);
@@ -48,15 +48,22 @@
 
 .ui-field__control::placeholder { color: var(--ui-color-ink-faint); }
 
+/* Фокус — ЧЁТКИЙ КОНТУР, а не свечение (Н4). Мягкое голубое свечение на
+   светлом фоне теряется, и с двух метров непонятно, где стоит курсор. Рамка
+   поля при этом становится прозрачной: иначе контур и рамка дают две линии
+   разного цвета вплотную. */
 .ui-field__control:focus {
-    outline: none;
-    border-color: var(--ui-color-accent-soft);
-    box-shadow: 0 0 0 3px var(--ui-color-focus-ring);
+    outline: 2px solid var(--ui-color-accent);
+    outline-offset: 1px;
+    border-color: transparent;
+    box-shadow: none;
 }
 
 /* ----- Тип: многострочное ------------------------------------------------ */
 textarea.ui-field__control {
-    min-height: 96px;
+    min-height: 68px;
+    height: auto;
+    padding: 9px 11px;
     resize: vertical;
 }
 
@@ -87,7 +94,7 @@ input[type="time"].ui-field__control { min-width: 110px; }
 /* ----- Состояние: с подсказкой -------------------------------------------- */
 .ui-field__hint {
     margin-top: var(--ui-space-1);
-    font-size: var(--ui-text-sm);
+    font-size: var(--ui-text-xs);
     color: var(--ui-color-ink-faint);
     line-height: var(--ui-line-base);
 }
@@ -98,17 +105,17 @@ input[type="time"].ui-field__control { min-width: 110px; }
 .ui-field__error {
     display: none;
     margin-top: var(--ui-space-1);
-    font-size: var(--ui-text-sm);
+    font-size: var(--ui-text-xs);
     color: var(--ui-color-danger);
     line-height: var(--ui-line-base);
 }
 
 .ui-field--error .ui-field__control {
     border-color: var(--ui-color-danger);
-    background: var(--ui-color-off-bg);
+    background: var(--ui-color-danger-wash);
 }
 .ui-field--error .ui-field__control:focus {
-    box-shadow: 0 0 0 3px rgba(231, 76, 60, .2);
+    outline-color: var(--ui-color-danger);
 }
 .ui-field--error .ui-field__error { display: block; }
 /* Подсказка уступает место ошибке — два текста под полем читаются как один. */
@@ -117,7 +124,7 @@ input[type="time"].ui-field__control { min-width: 110px; }
 /* ----- Состояние: неактивное ---------------------------------------------- */
 .ui-field__control:disabled,
 .ui-field__control[readonly] {
-    background: var(--ui-color-surface-sunken);
+    background: rgba(96, 112, 148, .07);
     color: var(--ui-color-ink-faint);
     cursor: not-allowed;
 }

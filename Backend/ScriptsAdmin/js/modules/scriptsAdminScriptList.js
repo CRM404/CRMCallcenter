@@ -47,11 +47,11 @@ function fillSummary(script) {
 export function renderScriptRows(scripts, selectedId) {
     return scripts.map((script) => {
         const chip = script.status === 'active'
-            ? '<span class="ui-pill ui-pill--ok ui-pill--dot">Активен</span>'
-            : '<span class="ui-pill ui-pill--mute ui-pill--dot">Черновик</span>';
+            ? '<span class="ui-pill ui-pill--ok">Активен</span>'
+            : '<span class="ui-pill ui-pill--mute">Черновик</span>';
         const statusToggleBtn = script.status === 'draft'
-            ? `<button type="button" class="ui-btn ui-btn--ghost ui-btn--sm" data-action="activate" data-id="${script.id}">Активировать</button>`
-            : `<button type="button" class="ui-btn ui-btn--ghost ui-btn--sm" data-action="deactivate" data-id="${script.id}">В черновик</button>`;
+            ? `<button type="button" class="ui-btn ui-btn--ghost" data-action="activate" data-id="${script.id}">Активировать</button>`
+            : `<button type="button" class="ui-btn ui-btn--ghost" data-action="deactivate" data-id="${script.id}">В черновик</button>`;
 
         return `
             <tr class="${script.id === selectedId ? 'ui-table__row--selected' : ''}" data-row-id="${script.id}">
@@ -61,9 +61,9 @@ export function renderScriptRows(scripts, selectedId) {
                 </td>
                 <td>${chip}</td>
                 <td class="ui-table__acts">
-                    <button type="button" class="ui-btn ui-btn--ghost ui-btn--sm" data-action="open" data-id="${script.id}">Открыть</button>
+                    <button type="button" class="ui-btn ui-btn--ghost" data-action="open" data-id="${script.id}">Открыть</button>
                     ${statusToggleBtn}
-                    <button type="button" class="ui-btn ui-btn--icon ui-btn--danger ui-btn--sm" data-action="delete" data-id="${script.id}" title="Удалить" aria-label="Удалить"><i class="fas fa-trash" aria-hidden="true"></i></button>
+                    <button type="button" class="ui-btn ui-btn--icon ui-btn--danger ui-btn--row" data-action="delete" data-id="${script.id}" title="Удалить" aria-label="Удалить"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-trash"></use></svg></button>
                 </td>
             </tr>
         `;

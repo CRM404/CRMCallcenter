@@ -27,8 +27,8 @@
     flex-direction: column;
     align-items: center;
     min-width: 82px;
-    padding: var(--ui-space-3) var(--ui-space-4);
-    background: var(--ui-color-surface-sunken);
+    padding: var(--ui-space-3) 13px;
+    background: rgba(255, 255, 255, .45);
     border: 1px solid var(--ui-color-line);
     border-radius: var(--ui-radius-md);
 }
@@ -54,8 +54,8 @@
     display: inline-flex;
     align-items: center;
     gap: 5px;
-    padding: 3px var(--ui-space-4);
-    border-radius: var(--ui-radius-pill);
+    padding: 3px 10px;
+    border-radius: var(--ui-radius-lg);
     font-size: 11px;
     font-weight: var(--ui-weight-bold);
     white-space: nowrap;
@@ -63,17 +63,12 @@
 .ui-pill--ok { background: var(--ui-color-ok-bg); color: var(--ui-color-ok-ink); }
 .ui-pill--warn { background: var(--ui-color-warn-bg); color: var(--ui-color-warn-ink); }
 .ui-pill--bad { background: var(--ui-color-off-bg); color: var(--ui-color-off-ink); }
-.ui-pill--mute { background: var(--ui-color-neutral-bg); color: var(--ui-color-neutral-ink); }
-/* Точка перед текстом — как в .status-chip и .src-badge сегодня. Это не новый
-   вид, а вариант той же пилюли: раздел включает её классом, а не правилом. */
-.ui-pill--dot::before {
-    content: '';
-    width: 6px;
-    height: 6px;
-    flex-shrink: 0;
-    border-radius: 50%;
-    background: currentColor;
-}
+.ui-pill--mute { background: rgba(96, 112, 148, .13); color: var(--ui-color-ink-soft); }
+/* Вид --dot (кружок-маркер перед текстом) УДАЛЁН вместе с применениями в
+   разделах. В макете точки нет ни у одной пилюли, а стояла она у трёх
+   разделов из шести — то есть одинаковые по смыслу статусы выглядели
+   по-разному (С5, Н7). Неиспользуемый вид в слое не оставляем намеренно:
+   через месяц его кто-нибудь применит и разнобой вернётся. */
 
 /* ----- Метка: «5/2», короткое значение без статуса ----- */
 .ui-tag {
@@ -103,7 +98,7 @@
     gap: var(--ui-space-2);
     padding: var(--ui-space-1) var(--ui-space-2) var(--ui-space-1) var(--ui-space-4);
     border: 1px solid var(--ui-color-accent-line);
-    border-radius: var(--ui-radius-pill);
+    border-radius: var(--ui-radius-lg);
     background: var(--ui-color-wash-active);
     font-size: var(--ui-text-xs);
     color: var(--ui-color-ink-soft);

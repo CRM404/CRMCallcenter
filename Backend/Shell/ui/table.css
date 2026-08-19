@@ -8,7 +8,7 @@
    больше не объявляет.
 
    Кнопка действия в строке — это не «опасная кнопка», а кнопка-иконка из
-   ui/button.css: .ui-btn.ui-btn--icon.ui-btn--sm. Здесь только размещение.
+   ui/button.css: .ui-btn.ui-btn--icon.ui-btn--row. Здесь только размещение.
 
    Подсветка строк — токенами --ui-color-wash-hover / --ui-color-wash-active
    (запрошены в dialog.md Т1, добавлены куратором в tokens.css 475329d).
@@ -19,7 +19,7 @@
     overflow-x: auto;
     border: 1px solid var(--ui-color-line);
     border-radius: var(--ui-radius-md);
-    background: var(--ui-color-surface);
+    background: rgba(255, 255, 255, .6);
 }
 /* Вертикальная прокрутка с закреплённой шапкой включается по месту: без
    ограничения высоты sticky-шапке прилипать не к чему. */
@@ -32,7 +32,7 @@
     border-collapse: separate;
     border-spacing: 0;
     font-family: var(--ui-font-ui);
-    font-size: var(--ui-text-xs);
+    font-size: var(--ui-text-sm);
     font-variant-numeric: tabular-nums;
 }
 /* Широкая таблица (график, лиды) не сжимает колонки, а прокручивается. */
@@ -43,20 +43,24 @@
     top: 0;
     z-index: 3;
     text-align: left;
-    padding: var(--ui-space-3) var(--ui-space-4);
-    /* Фон непрозрачный: под закреплённой шапкой проезжают строки, и сквозь
-       полупрозрачный они читаются призраком. */
-    background: var(--ui-color-surface-sunken);
+    padding: 9px 11px;
+    /* Подложка шапки — полупрозрачная, как в макете. Непрозрачной она обязана
+       быть только там, где под шапкой ПРОКРУЧИВАЕТСЯ содержимое: иначе строки
+       читаются сквозь неё призраком. Такой случай один — .ui-table-wrap--tall,
+       для него правило ниже. */
+    background: var(--ui-color-surface-head);
     border-bottom: 1px solid var(--ui-color-line-strong);
-    font-size: 10.5px;
+    font-size: var(--ui-text-2xs);
     font-weight: var(--ui-weight-bold);
     letter-spacing: .04em;
     text-transform: uppercase;
     color: var(--ui-color-ink-faint);
     white-space: nowrap;
 }
+.ui-table-wrap--tall .ui-table th { background: var(--ui-color-surface-sunken); }
+
 .ui-table td {
-    padding: var(--ui-space-3) var(--ui-space-4);
+    padding: 9px 11px;
     border-bottom: 1px solid var(--ui-color-line);
     color: var(--ui-color-ink);
     vertical-align: middle;
@@ -80,6 +84,43 @@
     white-space: nowrap;
     width: 1%;
 }
+/* ----- Колонка действий, закреплённая у правого края -----
+   Лечение блокера Б1: таблица «Сотрудников» — 1515 px в контейнере 1434 px,
+   и кнопки правки и удаления уезжали за правый край панели на всех трёх
+   ноутбучных ширинах. Резать колонки нельзя (часть заказана владельцем и
+   живёт в персональных настройках), поэтому колонка действий закрепляется:
+   таблица едет вбок под ней, действия остаются на месте.
+
+   Фон обязателен и обязан быть НЕПРОЗРАЧНЫМ — сквозь полупрозрачный при
+   прокрутке читается уезжающий текст (та же причина, что у --freeze-first).
+   Левая граница показывает, что колонка лежит поверх, а не приклеена к
+   последней колонке. */
+.ui-table--freeze-acts th.ui-table__acts,
+.ui-table--freeze-acts td.ui-table__acts {
+    position: sticky;
+    right: 0;
+    z-index: 2;
+    background: var(--ui-color-surface);
+    border-left: 1px solid var(--ui-color-line-strong);
+}
+.ui-table--freeze-acts thead th.ui-table__acts {
+    z-index: 4;
+    background: var(--ui-color-surface-head);
+}
+/* Подсветка строки не пропадает под закреплённой колонкой и не просвечивает:
+   цвет накладывается на непрозрачный фон, а не заменяет его. */
+.ui-table--freeze-acts tbody tr:hover td.ui-table__acts {
+    background:
+        linear-gradient(var(--ui-color-wash-hover), var(--ui-color-wash-hover)),
+        var(--ui-color-surface);
+}
+.ui-table--freeze-acts tbody tr.ui-table__row--selected td.ui-table__acts,
+.ui-table--freeze-acts tbody tr.ui-table__row--selected:hover td.ui-table__acts {
+    background:
+        linear-gradient(var(--ui-color-wash-active), var(--ui-color-wash-active)),
+        var(--ui-color-surface);
+}
+
 /* Действия по наведению — ОПЦИЯ, а не поведение по умолчанию. На «Сотрудниках»
    кнопки в строке видны всегда: так их сделали по прямому замечанию владельца
    (employees-light.css, «правка по фидбеку владельца»). Переезд раздела не
@@ -105,7 +146,16 @@
     height: 15px;
     accent-color: var(--ui-color-accent);
 }
-.ui-table tr.ui-table__row--selected td { background: var(--ui-color-wash-active); }
+/* Выделение СИЛЬНЕЕ наведения, и это правило написано так, чтобы выигрывать у
+   наведения по весу селектора. Раньше было `.ui-table tr.ui-table__row--selected td`
+   (вес 0-2-2) против `.ui-table tbody tr:hover td` (0-2-3): стоило подвести
+   курсор к выделенной строке, как выделение исчезало под цветом наведения —
+   и по таблице с отмеченными строками нельзя было понять, что отмечено (Н5).
+   Значения токенов при этом всегда были разные, дело было только в весе. */
+.ui-table tbody tr.ui-table__row--selected td,
+.ui-table tbody tr.ui-table__row--selected:hover td {
+    background: var(--ui-color-wash-active);
+}
 
 /* ----- Закреплённая первая колонка -----
    Фон обязателен и обязан быть непрозрачным: сквозь полупрозрачный при
@@ -153,7 +203,7 @@
     justify-content: space-between;
     gap: var(--ui-space-4);
     padding: var(--ui-space-4) 2px 0;
-    font-size: var(--ui-text-xs);
+    font-size: var(--ui-text-sm);
     color: var(--ui-color-ink-faint);
 }
 

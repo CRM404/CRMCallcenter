@@ -23,10 +23,10 @@
 
 <div class="m-wrap">
 
-    <div class="m-page-head">
-        <h2 class="m-page-title">Реквизиты организации</h2>
-        <span class="m-page-sub" data-role="org-name"></span>
-        <span class="m-page-acts" data-role="page-acts"></span>
+    <div class="ui-page-head">
+        <h2 class="ui-page-head__title">Реквизиты организации</h2>
+        <span class="ui-page-head__sub" data-role="org-name"></span>
+        <span class="ui-page-head__acts" data-role="page-acts"></span>
     </div>
 
     <div class="m-page-grid">
@@ -48,8 +48,8 @@
                 <div class="m-sec-head">
                     <h4>Банковские счета</h4>
                     <span class="m-sec-act">
-                        <button type="button" class="ui-btn ui-btn--ghost ui-btn--sm" data-role="account-add">
-                            <i class="fas fa-plus" aria-hidden="true"></i>Добавить счёт
+                        <button type="button" class="ui-btn ui-btn--ghost" data-role="account-add">
+                            <svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-plus"></use></svg>Добавить счёт
                         </button>
                     </span>
                 </div>
@@ -60,8 +60,8 @@
                 <div class="m-sec-head">
                     <h4>Налоговые записи</h4>
                     <span class="m-sec-act">
-                        <button type="button" class="ui-btn ui-btn--ghost ui-btn--sm" data-role="tax-add">
-                            <i class="fas fa-plus" aria-hidden="true"></i>Добавить налог
+                        <button type="button" class="ui-btn ui-btn--ghost" data-role="tax-add">
+                            <svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-plus"></use></svg>Добавить налог
                         </button>
                     </span>
                 </div>
@@ -72,8 +72,8 @@
                 <div class="m-sec-head">
                     <h4>Бланк письма</h4>
                     <span class="m-sec-act">
-                        <button type="button" class="ui-btn ui-btn--icon ui-btn--sm" data-role="letterhead-edit" title="Изменить">
-                            <i class="fas fa-pen" aria-hidden="true"></i>
+                        <button type="button" class="ui-btn ui-btn--icon ui-btn--row" data-role="letterhead-edit" title="Изменить">
+                            <svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-edit"></use></svg>
                         </button>
                     </span>
                 </div>
@@ -82,7 +82,7 @@
 
             <div class="m-aside-hint m-aside-hint--row" data-role="second-org" hidden>
                 <span>Организация одна. Появится второе юрлицо — здесь будет переключатель, а реквизиты станут своими у каждого.</span>
-                <button type="button" class="ui-btn ui-btn--ghost ui-btn--sm" data-role="org-add">Добавить</button>
+                <button type="button" class="ui-btn ui-btn--ghost" data-role="org-add">Добавить</button>
             </div>
         </div>
     </div>
@@ -99,7 +99,7 @@
         <div class="ui-modal__box">
             <div class="ui-modal__head">
                 <h2 class="ui-modal__title" data-role="account-title">Банковский счёт</h2>
-                <button type="button" class="ui-modal__close" data-role="account-close" aria-label="Закрыть"><i class="fas fa-xmark" aria-hidden="true"></i></button>
+                <button type="button" class="ui-modal__close" data-role="account-close" aria-label="Закрыть"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-close"></use></svg></button>
             </div>
             <form data-role="account-form">
                 <div class="ui-modal__body">
@@ -147,7 +147,7 @@
         <div class="ui-modal__box">
             <div class="ui-modal__head">
                 <h2 class="ui-modal__title" data-role="tax-title">Налог</h2>
-                <button type="button" class="ui-modal__close" data-role="tax-close" aria-label="Закрыть"><i class="fas fa-xmark" aria-hidden="true"></i></button>
+                <button type="button" class="ui-modal__close" data-role="tax-close" aria-label="Закрыть"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-close"></use></svg></button>
             </div>
             <form data-role="tax-form">
                 <div class="ui-modal__body">
@@ -186,7 +186,7 @@
                     <h2 class="ui-modal__title">Бланк письма</h2>
                     <p class="m-modal-sub">подставляется в документы</p>
                 </div>
-                <button type="button" class="ui-modal__close" data-role="letterhead-close" aria-label="Закрыть"><i class="fas fa-xmark" aria-hidden="true"></i></button>
+                <button type="button" class="ui-modal__close" data-role="letterhead-close" aria-label="Закрыть"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-close"></use></svg></button>
             </div>
             <form data-role="letterhead-form">
                 <div class="ui-modal__body">

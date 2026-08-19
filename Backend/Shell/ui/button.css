@@ -22,13 +22,16 @@
     justify-content: center;
     gap: var(--ui-space-3);
     box-sizing: border-box;
-    min-height: var(--ui-control-h);
-    padding: 10px 24px;
+    /* Базовый размер — кнопка шапки раздела и тулбара: в интерфейсе их
+       большинство. Кнопка подвала окна крупнее и берёт --lg (её ставит слой
+       окон, разделу об этом думать не нужно). */
+    min-height: var(--ui-btn-h);
+    padding: 7px 12px;
     border: none;
-    border-radius: var(--ui-radius-pill);
+    border-radius: var(--ui-radius-sm);
     overflow: hidden;
     font-family: var(--ui-font-ui);
-    font-size: var(--ui-text-lg);
+    font-size: var(--ui-text-sm);
     font-weight: var(--ui-weight-bold);
     line-height: var(--ui-line-tight);
     text-decoration: none;
@@ -78,30 +81,48 @@
 .ui-btn--danger::before { background-color: var(--ui-color-danger-deep); }
 
 /* ----- Вид: тихая --------------------------------------------------------
-   Без заливки, для второстепенных действий рядом с основным («Отмена»). */
+   Для второстепенных действий рядом с основным («Отмена»).
+
+   Фон у неё ЕСТЬ — светлое стекло, как в макете. Прозрачная тихая кнопка
+   (так было) на белой панели не читалась кнопкой вовсе и не отвечала на
+   наведение ничем, кроме цвета текста (Н6). */
 .ui-btn--ghost {
-    background-color: transparent;
+    background-color: rgba(255, 255, 255, .7);
     color: var(--ui-color-ink-soft);
     border: 1px solid var(--ui-color-line-strong);
 }
-.ui-btn--ghost::before { background-color: rgba(96, 112, 148, .12); }
+.ui-btn--ghost::before { background-color: #fff; }
 .ui-btn--ghost:hover { color: var(--ui-color-ink); }
 
 /* ----- Вид: только иконка ------------------------------------------------
    Квадратная, без текста. Высота совпадает с текстовой кнопкой рядом. */
 .ui-btn--icon {
-    width: var(--ui-control-h);
-    min-height: var(--ui-control-h);
+    width: var(--ui-btn-h);
+    min-height: var(--ui-btn-h);
     padding: 0;
     border-radius: var(--ui-radius-sm);
     background-color: transparent;
-    color: var(--ui-color-ink-soft);
+    border: none;
+    color: var(--ui-color-ink-faint);
 }
-.ui-btn--icon::before { background-color: rgba(96, 112, 148, .12); }
-.ui-btn--icon:hover { color: var(--ui-color-ink); }
+.ui-btn--icon::before { background-color: var(--ui-color-wash-strong); }
+.ui-btn--icon:hover { color: var(--ui-color-accent); }
 .ui-btn--icon .fa, .ui-btn--icon .fas, .ui-btn--icon .far, .ui-btn--icon i {
     font-size: var(--ui-icon-md);
 }
+
+/* ----- Вид: кнопка-иконка в строке таблицы -------------------------------
+   Мельче тулбарной и с меньшим радиусом — в макете это .icon-btn 28×28/6px.
+   Раньше эту роль играло сочетание --icon + --sm, а --sm заодно затыкали
+   разнобой размеров в шапках; теперь у роли своё имя, а --sm не существует. */
+.ui-btn--row {
+    width: var(--ui-btn-h-row);
+    min-height: var(--ui-btn-h-row);
+    padding: 0;
+    border-radius: var(--ui-radius-xs);
+}
+.ui-btn--row .fa, .ui-btn--row .fas, .ui-btn--row .far, .ui-btn--row i,
+.ui-btn--row .ui-ic { font-size: var(--ui-icon-sm); }
 
 /* Иконка опасного действия — красная. Без этого правила сочетание
    `ui-btn--icon ui-btn--danger` не давало красного НИ В ОДНОМ состоянии:
@@ -129,15 +150,14 @@
 .ui-btn--icon.ui-btn--danger::before { background-color: var(--ui-color-danger-wash); }
 .ui-btn--icon.ui-btn--danger:hover { color: var(--ui-color-danger-deep); }
 
-/* ----- Вид: мелкая -------------------------------------------------------- */
-.ui-btn--sm {
-    min-height: var(--ui-control-h-sm);
-    padding: 6px 16px;
-    font-size: var(--ui-text-sm);
-}
-.ui-btn--sm.ui-btn--icon { width: var(--ui-control-h-sm); padding: 0; }
-.ui-btn--sm .fa, .ui-btn--sm .fas, .ui-btn--sm .far, .ui-btn--sm i {
-    font-size: var(--ui-icon-sm);
+/* ----- Вид: крупная (подвал окна) -----------------------------------------
+   Единственное место, где кнопка крупнее тулбарной, — полоса действий окна.
+   Класс ставит слой окон (modal.css), раздел его не пишет: иначе размер снова
+   разъедется по разделам. */
+.ui-btn--lg {
+    min-height: var(--ui-btn-h-lg);
+    padding: 10px 16px;
+    font-size: var(--ui-text-lg);
 }
 
 /* ----- Состояние: неактивная ---------------------------------------------
@@ -146,7 +166,7 @@
    наплыв при наведении. */
 .ui-btn:disabled,
 .ui-btn[aria-disabled="true"] {
-    opacity: .45;
+    opacity: .42;
     cursor: not-allowed;
     transform: none;
     filter: grayscale(.35);

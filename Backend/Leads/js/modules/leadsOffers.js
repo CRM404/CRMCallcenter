@@ -121,13 +121,13 @@ export function createOfferTabPicker({
         const overLimit = maxPerLead !== null && lastTotal > maxPerLead;
         const addAllControl = overLimit
             ? `<span>${escapeHtml(TOO_MANY_OFFERS_HINT)}</span>`
-            : `<button type="button" class="ui-btn ui-btn--ghost ui-btn--sm" data-role="offer-add-all"${allAdded && lastTotal === lastResults.length ? ' disabled' : ''}>${addAllLabel}</button>`;
+            : `<button type="button" class="ui-btn ui-btn--ghost" data-role="offer-add-all"${allAdded && lastTotal === lastResults.length ? ' disabled' : ''}>${addAllLabel}</button>`;
 
         const rows = lastResults.map((o) => {
             const added = selected.has(o.id);
             const action = added
                 ? '<span class="added">✓ добавлен</span>'
-                : `<button type="button" class="ui-btn ui-btn--ghost ui-btn--sm" data-add="${o.id}">Добавить</button>`;
+                : `<button type="button" class="ui-btn ui-btn--ghost" data-add="${o.id}">Добавить</button>`;
             return `<div class="offer-result-row">
                 <div><div>${escapeHtml(o.name)}</div><div class="offer-result-sub">${escapeHtml(offerSubtitle(o))}</div></div>
                 ${action}

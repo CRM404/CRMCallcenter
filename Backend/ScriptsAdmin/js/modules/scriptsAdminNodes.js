@@ -332,15 +332,15 @@ function renderRichTextToolbar() {
     `).join('');
     return `
         <div class="scr-rte__toolbar">
-            <button type="button" class="ui-btn ui-btn--secondary ui-btn--sm" data-rte-cmd="bold" title="Жирный"><b>Ж</b></button>
-            <button type="button" class="ui-btn ui-btn--secondary ui-btn--sm" data-rte-cmd="italic" title="Курсив"><i>К</i></button>
-            <button type="button" class="ui-btn ui-btn--secondary ui-btn--sm" data-rte-cmd="insertUnorderedList" title="Список">☰ Список</button>
+            <button type="button" class="ui-btn ui-btn--secondary" data-rte-cmd="bold" title="Жирный"><b>Ж</b></button>
+            <button type="button" class="ui-btn ui-btn--secondary" data-rte-cmd="italic" title="Курсив"><i>К</i></button>
+            <button type="button" class="ui-btn ui-btn--secondary" data-rte-cmd="insertUnorderedList" title="Список">☰ Список</button>
             <select class="ui-field__control scr-rte__font" data-rte-font-select title="Шрифт" aria-label="Шрифт">
                 <option value="" disabled selected>Шрифт…</option>
                 ${fontOptions}
             </select>
-            <button type="button" class="ui-btn ui-btn--secondary ui-btn--sm" data-rte-size-delta="-1" title="Уменьшить размер на 1px">A−</button>
-            <button type="button" class="ui-btn ui-btn--secondary ui-btn--sm" data-rte-size-delta="1" title="Увеличить размер на 1px">A+</button>
+            <button type="button" class="ui-btn ui-btn--secondary" data-rte-size-delta="-1" title="Уменьшить размер на 1px">A−</button>
+            <button type="button" class="ui-btn ui-btn--secondary" data-rte-size-delta="1" title="Увеличить размер на 1px">A+</button>
             <div class="scr-rte__swatches" title="Цвет текста: выделите текст и выберите цвет, либо выберите цвет и печатайте им дальше">${colorSwatches}</div>
         </div>
     `;
@@ -362,7 +362,7 @@ function renderRootBlock(root, editing) {
                     </div>
                 </div>
                 <div class="ui-btn-row">
-                    <button type="button" class="ui-btn ui-btn--sm" data-role="root-create">Создать основной текст</button>
+                    <button type="button" class="ui-btn" data-role="root-create">Создать основной текст</button>
                 </div>
             </div>
         `;
@@ -379,8 +379,8 @@ function renderRootBlock(root, editing) {
                     </div>
                 </div>
                 <div class="ui-btn-row">
-                    <button type="button" class="ui-btn ui-btn--sm" data-role="root-save">Сохранить</button>
-                    <button type="button" class="ui-btn ui-btn--secondary ui-btn--sm" data-role="root-cancel">Отмена</button>
+                    <button type="button" class="ui-btn" data-role="root-save">Сохранить</button>
+                    <button type="button" class="ui-btn ui-btn--secondary" data-role="root-cancel">Отмена</button>
                 </div>
             </div>
         `;
@@ -390,7 +390,7 @@ function renderRootBlock(root, editing) {
             <h3 class="scr-card__title">Основной текст</h3>
             <div class="scr-node__content">${root.content}</div>
             <div class="ui-btn-row">
-                <button type="button" class="ui-btn ui-btn--secondary ui-btn--sm" data-role="root-edit">Изменить</button>
+                <button type="button" class="ui-btn ui-btn--secondary" data-role="root-edit">Изменить</button>
             </div>
         </div>
     `;
@@ -409,8 +409,8 @@ function renderObjectionCard(node, editing) {
                     <textarea class="ui-field__control" data-role="objection-content" rows="3" aria-label="Текст возражения">${escapeHtml(node.content)}</textarea>
                 </div>
                 <div class="ui-btn-row">
-                    <button type="button" class="ui-btn ui-btn--sm" data-action="save-objection" data-id="${node.id}">Сохранить</button>
-                    <button type="button" class="ui-btn ui-btn--secondary ui-btn--sm" data-action="cancel-edit-objection" data-id="${node.id}">Отмена</button>
+                    <button type="button" class="ui-btn" data-action="save-objection" data-id="${node.id}">Сохранить</button>
+                    <button type="button" class="ui-btn ui-btn--secondary" data-action="cancel-edit-objection" data-id="${node.id}">Отмена</button>
                 </div>
             </div>
         `;
@@ -420,8 +420,8 @@ function renderObjectionCard(node, editing) {
             <div class="scr-node__label">${escapeHtml(node.label || '(без метки)')}</div>
             <div class="scr-node__content">${escapeHtml(node.content)}</div>
             <div class="ui-btn-row">
-                <button type="button" class="ui-btn ui-btn--secondary ui-btn--sm" data-action="edit-objection" data-id="${node.id}">Изменить</button>
-                <button type="button" class="ui-btn ui-btn--danger ui-btn--sm" data-action="delete-objection" data-id="${node.id}">Удалить</button>
+                <button type="button" class="ui-btn ui-btn--secondary" data-action="edit-objection" data-id="${node.id}">Изменить</button>
+                <button type="button" class="ui-btn ui-btn--danger" data-action="delete-objection" data-id="${node.id}">Удалить</button>
             </div>
         </div>
     `;
@@ -440,8 +440,8 @@ function renderObjectionsBlock(objections, uiState) {
                 <textarea class="ui-field__control" data-role="objection-content" rows="3" aria-label="Текст возражения"></textarea>
             </div>
             <div class="ui-btn-row">
-                <button type="button" class="ui-btn ui-btn--sm" data-role="objection-create">Добавить</button>
-                <button type="button" class="ui-btn ui-btn--secondary ui-btn--sm" data-role="objection-create-cancel">Отмена</button>
+                <button type="button" class="ui-btn" data-role="objection-create">Добавить</button>
+                <button type="button" class="ui-btn ui-btn--secondary" data-role="objection-create-cancel">Отмена</button>
             </div>
         </div>
     ` : '';
@@ -450,7 +450,7 @@ function renderObjectionsBlock(objections, uiState) {
         <div class="scr-card">
             <div class="scr-card__head">
                 <h3 class="scr-card__title">Возражения</h3>
-                ${!uiState.addingObjection ? '<button type="button" class="ui-btn ui-btn--secondary ui-btn--sm" data-role="objection-add">+ Добавить возражение</button>' : ''}
+                ${!uiState.addingObjection ? '<button type="button" class="ui-btn ui-btn--secondary" data-role="objection-add">+ Добавить возражение</button>' : ''}
             </div>
             ${objections.length
                 ? `<div class="scr-objections">${cards}</div>`

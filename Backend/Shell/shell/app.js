@@ -28,7 +28,10 @@ import {
 // Добавить раздел = одна строка здесь плюс модуль. Поля:
 //   key        — ключ в адресе: /#/leads
 //   title      — название в шапке панели и на плитке
-//   icon       — класс иконки Font Awesome
+//   subtitle   — вторая строка в шапке панели: чем раздел занимается. Тексты
+//                взяты из макета дословно; без них шапка панели несла одно
+//                название и не отличалась от заголовка внутри раздела (С2)
+//   icon       — ключ значка из ui/icons.js (набор проекта, инлайновый SVG)
 //   module     — путь к модулю раздела; пока раздел не перенесён — null
 //   template   — путь к фрагменту разметки; грузится при первом монтировании
 //   styles     — файл раскладки раздела или список файлов
@@ -43,12 +46,12 @@ import {
 // дожил до конца — это дефект»).
 
 export const registry = [
-    { key: 'requisites', title: 'Реквизиты',  icon: 'fas fa-building',       module: '/js/modules/mainApp.js', template: '/main-section.html', styles: '/css/main-light.css', skeleton: 'form', legacyUrl: '/main.html' },
-    { key: 'employees',  title: 'Сотрудники', icon: 'fas fa-users',          module: '/js/modules/employeesApp.js', template: '/employees-section.html', styles: ['/css/employees-light.css', '/css/employees-schedule.css'], legacyUrl: '/emploees.html' },
-    { key: 'leads',      title: 'Лиды',       icon: 'fas fa-address-book',   module: '/js/modules/leadsApp.js', template: '/leads-section.html', styles: '/css/leads-light.css', legacyUrl: '/leads.html' },
-    { key: 'sources',    title: 'Источники',  icon: 'fas fa-diagram-project',module: '/js/modules/sourcesSection.js', template: '/sources-section.html', styles: '/css/sources-light.css', legacyUrl: '/sources.html' },
-    { key: 'cpa',        title: 'CPA-сети',   icon: 'fas fa-handshake',      module: '/js/modules/cpaApp.js', template: '/cpa-networks-section.html', styles: '/css/cpa-networks-light.css', legacyUrl: '/cpa-networks.html' },
-    { key: 'scripts',    title: 'Скрипты',    icon: 'fas fa-file-lines',     module: '/js/modules/scriptsSection.js', template: '/scripts-admin-section.html', styles: '/css/scripts-admin-light.css', legacyUrl: '/scripts-admin.html' }
+    { key: 'requisites', title: 'Реквизиты',  subtitle: 'организация и счета',      icon: 'requisites', module: '/js/modules/mainApp.js', template: '/main-section.html', styles: '/css/main-light.css', skeleton: 'form', legacyUrl: '/main.html' },
+    { key: 'employees',  title: 'Сотрудники', subtitle: 'карточки, график, доступы', icon: 'employees',  module: '/js/modules/employeesApp.js', template: '/employees-section.html', styles: ['/css/employees-light.css', '/css/employees-schedule.css'], legacyUrl: '/emploees.html' },
+    { key: 'leads',      title: 'Лиды',       subtitle: 'очередь и распределение',  icon: 'leads',      module: '/js/modules/leadsApp.js', template: '/leads-section.html', styles: '/css/leads-light.css', legacyUrl: '/leads.html' },
+    { key: 'sources',    title: 'Источники',  subtitle: 'площадки и связи',         icon: 'sources',    module: '/js/modules/sourcesSection.js', template: '/sources-section.html', styles: '/css/sources-light.css', legacyUrl: '/sources.html' },
+    { key: 'cpa',        title: 'CPA-сети',   subtitle: 'сети и офферы',            icon: 'cpa',        module: '/js/modules/cpaApp.js', template: '/cpa-networks-section.html', styles: '/css/cpa-networks-light.css', legacyUrl: '/cpa-networks.html' },
+    { key: 'scripts',    title: 'Скрипты',    subtitle: 'разговор и возражения',    icon: 'scripts',    module: '/js/modules/scriptsSection.js', template: '/scripts-admin-section.html', styles: '/css/scripts-admin-light.css', legacyUrl: '/scripts-admin.html' }
 ];
 
 const STORAGE_KEY = 'shellDesktopState';
@@ -124,7 +127,7 @@ function openSection(key) {
         return;
     }
 
-    openPanelFor(key, { title: section.title, icon: section.icon });
+    openPanelFor(key, { title: section.title, subtitle: section.subtitle, icon: section.icon });
 }
 
 /**
@@ -145,7 +148,7 @@ function openFromAddress(key) {
         return;
     }
 
-    openPanelFor(key, { title: section.title, icon: section.icon });
+    openPanelFor(key, { title: section.title, subtitle: section.subtitle, icon: section.icon });
 }
 
 // ---------------------------------------------------------------- события панелей
@@ -244,11 +247,28 @@ async function mountSection(panelId, key, container) {
         const module = await import(section.module);
         // И пока грузился модуль — тоже.
         if (!mounted.has(panelId)) return;
+
+        // Разборщик записывается ДО монтирования, а не после него.
+        //
+        // Раньше строка стояла после `await module.mount(...)`, и раздел,
+        // панель которого закрыли ПОКА ОН ГРУЗИЛ ДАННЫЕ, не разбирался вовсе:
+        // unmountSection видел record.unmount === null, молча пропускал вызов и
+        // чистил контейнер. Модуль при этом оставался с прежним root — теперь
+        // указывающим на опустошённый узел, — и первая же отрисовка после
+        // ответа сервера падала («CPA-сети»: TypeError на renderTabs). Вместе с
+        // разбором пропускалось и снятие слушателей документа, которые тот же
+        // раздел вешает в mount.
+        //
+        // Здесь это безопасно: между проверкой выше и вызовом mount нет ни
+        // одного await, то есть закрыться панель между ними не может, а сами
+        // модули к раннему разбору готовы — они сверяются со своим поколением
+        // после каждого ожидания.
+        record.unmount = module.unmount;
+
         // mount каждого раздела завершается после первых данных — на этом
         // накладку и снимаем: раньше показали бы пустую таблицу, позже
         // держали бы скелет поверх готового раздела.
         await module.mount(container, ctx);
-        if (mounted.get(panelId) === record) record.unmount = module.unmount;
     } catch (err) {
         renderFailure(container, section, err);
     } finally {
@@ -335,7 +355,7 @@ function renderFailure(container, section, err) {
     text.textContent = err && err.message ? err.message : 'Неизвестная ошибка.';
     const again = document.createElement('button');
     again.type = 'button';
-    again.className = 'ui-btn ui-btn--sm';
+    again.className = 'ui-btn';
     again.textContent = 'Открыть по старому адресу';
     again.addEventListener('click', () => window.open(section.legacyUrl, '_blank', 'noopener'));
     box.append(title, text, again);
@@ -410,7 +430,7 @@ function restoreState() {
         (saved.panels || []).filter((p) => p.minimized).forEach((p) => {
             const section = find(p.key);
             if (!section) return;
-            const panel = openPanelFor(p.key, { title: section.title, icon: section.icon });
+            const panel = openPanelFor(p.key, { title: section.title, subtitle: section.subtitle, icon: section.icon });
             if (panel) minimizePanel(panel.id);
         });
     } finally {

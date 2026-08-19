@@ -249,18 +249,18 @@ function renderChips(state) {
     const chips = [];
     if (state.search) {
         chips.push(`<span class="ui-fchip">Поиск: <b>${escapeHtml(state.search)}</b>
-            <button type="button" class="ui-fchip__remove" data-clear="search" aria-label="Сбросить поиск"><i class="fas fa-xmark" aria-hidden="true"></i></button></span>`);
+            <button type="button" class="ui-fchip__remove" data-clear="search" aria-label="Сбросить поиск"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-close"></use></svg></button></span>`);
     }
     if (state.platformId !== null && !state.search) {
         const platform = state.platforms.find((p) => p.id === state.platformId);
         if (platform) {
             chips.push(`<span class="ui-fchip">Площадка: <b>${escapeHtml(platform.name)}</b>
-                <button type="button" class="ui-fchip__remove" data-clear="platform" aria-label="Показать все площадки"><i class="fas fa-xmark" aria-hidden="true"></i></button></span>`);
+                <button type="button" class="ui-fchip__remove" data-clear="platform" aria-label="Показать все площадки"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-close"></use></svg></button></span>`);
         }
     }
     if (state.status !== 'all') {
         chips.push(`<span class="ui-fchip">Статус: <b>${escapeHtml(state.status)}</b>
-            <button type="button" class="ui-fchip__remove" data-clear="status" aria-label="Сбросить фильтр статуса"><i class="fas fa-xmark" aria-hidden="true"></i></button></span>`);
+            <button type="button" class="ui-fchip__remove" data-clear="status" aria-label="Сбросить фильтр статуса"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-close"></use></svg></button></span>`);
     }
 
     const box = $(state, 'filter-chips');
@@ -304,12 +304,12 @@ function renderRows(state) {
                 <td><span class="ui-table__main">${escapeHtml(source.rootSource)}</span></td>
                 <td class="ui-table__muted">${escapeHtml(source.cityRegion)}</td>
                 <td><span class="src-nets">${nets}</span></td>
-                <td><span class="ui-pill ${pill} ui-pill--dot">${escapeHtml(source.status)}</span></td>
+                <td><span class="ui-pill ${pill}">${escapeHtml(source.status)}</span></td>
                 <td class="ui-table__muted">${escapeHtml(source.leadSource)}</td>
                 <td class="ui-table__acts">
                     <span class="src-cell-actions">
-                        <button type="button" class="ui-btn ui-btn--icon ui-btn--sm" data-edit="${source.id}" aria-label="Изменить" title="Изменить"><i class="fas fa-pen" aria-hidden="true"></i></button>
-                        <button type="button" class="ui-btn ui-btn--icon ui-btn--sm" data-del="${source.id}" aria-label="Удалить" title="Удалить"><i class="fas fa-trash" aria-hidden="true"></i></button>
+                        <button type="button" class="ui-btn ui-btn--icon ui-btn--row" data-edit="${source.id}" aria-label="Изменить" title="Изменить"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-edit"></use></svg></button>
+                        <button type="button" class="ui-btn ui-btn--icon ui-btn--row ui-btn--danger" data-del="${source.id}" aria-label="Удалить" title="Удалить"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-trash"></use></svg></button>
                     </span>
                 </td>
             </tr>`;
@@ -752,9 +752,9 @@ function openPlatformsModal(state) {
 
     const addBtn = document.createElement('button');
     addBtn.type = 'button';
-    addBtn.className = 'ui-btn ui-btn--ghost ui-btn--sm';
+    addBtn.className = 'ui-btn ui-btn--ghost';
     addBtn.style.marginTop = 'var(--ui-space-4)';
-    addBtn.innerHTML = '<i class="fas fa-plus" aria-hidden="true"></i>Добавить площадку';
+    addBtn.innerHTML = '<svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-plus"></use></svg>Добавить площадку';
     body.appendChild(addBtn);
 
     const form = document.createElement('div');
@@ -776,8 +776,8 @@ function openPlatformsModal(state) {
             </div>
         </div>
         <div class="src-inline-form__actions">
-            <button type="button" class="ui-btn ui-btn--ghost ui-btn--sm" data-act="cancel">Отмена</button>
-            <button type="button" class="ui-btn ui-btn--sm" data-act="save">Сохранить</button>
+            <button type="button" class="ui-btn ui-btn--ghost" data-act="cancel">Отмена</button>
+            <button type="button" class="ui-btn" data-act="save">Сохранить</button>
         </div>`;
     body.appendChild(form);
 
@@ -789,12 +789,12 @@ function openPlatformsModal(state) {
             const pill = platform.status === 'Активна' ? 'ui-pill--ok' : 'ui-pill--mute';
             return `
                 <div class="src-platform-row">
-                    <span class="ui-pill ${pill} ui-pill--dot">${escapeHtml(platform.status)}</span>
+                    <span class="ui-pill ${pill}">${escapeHtml(platform.status)}</span>
                     <span class="src-platform-row__name">${escapeHtml(platform.name)}</span>
                     <span class="src-platform-row__meta">Источников: ${platform.sourcesCount || 0}</span>
-                    <button type="button" class="ui-btn ui-btn--icon ui-btn--sm" data-pedit="${platform.id}" aria-label="Изменить" title="Изменить"><i class="fas fa-pen" aria-hidden="true"></i></button>
-                    <button type="button" class="ui-btn ui-btn--icon ui-btn--sm" data-pdel="${platform.id}"${blocked ? ' disabled' : ''} aria-label="Удалить"
-                            title="${blocked ? `Нельзя удалить — у площадки есть источники (${platform.sourcesCount})` : 'Удалить'}"><i class="fas fa-trash" aria-hidden="true"></i></button>
+                    <button type="button" class="ui-btn ui-btn--icon ui-btn--row" data-pedit="${platform.id}" aria-label="Изменить" title="Изменить"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-edit"></use></svg></button>
+                    <button type="button" class="ui-btn ui-btn--icon ui-btn--row ui-btn--danger" data-pdel="${platform.id}"${blocked ? ' disabled' : ''} aria-label="Удалить"
+                            title="${blocked ? `Нельзя удалить — у площадки есть источники (${platform.sourcesCount})` : 'Удалить'}"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-trash"></use></svg></button>
                 </div>`;
         }).join('') || '<p class="src-side__note">Площадок пока нет — добавьте первую.</p>';
     };

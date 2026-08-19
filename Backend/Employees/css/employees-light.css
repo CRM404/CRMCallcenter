@@ -94,69 +94,25 @@
 .emp-wrap [data-role="list-section"][hidden],
 .emp-wrap [data-role="schedule-section"][hidden] { display: none; }
 
-/* ----- Шапка раздела ----- */
-.emp-wrap .emp-head {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    flex-wrap: wrap;
-    background: var(--e-surface);
-    border: 1px solid #fff6;
-    border-radius: var(--e-radius-lg);
-    padding: 16px 22px;
-    box-shadow: var(--e-shadow-card);
-}
-.emp-wrap .emp-head-identity { min-width: 0; margin-right: auto; }
-.emp-wrap .eyebrow {
-    font-size: 11.5px;
-    font-weight: 700;
-    letter-spacing: .09em;
-    text-transform: uppercase;
-    color: var(--e-ink-faint);
-    margin-bottom: 2px;
-}
-.emp-wrap .emp-head h1 { font-size: 24px; font-weight: 700; color: var(--e-ink); letter-spacing: -.01em; }
+/* ----- Шапка раздела -----
+   Своей шапки у раздела больше нет: заголовок, подпись и действия рисует
+   .ui-page-head из слоя. Здесь остаётся только то, чего в слое нет, —
+   поле поиска со значком внутри и счётчик активных фильтров. */
 
-/* ----- Тулбар ----- */
-.emp-wrap .toolbar {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    flex-wrap: wrap;
-    background: var(--e-surface);
-    border: 1px solid #fff6;
-    border-radius: var(--e-radius-lg);
-    padding: 14px 18px;
-    box-shadow: var(--e-shadow-card);
-}
-.emp-wrap .search-wrap { position: relative; flex: 1; min-width: 200px; }
-.emp-wrap .search-wrap .fa-magnifying-glass {
+/* Поиск со значком внутри поля. Само поле — .ui-field__control из слоя,
+   раздел добавляет только место под значок. */
+.emp-wrap .emp-search { position: relative; flex: 1; min-width: 200px; }
+.emp-wrap .emp-search > .ui-ic {
     position: absolute;
-    left: 12px;
+    left: 11px;
     top: 50%;
     transform: translateY(-50%);
-    color: var(--e-ink-faint);
-    font-size: var(--ui-icon-xs);
+    color: var(--ui-color-ink-faint);
     pointer-events: none;
 }
-.emp-wrap .search-wrap input {
-    width: 100%;
-    height: 40px;
-    padding: 0 12px 0 34px;
-    border: 1px solid var(--e-line-strong);
-    border-radius: var(--e-radius-sm);
-    background: rgba(255, 255, 255, .75);
-    font-family: inherit;
-    font-size: 14px;
-    color: var(--e-ink);
-}
-.emp-wrap .search-wrap input:focus {
-    outline: none;
-    border-color: var(--e-accent-soft);
-    box-shadow: 0 0 0 3px var(--ui-color-focus-ring);
-}
-.emp-wrap .filter-btn-wrap { position: relative; display: inline-flex; }
-.emp-wrap .filter-badge {
+.emp-wrap .emp-search input { padding-left: 32px; }
+.emp-wrap .emp-filter-wrap { position: relative; display: inline-flex; }
+.emp-wrap .emp-filter-badge {
     position: absolute;
     top: -6px;
     right: -6px;
@@ -174,27 +130,11 @@
     box-shadow: 0 0 0 2px var(--e-surface-modal);
 }
 
-/* ----- Составная ячейка «Сотрудник» ----- */
-.emp-wrap .employee-cell { display: flex; align-items: center; gap: 10px; }
-.emp-wrap .avatar-initials {
-    width: 36px;
-    height: 36px;
-    border-radius: var(--e-radius-md);
-    color: #fff;
-    font-size: 13px;
-    font-weight: 600;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-}
-.emp-wrap .avatar-initials.av-0 { background: var(--e-av-1); }
-.emp-wrap .avatar-initials.av-1 { background: var(--e-av-2); }
-.emp-wrap .avatar-initials.av-2 { background: var(--e-av-3); }
-.emp-wrap .avatar-initials.av-3 { background: var(--e-av-4); }
-.emp-wrap .employee-cell-text { min-width: 0; }
-.emp-wrap .employee-name { font-size: 13.5px; font-weight: 600; color: var(--e-ink); line-height: 1.3; }
-.emp-wrap .employee-position { font-size: 11.5px; color: var(--e-ink-faint); margin-top: 1px; }
+/* ----- Составная ячейка «Сотрудник» -----
+   Аватар-кружок с инициалами удалён (Э4). Имя и должность — двухстрочная
+   ячейка из слоя (.ui-table__main / .ui-table__sub), своих кеглей раздел для
+   неё не объявляет. */
+.emp-wrap .employee-cell { min-width: 0; }
 
 /* ----- Составная ячейка «Контакты» ----- */
 .emp-wrap .contact-cell { display: flex; flex-direction: column; gap: 3px; min-width: 160px; }
@@ -202,43 +142,19 @@
 .emp-wrap .contact-line i { color: var(--e-ink-faint); font-size: var(--ui-icon-xs); width: 12px; text-align: center; }
 .emp-wrap .contact-line.contact-phone { font-weight: 600; color: var(--e-ink); font-variant-numeric: tabular-nums; }
 
-/* ----- Составная ячейка «Мессенджеры» ----- */
+/* ----- Составная ячейка «Мессенджеры» -----
+   Фирменные зелёный и голубой сняты и здесь, и в подписях полей карточки (Э5):
+   в палитре проекта цвет означает статус. Остались метки .ui-tag из слоя. */
 .emp-wrap .messenger-cell { display: flex; gap: 6px; }
-.emp-wrap .messenger-chip i { font-size: var(--ui-icon-xs); }
-.emp-wrap .messenger-chip {
-    width: 24px;
-    height: 24px;
-    border-radius: 7px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    color: #fff;
-    font-size: 12px;
-}
-.emp-wrap .messenger-chip.chip-whatsapp { background: #25D366; }
-.emp-wrap .messenger-chip.chip-telegram { background: #0088cc; }
-.emp-wrap .messenger-empty { color: var(--e-ink-faint); }
-/* Те же два цвета в подписях полей карточки. */
-.emp-wrap .msg-wa { color: #25D366; margin-right: 4px; font-size: var(--ui-icon-xs); }
-.emp-wrap .msg-tg { color: #0088cc; margin-right: 4px; font-size: var(--ui-icon-xs); }
 
-/* ----- Отдел и руководитель ----- */
-.emp-wrap .department-tag {
-    display: inline-block;
-    padding: 3px 10px;
-    border-radius: 20px;
-    background: rgba(96, 112, 148, .12);
-    color: var(--e-ink-soft);
-    font-size: 12px;
-    font-weight: 600;
-    white-space: nowrap;
-}
+/* ----- Отдел и руководитель -----
+   Отдел выводится обычным текстом: серая пилюля означала бы статус, которым
+   отдел не является (М26). */
 .emp-wrap .manager-cell { display: flex; align-items: center; gap: 6px; color: var(--e-ink-soft); font-size: 13px; }
 .emp-wrap .manager-cell i { color: var(--e-ink-faint); font-size: var(--ui-icon-xs); }
 .emp-wrap .manager-cell.manager-empty { font-style: italic; color: var(--e-ink-faint); }
 
 /* Кнопка удаления строки — единственная, что краснеет при наведении. */
-.emp-wrap .row-del:hover { color: var(--e-danger); }
 .emp-wrap .sort-icon { margin-left: 6px; font-size: var(--ui-icon-xs); color: var(--e-accent); }
 
 /* Списки в полосе массовых действий: рост под полосу, а не под форму. */
@@ -350,10 +266,8 @@
 /* ----- Мелочи окон ----- */
 .emp-wrap .modal-sub { font-size: 12.5px; color: var(--e-ink-faint); margin-top: 3px; }
 .emp-wrap .ui-form-grid--single { grid-template-columns: 1fr; }
-.emp-wrap .ui-modal__actions--spread { justify-content: space-between; }
 .emp-wrap .actions-right { display: flex; gap: 10px; }
 
 @media (max-width: 760px) {
     .emp-wrap .column-checkbox-list { grid-template-columns: 1fr; }
-    .emp-wrap .emp-head { align-items: flex-start; }
 }

@@ -14,8 +14,8 @@
     z-index: var(--ui-z-toast);
     display: flex;
     flex-direction: column;
-    gap: var(--ui-space-3);
-    max-width: 350px;
+    gap: 10px;
+    max-width: 340px;
     /* Контейнер не должен перехватывать клики по интерфейсу под собой —
        кликабельны только сами тосты. */
     pointer-events: none;
@@ -25,14 +25,14 @@
     display: flex;
     align-items: center;
     gap: var(--ui-space-4);
-    padding: 14px var(--ui-space-6);
-    border-radius: var(--ui-radius-md);
-    border-left: 4px solid var(--ui-color-info-edge);
+    padding: 11px 15px;
+    border-radius: 10px;
+    border-left: 3px solid var(--ui-color-info-edge);
     background: var(--ui-color-inkwell);
     color: var(--ui-color-inkwell-text);
     box-shadow: var(--ui-shadow-toast);
     font-family: var(--ui-font-ui);
-    font-size: var(--ui-text-md);
+    font-size: var(--ui-text-sm);
     line-height: var(--ui-line-base);
     pointer-events: auto;
     animation: ui-toast-in var(--ui-dur-base) ease;

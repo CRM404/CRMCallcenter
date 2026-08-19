@@ -18,18 +18,20 @@
 -->
 
 <div class="cpa-wrap">
-<div class="identity-strip">
-        <div class="identity-copy">
-            <div class="eyebrow">Партнёрские сети · офферы</div>
-            <h1>CPA-сети</h1>
-            <p>Офферы недвижимости с настройками и требованиями к клиенту</p>
-        </div>
-        <dl class="ui-chips">
-            <div class="ui-chip"><dd class="ui-chip__value" data-role="stat-total">0</dd><dt class="ui-chip__label">Офферов всего</dt></div>
-            <div class="ui-chip ui-chip--ok"><dd class="ui-chip__value" data-role="stat-active">0</dd><dt class="ui-chip__label">Активны</dt></div>
-            <div class="ui-chip ui-chip--muted"><dd class="ui-chip__value" data-role="stat-draft">0</dd><dt class="ui-chip__label">Черновики</dt></div>
-        </dl>
+<div class="ui-page-head">
+        <h2 class="ui-page-head__title">CPA-сети</h2>
+        <span class="ui-page-head__sub">сети и их офферы</span>
+        <span class="ui-page-head__acts">
+            <button type="button" class="ui-btn ui-btn--ghost" id="cpa-manage-networks"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-gear"></use></svg>Управление сетями</button>
+            <button type="button" class="ui-btn" id="cpa-add-offer"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-plus"></use></svg>Добавить оффер</button>
+        </span>
     </div>
+
+    <dl class="ui-chips ui-page-chips">
+        <div class="ui-chip"><dd class="ui-chip__value" data-role="stat-total">0</dd><dt class="ui-chip__label">Офферов всего</dt></div>
+        <div class="ui-chip ui-chip--ok"><dd class="ui-chip__value" data-role="stat-active">0</dd><dt class="ui-chip__label">Активны</dt></div>
+        <div class="ui-chip ui-chip--muted"><dd class="ui-chip__value" data-role="stat-draft">0</dd><dt class="ui-chip__label">Черновики</dt></div>
+    </dl>
 
     <!-- ================= ВКЛАДКА «ОФФЕРЫ» ================= -->
     <div data-view="offers" class="active">
@@ -37,10 +39,9 @@
         <div class="network-bar">
             <div class="ui-tabs ui-tabs--inline network-tabs" id="networkTabs"></div>
             <div class="network-meta" id="networkMeta"></div>
-            <button type="button" class="ui-btn ui-btn--sm ui-btn--ghost" id="manageNetworksBtn"><i class="fas fa-gear" aria-hidden="true"></i>Управление сетями</button>
         </div>
 
-        <div class="toolbar">
+        <div class="ui-toolbar">
             <div class="ui-field cpa-search">
                 <input type="search" class="ui-field__control" data-role="search"
                        placeholder="Найти оффер по названию…" aria-label="Поиск офферов">
@@ -52,7 +53,6 @@
                 <button type="button" class="ui-tabs__tab" data-status="disabled">Отключённые</button>
                 <button type="button" class="ui-tabs__tab" data-status="draft">Черновики</button>
             </div>
-            <button type="button" class="ui-btn" id="addOfferBtn"><i class="fas fa-plus" aria-hidden="true"></i>Добавить оффер</button>
         </div>
 
         <div class="table-card">
@@ -93,7 +93,7 @@
             Настройка списков
             <span class="switch"><input type="checkbox" id="paramsModeToggle"><span class="switch-track"></span></span>
         </label>
-        <button type="button" class="ui-modal__close" id="offerModalClose"><i class="fas fa-xmark" aria-hidden="true"></i></button>
+        <button type="button" class="ui-modal__close" id="offerModalClose"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-close"></use></svg></button>
     </div>
 </div>
 <div class="ui-modal__body">
@@ -119,7 +119,7 @@
         </div>
 
         <div class="section-divider">
-            <div class="s-icon"><i class="fas fa-bullseye" aria-hidden="true"></i></div>
+            <div class="s-icon"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-target"></use></svg></div>
             <div><h3>Настройки оффера</h3><span>условия выплаты и критерии лида</span></div>
         </div>
         <div class="ui-form-grid">
@@ -140,7 +140,7 @@
         </div>
 
         <div class="section-divider">
-            <div class="s-icon"><i class="fas fa-layer-group" aria-hidden="true"></i></div>
+            <div class="s-icon"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-layers"></use></svg></div>
             <div><h3>Фильтр объектов</h3><span>какие объекты подходят под оффер</span></div>
         </div>
         <div class="ui-form-grid">
@@ -154,16 +154,16 @@
             <div class="ui-field"><label class="ui-field__label" for="fDeadline">Срок сдачи</label><input class="ui-field__control" type="text" id="fDeadline" placeholder="до 4 кв. 2027 / сдан"></div>
             <div class="ui-field ui-field--wide"><label class="ui-field__label">Цена и площадь по сегментам <span class="hint">зависят от типа/класса — можно задать несколько диапазонов</span></label>
                 <div class="repeat-rows" id="fSegments"></div>
-                <button type="button" class="dashed-row" id="addSegmentBtn"><i class="fas fa-plus" aria-hidden="true"></i>Добавить сегмент</button>
+                <button type="button" class="dashed-row" id="addSegmentBtn"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-plus"></use></svg>Добавить сегмент</button>
             </div>
             <div class="ui-field ui-field--wide"><label class="ui-field__label">География объекта <span class="hint">регион / город / район / нас. пункт (посёлки, деревни, сёла — если это не город) — пустой уровень значит «любой», можно несколько строк; начните печатать в любом из полей — подскажет адрес именно для этого уровня, а Город/Район/Нас. пункт сузятся до уже выбранного региона</span></label>
                 <div class="repeat-rows" id="fObjGeo"></div>
-                <button type="button" class="dashed-row" id="addObjGeoBtn"><i class="fas fa-plus" aria-hidden="true"></i>Добавить географию</button>
+                <button type="button" class="dashed-row" id="addObjGeoBtn"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-plus"></use></svg>Добавить географию</button>
             </div>
         </div>
 
         <div class="section-divider">
-            <div class="s-icon"><i class="fas fa-user" aria-hidden="true"></i></div>
+            <div class="s-icon"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-user"></use></svg></div>
             <div><h3>Требования к клиенту</h3><span>какой покупатель подходит под оффер</span></div>
         </div>
         <div class="ui-form-grid">
@@ -185,12 +185,12 @@
             </div>
             <div class="ui-field ui-field--wide"><label class="ui-field__label">География клиента <span class="hint">регион / город / район / нас. пункт (посёлки, деревни, сёла — если это не город) — тот же принцип, что у объекта, но про самого покупателя; подсказки адреса по каждому полю — так же</span></label>
                 <div class="repeat-rows" id="fClientGeo"></div>
-                <button type="button" class="dashed-row" id="addClientGeoBtn"><i class="fas fa-plus" aria-hidden="true"></i>Добавить географию</button>
+                <button type="button" class="dashed-row" id="addClientGeoBtn"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-plus"></use></svg>Добавить географию</button>
             </div>
         </div>
 
         <div class="section-divider">
-            <div class="s-icon"><i class="fas fa-shield" aria-hidden="true"></i></div>
+            <div class="s-icon"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-shield"></use></svg></div>
             <div><h3>Настройки обработки</h3><span>приоритет и лимиты передачи лида</span></div>
         </div>
         <div class="ui-form-grid">
@@ -212,12 +212,12 @@
         <div class="ui-modal__box">
 <div class="ui-modal__head">
     <div><h2>Управление сетями</h2><p class="modal-sub">Название, юрлицо, условия подключения</p></div>
-    <button type="button" class="ui-modal__close" id="networksModalClose"><i class="fas fa-xmark" aria-hidden="true"></i></button>
+    <button type="button" class="ui-modal__close" id="networksModalClose"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-close"></use></svg></button>
 </div>
 <div class="ui-modal__body">
     <div class="empty-state" id="networksLockedNote" hidden>Сначала заполните организацию в разделе <a href="#/requisites">Реквизиты</a> — CPA-сеть привязывается к юрлицу.</div>
     <div class="net-list" id="netList"></div>
-    <button type="button" class="dashed-row" id="addNetworkBtn" style="margin-top:10px"><i class="fas fa-plus" aria-hidden="true"></i>Добавить сеть</button>
+    <button type="button" class="dashed-row" id="addNetworkBtn" style="margin-top:10px"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-plus"></use></svg>Добавить сеть</button>
     <div class="inline-form" id="netInlineForm" hidden>
         <div class="ui-form-grid">
             <div class="ui-field ui-field--wide"><label class="ui-field__label" for="nfName">Название *</label><input class="ui-field__control" type="text" id="nfName" placeholder="AdCombo"></div>
@@ -228,8 +228,8 @@
             <div class="ui-field"><label class="ui-field__label" for="nfCommission">Комиссия %</label><input class="ui-field__control" type="number" step="any" id="nfCommission" placeholder="15"></div>
         </div>
         <div class="form-actions">
-            <button type="button" class="ui-btn ui-btn--sm ui-btn--secondary" id="netFormCancel">Отмена</button>
-            <button type="button" class="ui-btn ui-btn--sm" id="netFormSave">Сохранить</button>
+            <button type="button" class="ui-btn ui-btn--secondary" id="netFormCancel">Отмена</button>
+            <button type="button" class="ui-btn" id="netFormSave">Сохранить</button>
         </div>
     </div>
 </div>

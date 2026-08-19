@@ -51,10 +51,10 @@
     flex-direction: column;
     align-items: center;
     gap: var(--ui-space-3);
-    padding: var(--ui-space-8) var(--ui-space-6);
+    padding: 30px var(--ui-space-6);
     border: 1px dashed var(--ui-color-line-strong);
     border-radius: var(--ui-radius-md);
-    background: var(--ui-color-surface-sunken);
+    background: rgba(255, 255, 255, .45);
     text-align: center;
 }
 .ui-empty__icon {
@@ -63,7 +63,7 @@
     line-height: 1;
 }
 .ui-empty__title {
-    font-size: var(--ui-text-md);
+    font-size: var(--ui-text-xl);
     font-weight: var(--ui-weight-bold);
     color: var(--ui-color-ink);
 }
@@ -71,7 +71,7 @@
 .ui-empty__text {
     max-width: 360px;
     font-size: var(--ui-text-sm);
-    line-height: var(--ui-line-base);
+    line-height: 1.5;
     color: var(--ui-color-ink-soft);
 }
 /* Следующий шаг — кнопка из ui/button.css, здесь только отступ. */

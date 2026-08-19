@@ -60,8 +60,8 @@ export function createDepartments(root, deps) {
                     </div>
                 </div>
                 <div class="department-form-actions">
-                    <button type="button" class="ui-btn ui-btn--secondary ui-btn--sm" data-role="department-cancel">Отмена</button>
-                    <button type="button" class="ui-btn ui-btn--sm" data-role="department-save">Сохранить</button>
+                    <button type="button" class="ui-btn ui-btn--secondary" data-role="department-cancel">Отмена</button>
+                    <button type="button" class="ui-btn" data-role="department-save">Сохранить</button>
                 </div>
             </div>`;
     }
@@ -75,8 +75,8 @@ export function createDepartments(root, deps) {
                     <span class="department-row-org">${escapeHtml(d.organizationName || '—')}</span>
                 </div>
                 <div class="department-row-actions">
-                    <button type="button" class="ui-btn ui-btn--icon ui-btn--sm" data-action="edit" data-id="${d.id}" aria-label="Редактировать" title="Редактировать"><i class="fas fa-pencil" aria-hidden="true"></i></button>
-                    <button type="button" class="ui-btn ui-btn--icon ui-btn--sm row-del" data-action="delete" data-id="${d.id}" data-name="${escapeHtml(d.name)}" aria-label="Удалить" title="Удалить"><i class="fas fa-trash" aria-hidden="true"></i></button>
+                    <button type="button" class="ui-btn ui-btn--icon ui-btn--row" data-action="edit" data-id="${d.id}" aria-label="Редактировать" title="Редактировать"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-edit"></use></svg></button>
+                    <button type="button" class="ui-btn ui-btn--icon ui-btn--row ui-btn--danger" data-action="delete" data-id="${d.id}" data-name="${escapeHtml(d.name)}" aria-label="Удалить" title="Удалить"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-trash"></use></svg></button>
                 </div>
             </div>`;
     }
@@ -88,7 +88,7 @@ export function createDepartments(root, deps) {
         const rows = departments.map(rowHtml).join('');
         const addRow = activeForm && activeForm.mode === 'add'
             ? formRowHtml(null)
-            : '<button type="button" class="department-add-row" data-role="department-add"><i class="fas fa-plus" aria-hidden="true"></i> Добавить отдел</button>';
+            : '<button type="button" class="department-add-row" data-role="department-add"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-plus"></use></svg> Добавить отдел</button>';
         list.innerHTML = rows + addRow;
     }
 

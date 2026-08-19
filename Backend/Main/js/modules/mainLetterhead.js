@@ -55,8 +55,8 @@ export function renderAccounts(container, accounts) {
             </span>
             <span class="ui-pill ${index === 0 ? 'ui-pill--ok' : 'ui-pill--mute'}">${index === 0 ? 'Основной' : 'Резервный'}</span>
             <span class="m-acct-acts">
-                <button type="button" class="ui-btn ui-btn--icon ui-btn--sm" data-account-edit="${account.id}" title="Изменить"><i class="fas fa-pen" aria-hidden="true"></i></button>
-                <button type="button" class="ui-btn ui-btn--icon ui-btn--sm ui-btn--danger" data-account-del="${account.id}" title="Удалить"><i class="fas fa-trash" aria-hidden="true"></i></button>
+                <button type="button" class="ui-btn ui-btn--icon ui-btn--row" data-account-edit="${account.id}" title="Изменить"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-edit"></use></svg></button>
+                <button type="button" class="ui-btn ui-btn--icon ui-btn--row ui-btn--danger" data-account-del="${account.id}" title="Удалить"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-trash"></use></svg></button>
             </span>
         </div>`).join('');
 }
@@ -86,8 +86,8 @@ export function renderTaxes(container, taxes) {
                 <dt>Периодичность</dt><dd class="${tax.periodicity ? '' : 'm-empty-val'}">${tax.periodicity ? escapeHtml(tax.periodicity) : 'не заполнено'}</dd>
             </dl>
             <div class="m-tax-acts">
-                <button type="button" class="ui-btn ui-btn--icon ui-btn--sm" data-tax-edit="${tax.id}" title="Изменить"><i class="fas fa-pen" aria-hidden="true"></i></button>
-                <button type="button" class="ui-btn ui-btn--icon ui-btn--sm ui-btn--danger" data-tax-del="${tax.id}" title="Удалить"><i class="fas fa-trash" aria-hidden="true"></i></button>
+                <button type="button" class="ui-btn ui-btn--icon ui-btn--row" data-tax-edit="${tax.id}" title="Изменить"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-edit"></use></svg></button>
+                <button type="button" class="ui-btn ui-btn--icon ui-btn--row ui-btn--danger" data-tax-del="${tax.id}" title="Удалить"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-trash"></use></svg></button>
             </div>
         </div>`).join('');
 }

@@ -11,6 +11,8 @@
 //   - полоса не перекрывает панели — пока она видна, сцена получает нижний
 //     отступ (класс на сцене, правило в desktop.css).
 
+import { iconNode } from '../ui/icons.js';
+
 let shellApi = null;
 let barEl = null;
 let listEl = null;
@@ -63,10 +65,7 @@ function renderFrame() {
     homeEl.dataset.role = 'home';
     homeEl.title = 'На рабочий стол: панели свернутся, работа сохранится';
     homeEl.setAttribute('aria-label', 'На рабочий стол');
-    const icon = document.createElement('i');
-    icon.className = 'fas fa-house';
-    icon.setAttribute('aria-hidden', 'true');
-    homeEl.appendChild(icon);
+    homeEl.appendChild(iconNode('home', 'sm'));
     homeEl.addEventListener('click', goHome);
     document.body.appendChild(homeEl);
 
@@ -121,9 +120,7 @@ function chip(item) {
     open.className = 'shell-mini__open';
     open.dataset.restore = item.panelId;
 
-    const icon = document.createElement('i');
-    icon.className = `shell-mini__icon ${item.meta.icon || 'fas fa-window-maximize'}`;
-    icon.setAttribute('aria-hidden', 'true');
+    const icon = iconNode(item.meta.icon || 'split', 'sm', 'shell-mini__icon');
 
     const title = document.createElement('span');
     title.textContent = item.meta.title || item.key;
@@ -136,10 +133,7 @@ function chip(item) {
     close.dataset.close = item.panelId;
     close.title = `Закрыть «${item.meta.title || item.key}»`;
     close.setAttribute('aria-label', `Закрыть «${item.meta.title || item.key}»`);
-    const x = document.createElement('i');
-    x.className = 'fas fa-xmark';
-    x.setAttribute('aria-hidden', 'true');
-    close.appendChild(x);
+    close.appendChild(iconNode('close', 'sm'));
 
     box.append(open, close);
     return box;
