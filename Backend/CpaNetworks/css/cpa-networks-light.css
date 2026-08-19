@@ -79,32 +79,20 @@
 
 .cpa-wrap .toolbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; background: var(--surface); border: 1px solid #fff6; border-radius: var(--radius-lg); padding: 14px 18px; box-shadow: var(--shadow-card); }
 
-/* ----- Таблица (общая для офферов и площадок) ----- */
+/* ----- Таблица -----
+   Вид таблицы теперь из слоя (.ui-table): голые table/thead th/tbody td сняты
+   вместе с ними (Д13). Здесь остаётся только то, что про этот раздел, —
+   минимальная ширина, чтобы шесть колонок не сжимались в кашу. */
+.cpa-wrap .ui-table { min-width: 760px; }
+.cpa-wrap .cpa-empty { padding: var(--ui-space-6) var(--ui-space-5); }
 .cpa-wrap .table-card { background: var(--surface); border: 1px solid #fff6; border-radius: var(--radius-lg); box-shadow: var(--shadow-card); overflow: hidden; }
-.cpa-wrap .table-scroll { overflow-x: auto; }
-.cpa-wrap table { width: 100%; border-collapse: collapse; font-size: 13.5px; min-width: 760px; }
-.cpa-wrap thead th { position: sticky; top: 0; background: rgba(241, 245, 249, .92); backdrop-filter: blur(6px); text-align: left; font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--ink-faint); padding: 14px; border-bottom: 1px solid var(--line); white-space: nowrap; }
-.cpa-wrap tbody td { padding: 13px 14px; border-bottom: 1px solid rgba(96, 112, 148, .12); vertical-align: middle; color: var(--ink); }
-.cpa-wrap tbody tr:last-child td { border-bottom: none; }
-.cpa-wrap tbody tr:hover td { background: rgba(255, 255, 255, .4); }
 .cpa-wrap .offer-name { font-weight: 600; }
 .cpa-wrap .offer-cat { font-size: 12px; color: var(--ink-faint); margin-top: 2px; }
 .cpa-wrap .action-tag { display: inline-flex; padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; background: rgba(74, 144, 217, .12); color: var(--accent-soft); }
 .cpa-wrap .rate-value { font-weight: 700; }
 .cpa-wrap .rate-cur { font-size: 12px; color: var(--ink-faint); margin-left: 2px; }
 .cpa-wrap .period { font-size: 12.5px; color: var(--ink-soft); }
-.cpa-wrap .status-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; }
-.cpa-wrap .status-chip::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
-.cpa-wrap .status-chip.active { background: var(--ok-bg); color: var(--ok-ink); }
-.cpa-wrap .status-chip.paused { background: var(--draft-bg); color: var(--draft-ink); }
-.cpa-wrap .status-chip.disabled { background: var(--disabled-bg); color: var(--disabled-ink); }
-.cpa-wrap .status-chip.draft { background: var(--off-bg); color: var(--off-ink); }
 .cpa-wrap .row-actions { display: flex; justify-content: flex-end; gap: 4px; }
-.cpa-wrap .m-icon-btn { width: 30px; height: 30px; display: inline-flex; align-items: center; justify-content: center; border-radius: 9px; border: none; background: transparent; color: var(--ink-faint); cursor: pointer; transition: background .15s, color .15s; font-size: var(--ui-icon-sm); }
-.cpa-wrap .m-icon-btn:hover { background: rgba(0, 0, 255, .08); color: var(--accent); }
-.cpa-wrap .m-icon-btn.danger:hover { background: rgba(231, 76, 60, .1); color: var(--danger); }
-.cpa-wrap .m-icon-btn i { pointer-events: none; }
-.cpa-wrap .empty-state { text-align: center; padding: 46px 20px; color: var(--ink-faint); font-size: 14px; }
 
 /* ----- Модалки ----- */
 .cpa-wrap .modal-body { padding: 20px 26px; overflow-y: auto; }
@@ -197,6 +185,7 @@
 .cpa-wrap .net-row .n-name { font-weight: 600; font-size: 14px; flex: 1; }
 .cpa-wrap .net-row .n-meta { font-size: 12px; color: var(--ink-faint); }
 .cpa-wrap .dashed-row { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 12px; border-radius: var(--radius-md); border: 1.5px dashed var(--line-strong); color: var(--ink-faint); font-size: 13.5px; font-weight: 600; cursor: pointer; background: transparent; width: 100%; transition: .15s; }
+.cpa-wrap .dashed-row i { font-size: var(--ui-icon-xs); }
 .cpa-wrap .dashed-row:hover { border-color: var(--accent-soft); color: var(--accent); background: rgba(0, 0, 255, .04); }
 .cpa-wrap .inline-form { margin-top: 10px; padding: 14px; border-radius: var(--radius-md); background: rgba(0, 0, 255, .03); border: 1px solid rgba(0, 0, 255, .14); }
 .cpa-wrap .inline-form .form-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }

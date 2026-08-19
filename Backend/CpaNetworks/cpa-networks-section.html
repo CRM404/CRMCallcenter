@@ -56,8 +56,8 @@
         </div>
 
         <div class="table-card">
-            <div class="table-scroll">
-                <table>
+            <div class="ui-table-wrap">
+                <table class="ui-table">
                     <thead>
                         <tr>
                             <th>Оффер</th>
@@ -71,7 +71,10 @@
                     <tbody id="offersBody"></tbody>
                 </table>
             </div>
-            <div class="empty-state" data-role="empty-state" hidden>В этой сети пока нет офферов, подходящих под фильтр.</div>
+            <div class="ui-empty ui-empty--inline cpa-empty" data-role="empty-state" hidden>
+                <b class="ui-empty__title" data-role="empty-title">Офферов пока нет</b>
+                <span class="ui-empty__text" data-role="empty-text">В этой сети ещё не заведено ни одного оффера.</span>
+            </div>
         </div>
 
     </div>

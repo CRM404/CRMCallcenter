@@ -79,7 +79,9 @@
     border: none;
     background: none;
     color: var(--ui-color-ink-faint);
-    font-size: 28px;
+    /* Числом было 28 — и это СЛОЙ, то есть каждое окно каждого раздела
+       (находка ревизора Р2). */
+    font-size: var(--ui-icon-lg);
     line-height: 1;
     cursor: pointer;
     transition: color var(--ui-dur-fast);

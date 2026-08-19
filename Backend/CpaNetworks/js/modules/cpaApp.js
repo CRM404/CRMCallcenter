@@ -96,6 +96,26 @@ function formatMoney(n) {
 
 // --- Сети: переключатель-табы + компактная модалка "Управление сетями" ---
 
+// Пустое состояние заполняется составом — заголовок и причина, — а не одной
+// строкой: правило брифа и находка Д12, из-за которой то же самое чинили в
+// «Реквизитах».
+function setEmpty(title, text) {
+    const titleEl = $('[data-role="empty-title"]');
+    const textEl = $('[data-role="empty-text"]');
+    if (titleEl) titleEl.textContent = title;
+    if (textEl) textEl.textContent = text;
+}
+
+// Пилюля статуса — элемент слоя. Свой `status-chip` раздел держал с тех
+// пор, когда был отдельной страницей; в «Скриптах» и «Источниках» та же
+// задача давно решена `ui-pill` (находка дизайн-сессии Д13).
+const STATUS_PILL = {
+    active: 'ui-pill--ok',
+    paused: 'ui-pill--warn',
+    disabled: 'ui-pill--mute',
+    draft: 'ui-pill--bad'
+};
+
 // Прочерк — ОДИН элемент на всё приложение. Раньше пустое «Тип действия»
 // рисовалось пилюлей с прочерком внутри (пилюля читается как «статус есть»,
 // Д8), а прочерки «Ставки» и «Периода» в одной строке отличались начертанием,
@@ -151,8 +171,8 @@ function renderNetList() {
                 <div class="n-name">${escapeHtml(n.name)}</div>
                 <div class="n-meta">${escapeHtml(n.organizationName || '—')} · комиссия ${n.commissionPercent ?? '—'}% · ${escapeHtml(n.payoutCurrency || '—')}</div>
             </div>
-            <button type="button" class="m-icon-btn" data-nedit="${n.id}" title="Изменить"><i class="fas fa-pencil-alt" aria-hidden="true"></i></button>
-            <button type="button" class="m-icon-btn danger" data-ndel="${n.id}" title="Удалить"><i class="fas fa-trash" aria-hidden="true"></i></button>
+            <button type="button" class="ui-btn ui-btn--icon ui-btn--sm" data-nedit="${n.id}" title="Изменить"><i class="fas fa-pencil-alt" aria-hidden="true"></i></button>
+            <button type="button" class="ui-btn ui-btn--icon ui-btn--sm ui-btn--danger" data-ndel="${n.id}" title="Удалить"><i class="fas fa-trash" aria-hidden="true"></i></button>
         </div>`).join('');
 
     $('#netList').querySelectorAll('[data-nedit]').forEach((b) => b.addEventListener('click', () => openNetForm(Number(b.dataset.nedit))));
@@ -252,14 +272,17 @@ function renderOffersTable() {
     $('#addOfferBtn').disabled = activeNetworkId === null;
     if (activeNetworkId === null) {
         $('#offersBody').innerHTML = '';
-        $('[data-role="empty-state"]').textContent = 'Сначала добавьте сеть в «Управление сетями».';
+        setEmpty('Сетей пока нет', 'Добавьте первую сеть в окне «Управление сетями» — офферы заводятся внутри неё.');
         $('[data-role="empty-state"]').hidden = false;
         $('[data-role="stat-total"]').textContent = '0';
         $('[data-role="stat-active"]').textContent = '0';
         $('[data-role="stat-draft"]').textContent = '0';
         return;
     }
-    $('[data-role="empty-state"]').textContent = 'В этой сети пока нет офферов, подходящих под фильтр.';
+    setEmpty(searchQuery || activeStatus !== 'all' ? 'Ничего не найдено' : 'Офферов пока нет',
+        searchQuery || activeStatus !== 'all'
+            ? 'В этой сети есть офферы, но ни один не подходит под текущий поиск и фильтр статуса.'
+            : 'В этой сети ещё не заведено ни одного оффера.');
 
     let list = offers.filter((o) => o.networkId === activeNetworkId);
     if (activeStatus !== 'all') list = list.filter((o) => o.status === activeStatus);
@@ -271,12 +294,12 @@ function renderOffersTable() {
             <td>${o.actionType ? `<span class="action-tag">${escapeHtml(o.actionType)}</span>` : DASH}</td>
             <td>${o.rate === null || o.rate === undefined ? DASH : `<span class="rate-value">${formatMoney(o.rate)}</span><span class="rate-cur">₽</span>`}</td>
             <td>${o.dateStart ? `<span class="period">${formatDate(o.dateStart)} – ${o.dateEnd ? formatDate(o.dateEnd) : 'бессрочно'}</span>` : DASH}</td>
-            <td><span class="status-chip ${o.status}">${STATUS_LABEL[o.status]}</span></td>
+            <td><span class="ui-pill ui-pill--dot ${STATUS_PILL[o.status] || 'ui-pill--mute'}">${STATUS_LABEL[o.status]}</span></td>
             <td>
                 <div class="row-actions">
-                    <button type="button" class="m-icon-btn" data-edit="${o.id}" title="Настроить"><i class="fas fa-pencil-alt" aria-hidden="true"></i></button>
-                    <button type="button" class="m-icon-btn" data-copy="${o.id}" title="Скопировать"><i class="fas fa-copy" aria-hidden="true"></i></button>
-                    <button type="button" class="m-icon-btn danger" data-del="${o.id}" title="Удалить"><i class="fas fa-trash" aria-hidden="true"></i></button>
+                    <button type="button" class="ui-btn ui-btn--icon ui-btn--sm" data-edit="${o.id}" title="Настроить"><i class="fas fa-pencil-alt" aria-hidden="true"></i></button>
+                    <button type="button" class="ui-btn ui-btn--icon ui-btn--sm" data-copy="${o.id}" title="Скопировать"><i class="fas fa-copy" aria-hidden="true"></i></button>
+                    <button type="button" class="ui-btn ui-btn--icon ui-btn--sm ui-btn--danger" data-del="${o.id}" title="Удалить"><i class="fas fa-trash" aria-hidden="true"></i></button>
                 </div>
             </td>
         </tr>`).join('');
@@ -324,8 +347,8 @@ function renderSegments() {
             </select>
             <div class="range-pair"><input type="number" class="seg-price-min" placeholder="цена от" value="${s.priceMin ?? ''}"><span>—</span><input type="number" class="seg-price-max" placeholder="цена до" value="${s.priceMax ?? ''}"></div>
             <div class="range-pair"><input type="number" class="seg-area-min" placeholder="S от" value="${s.areaMin ?? ''}"><span>—</span><input type="number" class="seg-area-max" placeholder="S до" value="${s.areaMax ?? ''}"></div>
-            <button type="button" class="m-icon-btn danger rr-remove" data-rm="${i}"><i class="fas fa-trash" aria-hidden="true"></i></button>
-        </div>`).join('') || '<div class="empty-state" style="padding:14px">Сегментов пока нет — по умолчанию действует общий фильтр по типу выше.</div>';
+            <button type="button" class="ui-btn ui-btn--icon ui-btn--sm ui-btn--danger rr-remove" data-rm="${i}"><i class="fas fa-trash" aria-hidden="true"></i></button>
+        </div>`).join('') || '<div class="ui-empty ui-empty--inline"><span class="ui-empty__text">Сегментов пока нет — по умолчанию действует общий фильтр по типу выше.</span></div>';
     $('#fSegments').querySelectorAll('[data-rm]').forEach((b) => b.addEventListener('click', () => { syncSegmentsFromDom(); currentSegments.splice(Number(b.dataset.rm), 1); renderSegments(); }));
 }
 
@@ -355,8 +378,8 @@ function renderGeoRows(containerId, store) {
             <div class="geo-field"><input class="geo-city" placeholder="Город" value="${escapeHtml(r.city || '')}"></div>
             <div class="geo-field"><input class="geo-district" placeholder="Район" value="${escapeHtml(r.district || '')}"></div>
             <div class="geo-field"><input class="geo-locality" placeholder="Нас. пункт" value="${escapeHtml(r.locality || '')}"></div>
-            <button type="button" class="m-icon-btn danger rr-remove" data-rm="${i}"><i class="fas fa-trash" aria-hidden="true"></i></button>
-        </div>`).join('') || '<div class="empty-state" style="padding:14px">География не задана — оффер считается доступным по всей стране.</div>';
+            <button type="button" class="ui-btn ui-btn--icon ui-btn--sm ui-btn--danger rr-remove" data-rm="${i}"><i class="fas fa-trash" aria-hidden="true"></i></button>
+        </div>`).join('') || '<div class="ui-empty ui-empty--inline"><span class="ui-empty__text">География не задана — оффер считается доступным по всей стране.</span></div>';
     $('#' + containerId).querySelectorAll('[data-rm]').forEach((b) => b.addEventListener('click', () => { syncGeoRowsFromDom(containerId, store); store.splice(Number(b.dataset.rm), 1); renderGeoRows(containerId, store); }));
     attachGeoAutocomplete(containerId, store);
 }

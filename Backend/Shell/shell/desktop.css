@@ -182,7 +182,7 @@ body {
     border: 1px solid var(--ui-color-accent-line);
     border-radius: var(--ui-radius-pill);
     background: var(--ui-color-wash-active);
-    font-size: 9.5px;
+    font-size: var(--ui-icon-2xs);
     font-weight: var(--ui-weight-bold);
     letter-spacing: .04em;
     text-transform: uppercase;
@@ -207,7 +207,7 @@ body {
     display: inline-flex;
     align-items: center;
     gap: var(--ui-space-1);
-    font-size: 9.5px;
+    font-size: var(--ui-icon-2xs);
     font-weight: var(--ui-weight-bold);
     letter-spacing: .04em;
     text-transform: uppercase;

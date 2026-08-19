@@ -70,13 +70,31 @@ export function buildQuery(filters = {}) {
  * монтировании раздела и обрывает при размонтировании — раздел получает его
  * как ctx.api и своего AbortController не заводит.
  */
-export function createApiScope() {
+export function createApiScope(hooks = {}) {
     const controller = new AbortController();
     let alive = true;
 
+    // Чтение отличается от действия по методу. Оболочка вешает на чтение
+    // показ полосы «данные не загрузились» (ui/load-error.js): отказавший
+    // запрос данных иначе неотличим от честного «записей нет» — раздел
+    // рисует своё пустое состояние, и человек заводит заново то, что уже
+    // есть (находка ревизора Р3).
+    const isRead = (options) => !options.method || String(options.method).toUpperCase() === 'GET';
+
     const send = (path, options = {}) => {
         if (!alive) return Promise.reject(abortError());
-        return request(path, { ...options, signal: controller.signal });
+        const read = isRead(options);
+        return request(path, { ...options, signal: controller.signal }).then(
+            (body) => {
+                if (read && alive && hooks.onReadOk) hooks.onReadOk();
+                return body;
+            },
+            (err) => {
+                // Отмена — не отказ: панель просто закрыли.
+                if (read && alive && !isAbort(err) && hooks.onReadFail) hooks.onReadFail(err);
+                throw err;
+            }
+        );
     };
 
     return {

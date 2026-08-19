@@ -204,6 +204,7 @@
 
 /* ----- Составная ячейка «Мессенджеры» ----- */
 .emp-wrap .messenger-cell { display: flex; gap: 6px; }
+.emp-wrap .messenger-chip i { font-size: var(--ui-icon-xs); }
 .emp-wrap .messenger-chip {
     width: 24px;
     height: 24px;
@@ -218,8 +219,8 @@
 .emp-wrap .messenger-chip.chip-telegram { background: #0088cc; }
 .emp-wrap .messenger-empty { color: var(--e-ink-faint); }
 /* Те же два цвета в подписях полей карточки. */
-.emp-wrap .msg-wa { color: #25D366; margin-right: 4px; }
-.emp-wrap .msg-tg { color: #0088cc; margin-right: 4px; }
+.emp-wrap .msg-wa { color: #25D366; margin-right: 4px; font-size: var(--ui-icon-xs); }
+.emp-wrap .msg-tg { color: #0088cc; margin-right: 4px; font-size: var(--ui-icon-xs); }
 
 /* ----- Отдел и руководитель ----- */
 .emp-wrap .department-tag {

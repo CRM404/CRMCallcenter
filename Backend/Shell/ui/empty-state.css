@@ -1,3 +1,30 @@
+/* Полоса «данные не загрузились» (ui/load-error.js).
+
+   Родня пустому состоянию и стоит рядом с ним: оба отвечают на вопрос
+   «почему я ничего не вижу». Разница в правде ответа — пустое состояние
+   говорит «записей нет», полоса говорит «мы не знаем, есть они или нет».
+
+   Липнет к верху панели: раздел прокручивают, и уехавшее предупреждение
+   равносильно его отсутствию. */
+.ui-load-error {
+    position: sticky;
+    top: calc(var(--ui-space-5) * -1);
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    gap: var(--ui-space-4);
+    margin: calc(var(--ui-space-5) * -1) calc(var(--ui-space-5) * -1) var(--ui-space-5);
+    padding: var(--ui-space-4) var(--ui-space-5);
+    border-bottom: 1px solid var(--ui-color-line);
+    background: var(--ui-color-warn-bg);
+    font-family: var(--ui-font-ui);
+    font-size: var(--ui-text-sm);
+    color: var(--ui-color-ink);
+}
+.ui-load-error__icon { color: var(--ui-color-warn-ink); font-size: var(--ui-icon-sm); }
+.ui-load-error__text { flex: 1 1 auto; min-width: 0; }
+.ui-load-error__reason { color: var(--ui-color-ink-soft); }
+
 /* Прочерк: «значения нет» в ячейке таблицы или в карточке.
 
    Держится здесь, рядом с пустым состоянием, по той же причине: это ответ на

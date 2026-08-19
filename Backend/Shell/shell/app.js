@@ -14,6 +14,7 @@
 import { createApiScope } from '../api.js';
 import { showToast } from '../ui/toast.js';
 import { createSkeleton } from '../ui/skeleton.js';
+import { showLoadError, clearLoadError } from '../ui/load-error.js';
 import { confirm, confirmDanger } from '../ui/modal.js';
 import { startRouter, setRoute } from './router.js';
 import {
@@ -183,7 +184,20 @@ async function mountSection(panelId, key, container) {
     const section = find(key);
     if (!section) return;
 
-    const api = createApiScope();
+    // Полоса «данные не загрузились» — на любом отказавшем чтении этой
+    // панели, снимается на первом удачном. «Повторить» перемонтирует раздел:
+    // это ровно то же, что закрыть панель и открыть заново, только без
+    // потери места на экране.
+    const api = createApiScope({
+        onReadFail: (err) => {
+            if (mounted.get(panelId) !== record) return;
+            showLoadError(container, err && err.message, () => remountSection(panelId, key, container));
+        },
+        onReadOk: () => {
+            if (mounted.get(panelId) !== record) return;
+            clearLoadError(container);
+        }
+    });
     const ctx = {
         panelId,
         api,
@@ -196,7 +210,8 @@ async function mountSection(panelId, key, container) {
         findAll: (selector) => Array.from(container.querySelectorAll(selector))
     };
 
-    mounted.set(panelId, { key, api, unmount: null, container });
+    const record = { key, api, unmount: null, container };
+    mounted.set(panelId, record);
 
     // Скелет ставится ДО первого await — иначе он опоздает ровно к тому
     // кадру, ради которого нужен: между открытием панели и первым ответом
@@ -233,8 +248,7 @@ async function mountSection(panelId, key, container) {
         // накладку и снимаем: раньше показали бы пустую таблицу, позже
         // держали бы скелет поверх готового раздела.
         await module.mount(container, ctx);
-        const record = mounted.get(panelId);
-        if (record) record.unmount = module.unmount;
+        if (mounted.get(panelId) === record) record.unmount = module.unmount;
     } catch (err) {
         renderFailure(container, section, err);
     } finally {
@@ -242,6 +256,16 @@ async function mountSection(panelId, key, container) {
         // уйти, иначе поверх объяснения ошибки останутся мигающие полосы.
         skeleton.remove();
     }
+}
+
+/**
+ * Перемонтировать раздел в той же панели — кнопка «Повторить» на полосе
+ * отказа. Разбор и сборка те же, что при закрытии и открытии панели: своего
+ * пути восстановления не заводим, иначе он разойдётся с основным.
+ */
+function remountSection(panelId, key, container) {
+    unmountSection(panelId);
+    mountSection(panelId, key, container);
 }
 
 function unmountSection(panelId) {
