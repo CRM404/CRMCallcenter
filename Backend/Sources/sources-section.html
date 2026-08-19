@@ -1,0 +1,107 @@
+<!-- Фрагмент раздела «Источники». Грузится оболочкой при первом монтировании
+     панели и кэшируется в памяти (shell/app.js).
+
+     ЗДЕСЬ НЕТ ГЛОБАЛЬНЫХ id — это главная техническая ловушка задачи: при двух
+     открытых панелях getElementById вернул бы первый попавшийся, и раздел стал
+     бы управлять чужим элементом. Поиск идёт только по data-role в границах
+     своего контейнера.
+
+     Своих кнопок, полей, таблиц, чипов, модалок и тостов раздел не объявляет —
+     всё из слоя элементов. В sources-light.css остаётся только раскладка. -->
+
+<div class="src-section">
+
+    <div class="src-head">
+        <div class="src-head__titles">
+            <div class="src-head__eyebrow">CRM · Источники лидов</div>
+            <h2 class="src-head__title">Источники</h2>
+            <p class="src-head__sub">Рекламные площадки и вложенные в них источники — то, откуда приходят лиды.</p>
+        </div>
+
+        <!-- Счётчики раздела остаются: владелец убрал числа с плиток стола, и
+             только оттуда (бриф, п.6). -->
+        <ul class="ui-chips src-head__stats">
+            <li class="ui-chip"><span class="ui-chip__value" data-role="stat-platforms">—</span><span class="ui-chip__label">Площадок</span></li>
+            <li class="ui-chip"><span class="ui-chip__value" data-role="stat-sources">—</span><span class="ui-chip__label">Источников</span></li>
+            <li class="ui-chip ui-chip--ok"><span class="ui-chip__value" data-role="stat-active">—</span><span class="ui-chip__label">Активных</span></li>
+        </ul>
+
+        <div class="src-head__acts">
+            <button type="button" class="ui-btn ui-btn--ghost ui-btn--sm" data-role="manage-platforms">
+                <i class="fas fa-gear" aria-hidden="true"></i>Управление площадками
+            </button>
+            <button type="button" class="ui-btn ui-btn--sm" data-role="add-source">
+                <i class="fas fa-plus" aria-hidden="true"></i>Добавить источник
+            </button>
+        </div>
+    </div>
+
+    <!-- Мастер-деталь: слева площадки, справа их источники (бриф, п.6). -->
+    <div class="src-master">
+        <aside class="src-side">
+            <div class="src-side__title">Площадки</div>
+            <div class="src-side__list" data-role="platform-list"></div>
+            <p class="src-side__note" data-role="platform-note"></p>
+        </aside>
+
+        <div class="src-main">
+            <div class="ui-tabs" data-role="status-tabs"></div>
+
+            <div class="src-toolbar">
+                <div class="ui-field src-search">
+                    <input type="search" class="ui-field__control" data-role="search"
+                           placeholder="Поиск по корневому источнику, источнику лидов, площадке, CPA-сети, городу, статусу…"
+                           aria-label="Поиск источников">
+                </div>
+            </div>
+
+            <div class="ui-fchips" data-role="filter-chips" hidden></div>
+
+            <div class="ui-table-wrap" data-role="table-wrap">
+                <table class="ui-table">
+                    <thead>
+                        <tr>
+                            <th class="ui-table__sel">
+                                <input type="checkbox" data-role="check-all" aria-label="Выделить все">
+                            </th>
+                            <th data-role="col-platform" hidden>Площадка</th>
+                            <th>Корневой источник</th>
+                            <th>Город/Регион</th>
+                            <th>CPA-сети</th>
+                            <th>Статус</th>
+                            <th>Источник лидов</th>
+                            <th class="ui-table__acts"></th>
+                        </tr>
+                    </thead>
+                    <tbody data-role="rows"></tbody>
+                </table>
+            </div>
+
+            <div class="ui-empty" data-role="empty" hidden>
+                <span class="ui-empty__icon"><i class="fas fa-diagram-project" aria-hidden="true"></i></span>
+                <b class="ui-empty__title" data-role="empty-title"></b>
+                <span class="ui-empty__text" data-role="empty-text"></span>
+                <button type="button" class="ui-btn ui-btn--ghost ui-btn--sm ui-empty__action" data-role="empty-action" hidden></button>
+            </div>
+
+            <div class="ui-table-foot" data-role="foot" hidden>
+                <span data-role="foot-shown"></span>
+                <span data-role="foot-selected"></span>
+            </div>
+
+            <div class="ui-mass-bar" data-role="mass-bar" hidden>
+                <span class="ui-mass-bar__count" data-role="selected-count">Выбрано: 0</span>
+                <select class="ui-field__control src-mass-select" data-role="mass-action" aria-label="Массовое действие">
+                    <option value="">Выберите действие</option>
+                    <option value="Активен">Статус → Активен</option>
+                    <option value="Неактивен">Статус → Неактивен</option>
+                    <option value="Архив">Статус → Архив</option>
+                    <option value="delete">Удалить</option>
+                </select>
+                <button type="button" class="ui-btn ui-btn--sm" data-role="mass-apply">Применить</button>
+                <button type="button" class="ui-btn ui-btn--ghost ui-btn--sm" data-role="mass-clear">Снять выделение</button>
+            </div>
+        </div>
+    </div>
+
+</div>

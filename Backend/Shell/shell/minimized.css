@@ -1,0 +1,120 @@
+/* --- shell/minimized.css: БЛОК 4 — оболочка ------------------------------
+   Полоса свёрнутых панелей и кнопка «Главная».
+
+   Полоса НЕ ПЕРЕКРЫВАЕТ панели: пока она видна, сцена получает нижний отступ
+   (shell-stage--with-bar в desktop.css). Свёрнутая панель не размонтирована —
+   в чипе живой раздел с введённым текстом и позицией прокрутки, поэтому чип
+   это «свернуть», а не «закрыть и открыть заново».
+
+   Кнопка «Главная» — то, что раньше давала боковая рейка бесплатно: возврат
+   на стол одним действием из любого состояния. Она сворачивает панели, а не
+   закрывает их.
+   ------------------------------------------------------------------------ */
+
+.shell-minimized {
+    position: fixed;
+    left: 76px;
+    right: var(--ui-space-5);
+    bottom: var(--ui-space-4);
+    z-index: 60;
+    display: flex;
+    align-items: center;
+    gap: var(--ui-space-3);
+    padding: var(--ui-space-2) var(--ui-space-3);
+    border: 1px solid var(--ui-color-line);
+    border-radius: var(--ui-radius-lg);
+    background: var(--ui-color-glass-strong);
+    box-shadow: var(--ui-shadow-card);
+    font-family: var(--ui-font-ui);
+}
+
+.shell-minimized__label {
+    padding: 0 var(--ui-space-2);
+    font-size: 11px;
+    font-weight: var(--ui-weight-bold);
+    letter-spacing: .07em;
+    text-transform: uppercase;
+    color: var(--ui-color-ink-faint);
+    white-space: nowrap;
+}
+
+.shell-minimized__list {
+    display: flex;
+    align-items: center;
+    gap: var(--ui-space-3);
+    flex-wrap: wrap;
+    min-width: 0;
+}
+
+.shell-minimized__tail { margin-left: auto; display: flex; align-items: center; gap: var(--ui-space-3); }
+
+/* ----- Чип свёрнутой панели ----------------------------------------------- */
+.shell-mini {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--ui-space-2);
+    padding: var(--ui-space-1) var(--ui-space-2) var(--ui-space-1) var(--ui-space-4);
+    border: 1px solid var(--ui-color-line);
+    border-radius: var(--ui-radius-md);
+    background: var(--ui-color-surface-sunken);
+    font-size: var(--ui-text-sm);
+    color: var(--ui-color-ink);
+}
+.shell-mini:hover { border-color: var(--ui-color-accent); background: var(--ui-color-wash-hover); }
+
+.shell-mini__open {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--ui-space-3);
+    padding: 0;
+    border: none;
+    background: transparent;
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+}
+.shell-mini__open:focus-visible { outline: 2px solid var(--ui-color-accent); outline-offset: 2px; }
+.shell-mini__icon { color: var(--ui-color-ink-soft); }
+
+.shell-mini__close {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border: none;
+    border-radius: var(--ui-radius-sm);
+    background: transparent;
+    color: var(--ui-color-ink-faint);
+    font-size: var(--ui-icon-sm);
+    cursor: pointer;
+}
+.shell-mini__close:hover { background: var(--ui-color-off-bg); color: var(--ui-color-danger); }
+.shell-mini__close:focus-visible { outline: 2px solid var(--ui-color-accent); outline-offset: 1px; }
+
+/* ----- Кнопка «Главная» ---------------------------------------------------
+   Живёт в левом нижнем углу постоянно, пока на экране есть хоть одна панель:
+   это единственный способ вернуться на стол, не закрывая работу. */
+.shell-home {
+    position: fixed;
+    left: var(--ui-space-5);
+    bottom: var(--ui-space-4);
+    z-index: 70;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 46px;
+    height: 46px;
+    border: 1px solid var(--ui-color-line);
+    border-radius: var(--ui-radius-md);
+    background: var(--ui-color-glass-strong);
+    box-shadow: var(--ui-shadow-card);
+    color: var(--ui-color-ink-soft);
+    font-size: var(--ui-icon-md);
+    cursor: pointer;
+}
+.shell-home:hover { border-color: var(--ui-color-accent); color: var(--ui-color-accent); }
+.shell-home:focus-visible { outline: 2px solid var(--ui-color-accent); outline-offset: 2px; }
+
+/* Когда полосы нет, «Главная» остаётся на месте — иначе кнопка прыгала бы по
+   экрану в зависимости от того, свёрнуто что-то или нет. */

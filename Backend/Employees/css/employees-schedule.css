@@ -1,84 +1,24 @@
 /* ============================================================
-   employees-schedule.css — режим «График» на странице «Сотрудники».
+   employees-schedule.css — БЛОК 5: раскладка режима «График».
+
    Отдельный файл, а не дописка в employees-light.css: режим «Список» мы
    обязались не задевать, и физическая граница надёжнее обещания (dialog.md, Н11).
-   Токены (--e-*), стекло, серые кнопки и синий только на интерактиве —
-   наследуются из employees-light.css.
+   Токены (--e-*, --s-*) объявлены в employees-light.css на той же обёртке —
+   оба файла применяются к .emp-wrap.
+
+   ЧТО УШЛО В ОБЩИЙ СЛОЙ: переключатель режима (.ui-switch), чипы счётчиков,
+   кнопки, поля, окно заполнения (.ui-modal), поповер дня (.ui-popover) — от
+   него здесь остались только цветные точки состояний и второй шаг с временем.
+
+   ВСЕ СЕЛЕКТОРЫ ОГРАНИЧЕНЫ .emp-wrap.
    ============================================================ */
 
-:root {
-    /* Состояния ячейки графика */
-    --s-shift-bg: #ffffff;
-    --s-shift-ink: #2c3a55;
-    --s-off-bg: rgba(96, 112, 148, .13);
-    --s-off-ink: #6a778f;
-    --s-vac-bg: #f3e9cf;
-    --s-vac-ink: #7a5c1e;
-    --s-danger-bg: #fdecea;
-}
-
-/* Атрибут hidden не работает на элементе, которому CSS задал display
-   (flex/grid/block) — повторяющийся класс дефектов проекта, на странице
-   оператора его чинили дважды. Правило намеренно ОГРАНИЧЕНО кодом этой задачи:
-   глобальное трогало бы и режим «Список» (dialog.md, Н11). */
-#scheduleView[hidden],
-#scheduleView [hidden],
-#listSection[hidden],
-#listStatChips[hidden],
-#schedStatChips[hidden],
-#addEmployeeWrap[hidden],
-#cellPop[hidden],
-#cellPop [hidden],
-#fillModal [hidden] {
-    display: none !important;
-}
-
-/* ----- Переключатель «Список | График» ----- */
-.view-switch {
-    display: flex;
-    background: rgba(96, 112, 148, .10);
-    border: 1px solid var(--e-line);
-    border-radius: 10px;
-    padding: 3px;
-    gap: 2px;
-}
-.view-switch button {
-    border: none;
-    background: transparent;
-    color: var(--e-ink-soft);
-    font-size: 13px;
-    font-weight: 600;
-    font-family: var(--e-font-ui);
-    padding: 7px 16px;
-    border-radius: 8px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    gap: 7px;
-    transition: background .18s, color .18s;
-}
-.view-switch button:hover { color: var(--e-ink); }
-.view-switch button.active { background: var(--e-accent); color: #fff; }
-.view-switch button:focus-visible { outline: 2px solid var(--e-accent); outline-offset: 2px; }
-
-/* Четыре чипа вместо трёх — ужимаем по горизонтали, высоту не трогаем:
-   шапка не должна менять высоту при переключении режима. */
-.sched-chips .stat-chip { min-width: 78px; padding: 8px 12px; }
-.sched-chips .stat-chip.stat-shift .stat-value { color: var(--e-ok-ink); }
-.sched-chips .stat-chip.stat-vac .stat-value { color: var(--s-vac-ink); }
-.sched-chips .stat-chip.stat-sick .stat-value { color: var(--e-off-ink); }
-.sched-chips .stat-chip.muted .stat-value { color: var(--e-ink-faint); }
-.sched-chips .stat-chip .stat-label { text-transform: none; letter-spacing: 0; }
-
 /* ----- Тулбар графика ----- */
-.sched-section { margin-top: 10px; }
-.sched-toolbar-card { display: flex; flex-direction: column; gap: 12px; }
-.sched-toolbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-
-.month-nav { display: flex; align-items: center; gap: 10px; }
+.emp-wrap .sched-toolbar { flex-wrap: wrap; }
+.emp-wrap .month-nav { display: flex; align-items: center; gap: 10px; }
 /* Месяц и стрелки — один блок с тонкой рамкой; серых квадратных кнопок здесь
    быть не должно (правка владельца от 16.08). */
-.month-pill {
+.emp-wrap .month-pill {
     display: flex;
     align-items: stretch;
     height: 40px;
@@ -87,171 +27,121 @@
     border-radius: 10px;
     overflow: hidden;
 }
-.month-pill button {
-    width: 36px;
+.emp-wrap .month-pill button {
+    width: 34px;
     border: none;
     background: transparent;
-    color: var(--e-ink-faint);
+    color: var(--e-ink-soft);
     cursor: pointer;
+    font-size: 13px;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 13px;
-    transition: background .18s, color .18s;
+    transition: background .15s, color .15s;
 }
-.month-pill button:hover { background: rgba(0, 0, 255, .06); color: var(--e-accent); }
-.month-pill button:focus-visible { outline: 2px solid var(--e-accent); outline-offset: -2px; }
-.month-label {
-    font-size: 16px;
+.emp-wrap .month-pill button:hover { background: rgba(0, 0, 255, .06); color: var(--e-accent); }
+.emp-wrap .month-pill button:focus-visible { outline: 2px solid var(--e-accent); outline-offset: -2px; }
+.emp-wrap .month-label {
+    display: flex;
+    align-items: center;
+    padding: 0 12px;
+    font-size: 13.5px;
     font-weight: 700;
     color: var(--e-ink);
-    min-width: 142px;
-    text-align: center;
-    display: flex;
-    align-items: center;
+    white-space: nowrap;
+    min-width: 132px;
     justify-content: center;
-    padding: 0 6px;
-    border-left: 1px solid var(--e-line);
-    border-right: 1px solid var(--e-line);
 }
+.emp-wrap .sched-dept { width: auto; min-width: 170px; }
+.emp-wrap .sched-dept:disabled { opacity: .65; cursor: not-allowed; }
+.emp-wrap [data-role="sched-fill"] { margin-left: auto; }
 
-.btn-ghost {
-    background: rgba(255, 255, 255, .7);
-    color: var(--e-ink-soft);
-    border: 1px solid var(--e-line-strong);
-    font-weight: 600;
-}
-.btn-ghost:hover { background: #fff; color: var(--e-ink); }
-#schedTodayBtn { height: 40px; }
+/* Счётчики в месяце без «сегодня» гаснут: они показывают «—», и бледный вид
+   говорит то же самое, что прочерк. Правило потерялось при переносе — класс
+   модуль ставил, а правила под него в файле раздела не осталось; поймано
+   машинной проверкой «классы без единого правила». */
+.emp-wrap [data-role="sched-chips"] .ui-chip.muted .ui-chip__value { color: var(--e-ink-faint); }
 
-.sched-search-wrap { position: relative; }
-.sched-search-wrap .fa-magnifying-glass {
-    position: absolute;
-    left: 12px;
-    top: 50%;
-    transform: translateY(-50%);
-    color: var(--e-ink-faint);
-    font-size: 13px;
-    pointer-events: none;
+/* Сетка месяца прокручивается сама — и вбок, и вниз: тридцать одна колонка
+   не помещается по ширине, а строк бывает больше экрана. Закреплённые шапка,
+   подвал и колонка сотрудника прилипают именно к этой обёртке. */
+.emp-wrap .sched-wrap {
+    flex: 1 1 auto;
+    min-height: 220px;
+    overflow: auto;
 }
-.sched-search-wrap input {
-    height: 40px;
-    padding: 0 12px 0 34px;
-    border: 1px solid var(--e-line-strong);
-    border-radius: 8px;
-    background: #fff;
-    font-size: 13.5px;
-    font-family: var(--e-font-ui);
-    color: var(--e-ink);
-    width: 210px;
-}
-.sched-search-wrap input:focus { outline: 2px solid var(--e-accent); outline-offset: 1px; border-color: transparent; }
-
-.sched-dept-select {
-    height: 40px;
-    padding: 0 12px;
-    border: 1px solid var(--e-line-strong);
-    border-radius: 8px;
-    background: #fff;
-    font-size: 13.5px;
-    font-family: var(--e-font-ui);
-    color: var(--e-ink);
-    cursor: pointer;
-}
-.sched-dept-select:focus { outline: 2px solid var(--e-accent); outline-offset: 1px; }
-.sched-dept-select:disabled { opacity: .65; cursor: not-allowed; }
-.sched-fill-btn { margin-left: auto; }
-.sched-fill-btn i { margin-right: 8px; }
 
 /* ----- Легенда ----- */
-.sched-legend {
+.emp-wrap .sched-legend {
     display: flex;
     align-items: center;
-    gap: 14px;
+    gap: 18px;
     flex-wrap: wrap;
-    font-size: 12px;
+    font-size: 11.5px;
     color: var(--e-ink-soft);
+    padding: 0 4px;
 }
-.legend-item { display: inline-flex; align-items: center; gap: 6px; }
-.legend-swatch {
+.emp-wrap .legend-item { display: inline-flex; align-items: center; gap: 6px; }
+.emp-wrap .legend-swatch {
+    width: 44px;
+    height: 30px;
+    border-radius: 6px;
     display: inline-flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    min-width: 40px;
-    height: 30px;
-    border-radius: 6px;
-    font-size: 9.5px;
+    font-size: 10px;
     font-weight: 600;
-    padding: 0 4px;
     line-height: 1.15;
+    flex-shrink: 0;
 }
-.legend-swatch .t2 { color: var(--e-ink-faint); }
-.sw-shift { background: var(--s-shift-bg); color: var(--s-shift-ink); border: 1px solid var(--e-line-strong); }
-.sw-off { background: var(--s-off-bg); color: var(--s-off-ink); font-size: 10.5px; }
-.sw-vac { background: var(--s-vac-bg); color: var(--s-vac-ink); border: 1px solid rgba(122, 92, 30, .25); font-size: 10.5px; }
-.sw-sick { background: var(--e-off-bg); color: var(--e-off-ink); border: 1px solid rgba(154, 47, 39, .22); font-size: 10.5px; }
-.sw-empty {
+.emp-wrap .legend-swatch .t2 { color: var(--e-ink-faint); }
+.emp-wrap .sw-shift { background: var(--s-shift-bg); color: var(--s-shift-ink); border: 1px solid var(--e-line-strong); }
+.emp-wrap .sw-off { background: var(--s-off-bg); color: var(--s-off-ink); font-size: 10.5px; }
+.emp-wrap .sw-vac { background: var(--s-vac-bg); color: var(--s-vac-ink); border: 1px solid rgba(122, 92, 30, .25); font-size: 10.5px; }
+.emp-wrap .sw-sick { background: var(--e-off-bg); color: var(--e-off-ink); border: 1px solid rgba(154, 47, 39, .22); font-size: 10.5px; }
+.emp-wrap .sw-empty {
     background: repeating-linear-gradient(135deg, rgba(96, 112, 148, .10) 0 3px, transparent 3px 7px);
-    border: 1px dashed var(--e-line-strong);
+    border: 1px dashed rgba(96, 112, 148, .30);
 }
 
 /* ----- Плашка пустого месяца ----- */
-.sched-empty-note {
+.emp-wrap .sched-empty-note {
     display: flex;
     align-items: flex-start;
-    gap: 12px;
-    background: rgba(255, 255, 255, .62);
-    border: 1px dashed var(--e-line-strong);
-    border-radius: var(--e-radius-md);
-    padding: 14px 18px;
-    margin-bottom: 14px;
-}
-.sched-empty-note i { color: var(--e-ink-faint); flex-shrink: 0; margin-top: 2px; }
-.sched-empty-note b { display: block; font-size: 13.5px; color: var(--e-ink); margin-bottom: 3px; }
-.sched-empty-note span { font-size: 12.5px; color: var(--e-ink-soft); line-height: 1.5; }
-
-/* ----- Таблица графика ----- */
-.sched-card {
-    background: var(--e-surface);
+    gap: 10px;
+    background: rgba(255, 255, 255, .6);
     border: 1px solid var(--e-line);
-    border-radius: var(--e-radius-lg);
-    box-shadow: var(--e-shadow-card);
-    padding: 6px;
+    border-radius: var(--e-radius-md);
+    padding: 12px 16px;
 }
-/* Горизонтально скроллится только обёртка таблицы; страница вбок не едет. */
-.sched-table-wrapper { overflow-x: auto; border-radius: 14px; max-height: 70vh; overflow-y: auto; }
-table.sched {
-    border-collapse: separate;
-    border-spacing: 0;
-    width: max-content;
-    min-width: 100%;
-    font-variant-numeric: tabular-nums;
-}
-.sched th, .sched td { border-bottom: 1px solid rgba(96, 112, 148, .14); }
+.emp-wrap .sched-empty-note i { color: var(--e-ink-faint); flex-shrink: 0; margin-top: 2px; }
+.emp-wrap .sched-empty-note b { display: block; font-size: 13.5px; color: var(--e-ink); margin-bottom: 3px; }
+.emp-wrap .sched-empty-note span { font-size: 12.5px; color: var(--e-ink-soft); line-height: 1.5; }
 
-.sched thead th {
-    position: sticky;
-    top: 0;
-    z-index: 3;
-    background: var(--bg-table-header);
-    font-size: 11px;
-    font-weight: 600;
-    color: var(--e-ink-soft);
-    padding: 8px 4px 7px;
+/* ----- Сетка месяца ----- */
+/* Ячейки узкие и плотные — таблица слоя рассчитана на текст, здесь другое. */
+.emp-wrap .sched th,
+.emp-wrap .sched td { border-bottom: 1px solid rgba(96, 112, 148, .14); }
+.emp-wrap .sched thead th {
+    padding: 8px 2px;
     text-align: center;
-    border-bottom: 1px solid var(--e-line-strong);
+    text-transform: none;
+    letter-spacing: 0;
 }
-.sched thead th.col-emp { text-align: left; padding-left: 14px; font-size: 12px; }
-.sched th.day { min-width: 48px; }
-.sched th.day .dnum { display: block; font-size: 13px; font-weight: 700; color: var(--e-ink); }
-.sched th.day .dow { display: block; font-size: 10px; font-weight: 600; letter-spacing: .03em; color: var(--e-ink-faint); }
+.emp-wrap .sched thead th.col-emp { text-align: left; padding-left: 14px; font-size: 12px; }
+.emp-wrap .sched th.day { min-width: 48px; }
+.emp-wrap .sched th.day .dnum { display: block; font-size: 13px; font-weight: 700; color: var(--e-ink); }
+.emp-wrap .sched th.day .dow { display: block; font-size: 10px; font-weight: 600; letter-spacing: .03em; color: var(--e-ink-faint); }
 /* Суббота-воскресенье и «сегодня» — это КАЛЕНДАРНАЯ разметка, а не выходные
    сотрудника: совпадать они не обязаны. */
-.sched th.day.wend .dow { color: #b0736c; }
-.sched th.day.today .dnum, .sched th.day.today .dow { color: var(--e-accent); }
+.emp-wrap .sched th.day.wend .dow { color: #b0736c; }
+.emp-wrap .sched th.day.today .dnum,
+.emp-wrap .sched th.day.today .dow { color: var(--e-accent); }
 
-.sched .col-emp {
+/* Колонка сотрудника закреплена слева: без неё в тридцати одной колонке не
+   понять, чья это строка. */
+.emp-wrap .sched .col-emp {
     position: sticky;
     left: 0;
     z-index: 2;
@@ -261,8 +151,8 @@ table.sched {
     border-right: 1px solid var(--e-line-strong);
     padding: 6px 14px;
 }
-.sched thead .col-emp { z-index: 4; background: var(--bg-table-header); }
-.sched .col-total {
+.emp-wrap .sched thead .col-emp { z-index: 4; background: var(--ui-color-surface-sunken); }
+.emp-wrap .sched .col-total {
     min-width: 104px;
     text-align: right;
     padding: 6px 14px 6px 8px;
@@ -270,24 +160,13 @@ table.sched {
     border-left: 1px solid rgba(96, 112, 148, .14);
     background: rgba(255, 255, 255, .45);
 }
-.sched .total-main { font-size: 13px; font-weight: 700; color: var(--e-ink); }
-.sched .total-sub { font-size: 11px; color: var(--e-ink-faint); }
+.emp-wrap .sched .total-main { font-size: 13px; font-weight: 700; color: var(--e-ink); }
+.emp-wrap .sched .total-sub { font-size: 11px; color: var(--e-ink-faint); }
 
-.sched .emp-cell { display: flex; align-items: center; gap: 10px; }
-.sched .avatar-initials {
-    width: 34px;
-    height: 34px;
-    border-radius: var(--e-radius-md);
-    color: #fff;
-    font-size: 12.5px;
-    font-weight: 600;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-}
-.sched .emp-name { font-size: 13.5px; font-weight: 600; color: var(--e-ink); line-height: 1.25; }
-.sched .emp-sub {
+.emp-wrap .sched .emp-cell { display: flex; align-items: center; gap: 10px; }
+.emp-wrap .sched .avatar-initials { width: 34px; height: 34px; font-size: 12.5px; }
+.emp-wrap .sched .emp-name { font-size: 13.5px; font-weight: 600; color: var(--e-ink); line-height: 1.25; }
+.emp-wrap .sched .emp-sub {
     font-size: 11px;
     color: var(--e-ink-faint);
     display: flex;
@@ -296,7 +175,7 @@ table.sched {
     gap: 4px 6px;
     margin-top: 2px;
 }
-.sched .tpl-tag {
+.emp-wrap .sched .tpl-tag {
     font-size: 10px;
     font-weight: 700;
     color: var(--e-ink-soft);
@@ -308,20 +187,21 @@ table.sched {
 }
 /* Метка короткая и переносимая: колонка сотрудника узкая и закреплена —
    вылезти за её край плашка не должна. */
-.sched .tpl-tag.empty { color: var(--e-danger-deep); background: var(--s-danger-bg); font-weight: 600; white-space: normal; }
+.emp-wrap .sched .tpl-tag.empty { color: var(--e-danger-deep); background: var(--s-danger-bg); font-weight: 600; white-space: normal; }
 /* Режим сотрудника — справка, поэтому без плашки: он ни на что не влияет. */
-.sched .tpl-mode { font-size: 10.5px; color: var(--e-ink-faint); white-space: nowrap; }
-.sched .tpl-fired { font-size: 10.5px; color: var(--e-ink-faint); white-space: nowrap; }
+.emp-wrap .sched .tpl-mode { font-size: 10.5px; color: var(--e-ink-faint); white-space: nowrap; }
+.emp-wrap .sched .tpl-fired { font-size: 10.5px; color: var(--e-ink-faint); white-space: nowrap; }
 
-.sched td.day { padding: 3px 2px; text-align: center; }
-.sched td.day.wend { background: rgba(96, 112, 148, .06); }
-.sched td.day.today { background: rgba(0, 0, 255, .045); }
-.sched tbody tr:hover td { background-color: rgba(255, 255, 255, .55); }
-.sched tbody tr:hover td.wend { background-color: rgba(96, 112, 148, .09); }
-.sched tbody tr:hover td.today { background-color: rgba(0, 0, 255, .06); }
-.sched tbody tr:hover .col-emp { background-color: #fafbfe; }
+.emp-wrap .sched td.day { padding: 3px 2px; text-align: center; }
+.emp-wrap .sched td.day.wend { background: rgba(96, 112, 148, .06); }
+.emp-wrap .sched td.day.today { background: rgba(0, 0, 255, .045); }
+.emp-wrap .sched tbody tr:hover td { background-color: rgba(255, 255, 255, .55); }
+.emp-wrap .sched tbody tr:hover td.wend { background-color: rgba(96, 112, 148, .09); }
+.emp-wrap .sched tbody tr:hover td.today { background-color: rgba(0, 0, 255, .06); }
+.emp-wrap .sched tbody tr:hover .col-emp { background-color: #fafbfe; }
 
-.cellbtn {
+/* ----- Ячейка дня ----- */
+.emp-wrap .cellbtn {
     width: 44px;
     height: 34px;
     border-radius: 6px;
@@ -339,140 +219,53 @@ table.sched {
     color: var(--e-ink-faint);
     transition: box-shadow .15s;
 }
-.cellbtn:hover { box-shadow: 0 0 0 2px var(--e-accent) inset; }
-.cellbtn:focus-visible { outline: 2px solid var(--e-accent); outline-offset: 2px; }
+.emp-wrap .cellbtn:hover { box-shadow: 0 0 0 2px var(--e-accent) inset; }
+.emp-wrap .cellbtn:focus-visible { outline: 2px solid var(--e-accent); outline-offset: 2px; }
 /* Смена и доп. смена выглядят одинаково — решение владельца. */
-.cellbtn.st-shift { background: var(--s-shift-bg); color: var(--s-shift-ink); border-color: var(--e-line-strong); }
-.cellbtn.st-shift .t2 { color: var(--e-ink-faint); font-weight: 600; }
-.cellbtn.st-day_off { background: var(--s-off-bg); color: var(--s-off-ink); font-size: 11px; }
-.cellbtn.st-vacation { background: var(--s-vac-bg); color: var(--s-vac-ink); border-color: rgba(122, 92, 30, .25); font-size: 11px; }
-.cellbtn.st-sick { background: var(--e-off-bg); color: var(--e-off-ink); border-color: rgba(154, 47, 39, .22); font-size: 11px; }
+.emp-wrap .cellbtn.st-shift { background: var(--s-shift-bg); color: var(--s-shift-ink); border-color: var(--e-line-strong); }
+.emp-wrap .cellbtn.st-shift .t2 { color: var(--e-ink-faint); font-weight: 600; }
+.emp-wrap .cellbtn.st-day_off { background: var(--s-off-bg); color: var(--s-off-ink); font-size: 11px; }
+.emp-wrap .cellbtn.st-vacation { background: var(--s-vac-bg); color: var(--s-vac-ink); border-color: rgba(122, 92, 30, .25); font-size: 11px; }
+.emp-wrap .cellbtn.st-sick { background: var(--e-off-bg); color: var(--e-off-ink); border-color: rgba(154, 47, 39, .22); font-size: 11px; }
 /* «Не заполнено» — не пустое место, а различимая штриховка: иначе «нет
    графика» не отличить от выходного и от края таблицы. */
-.cellbtn.st-empty {
+.emp-wrap .cellbtn.st-empty {
     background: repeating-linear-gradient(135deg, rgba(96, 112, 148, .10) 0 3px, transparent 3px 7px);
     border: 1px dashed rgba(96, 112, 148, .30);
 }
 /* Дни до найма и после увольнения — бледный «·», не кликается. */
-.cellbtn.st-none { cursor: default; color: rgba(136, 148, 168, .5); }
-.cellbtn.st-none:hover { box-shadow: none; }
-.cellbtn.pending { opacity: .55; cursor: progress; }
+.emp-wrap .cellbtn.st-none { cursor: default; color: rgba(136, 148, 168, .5); }
+.emp-wrap .cellbtn.st-none:hover { box-shadow: none; }
+.emp-wrap .cellbtn.pending { opacity: .55; cursor: progress; }
 
 /* Строка покрытия «В смене» — просто число, без порогов и подсветки. */
-.sched tfoot td, .sched tfoot th { border-bottom: none; border-top: 1px solid var(--e-line-strong); background: var(--bg-table-header); }
-.sched tfoot .col-emp { font-size: 11.5px; font-weight: 600; color: var(--e-ink-soft); z-index: 2; background: var(--bg-table-header); }
-.sched tfoot td.day { font-size: 12px; font-weight: 700; color: var(--e-ink-soft); text-align: center; padding: 8px 2px; }
-.sched tfoot td.day.zero { color: rgba(136, 148, 168, .6); font-weight: 600; }
-.sched tfoot .col-total { background: var(--bg-table-header); }
+.emp-wrap .sched tfoot td,
+.emp-wrap .sched tfoot th { border-bottom: none; border-top: 1px solid var(--e-line-strong); background: var(--ui-color-surface-sunken); }
+.emp-wrap .sched tfoot .col-emp { font-size: 11.5px; font-weight: 600; color: var(--e-ink-soft); z-index: 2; background: var(--ui-color-surface-sunken); }
+.emp-wrap .sched tfoot td.day { font-size: 12px; font-weight: 700; color: var(--e-ink-soft); text-align: center; padding: 8px 2px; }
+.emp-wrap .sched tfoot td.day.zero { color: rgba(136, 148, 168, .6); font-weight: 600; }
+.emp-wrap .sched tfoot .col-total { background: var(--ui-color-surface-sunken); }
 
-/* ----- Поповер дня ----- */
-.cell-pop {
-    position: fixed;
-    z-index: 300;
-    width: 236px;
-    background: rgba(255, 255, 255, .97);
-    backdrop-filter: blur(8px);
-    border: 1px solid var(--e-line-strong);
-    border-radius: var(--e-radius-md);
-    box-shadow: var(--e-shadow-pop);
-    padding: 8px;
-}
-.cell-pop-title {
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--e-ink-soft);
-    padding: 4px 8px 8px;
-    border-bottom: 1px solid var(--e-line);
-    margin-bottom: 6px;
-}
-.cell-pop-opt {
-    display: flex;
-    align-items: center;
-    gap: 9px;
-    width: 100%;
-    border: none;
-    background: transparent;
-    padding: 7px 8px;
-    border-radius: 7px;
-    font-size: 13px;
-    font-family: var(--e-font-ui);
-    color: var(--e-ink);
-    cursor: pointer;
-    text-align: left;
-}
-.cell-pop-opt:hover { background: rgba(0, 0, 255, .06); }
-.cell-pop-opt:focus-visible { outline: 2px solid var(--e-accent); outline-offset: -2px; }
-.cell-pop-opt .dot { width: 14px; height: 14px; border-radius: 4px; flex-shrink: 0; }
-.cell-pop-opt .sub { display: block; font-size: 11px; color: var(--e-ink-faint); font-weight: 400; }
-/* Пункт «Смена» без времени в карточке — виден, но неактивен: пропавший пункт
-   читается как поломка. */
-.cell-pop-opt.off { opacity: .55; cursor: not-allowed; }
-.cell-pop-opt.off:hover { background: transparent; }
-.cell-pop-sep { border: none; border-top: 1px solid var(--e-line); margin: 5px 4px; }
-.cell-pop-opt.opt-clear { color: var(--e-ink-faint); }
-.dot-shift { background: #fff; border: 1px solid var(--e-line-strong); }
-.dot-off { background: var(--s-off-bg); }
-.dot-vac { background: var(--s-vac-bg); border: 1px solid rgba(122, 92, 30, .3); }
-.dot-sick { background: var(--e-off-bg); border: 1px solid rgba(154, 47, 39, .3); }
-.dot-extra { background: #fff; border: 1px dashed var(--e-accent); }
-.dot-clear { border: 1px dashed var(--e-line-strong); }
+/* ----- Поповер дня: цветные точки состояний и второй шаг ----- */
+/* Сам поповер, его пункты и разделители — из слоя (.ui-popover). Здесь только
+   то, чего в слое быть не может: цвета состояний графика. */
+.emp-wrap .cell-pop { width: 236px; }
+.emp-wrap .dot-shift { background: #fff; border: 1px solid var(--e-line-strong); }
+.emp-wrap .dot-off { background: var(--s-off-bg); }
+.emp-wrap .dot-vac { background: var(--s-vac-bg); border: 1px solid rgba(122, 92, 30, .3); }
+.emp-wrap .dot-sick { background: var(--e-off-bg); border: 1px solid rgba(154, 47, 39, .3); }
+.emp-wrap .dot-extra { background: #fff; border: 1px dashed var(--e-accent); }
+.emp-wrap .dot-clear { border: 1px dashed var(--e-line-strong); }
+.emp-wrap .opt-clear { color: var(--e-ink-faint); }
 
-.pop-step { padding: 2px 8px 6px; }
-.pop-step .time-row { display: flex; align-items: center; gap: 8px; margin: 8px 0 6px; }
-.pop-step input[type="time"] {
-    flex: 1;
-    min-width: 0;
-    height: 36px;
-    padding: 0 8px;
-    border: 1px solid var(--e-line-strong);
-    border-radius: 8px;
-    background: #fff;
-    font-size: 13px;
-    color: var(--e-ink);
-    font-family: inherit;
-}
-.pop-step input[type="time"]:focus { outline: 2px solid var(--e-accent); outline-offset: 1px; border-color: transparent; }
-.pop-step .dash { color: var(--e-ink-faint); }
-.pop-step .note { font-size: 11px; color: var(--e-ink-faint); line-height: 1.45; }
-.pop-step .actions { display: flex; gap: 8px; margin-top: 10px; }
-.pop-step .actions .btn { flex: 1; justify-content: center; padding: 8px 10px; font-size: 12.5px; }
+.emp-wrap .time-row { display: flex; align-items: center; gap: 8px; margin: 8px 0 6px; }
+.emp-wrap .time-row .ui-field__control { flex: 1; min-width: 0; }
+.emp-wrap .time-row .dash { color: var(--e-ink-faint); }
+.emp-wrap .pop-note { font-size: 11px; color: var(--e-ink-faint); line-height: 1.45; }
 
-/* ----- Модалка «Добавить график» ----- */
-.sched-modal { max-width: 440px; }
-.sched-modal .form-group { display: flex; flex-direction: column; gap: 5px; margin-bottom: 14px; }
-.sched-modal .form-group > label,
-.sched-modal .field-label { font-size: 12.5px; font-weight: 600; color: var(--e-ink-soft); }
-.sched-modal select,
-.sched-modal input[type="date"] {
-    height: 40px;
-    padding: 0 12px;
-    border: 1px solid var(--e-line-strong);
-    border-radius: 8px;
-    background: #fff;
-    font-size: 13.5px;
-    color: var(--e-ink);
-    font-family: inherit;
-}
-.sched-modal select:focus,
-.sched-modal input[type="date"]:focus { outline: 2px solid var(--e-accent); outline-offset: 1px; }
-.sched-modal .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
-/* Неактивная «Заполнить» обязана выглядеть неактивной: без этого правила у неё
-   тот же серый фон и тот же курсор, что у рабочей кнопки, — человек жмёт и
-   получает «ничего не происходит», ровно то, ради устранения чего кнопку и
-   гасили вместо ошибки после нажатия (приёмка дизайн-сессии, п.1).
-   Область ограничена модалкой графика: режим «Список» не задет.
-
-   Одного фона мало: у .btn в employees-light.css два декоративных слоя —
-   :after с непрозрачным #696969 под кнопкой (z-index: -2) и :before, который
-   на hover заливает её #555555. Полупрозрачный фон поверх непрозрачного слоя
-   даёт ровно прежний серый, и кнопка выглядит рабочей. Поэтому оба слоя тоже
-   гасятся — иначе правило есть, а на экране ничего не меняется. */
-.sched-modal .btn-primary:disabled { background: rgba(105, 105, 105, .38); cursor: not-allowed; }
-.sched-modal .btn-primary:disabled::after { background-color: transparent; }
-.sched-modal .btn-primary:disabled:hover::before { width: 0; }
-
+/* ----- Окно «Добавить график» ----- */
 /* Данные выбранного сотрудника — читаются, не редактируются. */
-.emp-schedule {
+.emp-wrap .emp-schedule {
     display: flex;
     flex-direction: column;
     gap: 6px;
@@ -482,18 +275,18 @@ table.sched {
     padding: 10px 12px;
     margin-top: 4px;
 }
-.emp-schedule .es-line { display: flex; align-items: baseline; gap: 10px; }
-.emp-schedule .es-key { font-size: 11.5px; color: var(--e-ink-faint); min-width: 92px; }
-.emp-schedule .es-val { font-size: 13.5px; font-weight: 700; color: var(--e-ink); }
-.emp-schedule .es-note { font-size: 12.5px; color: var(--e-ink-soft); }
-.emp-schedule .es-note i { font-style: normal; color: var(--e-ink-faint); font-size: 11.5px; }
+.emp-wrap .emp-schedule .es-line { display: flex; align-items: baseline; gap: 10px; }
+.emp-wrap .emp-schedule .es-key { font-size: 11.5px; color: var(--e-ink-faint); min-width: 92px; }
+.emp-wrap .emp-schedule .es-val { font-size: 13.5px; font-weight: 700; color: var(--e-ink); }
+.emp-wrap .emp-schedule .es-note { font-size: 12.5px; color: var(--e-ink-soft); }
+.emp-wrap .emp-schedule .es-note i { font-style: normal; color: var(--e-ink-faint); font-size: var(--ui-icon-xs); }
 /* Краснеет СРАЗУ при выборе сотрудника, а не после нажатия «Заполнить»:
    ругаться, когда человек уже заполнил форму, — худший момент из возможных. */
-.emp-schedule.bad { background: var(--s-danger-bg); border-color: rgba(192, 57, 43, .3); }
-.emp-schedule.bad .es-val { color: var(--e-danger-deep); font-size: 12.5px; font-weight: 600; line-height: 1.4; }
+.emp-wrap .emp-schedule.bad { background: var(--s-danger-bg); border-color: rgba(192, 57, 43, .3); }
+.emp-wrap .emp-schedule.bad .es-val { color: var(--e-danger-deep); font-size: 12.5px; font-weight: 600; line-height: 1.4; }
 
 /* Поле «Выходные»: сводка + раскрывающийся календарь месяца */
-.wk-field {
+.emp-wrap .wk-field {
     display: flex;
     align-items: center;
     gap: 10px;
@@ -509,23 +302,23 @@ table.sched {
     font-family: inherit;
     text-align: left;
 }
-.wk-field:hover { border-color: var(--e-accent); }
-.wk-field:focus-visible { outline: 2px solid var(--e-accent); outline-offset: 1px; }
-.wk-field .wk-sum { flex: 1; }
-.wk-field .wk-sum.none { color: var(--e-ink-faint); }
-.wk-field i { color: var(--e-ink-faint); flex-shrink: 0; transition: transform .18s; }
-.wk-field[aria-expanded="true"] i { transform: rotate(180deg); }
+.emp-wrap .wk-field:hover { border-color: var(--e-accent); }
+.emp-wrap .wk-field:focus-visible { outline: 2px solid var(--e-accent); outline-offset: 1px; }
+.emp-wrap .wk-field .wk-sum { flex: 1; }
+.emp-wrap .wk-field .wk-sum.none { color: var(--e-ink-faint); }
+.emp-wrap .wk-field i { color: var(--e-ink-faint); flex-shrink: 0; transition: transform .18s; }
+.emp-wrap .wk-field[aria-expanded="true"] i { transform: rotate(180deg); }
 
-.wk-panel {
+.emp-wrap .wk-panel {
     margin-top: 8px;
     border: 1px solid var(--e-line-strong);
     border-radius: var(--e-radius-sm);
     background: rgba(255, 255, 255, .85);
     padding: 12px;
 }
-.wk-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
-.wk-head .wk-month { font-size: 13.5px; font-weight: 700; color: var(--e-ink); }
-.wk-clear {
+.emp-wrap .wk-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.emp-wrap .wk-head .wk-month { font-size: 13.5px; font-weight: 700; color: var(--e-ink); }
+.emp-wrap .wk-clear {
     border: none;
     background: transparent;
     color: var(--e-ink-soft);
@@ -536,10 +329,10 @@ table.sched {
     border-radius: 6px;
     font-family: inherit;
 }
-.wk-clear:hover { color: var(--e-accent); background: rgba(0, 0, 255, .06); }
-.wk-clear:disabled { color: var(--e-ink-faint); opacity: .5; cursor: default; background: transparent; }
-.wk-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
-.wk-dow {
+.emp-wrap .wk-clear:hover { color: var(--e-accent); background: rgba(0, 0, 255, .06); }
+.emp-wrap .wk-clear:disabled { color: var(--e-ink-faint); opacity: .5; cursor: default; background: transparent; }
+.emp-wrap .wk-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.emp-wrap .wk-dow {
     font-size: 10px;
     font-weight: 700;
     letter-spacing: .05em;
@@ -548,8 +341,8 @@ table.sched {
     text-align: center;
     padding-bottom: 2px;
 }
-.wk-dow.wend { color: #b0736c; }
-.wk-day {
+.emp-wrap .wk-dow.wend { color: #b0736c; }
+.emp-wrap .wk-day {
     height: 32px;
     border: 1px solid transparent;
     border-radius: 7px;
@@ -564,16 +357,16 @@ table.sched {
     justify-content: center;
     transition: background .15s, color .15s;
 }
-.wk-day:hover { background: rgba(0, 0, 255, .08); }
-.wk-day:focus-visible { outline: 2px solid var(--e-accent); outline-offset: 1px; }
-.wk-day.on { background: var(--e-accent); color: #fff; }
-.wk-day.blank { background: transparent; cursor: default; }
-.wk-day.out { background: transparent; color: rgba(136, 148, 168, .55); cursor: not-allowed; }
-.wk-day.out:hover { background: transparent; }
-.wk-note { font-size: 11.5px; color: var(--e-ink-faint); line-height: 1.45; margin-top: 10px; }
+.emp-wrap .wk-day:hover { background: rgba(0, 0, 255, .08); }
+.emp-wrap .wk-day:focus-visible { outline: 2px solid var(--e-accent); outline-offset: 1px; }
+.emp-wrap .wk-day.on { background: var(--e-accent); color: #fff; }
+.emp-wrap .wk-day.blank { background: transparent; cursor: default; }
+.emp-wrap .wk-day.out { background: transparent; color: rgba(136, 148, 168, .55); cursor: not-allowed; }
+.emp-wrap .wk-day.out:hover { background: transparent; }
+.emp-wrap .wk-note { font-size: 11.5px; color: var(--e-ink-faint); line-height: 1.45; margin-top: 10px; }
 
 /* Предпросмотр: что именно будет проставлено и что затрётся. */
-.fill-preview {
+.emp-wrap .fill-preview {
     border: 1px solid var(--e-line);
     border-radius: var(--e-radius-sm);
     padding: 11px 12px;
@@ -581,12 +374,13 @@ table.sched {
     font-size: 12.5px;
     color: var(--e-ink-soft);
     line-height: 1.5;
+    margin-top: 4px;
 }
-.fill-preview b { color: var(--e-ink); font-weight: 700; }
-.fill-preview i { font-style: italic; }
+.emp-wrap .fill-preview b { color: var(--e-ink); font-weight: 700; }
+.emp-wrap .fill-preview i { font-style: italic; }
 /* Единственная защита отпуска и больничного — считаемое предупреждение.
    Статическую фразу перестают читать на третий раз, число читают. */
-.fill-warn {
+.emp-wrap .fill-warn {
     margin-top: 8px;
     padding-top: 8px;
     border-top: 1px solid var(--e-line);
@@ -595,27 +389,13 @@ table.sched {
     font-size: 12.5px;
 }
 
-/* ----- Блок «График работы» в форме сотрудника ----- */
-.schedule-field .field-hint {
-    font-size: 11.5px;
-    color: var(--e-ink-faint);
-    line-height: 1.4;
-    margin-top: 4px;
-    display: block;
-}
-.schedule-field .field-hint.warn { color: var(--s-vac-ink); font-weight: 600; }
-.schedule-field.bad input { border-color: var(--e-danger-deep); background: var(--s-danger-bg); }
-.schedule-field.bad .field-hint { color: var(--e-danger-deep); font-weight: 600; }
-
 @media (prefers-reduced-motion: reduce) {
-    .view-switch button,
-    .month-pill button,
-    .cellbtn,
-    .wk-day,
-    .wk-field i { transition: none !important; }
+    .emp-wrap .month-pill button,
+    .emp-wrap .cellbtn,
+    .emp-wrap .wk-day,
+    .emp-wrap .wk-field i { transition: none !important; }
 }
 
 @media (max-width: 700px) {
-    .sched-fill-btn { margin-left: 0; }
-    .sched-search-wrap input { width: 100%; }
+    .emp-wrap [data-role="sched-fill"] { margin-left: 0; }
 }

@@ -1,20 +1,36 @@
-// --- leadsApp.js: страница «Лиды» — список, фильтры, настройка колонок,
-// массовые действия, статистика (report_2026-08-01.md, 13.08.2026).
+// --- leadsApp.js: раздел «Лиды» — список, фильтры, настройка колонок,
+// массовые действия, статистика.
 // Композиция и поведение — 1:1 с утверждённым макетом дизайн-сессии
-// (https://claude.ai/code/artifact/430feb4c-c115-424e-9f29-2d995e110a7a),
-// переписаны на реальные API-вызовы вместо демо-данных макета.
+// (https://claude.ai/code/artifact/430feb4c-c115-424e-9f29-2d995e110a7a).
+//
+// КОНТРАКТ РАЗДЕЛА (тот же, что у «Реквизитов» и «CPA-сетей»):
+//
+//     export async function mount(container, ctx)
+//     export function unmount()
+//
+// Три правила переноса, из-за которых модуль переписан, а не перенесён:
+//
+// 1. НЕТ ОБРАЩЕНИЙ К document. Поиск идёт в границах своей панели. Раньше
+//    document.querySelector работал, пока раздел был отдельной страницей; в
+//    оболочке при двух открытых панелях он взял бы первый попавшийся узел.
+//
+// 2. НЕТ КОДА НА ВЕРХНЕМ УРОВНЕ. Модуль импортируется один раз, а монтируется
+//    много: обработчики, навешенные при импорте, указывали бы на узлы первой
+//    панели даже после её закрытия.
+//
+// 3. СОСТОЯНИЕ СБРАСЫВАЕТСЯ ПРИ КАЖДОМ МОНТИРОВАНИИ — иначе второе открытие
+//    раздела показало бы список, фильтры и выделение от первого.
 
-import {
-    fetchLeads, fetchLeadStats, deleteLead, bulkUpdateLeads,
-    fetchAllSources, fetchAllEmployees, fetchFunnelStatuses, fetchParamLists, fetchActiveScripts
-} from './leadsStorage.js';
-import { showToast } from './leadsToast.js';
-import { initConfirmModal, confirmAction } from './leadsConfirm.js';
-import { initHubNav } from './leadsNav.js';
-import { initLeadModal, openLeadModal, fillFunnelStatusSelect } from './leadsModal.js';
-import { initUpload } from './leadsUpload.js';
+import { createStorage } from './leadsStorage.js';
+import { createPickList } from './leadsPickList.js';
+import { createOfferTabPicker } from './leadsOffers.js';
+import { createGeoAutocomplete } from './leadsGeo.js';
+import { createLeadModal, fillFunnelStatusSelect } from './leadsModal.js';
+import { createUpload } from './leadsUpload.js';
+// Путь АБСОЛЮТНЫЙ: физическая структура папок не совпадает с адресами —
+// Backend/Shell/ монтируется в корень «/».
+import { isAbort } from '/api.js';
 
-const $ = (sel) => document.querySelector(sel);
 const PAGE_SIZE = 30;
 
 function escapeHtml(value) {
@@ -103,7 +119,7 @@ const RICH_CELLS = {
         if (!l.scriptId) return null;
         const onRepeat = l.stageNumber >= REPEAT_STAGE_FROM;
         // Подсвеченный чип означает «оператор сейчас видит именно повторный» —
-        // тултип должен говорить то же самое, а не одно и то же в обоих состояниях.
+        // подпись должна говорить то же самое, а не одно и то же в обоих состояниях.
         const chipTitle = onRepeat
             ? `Оператор сейчас видит скрипт для повторных: ${l.repeatScriptTitle || ''}`
             : `Скрипт для повторных: ${l.repeatScriptTitle || ''}`;
@@ -112,7 +128,7 @@ const RICH_CELLS = {
             : '';
         return `${escapeHtml(l.scriptTitle || '')}${chip}`;
     },
-    // Первый оффер + счётчик остальных, полный список — в tooltip.
+    // Первый оффер + счётчик остальных, полный список — в подсказке.
     offers: (l) => {
         const offers = l.offers || [];
         if (offers.length === 0) return null;
@@ -132,12 +148,41 @@ const COLUMN_CELL = {
     downPaymentPercent: (l) => l.downPaymentPercent,
     createdAt: (l) => formatDate(l.createdAt), updatedAt: (l) => formatDate(l.updatedAt)
 };
+
 function cellHtml(key, lead) {
-    if (RICH_CELLS[key]) return RICH_CELLS[key](lead) || '<span class="muted">—</span>';
+    if (RICH_CELLS[key]) return RICH_CELLS[key](lead) || '<span class="ui-table__muted">—</span>';
     const getValue = COLUMN_CELL[key] || ((l) => l[key]);
     const value = getValue(lead);
-    return value !== null && value !== undefined && value !== '' ? escapeHtml(value) : '<span class="muted">—</span>';
+    return value !== null && value !== undefined && value !== '' ? escapeHtml(value) : '<span class="ui-table__muted">—</span>';
 }
+
+// Действие -> ключ patch'а и список со значением. Все четыре идут одним
+// лёгким bulk-update: полное тело лида для них не требуется, поэтому массово
+// править можно и старых лидов без линии/скрипта/офферов (dialog.md B1).
+const MASS_PATCH_ACTIONS = {
+    employee: { key: 'employeeId', role: 'mass-employee', required: false, done: 'Оператор изменён' },
+    status: { key: 'funnelStatusId', role: 'mass-status', required: true, prompt: 'Выберите статус', done: 'Статус изменён' },
+    script: { key: 'scriptId', role: 'mass-script', required: true, prompt: 'Выберите скрипт', done: 'Скрипт изменён' },
+    repeatScript: { key: 'repeatScriptId', role: 'mass-repeat-script', required: false, done: 'Скрипт для повторных изменён' }
+};
+
+// ---------------------------------------------------------------- состояние
+
+let root = null;
+let shell = null;
+let storage = null;
+let leadModal = null;
+let upload = null;
+// Слушатель на документе — снимается при закрытии панели, иначе они копятся
+// с каждым открытием раздела.
+let onDocKeydown = null;
+
+// Номер монтирования. Раздел закрывают и открывают заново, а ответ на запрос,
+// ушедший ДО закрытия, приходит после. Отмена запросов обычно срабатывает
+// раньше, но полагаться только на неё нельзя: гонку выигрывает то один, то
+// другой, и проявится это один раз из ста — данными прошлой панели,
+// дорисованными в новую.
+let generation = 0;
 
 let sources = [];
 let employees = [];
@@ -152,158 +197,173 @@ let selectedIds = new Set();
 let offset = 0;
 let hasMore = true;
 
-// ================= Загрузка данных =================
+// Идёт ли уже догрузка и идёт ли массовое действие. Смещение следующей
+// страницы известно только ПОСЛЕ ответа сервера, поэтому два щелчка подряд
+// отправляли два запроса с одним и тем же смещением: страница добавлялась в
+// список дважды, а смещение уезжало на две страницы вперёд — и пропущенная
+// между ними страница становилась недостижимой вовсе.
+let loadingMore = false;
+let massApplying = false;
 
-// Справочник офферов сюда НЕ входит: их ≈38 000, страница ходит только в
+const $ = (sel) => (root ? root.querySelector(sel) : null);
+const $$ = (sel) => (root ? Array.from(root.querySelectorAll(sel)) : []);
+
+// Жив ли ТОТ ЖЕ раздел, из которого ушёл запрос. Проверять только «root !==
+// null» мало: панель могли закрыть и открыть заново, и тогда ответ старого
+// запроса дорисовался бы в новую панель.
+function alive(mountId) {
+    return root !== null && mountId === generation;
+}
+
+function fail(mountId, err) {
+    if (!alive(mountId) || isAbort(err)) return;
+    shell.toast(err.message, 'error');
+}
+
+// Блокировка кнопки на время запроса. Панель могли уже закрыть — тогда узла
+// нет, и снимать блокировку не с чего.
+function setBusy(selector, busy) {
+    const btn = $(selector);
+    if (btn) btn.disabled = busy;
+}
+
+// ---------------------------------------------------------------- данные
+
+// Справочник офферов сюда НЕ входит: их ≈38 000, раздел ходит только в
 // серверный поиск (leadsOffers.js).
 async function loadReferenceData() {
     [sources, employees, statuses, paramLists, scripts] = await Promise.all([
-        fetchAllSources(), fetchAllEmployees(), fetchFunnelStatuses(), fetchParamLists(), fetchActiveScripts()
+        storage.fetchAllSources(), storage.fetchAllEmployees(), storage.fetchFunnelStatuses(),
+        storage.fetchParamLists(), storage.fetchActiveScripts()
     ]);
 }
 
-async function loadStats() {
+async function loadStats(mountId) {
     try {
-        const stats = await fetchLeadStats();
-        $('#statTotal').textContent = stats.total;
-        $('#statQueue').textContent = stats.queue;
-        $('#statToday').textContent = stats.today;
+        const stats = await storage.fetchLeadStats();
+        if (!alive(mountId)) return;
+        $('[data-role="stat-total"]').textContent = stats.total;
+        $('[data-role="stat-queue"]').textContent = stats.queue;
+        $('[data-role="stat-today"]').textContent = stats.today;
     } catch (e) {
-        showToast(e.message, 'error');
+        fail(mountId, e);
     }
 }
 
 async function loadLeads({ reset }) {
     if (reset) offset = 0;
-    const batch = await fetchLeads({ ...filters, limit: PAGE_SIZE, offset });
+    const batch = await storage.fetchLeads({ ...filters, limit: PAGE_SIZE, offset });
     leads = reset ? batch : leads.concat(batch);
     hasMore = batch.length === PAGE_SIZE;
     offset += batch.length;
 }
 
 async function reloadAll() {
+    const my = generation;
     await loadLeads({ reset: true });
+    if (!alive(my)) return;
     renderAll();
-    await loadStats();
+    await loadStats(my);
 }
 
-// ================= Рендер: таблица =================
+// ---------------------------------------------------------------- таблица
 
 function applyColumnVisibility() {
     COLUMN_ORDER.forEach((key) => {
-        const th = document.getElementById('th-' + key);
-        if (th) th.classList.toggle('col-hidden', !visibleColumns[key]);
+        $$(`[data-col="${key}"]`).forEach((cell) => {
+            cell.hidden = !visibleColumns[key];
+        });
     });
+}
+
+function rowHtml(lead) {
+    const name = fullName(lead)
+        ? `<span class="ui-table__main">${escapeHtml(fullName(lead))}</span>`
+        : '<span class="ui-table__muted">— без ФИО —</span>';
+    const employeeCell = lead.employeeId
+        ? escapeHtml(lead.employeeName)
+        : '<span class="ui-table__muted">не назначен</span><span class="ui-pill ui-pill--warn queue-tag">в очереди</span>';
+    const cells = COLUMN_ORDER.map((key) => {
+        const body = key === 'employee' ? employeeCell : cellHtml(key, lead);
+        return `<td data-col="${key}"${visibleColumns[key] ? '' : ' hidden'}>${body}</td>`;
+    }).join('');
+    const checked = selectedIds.has(lead.id) ? ' checked' : '';
+    return `
+        <tr class="${selectedIds.has(lead.id) ? 'ui-table__row--selected' : ''}" data-row-id="${lead.id}">
+            <td class="ui-table__sel"><input type="checkbox" data-check-id="${lead.id}" aria-label="Выбрать лида ${lead.id}"${checked}></td>
+            <td>${lead.id}</td>
+            <td>${name}</td>
+            <td class="lead-phone">${escapeHtml(lead.phone)}</td>
+            ${cells}
+            <td class="ui-table__acts">
+                <button type="button" class="ui-btn ui-btn--icon ui-btn--sm" data-edit="${lead.id}" title="Изменить" aria-label="Изменить"><i class="fas fa-pen" aria-hidden="true"></i></button>
+                <button type="button" class="ui-btn ui-btn--icon ui-btn--sm row-del" data-del="${lead.id}" title="Удалить" aria-label="Удалить"><i class="fas fa-trash" aria-hidden="true"></i></button>
+            </td>
+        </tr>`;
 }
 
 function renderTable() {
     applyColumnVisibility();
-
-    $('#loadMoreRow').hidden = !hasMore;
+    $('[data-role="load-more-row"]').hidden = !hasMore;
 
     if (!leads.length) {
-        $('#leadsBody').innerHTML = '';
-        $('#emptyState').hidden = false;
+        $('[data-role="leads-body"]').innerHTML = '';
+        // Обёртку таблицы прячем целиком: она забирает всю оставшуюся высоту
+        // панели, и над сообщением «ничего не найдено» висела бы пустая рамка
+        // в треть экрана.
+        $('[data-role="table-wrap"]').hidden = true;
+        $('[data-role="empty-state"]').hidden = false;
+        updateMassActionsUI();
         return;
     }
-    $('#emptyState').hidden = true;
-
-    $('#leadsBody').innerHTML = leads.map((l) => {
-        const name = fullName(l) ? `<span class="lead-name">${escapeHtml(fullName(l))}</span>` : '<span class="muted">— без ФИО —</span>';
-        const employeeCell = l.employeeId
-            ? escapeHtml(l.employeeName)
-            : `<span class="muted">не назначен</span><span class="queue-tag">в очереди</span>`;
-        const extraCells = COLUMN_ORDER.map((key) => {
-            if (key === 'employee') return `<td class="${visibleColumns[key] ? '' : 'col-hidden'}">${employeeCell}</td>`;
-            return `<td class="${visibleColumns[key] ? '' : 'col-hidden'}">${cellHtml(key, l)}</td>`;
-        }).join('');
-        const checked = selectedIds.has(l.id) ? 'checked' : '';
-        return `
-            <tr class="${selectedIds.has(l.id) ? 'row-selected' : ''}" data-row-id="${l.id}">
-                <td class="col-check"><input type="checkbox" class="row-checkbox" data-check-id="${l.id}" ${checked}></td>
-                <td>${l.id}</td>
-                <td>${name}</td>
-                <td class="lead-phone">${escapeHtml(l.phone)}</td>
-                ${extraCells}
-                <td class="col-actions">
-                    <div class="row-actions">
-                        <button type="button" class="m-icon-btn" data-edit="${l.id}" data-tooltip="Изменить" aria-label="Изменить"><i class="fas fa-pen" aria-hidden="true"></i></button>
-                        <button type="button" class="m-icon-btn danger" data-del="${l.id}" data-tooltip="Удалить" aria-label="Удалить"><i class="fas fa-trash" aria-hidden="true"></i></button>
-                    </div>
-                </td>
-            </tr>`;
-    }).join('');
-
-    $('#leadsBody').querySelectorAll('[data-edit]').forEach((btn) => {
-        btn.addEventListener('click', () => {
-            const lead = leads.find((x) => x.id === Number(btn.dataset.edit));
-            openLeadModal(lead);
-        });
-    });
-    $('#leadsBody').querySelectorAll('[data-del]').forEach((btn) => {
-        btn.addEventListener('click', async () => {
-            const lead = leads.find((x) => x.id === Number(btn.dataset.del));
-            const ok = await confirmAction(`Лид #${lead.id}${fullName(lead) ? ' («' + fullName(lead) + '»)' : ''} будет удалён без возможности восстановления.`);
-            if (!ok) return;
-            try {
-                await deleteLead(lead.id);
-                showToast('Лид удалён', 'success');
-                selectedIds.delete(lead.id);
-                await reloadAll();
-            } catch (e) {
-                showToast(e.message, 'error');
-            }
-        });
-    });
-    $('#leadsBody').querySelectorAll('[data-check-id]').forEach((cb) => {
-        cb.addEventListener('change', () => {
-            const id = Number(cb.dataset.checkId);
-            if (cb.checked) selectedIds.add(id); else selectedIds.delete(id);
-            updateMassActionsUI();
-            renderTable();
-        });
-    });
+    $('[data-role="table-wrap"]').hidden = false;
+    $('[data-role="empty-state"]').hidden = true;
+    $('[data-role="leads-body"]').innerHTML = leads.map(rowHtml).join('');
+    // Догрузка добавляет невыделенные строки — значит «выделено всё» могло
+    // перестать быть правдой, и чекбокс шапки обязан это показать.
+    updateMassActionsUI();
 }
 
 function renderAll() {
     renderTable();
-    updateMassActionsUI();
 }
 
-$('#loadMoreBtn').addEventListener('click', async () => {
-    try {
-        await loadLeads({ reset: false });
-        renderTable();
-    } catch (e) {
-        showToast(e.message, 'error');
-    }
-});
-
-$('#headCheckbox').addEventListener('change', (e) => {
-    leads.forEach((l) => { if (e.target.checked) selectedIds.add(l.id); else selectedIds.delete(l.id); });
-    updateMassActionsUI();
-    renderTable();
-});
-
-// ================= Массовые действия =================
-// Двухшаговый выбор (действие -> контекстный select), не один <select> с
-// захардкоженными парами "действие+значение" — вариантов слишком много
+// ---------------------------------------------------------------- массовые действия
+// Двухшаговый выбор (действие -> контекстный список), не один <select> с
+// захардкоженными парами «действие+значение» — вариантов слишком много
 // (~59 статусов, N сотрудников), report_designer.md, п.5.
 
 function updateMassActionsUI() {
-    $('#selectedCount').textContent = `Выбрано: ${selectedIds.size}`;
-    const hasSelection = selectedIds.size > 0;
-    $('#massActions').classList.toggle('visible', hasSelection);
-    $('#leadsTableCard')?.classList.toggle('reserve-mass-actions-space', hasSelection);
-    $('#headCheckbox').checked = leads.length > 0 && leads.every((l) => selectedIds.has(l.id));
+    $('[data-role="selected-count"]').textContent = `Выбрано: ${selectedIds.size}`;
+    $('[data-role="mass-bar"]').hidden = selectedIds.size === 0;
+    $('[data-role="head-checkbox"]').checked = leads.length > 0 && leads.every((l) => selectedIds.has(l.id));
 }
 
 function clearSelection() {
     selectedIds.clear();
+    $$('[data-check-id]').forEach((cb) => { cb.checked = false; });
+    $$('tr[data-row-id]').forEach((tr) => tr.classList.remove('ui-table__row--selected'));
+    resetMassAction();
     updateMassActionsUI();
 }
 
-$('#massClearBtn').addEventListener('click', () => { clearSelection(); renderTable(); });
+// Вместе с выделением сбрасывается и выбранное действие. Иначе так: выбрали
+// лидов входящей линии, действие «Сменить оператора», применили. Полоса
+// спряталась, но в ней остались и действие, и список операторов ВХОДЯЩЕЙ линии.
+// Выделяем лидов исходящей — полоса открывается в прежнем виде, проверка линии
+// молчит (линия у новых лидов одна), и «Применить» назначает оператора чужой
+// линии. Раздача по линии — главное правило раздела, и обойти его выходило в
+// два щелчка.
+function resetMassAction() {
+    const action = $('[data-role="mass-action"]');
+    if (action) action.value = '';
+    Object.values(MASS_PATCH_ACTIONS).forEach(({ role }) => {
+        const select = $(`[data-role="${role}"]`);
+        if (!select) return;
+        select.hidden = true;
+        select.value = '';
+    });
+}
 
 // Назначить можно только оператора линии лида — значит и список для массового
 // действия зависит от выбранных лидов, а не от всех сотрудников сразу.
@@ -325,86 +385,114 @@ function selectedLeadsLine() {
 }
 
 function fillMassEmployeeSelect(line) {
-    $('#massEmployeeSelect').innerHTML = '<option value="">— не назначен —</option>'
+    $('[data-role="mass-employee"]').innerHTML = '<option value="">— не назначен —</option>'
         + employees
             .filter((e) => e.lineType === line && e.status === 'active')
             .map((e) => `<option value="${e.id}">${escapeHtml(e.lastName + ' ' + e.firstName)}</option>`)
             .join('');
 }
 
-$('#massActionSelect').addEventListener('change', () => {
-    const action = $('#massActionSelect').value;
+function handleMassActionChange() {
+    const action = $('[data-role="mass-action"]').value;
 
     if (action === 'employee') {
         const { error, line } = selectedLeadsLine();
         if (error) {
-            showToast(error, 'error');
-            $('#massActionSelect').value = '';
-            $('#massEmployeeSelect').hidden = true;
+            shell.toast(error, 'error');
+            $('[data-role="mass-action"]').value = '';
+            $('[data-role="mass-employee"]').hidden = true;
             return;
         }
         fillMassEmployeeSelect(line);
     }
 
-    $('#massEmployeeSelect').hidden = action !== 'employee';
-    $('#massStatusSelect').hidden = action !== 'status';
-    $('#massScriptSelect').hidden = action !== 'script';
-    $('#massRepeatScriptSelect').hidden = action !== 'repeatScript';
-});
+    $('[data-role="mass-employee"]').hidden = action !== 'employee';
+    $('[data-role="mass-status"]').hidden = action !== 'status';
+    $('[data-role="mass-script"]').hidden = action !== 'script';
+    $('[data-role="mass-repeat-script"]').hidden = action !== 'repeatScript';
+}
 
-// Действие -> ключ patch'а и select со значением. Все четыре идут одним
-// лёгким bulk-update: полное тело лида для них не требуется, поэтому массово
-// править можно и старых лидов без линии/скрипта/офферов (dialog.md B1).
-const MASS_PATCH_ACTIONS = {
-    employee: { key: 'employeeId', selectId: '#massEmployeeSelect', required: false, done: 'Оператор изменён' },
-    status: { key: 'funnelStatusId', selectId: '#massStatusSelect', required: true, prompt: 'Выберите статус', done: 'Статус изменён' },
-    script: { key: 'scriptId', selectId: '#massScriptSelect', required: true, prompt: 'Выберите скрипт', done: 'Скрипт изменён' },
-    repeatScript: { key: 'repeatScriptId', selectId: '#massRepeatScriptSelect', required: false, done: 'Скрипт для повторных изменён' }
-};
+async function handleMassApply() {
+    // Второй щелчок, пока идёт первый, отправлял действие ещё раз: для правки
+    // это лишний запрос, а для удаления — второй проход по тем же лидам, где
+    // сервер на каждого отвечает «не найден», и человек получает «Не удалось
+    // удалить: N» сразу после успешного удаления.
+    if (massApplying) return;
 
-$('#massApplyBtn').addEventListener('click', async () => {
-    const action = $('#massActionSelect').value;
-    if (!action) { showToast('Выберите действие', 'error'); return; }
-    if (selectedIds.size === 0) { showToast('Выберите хотя бы одного лида', 'error'); return; }
+    const my = generation;
+    const action = $('[data-role="mass-action"]').value;
+    if (!action) { shell.toast('Выберите действие', 'error'); return; }
+    if (selectedIds.size === 0) { shell.toast('Выберите хотя бы одного лида', 'error'); return; }
     const ids = Array.from(selectedIds);
 
-    if (action === 'delete') {
-        const ok = await confirmAction(`Будет удалено: ${ids.length}. Действие необратимо.`);
-        if (!ok) return;
-        let deleted = 0, failed = 0;
-        for (const id of ids) {
-            try { await deleteLead(id); deleted++; } catch (e) { failed++; }
-        }
-        clearSelection();
-        await reloadAll();
-        if (deleted > 0) showToast(`Удалено лидов: ${deleted}`, 'success');
-        if (failed > 0) showToast(`Не удалось удалить: ${failed}`, 'error');
-        return;
-    }
-
     const config = MASS_PATCH_ACTIONS[action];
-    if (!config) return;
-
-    // Выделение могли изменить уже после выбора действия — перепроверяем.
-    if (action === 'employee') {
-        const { error } = selectedLeadsLine();
-        if (error) { showToast(error, 'error'); return; }
+    let select = null;
+    if (action !== 'delete') {
+        if (!config) return;
+        // Выделение могли изменить уже после выбора действия — перепроверяем.
+        if (action === 'employee') {
+            const { error } = selectedLeadsLine();
+            if (error) { shell.toast(error, 'error'); return; }
+        }
+        select = $(`[data-role="${config.role}"]`);
+        if (config.required && !select.value) { shell.toast(config.prompt, 'error'); return; }
     }
 
-    const select = $(config.selectId);
-    if (config.required && !select.value) { showToast(config.prompt, 'error'); return; }
-
+    massApplying = true;
+    setBusy('[data-role="mass-apply"]', true);
     try {
-        const { updated } = await bulkUpdateLeads(ids, { [config.key]: select.value || null });
+        if (action === 'delete') {
+            await runMassDelete(ids, my);
+        } else {
+            await runMassPatch(config, select, ids, my);
+        }
+    } finally {
+        massApplying = false;
+        setBusy('[data-role="mass-apply"]', false);
+    }
+}
+
+async function runMassDelete(ids, my) {
+    const ok = await shell.confirmDanger({
+        title: 'Удаление лидов',
+        message: `Будет удалено: ${ids.length}. Действие необратимо.`
+    });
+    if (!ok || !alive(my)) return;
+    let deleted = 0;
+    let failed = 0;
+    for (const id of ids) {
+        try {
+            await storage.deleteLead(id);
+            deleted++;
+        } catch (e) {
+            // Отмена = панель закрыли посреди пачки: оставшиеся запросы
+            // отбиваются мгновенно, и досчитывать их до конца незачем.
+            if (isAbort(e)) return;
+            failed++;
+        }
+        if (!alive(my)) return;
+    }
+    clearSelection();
+    await reloadAll();
+    if (!alive(my)) return;
+    if (deleted > 0) shell.toast(`Удалено лидов: ${deleted}`, 'success');
+    if (failed > 0) shell.toast(`Не удалось удалить: ${failed}`, 'error');
+}
+
+async function runMassPatch(config, select, ids, my) {
+    try {
+        const { updated } = await storage.bulkUpdateLeads(ids, { [config.key]: select.value || null });
+        if (!alive(my)) return;
         clearSelection();
         await reloadAll();
-        showToast(`${config.done} у ${updated} лид(ов)`, 'success');
+        if (!alive(my)) return;
+        shell.toast(`${config.done} у ${updated} лид(ов)`, 'success');
     } catch (e) {
-        showToast(e.message, 'error');
+        fail(my, e);
     }
-});
+}
 
-// ================= Фильтры =================
+// ---------------------------------------------------------------- фильтры
 
 function fillFilterSelects() {
     $('#fltSource').innerHTML = '<option value="">Все источники</option>'
@@ -419,13 +507,8 @@ function fillFilterSelects() {
     $('#fltStatus').value = '';
 }
 
-$('#filterToggleBtn').addEventListener('click', () => { $('#filterModal').hidden = false; });
-$('#filterModalClose').addEventListener('click', () => { $('#filterModal').hidden = true; });
-$('#filterModal').addEventListener('click', (e) => { if (e.target.id === 'filterModal') $('#filterModal').hidden = true; });
-$('#filterClearBtn').addEventListener('click', () => {
-    $('#fltFio').value = ''; $('#fltPhone').value = ''; $('#fltSource').value = ''; $('#fltEmployee').value = ''; $('#fltStatus').value = '';
-});
-$('#filterApplyBtn').addEventListener('click', async () => {
+async function applyFilters() {
+    const my = generation;
     filters = {
         fio: $('#fltFio').value.trim(),
         phone: $('#fltPhone').value.trim(),
@@ -434,66 +517,241 @@ $('#filterApplyBtn').addEventListener('click', async () => {
         funnelStatusId: $('#fltStatus').value
     };
     const activeCount = Object.values(filters).filter(Boolean).length;
-    $('#filterBadge').hidden = activeCount === 0;
-    $('#filterBadge').textContent = activeCount;
-    $('#filterModal').hidden = true;
+    $('[data-role="filter-badge"]').hidden = activeCount === 0;
+    $('[data-role="filter-badge"]').textContent = activeCount;
+    $('[data-role="filter-modal"]').hidden = true;
     clearSelection();
     try {
         await loadLeads({ reset: true });
+        if (!alive(my)) return;
         renderTable();
     } catch (e) {
-        showToast(e.message, 'error');
+        fail(my, e);
     }
-});
+}
 
-// ================= Настройка колонок =================
+// ---------------------------------------------------------------- колонки
 
 function renderColumnsModalBody() {
-    $('#columnsModalBody').innerHTML = COLUMN_GROUPS.map((group) => `
+    $('[data-role="columns-body"]').innerHTML = COLUMN_GROUPS.map((group) => `
         <div class="col-group">
             <div class="col-group-label">${escapeHtml(group.label)}</div>
             <div class="column-checkbox-list">
-                ${group.columns.map((c) => `<label class="column-checkbox-item"><input type="checkbox" data-col="${c.key}">${escapeHtml(c.label)}</label>`).join('')}
+                ${group.columns.map((c) => `<label class="column-checkbox-item"><input type="checkbox" data-col-check="${c.key}">${escapeHtml(c.label)}</label>`).join('')}
             </div>
         </div>
     `).join('');
 }
 
-$('#columnSettingsBtn').addEventListener('click', () => {
-    document.querySelectorAll('#columnsModalBody input[data-col]').forEach((cb) => { cb.checked = visibleColumns[cb.dataset.col]; });
-    $('#columnsModal').hidden = false;
-});
-$('#columnsModalClose').addEventListener('click', () => { $('#columnsModal').hidden = true; });
-$('#columnsModal').addEventListener('click', (e) => { if (e.target.id === 'columnsModal') $('#columnsModal').hidden = true; });
-$('#columnsResetBtn').addEventListener('click', () => {
-    document.querySelectorAll('#columnsModalBody input[data-col]').forEach((cb) => { cb.checked = COLUMN_DEFAULT[cb.dataset.col]; });
-});
-$('#columnsApplyBtn').addEventListener('click', () => {
-    document.querySelectorAll('#columnsModalBody input[data-col]').forEach((cb) => { visibleColumns[cb.dataset.col] = cb.checked; });
-    $('#columnsModal').hidden = true;
-    renderTable();
-    showToast('Настройки колонок сохранены', 'success');
-});
+// ---------------------------------------------------------------- монтирование
 
-// ================= Инициализация =================
+export async function mount(container, ctx) {
+    const my = ++generation;
+    root = container;
+    shell = ctx;
+    storage = createStorage(ctx.api);
 
-(async () => {
-    initHubNav('leads');
-    initConfirmModal();
+    // Состояние — заново при каждом монтировании.
+    sources = [];
+    employees = [];
+    statuses = [];
+    paramLists = {};
+    scripts = [];
+    leads = [];
+    filters = { fio: '', phone: '', sourceId: '', employeeId: '', funnelStatusId: '' };
+    visibleColumns = { ...COLUMN_DEFAULT };
+    selectedIds = new Set();
+    offset = 0;
+    hasMore = true;
+    loadingMore = false;
+    massApplying = false;
+
+    const isAlive = () => alive(my);
+
+    leadModal = createLeadModal(container, {
+        storage,
+        toast: ctx.toast,
+        isAlive,
+        isAbort,
+        createPickList,
+        createOfferTabPicker: (opts) => createOfferTabPicker({ ...opts, storage, toast: ctx.toast, isAlive, isAbort }),
+        createGeo: () => createGeoAutocomplete(container, { storage, toast: ctx.toast, isAlive, isAbort }),
+        onSaved: reloadAll
+    });
+    upload = createUpload(container, {
+        storage, toast: ctx.toast, isAlive, isAbort, onImported: reloadAll
+    });
+
     try {
         await loadReferenceData();
+        if (!isAlive()) return;
+
         fillFilterSelects();
         renderColumnsModalBody();
-        initLeadModal({ sources, employees, statuses, paramLists, scripts }, reloadAll);
-        initUpload({ sources, employees, statuses, scripts }, reloadAll);
-        fillFunnelStatusSelect($('#massStatusSelect'), statuses, false);
+        leadModal.init({ sources, employees, statuses, paramLists, scripts });
+        upload.init({ sources, employees, statuses, scripts });
+        // Обработчики — ПОСЛЕ справочников, а не до. Кнопка «Добавить лида»
+        // открывает окно, которое читает списки статусов и офферов; нажатая до
+        // загрузки, она роняла бы раздел на пустом мультивыборе. На быстрой
+        // сети щель между вставкой разметки и ответом сервера меньше
+        // человеческой реакции, на медленной — нет.
+        bindHandlers();
+        fillFunnelStatusSelect($('[data-role="mass-status"]'), statuses, false);
         // Список сотрудников для массового действия заполняется не здесь, а в
         // момент выбора действия: он зависит от линии выбранных лидов.
         const scriptOptions = scripts.map((s) => `<option value="${s.id}">${escapeHtml(s.title)}</option>`).join('');
-        $('#massScriptSelect').innerHTML = '<option value="">— выберите скрипт —</option>' + scriptOptions;
-        $('#massRepeatScriptSelect').innerHTML = '<option value="">— снять скрипт —</option>' + scriptOptions;
+        $('[data-role="mass-script"]').innerHTML = '<option value="">— выберите скрипт —</option>' + scriptOptions;
+        $('[data-role="mass-repeat-script"]').innerHTML = '<option value="">— снять скрипт —</option>' + scriptOptions;
+
         await reloadAll();
     } catch (e) {
-        showToast(e.message, 'error');
+        fail(my, e);
     }
-})();
+}
+
+function bindHandlers() {
+    const my = generation;
+
+    // Действия строк — делегированием на теле таблицы, а не подпиской на каждую
+    // кнопку после каждой перерисовки: список перерисовывается на любой фильтр
+    // и на каждую догрузку.
+    $('[data-role="leads-body"]').addEventListener('click', async (e) => {
+        const editBtn = e.target.closest('[data-edit]');
+        if (editBtn) {
+            const lead = leads.find((x) => x.id === Number(editBtn.dataset.edit));
+            if (lead) await leadModal.open(lead);
+            return;
+        }
+        const delBtn = e.target.closest('[data-del]');
+        if (!delBtn) return;
+        const lead = leads.find((x) => x.id === Number(delBtn.dataset.del));
+        if (!lead) return;
+        // Удаление необратимо — подтверждение накрывает весь экран, а не только
+        // свою панель (правило дизайн-сессии, бриф 5.4).
+        const ok = await shell.confirmDanger({
+            title: 'Удаление лида',
+            message: `Лид #${lead.id}${fullName(lead) ? ' («' + fullName(lead) + '»)' : ''} будет удалён без возможности восстановления.`
+        });
+        if (!ok || !alive(my)) return;
+        try {
+            await storage.deleteLead(lead.id);
+            if (!alive(my)) return;
+            shell.toast('Лид удалён', 'success');
+            selectedIds.delete(lead.id);
+            await reloadAll();
+        } catch (err) {
+            fail(my, err);
+        }
+    });
+
+    // Выделение строки: правим только саму строку, а не перерисовываем таблицу
+    // целиком — иначе на каждый щелчок теряется положение прокрутки.
+    $('[data-role="leads-body"]').addEventListener('change', (e) => {
+        const cb = e.target.closest('[data-check-id]');
+        if (!cb) return;
+        const id = Number(cb.dataset.checkId);
+        if (cb.checked) selectedIds.add(id); else selectedIds.delete(id);
+        const row = cb.closest('tr');
+        if (row) row.classList.toggle('ui-table__row--selected', cb.checked);
+        updateMassActionsUI();
+    });
+
+    $('[data-role="head-checkbox"]').addEventListener('change', (e) => {
+        const on = e.target.checked;
+        leads.forEach((l) => { if (on) selectedIds.add(l.id); else selectedIds.delete(l.id); });
+        $$('[data-check-id]').forEach((cb) => { cb.checked = on; });
+        $$('tr[data-row-id]').forEach((tr) => tr.classList.toggle('ui-table__row--selected', on));
+        updateMassActionsUI();
+    });
+
+    $('[data-role="load-more"]').addEventListener('click', async () => {
+        if (loadingMore) return;
+        loadingMore = true;
+        setBusy('[data-role="load-more"]', true);
+        try {
+            await loadLeads({ reset: false });
+            if (!alive(my)) return;
+            renderTable();
+        } catch (e) {
+            fail(my, e);
+        } finally {
+            loadingMore = false;
+            setBusy('[data-role="load-more"]', false);
+        }
+    });
+
+    $('[data-role="add-lead"]').addEventListener('click', () => leadModal.open(null));
+
+    // --- массовые действия ---
+    $('[data-role="mass-clear"]').addEventListener('click', clearSelection);
+    $('[data-role="mass-action"]').addEventListener('change', handleMassActionChange);
+    $('[data-role="mass-apply"]').addEventListener('click', handleMassApply);
+
+    // --- фильтры ---
+    const filterModal = $('[data-role="filter-modal"]');
+    $('[data-role="filter-toggle"]').addEventListener('click', () => { filterModal.hidden = false; });
+    $('[data-role="filter-close"]').addEventListener('click', () => { filterModal.hidden = true; });
+    filterModal.addEventListener('click', (e) => { if (e.target === filterModal) filterModal.hidden = true; });
+    $('[data-role="filter-clear"]').addEventListener('click', () => {
+        ['#fltFio', '#fltPhone', '#fltSource', '#fltEmployee', '#fltStatus'].forEach((sel) => { $(sel).value = ''; });
+    });
+    $('[data-role="filter-apply"]').addEventListener('click', applyFilters);
+
+    // --- настройка колонок ---
+    const columnsModal = $('[data-role="columns-modal"]');
+    $('[data-role="columns-btn"]').addEventListener('click', () => {
+        $$('[data-col-check]').forEach((cb) => { cb.checked = visibleColumns[cb.dataset.colCheck]; });
+        columnsModal.hidden = false;
+    });
+    $('[data-role="columns-close"]').addEventListener('click', () => { columnsModal.hidden = true; });
+    columnsModal.addEventListener('click', (e) => { if (e.target === columnsModal) columnsModal.hidden = true; });
+    $('[data-role="columns-reset"]').addEventListener('click', () => {
+        $$('[data-col-check]').forEach((cb) => { cb.checked = COLUMN_DEFAULT[cb.dataset.colCheck]; });
+    });
+    $('[data-role="columns-apply"]').addEventListener('click', () => {
+        $$('[data-col-check]').forEach((cb) => { visibleColumns[cb.dataset.colCheck] = cb.checked; });
+        columnsModal.hidden = true;
+        renderTable();
+        shell.toast('Настройки колонок сохранены', 'success');
+    });
+
+    // Esc закрывает верхнее открытое окно раздела — правило дизайн-сессии, в
+    // слое оно уже соблюдено, а эти четыре окна разметочные (сложные формы, не
+    // подтверждения), и Esc им нужно дать вручную. Окно подтверждения удаления
+    // приходит из слоя и свой Esc обрабатывает само, поэтому при открытом
+    // подтверждении мы не вмешиваемся.
+    onDocKeydown = (e) => {
+        if (e.key !== 'Escape' || !root) return;
+        if (document.querySelector('.ui-modal--screen')) return;
+        const open = $$('.leads-modal').filter((m) => !m.hidden);
+        if (open.length === 0) return;
+        open[open.length - 1].hidden = true;
+    };
+    document.addEventListener('keydown', onDocKeydown);
+}
+
+export function unmount() {
+    generation += 1;   // всё, что было в полёте, теперь чужое
+
+    // Отложенные запросы подсказок и поиска офферов, слушатель документа —
+    // снимаются здесь. Ровно на этом «CPA-сети» падали уже после закрытия
+    // панели: таймер срабатывал и шёл в обнулённый storage.
+    if (leadModal) leadModal.destroy();
+    if (upload) upload.destroy();
+
+    if (onDocKeydown) document.removeEventListener('keydown', onDocKeydown);
+    onDocKeydown = null;
+
+    root = null;
+    shell = null;
+    storage = null;
+    leadModal = null;
+    upload = null;
+    sources = [];
+    employees = [];
+    statuses = [];
+    paramLists = {};
+    scripts = [];
+    leads = [];
+    selectedIds = new Set();
+}

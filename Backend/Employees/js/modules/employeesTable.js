@@ -1,0 +1,593 @@
+// --- employeesTable.js: режим «Список» — таблица, фильтры, сортировка,
+// пагинация, выделение и массовые действия ---
+//
+// Собран из render.js и massActions.js: они и раньше были одним экраном,
+// разнесённым по двум файлам через глобальные id и взаимный импорт
+// (render → massActions → render).
+//
+// Таблица строится вокруг составных ячеек «Сотрудник» (аватар + ФИО +
+// должность), «Контакты» (телефон + email) и «Мессенджеры» (чипы) — они
+// структурные и есть всегда; «Отдел»/«Руководитель»/«Дата найма»/«Статус» и
+// далее переключаются целиком. Настройка колонок управляет и тем, и другим:
+// внутри составной ячейки — гранулярно, у остальных — колонкой целиком.
+
+const PAGE_SIZE = 20;
+const SEARCH_DEBOUNCE_MS = 300;
+
+// Колонки, которые могут исчезать целиком. Раньше их <th> искались по семи
+// отдельным id; теперь у шапки и у ячеек один общий атрибут data-col.
+const STANDALONE_COLUMNS = ['department', 'managerName', 'hireDate', 'status', 'terminationDate', 'lineType', 'workSchedule'];
+
+function escapeHtml(value) {
+    if (value === null || value === undefined || value === '') return '';
+    return String(value).replace(/[&<>"]/g, (m) => {
+        if (m === '&') return '&amp;';
+        if (m === '<') return '&lt;';
+        if (m === '>') return '&gt;';
+        if (m === '"') return '&quot;';
+        return m;
+    });
+}
+
+function formatDate(dateStr) {
+    if (!dateStr) return '';
+    const parts = String(dateStr).split('-');
+    return parts.length === 3 ? `${parts[2]}.${parts[1]}.${parts[0]}` : String(dateStr);
+}
+
+function createDebounced(fn, ms) {
+    let timer = null;
+    const call = (...args) => {
+        clearTimeout(timer);
+        timer = setTimeout(() => fn(...args), ms);
+    };
+    call.cancel = () => clearTimeout(timer);
+    return call;
+}
+
+/**
+ * @param {HTMLElement} root  контейнер панели
+ * @param {Object}      deps  { storage, toast, confirmDanger, isAlive, isAbort,
+ *                              getHiddenColumns, onEdit, onDataChanged }
+ */
+export function createTable(root, deps) {
+    const { storage, toast, confirmDanger, isAlive, isAbort, getHiddenColumns, onEdit, onDataChanged } = deps;
+
+    const $ = (sel) => root.querySelector(sel);
+    const $$ = (sel) => Array.from(root.querySelectorAll(sel));
+
+    let sortField = 'id';
+    let sortDirection = 'asc';
+    let currentPage = 1;
+    let rows = [];
+    // Отбор, с которым реально сходили на сервер. Поля окна фильтров — это
+    // ещё не отбор: их можно заполнить и закрыть окно, не нажимая «Применить».
+    let appliedFilters = {};
+    let selectedIds = new Set();
+    let massApplying = false;
+    // Полный список — только для наполнения списков «Отдел» и «Должность» в
+    // фильтрах. Раньше он запрашивался ЗАНОВО при каждой перерисовке, то есть
+    // на каждую букву в поиске уходило по два запроса вместо одного.
+    let allEmployees = [];
+
+    // ------------------------------------------------------------ ячейки
+
+    // Цвет аватара стабилен на сотрудника (id % 4), не зависит от позиции строки
+    // в текущей отсортированной выдаче.
+    function renderAvatar(emp) {
+        const last = (emp.lastName || '').trim().charAt(0).toUpperCase();
+        const first = (emp.firstName || '').trim().charAt(0).toUpperCase();
+        const initials = `${last}${first}` || '?';
+        const colorIndex = Math.abs(Number(emp.id) || 0) % 4;
+        return `<span class="avatar-initials av-${colorIndex}">${escapeHtml(initials)}</span>`;
+    }
+
+    function renderEmployeeCell(emp, hidden) {
+        const nameParts = [];
+        if (!hidden.has('lastName')) nameParts.push(emp.lastName);
+        if (!hidden.has('firstName')) nameParts.push(emp.firstName);
+        if (!hidden.has('middleName') && emp.middleName) nameParts.push(emp.middleName);
+        const fio = escapeHtml(nameParts.filter(Boolean).join(' '));
+        const showPosition = !hidden.has('position') && emp.position;
+        return `
+            <div class="employee-cell">
+                ${renderAvatar(emp)}
+                <div class="employee-cell-text">
+                    <div class="employee-name">${fio}</div>
+                    ${showPosition ? `<div class="employee-position">${escapeHtml(emp.position)}</div>` : ''}
+                </div>
+            </div>`;
+    }
+
+    // Скрыт email — остаётся только телефон, и наоборот; скрыты оба — ячейка пустая.
+    function renderContactsCell(emp, hidden) {
+        const lines = [];
+        if (!hidden.has('phone') && emp.phone) {
+            lines.push(`<div class="contact-line contact-phone"><i class="fas fa-phone" aria-hidden="true"></i>${escapeHtml(emp.phone)}</div>`);
+        }
+        if (!hidden.has('email') && emp.email) {
+            lines.push(`<div class="contact-line"><i class="fas fa-envelope" aria-hidden="true"></i>${escapeHtml(emp.email)}</div>`);
+        }
+        return `<div class="contact-cell">${lines.join('')}</div>`;
+    }
+
+    // Чип не показывается, если поле пустое ИЛИ колонка скрыта; ни одного чипа —
+    // прочерк.
+    function renderMessengersCell(emp, hidden) {
+        const chips = [];
+        if (!hidden.has('whatsapp') && emp.whatsapp) {
+            chips.push('<span class="messenger-chip chip-whatsapp" title="WhatsApp"><i class="fab fa-whatsapp" aria-hidden="true"></i></span>');
+        }
+        if (!hidden.has('telegram') && emp.telegram) {
+            chips.push('<span class="messenger-chip chip-telegram" title="Telegram"><i class="fab fa-telegram" aria-hidden="true"></i></span>');
+        }
+        if (chips.length === 0) return '<div class="messenger-cell messenger-empty">—</div>';
+        return `<div class="messenger-cell">${chips.join('')}</div>`;
+    }
+
+    // «3/3 · 21:00–23:30»; при одном заполненном — только оно, при пустых прочерк.
+    function renderWorkScheduleCell(emp) {
+        const parts = [];
+        if (emp.workSchedule) parts.push(escapeHtml(emp.workSchedule));
+        if (emp.shiftStart && emp.shiftEnd) parts.push(`${escapeHtml(emp.shiftStart)}–${escapeHtml(emp.shiftEnd)}`);
+        return parts.length ? parts.join(' · ') : '—';
+    }
+
+    function renderManagerCell(emp) {
+        if (!emp.managerName) return '<span class="manager-cell manager-empty">—</span>';
+        return `<span class="manager-cell"><i class="fas fa-share" aria-hidden="true"></i>${escapeHtml(emp.managerName)}</span>`;
+    }
+
+    function renderStatusBadge(emp) {
+        const isActive = emp.status === 'active';
+        return `<span class="ui-pill ${isActive ? 'ui-pill--ok' : 'ui-pill--mute'}">${isActive ? 'Активен' : 'Неактивен'}</span>`;
+    }
+
+    // ------------------------------------------------------------ отрисовка
+
+    function applyColumnVisibility(hidden) {
+        STANDALONE_COLUMNS.forEach((key) => {
+            $$(`[data-col="${key}"]`).forEach((cell) => { cell.hidden = hidden.has(key); });
+        });
+    }
+
+    function rowHtml(emp, hidden) {
+        const idFormatted = String(emp.id).padStart(4, '0');
+        const hiddenAttr = (key) => (hidden.has(key) ? ' hidden' : '');
+        const fullName = `${emp.lastName || ''} ${emp.firstName || ''}`.trim();
+        const checked = selectedIds.has(emp.id) ? ' checked' : '';
+        return `
+            <tr data-id="${emp.id}" class="${selectedIds.has(emp.id) ? 'ui-table__row--selected' : ''}">
+                <td class="ui-table__sel"><input type="checkbox" data-check-id="${emp.id}" aria-label="Выбрать сотрудника ${idFormatted}"${checked}></td>
+                <td>${idFormatted}</td>
+                <td>${renderEmployeeCell(emp, hidden)}</td>
+                <td data-col="department"${hiddenAttr('department')}>${emp.department ? `<span class="department-tag">${escapeHtml(emp.department)}</span>` : '—'}</td>
+                <td>${renderContactsCell(emp, hidden)}</td>
+                <td>${renderMessengersCell(emp, hidden)}</td>
+                <td data-col="managerName"${hiddenAttr('managerName')}>${renderManagerCell(emp)}</td>
+                <td data-col="hireDate"${hiddenAttr('hireDate')}>${emp.hireDate ? formatDate(emp.hireDate) : '—'}</td>
+                <td data-col="status"${hiddenAttr('status')}>${renderStatusBadge(emp)}</td>
+                <td data-col="terminationDate"${hiddenAttr('terminationDate')}>${emp.terminationDate ? formatDate(emp.terminationDate) : '—'}</td>
+                <td data-col="lineType"${hiddenAttr('lineType')}>${emp.lineType ? escapeHtml(emp.lineType) : '—'}</td>
+                <td data-col="workSchedule"${hiddenAttr('workSchedule')}>${renderWorkScheduleCell(emp)}</td>
+                <td class="ui-table__acts">
+                    <button type="button" class="ui-btn ui-btn--icon ui-btn--sm" data-edit="${emp.id}" title="Изменить" aria-label="Изменить"><i class="fas fa-pencil-alt" aria-hidden="true"></i></button>
+                    <button type="button" class="ui-btn ui-btn--icon ui-btn--sm row-del" data-del="${emp.id}" data-name="${escapeHtml(fullName)}" title="Удалить" aria-label="Удалить"><i class="fas fa-trash" aria-hidden="true"></i></button>
+                </td>
+            </tr>`;
+    }
+
+    function renderPagination(totalItems) {
+        const totalPages = Math.ceil(totalItems / PAGE_SIZE) || 1;
+        const box = $('[data-role="pagination"]');
+        if (totalPages <= 1) {
+            box.innerHTML = '';
+            $('[data-role="pagination-note"]').textContent = totalItems ? `Всего: ${totalItems}` : '';
+            return;
+        }
+        const maxVisible = 7;
+        let startPage = Math.max(1, currentPage - Math.floor(maxVisible / 2));
+        const endPage = Math.min(totalPages, startPage + maxVisible - 1);
+        if (endPage - startPage + 1 < maxVisible) startPage = Math.max(1, endPage - maxVisible + 1);
+
+        let html = '';
+        for (let i = startPage; i <= endPage; i++) {
+            html += `<button type="button" class="page-btn ${i === currentPage ? 'active' : ''}" data-page="${i}">${i}</button>`;
+        }
+        box.innerHTML = html;
+        $('[data-role="pagination-note"]').textContent = `Страница ${currentPage} из ${totalPages} · всего ${totalItems}`;
+    }
+
+    function renderSortIcons() {
+        $$('thead th[data-field]').forEach((th) => {
+            const icon = th.querySelector('.sort-icon');
+            if (th.dataset.field === sortField) {
+                const iconClass = sortDirection === 'asc' ? 'fa-arrow-down-short-wide' : 'fa-arrow-down-wide-short';
+                if (!icon) {
+                    const i = document.createElement('i');
+                    i.className = `fas ${iconClass} sort-icon`;
+                    i.setAttribute('aria-hidden', 'true');
+                    th.appendChild(i);
+                } else {
+                    icon.className = `fas ${iconClass} sort-icon`;
+                }
+            } else if (icon) {
+                icon.remove();
+            }
+        });
+    }
+
+    function renderStatChips(list) {
+        const total = list.length;
+        const active = list.filter((e) => e.status === 'active').length;
+        $('[data-role="stat-total"]').textContent = String(total);
+        $('[data-role="stat-active"]').textContent = String(active);
+        $('[data-role="stat-inactive"]').textContent = String(total - active);
+    }
+
+    function currentFilters() {
+        return {
+            search: $('[data-role="search"]').value.trim(),
+            status: $('#empFilterStatus').value,
+            department: $('#empFilterDepartment').value,
+            position: $('#empFilterPosition').value,
+            hasWhatsapp: $('#empFilterWhatsapp').checked,
+            hasTelegram: $('#empFilterTelegram').checked,
+            hireDateFrom: $('#empFilterHireFrom').value,
+            hireDateTo: $('#empFilterHireTo').value
+        };
+    }
+
+    function updateFilterBadge(filters = {}) {
+        const badge = $('[data-role="filter-badge"]');
+        const activeCount = [filters.status, filters.department, filters.position, filters.hireDateFrom, filters.hireDateTo]
+            .filter(Boolean).length + (filters.hasWhatsapp ? 1 : 0) + (filters.hasTelegram ? 1 : 0);
+        badge.textContent = String(activeCount);
+        badge.hidden = activeCount === 0;
+    }
+
+    function populateFilterOptions() {
+        const fill = (select, values, placeholder) => {
+            const previous = select.value;
+            select.innerHTML = `<option value="">${placeholder}</option>`;
+            values.sort().forEach((v) => {
+                const opt = document.createElement('option');
+                opt.value = v;
+                opt.textContent = v;
+                select.appendChild(opt);
+            });
+            select.value = values.includes(previous) ? previous : '';
+        };
+        fill($('#empFilterDepartment'), [...new Set(allEmployees.map((e) => e.department).filter(Boolean))], 'Все отделы');
+        fill($('#empFilterPosition'), [...new Set(allEmployees.map((e) => e.position).filter(Boolean))], 'Все должности');
+    }
+
+    // Полный список — не на каждую перерисовку, а когда данные могли измениться.
+    async function reloadAllForFilters() {
+        try {
+            const list = await storage.fetchEmployees();
+            if (!isAlive()) return;
+            allEmployees = list;
+            populateFilterOptions();
+        } catch (err) {
+            if (!isAbort(err)) toast(err.message, 'error');
+        }
+    }
+
+    // Задан ли хоть один фильтр в наборе. При пустом отборе список сотрудников
+    // совпадает с полным — значит второй запрос за «полным списком для
+    // выпадающих фильтров» не нужен вовсе.
+    function isFilterSet(f) {
+        return Boolean(f.search || f.status || f.department || f.position
+            || f.hasWhatsapp || f.hasTelegram || f.hireDateFrom || f.hireDateTo);
+    }
+
+    function hasActiveFilters() {
+        return isFilterSet(appliedFilters);
+    }
+
+    /**
+     * Сходить за данными. Вызывается только когда отбор мог измениться:
+     * поиск, фильтры, обновление после правки. Сортировка, страница и
+     * настройка колонок сюда не ходят — они меняют лишь то, КАК показан уже
+     * загруженный список.
+     */
+    async function load() {
+        const filters = currentFilters();
+        try {
+            const list = await storage.fetchEmployees(filters);
+            if (!isAlive()) return false;
+            rows = list;
+            appliedFilters = filters;
+            if (!isFilterSet(filters)) {
+                allEmployees = list;
+                populateFilterOptions();
+            }
+            return true;
+        } catch (err) {
+            if (!isAbort(err)) toast(err.message, 'error');
+            return false;
+        }
+    }
+
+    /** Нарисовать уже загруженный список: сортировка, страница, колонки. */
+    async function draw() {
+        const list = rows.slice();
+
+        const hidden = await getHiddenColumns();
+        if (!isAlive()) return;
+
+        applyColumnVisibility(hidden);
+        // По применённому отбору, а не по полям окна: иначе счётчик загорается
+        // от значения, которое человек выбрал и не применил.
+        updateFilterBadge(appliedFilters);
+        renderStatChips(list);
+
+        // Колонка, по которой шла сортировка, скрыта — откатываем на дефолтную.
+        if (STANDALONE_COLUMNS.includes(sortField) && hidden.has(sortField)) {
+            sortField = 'id';
+            sortDirection = 'asc';
+        }
+
+        list.sort((a, b) => {
+            let valA = a[sortField] ?? '';
+            let valB = b[sortField] ?? '';
+            if (typeof valA === 'string') valA = valA.toLowerCase();
+            if (typeof valB === 'string') valB = valB.toLowerCase();
+            if (valA < valB) return sortDirection === 'asc' ? -1 : 1;
+            if (valA > valB) return sortDirection === 'asc' ? 1 : -1;
+            return 0;
+        });
+
+        const totalPages = Math.ceil(list.length / PAGE_SIZE) || 1;
+        if (currentPage > totalPages) currentPage = totalPages;
+
+        if (list.length === 0) {
+            $('[data-role="table-body"]').innerHTML = '';
+            // Рамку таблицы прячем целиком: она забирает всю оставшуюся высоту
+            // панели, и над сообщением висел бы пустой прямоугольник.
+            $('[data-role="table-wrap"]').hidden = true;
+            $('[data-role="empty-state"]').hidden = false;
+            $('[data-role="pagination-row"]').hidden = true;
+            updateMassBar();
+            return;
+        }
+        $('[data-role="table-wrap"]').hidden = false;
+        $('[data-role="empty-state"]').hidden = true;
+        $('[data-role="pagination-row"]').hidden = false;
+
+        const startIndex = (currentPage - 1) * PAGE_SIZE;
+        const pageItems = list.slice(startIndex, startIndex + PAGE_SIZE);
+        $('[data-role="table-body"]').innerHTML = pageItems.map((emp) => rowHtml(emp, hidden)).join('');
+
+        renderPagination(list.length);
+        renderSortIcons();
+        updateMassBar();
+    }
+
+    // ------------------------------------------------------------ выделение
+
+    function updateMassBar() {
+        $('[data-role="selected-count"]').textContent = `Выбрано: ${selectedIds.size}`;
+        $('[data-role="mass-bar"]').hidden = selectedIds.size === 0;
+        const boxes = $$('[data-check-id]');
+        $('[data-role="select-all"]').checked = boxes.length > 0 && boxes.every((cb) => cb.checked);
+    }
+
+    function clearSelection() {
+        selectedIds.clear();
+        $$('[data-check-id]').forEach((cb) => { cb.checked = false; });
+        $$('tr[data-id]').forEach((tr) => tr.classList.remove('ui-table__row--selected'));
+        // Вместе с выделением сбрасывается и выбранное действие: иначе полоса
+        // откроется в следующий раз с прежним выбором, и «Применить» сделает
+        // не то, чего человек ждёт.
+        $('[data-role="mass-action"]').value = '';
+        updateMassBar();
+    }
+
+    // ------------------------------------------------------------ действия
+
+    async function handleDelete(id, name) {
+        const ok = await confirmDanger({
+            title: 'Удаление сотрудника',
+            message: name
+                ? `Удалить сотрудника «${name}»? Действие необратимо.`
+                : 'Удалить этого сотрудника? Действие необратимо.'
+        });
+        if (!ok || !isAlive()) return;
+        try {
+            await storage.deleteEmployee(id);
+            if (!isAlive()) return;
+            selectedIds.delete(id);
+            toast('Сотрудник удалён', 'success');
+            await refresh();
+        } catch (err) {
+            if (!isAlive() || isAbort(err)) return;
+            toast(err.message, 'error');
+        }
+    }
+
+    async function runMassInactive(ids) {
+        let changed = 0;
+        let failed = 0;
+        for (const id of ids) {
+            try {
+                const emp = await storage.fetchEmployeeById(id);
+                if (!isAlive()) return;
+                if (emp.status !== 'inactive') {
+                    await storage.updateEmployee(id, { ...emp, status: 'inactive' });
+                    changed++;
+                }
+            } catch (err) {
+                if (isAbort(err)) return;
+                failed++;
+            }
+            if (!isAlive()) return;
+        }
+        clearSelection();
+        await refresh();
+        if (!isAlive()) return;
+        if (changed > 0) toast(`Статус обновлён у ${changed} сотрудников`, 'success');
+        else if (failed === 0) toast('Нет сотрудников для изменения — они уже неактивны', 'info');
+        if (failed > 0) toast(`Не удалось обновить: ${failed}`, 'error');
+    }
+
+    async function runMassDelete(ids) {
+        const ok = await confirmDanger({
+            title: 'Удаление сотрудников',
+            message: `Будет удалено: ${ids.length}. Действие необратимо.`
+        });
+        if (!ok || !isAlive()) return;
+        let deleted = 0;
+        let failed = 0;
+        for (const id of ids) {
+            try {
+                await storage.deleteEmployee(id);
+                deleted++;
+            } catch (err) {
+                if (isAbort(err)) return;
+                failed++;
+            }
+            if (!isAlive()) return;
+        }
+        clearSelection();
+        await refresh();
+        if (!isAlive()) return;
+        if (deleted > 0) toast(`Удалено сотрудников: ${deleted}`, 'success');
+        if (failed > 0) toast(`Не удалось удалить: ${failed}`, 'error');
+    }
+
+    async function handleMassApply() {
+        // Второй щелчок, пока идёт первый, повторял бы весь проход по списку —
+        // для удаления это второй заход по уже удалённым, где сервер на каждого
+        // отвечает «не найден».
+        if (massApplying) return;
+        const action = $('[data-role="mass-action"]').value;
+        if (!action) { toast('Выберите действие', 'error'); return; }
+        if (selectedIds.size === 0) { toast('Выберите хотя бы одного сотрудника', 'error'); return; }
+        const ids = Array.from(selectedIds);
+
+        massApplying = true;
+        const btn = $('[data-role="mass-apply"]');
+        btn.disabled = true;
+        try {
+            if (action === 'inactive') await runMassInactive(ids);
+            else if (action === 'delete') await runMassDelete(ids);
+        } finally {
+            massApplying = false;
+            btn.disabled = false;
+        }
+    }
+
+    /** Сходить за данными и нарисовать — когда отбор изменился. */
+    async function reload() {
+        const ok = await load();
+        if (!ok || !isAlive()) return;
+        await draw();
+    }
+
+    /**
+     * Обновление после изменения данных. Списки «Отдел» и «Должность» строятся
+     * по полному набору, поэтому при заданном отборе он перечитывается
+     * отдельно; при пустом хватает одного запроса — его делает load().
+     */
+    async function refresh() {
+        if (hasActiveFilters()) {
+            await reloadAllForFilters();
+            if (!isAlive()) return;
+        }
+        await reload();
+        if (!isAlive()) return;
+        if (onDataChanged) await onDataChanged();
+    }
+
+    const renderDebounced = createDebounced(() => { currentPage = 1; reload(); }, SEARCH_DEBOUNCE_MS);
+
+    function init() {
+        $('[data-role="search"]').addEventListener('input', renderDebounced);
+
+        $('thead').addEventListener('click', (e) => {
+            const th = e.target.closest('th[data-field]');
+            if (!th) return;
+            const field = th.dataset.field;
+            if (sortField === field) sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+            else { sortField = field; sortDirection = 'asc'; }
+            currentPage = 1;
+            draw();
+        });
+
+        $('[data-role="pagination"]').addEventListener('click', (e) => {
+            const btn = e.target.closest('[data-page]');
+            if (!btn) return;
+            const page = Number(btn.dataset.page);
+            if (page === currentPage) return;
+            currentPage = page;
+            draw();
+        });
+
+        const body = $('[data-role="table-body"]');
+        body.addEventListener('click', (e) => {
+            const editBtn = e.target.closest('[data-edit]');
+            if (editBtn) { onEdit(Number(editBtn.dataset.edit)); return; }
+            const delBtn = e.target.closest('[data-del]');
+            if (delBtn) handleDelete(Number(delBtn.dataset.del), delBtn.dataset.name || '');
+        });
+        body.addEventListener('change', (e) => {
+            const cb = e.target.closest('[data-check-id]');
+            if (!cb) return;
+            const id = Number(cb.dataset.checkId);
+            if (cb.checked) selectedIds.add(id); else selectedIds.delete(id);
+            const row = cb.closest('tr');
+            if (row) row.classList.toggle('ui-table__row--selected', cb.checked);
+            updateMassBar();
+        });
+
+        $('[data-role="select-all"]').addEventListener('change', (e) => {
+            const on = e.target.checked;
+            $$('[data-check-id]').forEach((cb) => {
+                cb.checked = on;
+                const id = Number(cb.dataset.checkId);
+                if (on) selectedIds.add(id); else selectedIds.delete(id);
+                const row = cb.closest('tr');
+                if (row) row.classList.toggle('ui-table__row--selected', on);
+            });
+            updateMassBar();
+        });
+
+        $('[data-role="mass-clear"]').addEventListener('click', clearSelection);
+        $('[data-role="mass-apply"]').addEventListener('click', handleMassApply);
+
+        // --- фильтры ---
+        const filterModal = $('[data-role="filter-modal"]');
+        $('[data-role="filter-toggle"]').addEventListener('click', () => { filterModal.hidden = false; });
+        $('[data-role="filter-close"]').addEventListener('click', () => { filterModal.hidden = true; });
+        filterModal.addEventListener('click', (e) => { if (e.target === filterModal) filterModal.hidden = true; });
+        $('[data-role="filter-apply"]').addEventListener('click', () => {
+            currentPage = 1;
+            filterModal.hidden = true;
+            reload();
+        });
+        $('[data-role="filter-clear"]').addEventListener('click', () => {
+            ['#empFilterStatus', '#empFilterDepartment', '#empFilterPosition', '#empFilterHireFrom', '#empFilterHireTo']
+                .forEach((sel) => { $(sel).value = ''; });
+            $('#empFilterWhatsapp').checked = false;
+            $('#empFilterTelegram').checked = false;
+            currentPage = 1;
+            filterModal.hidden = true;
+            reload();
+        });
+    }
+
+    return {
+        init,
+        // reload — сходить за данными и нарисовать; draw — только перерисовать
+        // уже загруженное (настройка колонок ничего не перезапрашивает).
+        reload,
+        draw,
+        refresh,
+        getRows: () => rows,
+        destroy() {
+            renderDebounced.cancel();
+        }
+    };
+}

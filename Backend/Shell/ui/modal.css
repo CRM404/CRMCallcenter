@@ -1,0 +1,145 @@
+/* --- ui/modal.css: БЛОК 3 — составные элементы ---------------------------
+   Две модалки, и различие между ними — правило дизайн-сессии, а не оформление:
+
+   1. ОБЫЧНАЯ накрывает СВОЮ ПАНЕЛЬ (.ui-modal--panel). Иначе непонятно, к
+      какой из двух открытых панелей относится окно, и вторая блокируется ни
+      за что.
+   2. НЕОБРАТИМОЕ ДЕЙСТВИЕ накрывает ВЕСЬ ЭКРАН (.ui-modal--screen). Цена
+      ошибки выше, чем удобство соседней панели.
+
+   Модалка панели позиционируется внутри контейнера с position:relative —
+   его задаёт оболочка на .shell-panel. Если контейнера нет (каталог
+   элементов, отдельная страница), модалка панели ведёт себя как экранная:
+   fixed-разметка ниже это учитывает.
+
+   ТРЕБОВАНИЕ К .shell-panel, без которого окно поедет:
+   сама панель НЕ прокручивается (overflow:hidden), прокручивается ВНУТРЕННИЙ
+   контейнер содержимого. Окно привязано к панели, а не к её содержимому, —
+   если прокручивать саму панель, окно уползёт вместе с текстом и на длинной
+   странице уйдёт за край экрана. Проверяется в наборе (проверка «Окно не
+   уезжает при прокрутке содержимого панели»).
+   ------------------------------------------------------------------------ */
+
+.ui-modal {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--ui-space-6);
+    background: var(--ui-color-scrim);
+    z-index: var(--ui-z-modal-panel);
+}
+
+.ui-modal--screen {
+    position: fixed;
+    z-index: var(--ui-z-modal-screen);
+}
+
+.ui-modal__box {
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 560px;
+    max-height: 100%;
+    padding: var(--ui-space-7) var(--ui-space-8);
+    border: 1px solid var(--ui-color-line);
+    border-radius: var(--ui-radius-lg);
+    background: var(--ui-color-surface);
+    box-shadow: var(--ui-shadow-modal);
+    font-family: var(--ui-font-ui);
+    color: var(--ui-color-ink);
+    animation: ui-modal-in var(--ui-dur-fast) ease;
+}
+
+.ui-modal__box--narrow { max-width: 450px; }
+.ui-modal__box--wide { max-width: 860px; }
+
+/* ----- Шапка -------------------------------------------------------------- */
+.ui-modal__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--ui-space-5);
+    margin-bottom: var(--ui-space-6);
+}
+
+.ui-modal__title {
+    margin: 0;
+    font-size: var(--ui-text-title);
+    font-weight: var(--ui-weight-bold);
+    line-height: var(--ui-line-tight);
+    color: var(--ui-color-ink);
+}
+
+.ui-modal__close {
+    flex-shrink: 0;
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--ui-color-ink-faint);
+    /* Числом было 28 — и это СЛОЙ, то есть каждое окно каждого раздела
+       (находка ревизора Р2). */
+    font-size: var(--ui-icon-lg);
+    line-height: 1;
+    cursor: pointer;
+    transition: color var(--ui-dur-fast);
+}
+.ui-modal__close:hover { color: var(--ui-color-danger); }
+.ui-modal__close:focus-visible {
+    outline: 2px solid var(--ui-color-accent);
+    outline-offset: 2px;
+}
+
+/* ----- Форма как прослойка -----------------------------------------------
+   Окно с формой обычно выглядит так:
+
+       .ui-modal__box > form > (.ui-modal__body + .ui-modal__actions)
+
+   Без этого правила <form> — обычный блок: он не передаёт вниз ограничение
+   высоты бокса и не даёт телу прокручиваться, а полосу действий выдавливает
+   за нижний край экрана. Ровно это и случилось с окном «Новый сотрудник»
+   (находка дизайн-сессии Д3): само окно кончалось на 731 px, кнопки «Отмена»
+   и «Далее» стояли на 902 при окне 768.
+
+   Правило в слое, а не в разделе: форма в этом месте — не выдумка одного
+   раздела, а нормальная разметка, и следующее такое окно должно работать без
+   отдельной починки. */
+.ui-modal__box > form {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+/* ----- Тело --------------------------------------------------------------
+   Прокрутка своя, у тела: шапка и полоса действий остаются на месте, когда
+   содержимое длинное. */
+.ui-modal__body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    font-size: var(--ui-text-xl);
+    line-height: var(--ui-line-base);
+}
+.ui-modal__body p { margin: 0 0 var(--ui-space-4); }
+.ui-modal__body p:last-child { margin-bottom: 0; }
+
+/* ----- Полоса действий ---------------------------------------------------- */
+.ui-modal__actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--ui-space-4);
+    margin-top: var(--ui-space-6);
+}
+
+@keyframes ui-modal-in {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .ui-modal__box { animation: none; }
+}

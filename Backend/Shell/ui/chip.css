@@ -1,0 +1,139 @@
+/* --- ui/chip.css: БЛОК 2 — базовые элементы ------------------------------
+   Чип-счётчик, пилюля-статус, чип активного фильтра и короткая метка.
+
+   Сегодня .stat-chip объявлен на шести страницах (Сотрудники, График, Скрипты,
+   CPA-сети, Источники и Главная под именем .m-chip), а статус-пилюля живёт под
+   четырьмя именами: .status-badge, .status-chip, .src-badge, .pf-badge. Здесь
+   их два вида на всё приложение.
+
+   ВАЖНО: счётчики ВНУТРИ разделов остаются. Владелец убрал числа с плиток
+   рабочего стола — и только оттуда (бриф, п.6).
+
+   Подсветка и рамка чипа фильтра — токенами --ui-color-wash-active и
+   --ui-color-accent-line (dialog.md Т1, добавлены куратором в 475329d).
+   ------------------------------------------------------------------------ */
+
+/* ----- Чип-счётчик: «Всего 3», «В смене 2» ----- */
+.ui-chips {
+    display: flex;
+    gap: var(--ui-space-3);
+    flex-wrap: wrap;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+.ui-chip {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 82px;
+    padding: var(--ui-space-3) var(--ui-space-4);
+    background: var(--ui-color-surface-sunken);
+    border: 1px solid var(--ui-color-line);
+    border-radius: var(--ui-radius-md);
+}
+.ui-chip__value {
+    font-size: 18px;
+    font-weight: var(--ui-weight-bold);
+    line-height: var(--ui-line-tight);
+    color: var(--ui-color-ink);
+}
+.ui-chip__label {
+    font-size: 10.5px;
+    color: var(--ui-color-ink-faint);
+    white-space: nowrap;
+}
+.ui-chip--ok .ui-chip__value { color: var(--ui-color-ok-ink); }
+.ui-chip--warn .ui-chip__value { color: var(--ui-color-warn-ink); }
+.ui-chip--bad .ui-chip__value { color: var(--ui-color-off-ink); }
+/* Приглушённый — это «данных нет», а не «ноль»: значение в нём прочерк. */
+.ui-chip--muted .ui-chip__value { color: var(--ui-color-ink-faint); }
+
+/* ----- Пилюля-статус: «Активен», «Перезвон 14:30» ----- */
+.ui-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px var(--ui-space-4);
+    border-radius: var(--ui-radius-pill);
+    font-size: 11px;
+    font-weight: var(--ui-weight-bold);
+    white-space: nowrap;
+}
+.ui-pill--ok { background: var(--ui-color-ok-bg); color: var(--ui-color-ok-ink); }
+.ui-pill--warn { background: var(--ui-color-warn-bg); color: var(--ui-color-warn-ink); }
+.ui-pill--bad { background: var(--ui-color-off-bg); color: var(--ui-color-off-ink); }
+.ui-pill--mute { background: var(--ui-color-neutral-bg); color: var(--ui-color-neutral-ink); }
+/* Точка перед текстом — как в .status-chip и .src-badge сегодня. Это не новый
+   вид, а вариант той же пилюли: раздел включает её классом, а не правилом. */
+.ui-pill--dot::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    flex-shrink: 0;
+    border-radius: 50%;
+    background: currentColor;
+}
+
+/* ----- Метка: «5/2», короткое значение без статуса ----- */
+.ui-tag {
+    display: inline-block;
+    padding: 2px var(--ui-space-2);
+    border-radius: var(--ui-radius-sm);
+    background: var(--ui-color-neutral-bg);
+    font-size: 10px;
+    font-weight: var(--ui-weight-bold);
+    color: var(--ui-color-ink-soft);
+    white-space: nowrap;
+}
+
+/* ----- Чип активного фильтра -----
+   Показывает, что именно сейчас отфильтровано: крестик снимает один фильтр,
+   «Очистить всё» — сразу все. Без этого человек видит короткий список и не
+   понимает, почему он короткий. */
+.ui-fchips {
+    display: flex;
+    align-items: center;
+    gap: var(--ui-space-3);
+    flex-wrap: wrap;
+}
+.ui-fchip {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--ui-space-2);
+    padding: var(--ui-space-1) var(--ui-space-2) var(--ui-space-1) var(--ui-space-4);
+    border: 1px solid var(--ui-color-accent-line);
+    border-radius: var(--ui-radius-pill);
+    background: var(--ui-color-wash-active);
+    font-size: var(--ui-text-xs);
+    color: var(--ui-color-ink-soft);
+}
+.ui-fchip b {
+    font-weight: var(--ui-weight-bold);
+    color: var(--ui-color-ink);
+}
+.ui-fchip__remove {
+    width: 18px;
+    height: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--ui-color-ink-faint);
+    font-size: var(--ui-icon-sm);
+    cursor: pointer;
+}
+.ui-fchip__remove:hover { background: var(--ui-color-wash-active); color: var(--ui-color-accent); }
+.ui-fchip__remove:focus-visible { outline: 2px solid var(--ui-color-accent); outline-offset: 1px; }
+.ui-fchips__clear {
+    border: none;
+    background: transparent;
+    font-family: var(--ui-font-ui);
+    font-size: var(--ui-text-xs);
+    color: var(--ui-color-ink-faint);
+    text-decoration: underline;
+    cursor: pointer;
+}
+.ui-fchips__clear:hover { color: var(--ui-color-accent); }

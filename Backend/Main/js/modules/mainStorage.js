@@ -1,67 +1,51 @@
-// --- mainStorage.js: клиент REST API для главной страницы (раздел "Реквизиты") ---
+// --- mainStorage.js: клиент REST API раздела «Реквизиты» ---
+//
+// ЧТО ИЗМЕНИЛОСЬ ПРИ ПЕРЕЕЗДЕ В ОБОЛОЧКУ.
+//
+// Транспорт (функция request с fetch, разбором JSON и обработкой ошибки) был
+// здесь дословной копией такой же функции из пяти других storage-модулей.
+// Копия убрана — транспорт живёт в Shell/api.js.
+//
+// Доменные методы остались тут: сливать их в общий файл на шесть разделов
+// значило бы заменить шесть копий одним монолитом, это не улучшение.
+//
+// ОБРАЗЕЦ ДЛЯ ОСТАЛЬНЫХ РАЗДЕЛОВ — фабрика, а не свободные функции.
+// Раздел получает от оболочки ctx.api, привязанный к жизни его панели, и
+// строит storage поверх него:
+//
+//     const storage = createStorage(ctx.api);
+//
+// Так закрытие панели обрывает незавершённые запросы раздела. Со свободными
+// функциями, импортирующими общий request напрямую, это было бы невозможно:
+// ответ пришёл бы в уже размонтированный раздел.
 
-export const API_BASE_URL = '/api';
+export function createStorage(api) {
+    return {
+        fetchOrganization: () =>
+            api.get('/organization'),
 
-async function request(path, options = {}) {
-    let response;
-    try {
-        response = await fetch(`${API_BASE_URL}${path}`, {
-            headers: { 'Content-Type': 'application/json' },
-            ...options
-        });
-    } catch (e) {
-        throw new Error('Не удалось связаться с сервером. Проверьте подключение.');
-    }
+        createOrganization: (data) =>
+            api.post('/organization', data),
 
-    if (response.status === 204) return null;
+        updateOrganization: (id, data) =>
+            api.put(`/organization/${id}`, data),
 
-    let body = null;
-    try {
-        body = await response.json();
-    } catch (e) {
-        // тело может отсутствовать при некоторых ошибках — игнорируем
-    }
+        createBankAccount: (organizationId, data) =>
+            api.post(`/organization/${organizationId}/bank-accounts`, data),
 
-    if (!response.ok) {
-        const err = new Error((body && body.error) || 'Произошла ошибка на сервере');
-        err.status = response.status;
-        throw err;
-    }
-    return body;
-}
+        updateBankAccount: (organizationId, accountId, data) =>
+            api.put(`/organization/${organizationId}/bank-accounts/${accountId}`, data),
 
-export function fetchOrganization() {
-    return request('/organization');
-}
+        deleteBankAccount: (organizationId, accountId) =>
+            api.del(`/organization/${organizationId}/bank-accounts/${accountId}`),
 
-export function createOrganization(data) {
-    return request('/organization', { method: 'POST', body: JSON.stringify(data) });
-}
+        createTax: (organizationId, data) =>
+            api.post(`/organization/${organizationId}/taxes`, data),
 
-export function updateOrganization(id, data) {
-    return request(`/organization/${id}`, { method: 'PUT', body: JSON.stringify(data) });
-}
+        updateTax: (organizationId, taxId, data) =>
+            api.put(`/organization/${organizationId}/taxes/${taxId}`, data),
 
-export function createBankAccount(organizationId, data) {
-    return request(`/organization/${organizationId}/bank-accounts`, { method: 'POST', body: JSON.stringify(data) });
-}
-
-export function updateBankAccount(organizationId, accountId, data) {
-    return request(`/organization/${organizationId}/bank-accounts/${accountId}`, { method: 'PUT', body: JSON.stringify(data) });
-}
-
-export function deleteBankAccount(organizationId, accountId) {
-    return request(`/organization/${organizationId}/bank-accounts/${accountId}`, { method: 'DELETE' });
-}
-
-export function createTax(organizationId, data) {
-    return request(`/organization/${organizationId}/taxes`, { method: 'POST', body: JSON.stringify(data) });
-}
-
-export function updateTax(organizationId, taxId, data) {
-    return request(`/organization/${organizationId}/taxes/${taxId}`, { method: 'PUT', body: JSON.stringify(data) });
-}
-
-export function deleteTax(organizationId, taxId) {
-    return request(`/organization/${organizationId}/taxes/${taxId}`, { method: 'DELETE' });
+        deleteTax: (organizationId, taxId) =>
+            api.del(`/organization/${organizationId}/taxes/${taxId}`)
+    };
 }

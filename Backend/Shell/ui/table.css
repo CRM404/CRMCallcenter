@@ -1,0 +1,179 @@
+/* --- ui/table.css: БЛОК 3 — составные элементы ---------------------------
+   Таблица: закреплённая шапка, закреплённая первая колонка, числовые колонки
+   вправо, выделение строк, горизонтальная прокрутка контейнером, полоса
+   массовых действий.
+
+   Заменяет собой пять почти одинаковых объявлений table/th/td по страницам
+   (Сотрудники, Лиды, Источники, CPA-сети, Скрипты). Раздел своих table/th/td
+   больше не объявляет.
+
+   Кнопка действия в строке — это не «опасная кнопка», а кнопка-иконка из
+   ui/button.css: .ui-btn.ui-btn--icon.ui-btn--sm. Здесь только размещение.
+
+   Подсветка строк — токенами --ui-color-wash-hover / --ui-color-wash-active
+   (запрошены в dialog.md Т1, добавлены куратором в tokens.css 475329d).
+   ------------------------------------------------------------------------ */
+
+/* ----- Обёртка: вбок едет таблица, а не панель ----- */
+.ui-table-wrap {
+    overflow-x: auto;
+    border: 1px solid var(--ui-color-line);
+    border-radius: var(--ui-radius-md);
+    background: var(--ui-color-surface);
+}
+/* Вертикальная прокрутка с закреплённой шапкой включается по месту: без
+   ограничения высоты sticky-шапке прилипать не к чему. */
+.ui-table-wrap--tall { max-height: 70vh; overflow-y: auto; }
+
+.ui-table {
+    width: 100%;
+    /* separate + border-spacing 0: collapse ломает липкие шапку и колонку —
+       у схлопнутых границ нет своего слоя, и они уезжают из-под sticky. */
+    border-collapse: separate;
+    border-spacing: 0;
+    font-family: var(--ui-font-ui);
+    font-size: var(--ui-text-xs);
+    font-variant-numeric: tabular-nums;
+}
+/* Широкая таблица (график, лиды) не сжимает колонки, а прокручивается. */
+.ui-table--wide { width: max-content; min-width: 100%; }
+
+.ui-table th {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    text-align: left;
+    padding: var(--ui-space-3) var(--ui-space-4);
+    /* Фон непрозрачный: под закреплённой шапкой проезжают строки, и сквозь
+       полупрозрачный они читаются призраком. */
+    background: var(--ui-color-surface-sunken);
+    border-bottom: 1px solid var(--ui-color-line-strong);
+    font-size: 10.5px;
+    font-weight: var(--ui-weight-bold);
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    color: var(--ui-color-ink-faint);
+    white-space: nowrap;
+}
+.ui-table td {
+    padding: var(--ui-space-3) var(--ui-space-4);
+    border-bottom: 1px solid var(--ui-color-line);
+    color: var(--ui-color-ink);
+    vertical-align: middle;
+}
+.ui-table tbody tr:last-child td { border-bottom: none; }
+.ui-table tbody tr:hover td { background: var(--ui-color-wash-hover); }
+
+/* ----- Сортируемая шапка ----- */
+.ui-table th.ui-table__sortable { cursor: pointer; user-select: none; }
+.ui-table th.ui-table__sortable:hover { color: var(--ui-color-ink-soft); }
+.ui-table__sort-icon { margin-left: var(--ui-space-1); color: var(--ui-color-accent); }
+
+/* ----- Числовая колонка вправо ----- */
+.ui-table th.ui-table__num,
+.ui-table td.ui-table__num { text-align: right; }
+
+/* ----- Колонка действий ----- */
+.ui-table th.ui-table__acts { text-align: right; }
+.ui-table td.ui-table__acts {
+    text-align: right;
+    white-space: nowrap;
+    width: 1%;
+}
+/* Действия по наведению — ОПЦИЯ, а не поведение по умолчанию. На «Сотрудниках»
+   кнопки в строке видны всегда: так их сделали по прямому замечанию владельца
+   (employees-light.css, «правка по фидбеку владельца»). Переезд раздела не
+   должен молча отменить его правку, поэтому раздел, которому нужно наведение,
+   включает класс сам. */
+.ui-table--acts-on-hover td.ui-table__acts > * {
+    opacity: 0;
+    transition: opacity var(--ui-dur-fast);
+}
+.ui-table--acts-on-hover tr:hover td.ui-table__acts > *,
+.ui-table--acts-on-hover td.ui-table__acts > *:focus-visible { opacity: 1; }
+
+/* ----- Колонка выделения ----- */
+.ui-table th.ui-table__sel,
+.ui-table td.ui-table__sel {
+    width: 34px;
+    padding-left: var(--ui-space-4);
+    padding-right: 0;
+}
+.ui-table th.ui-table__sel input,
+.ui-table td.ui-table__sel input {
+    width: 15px;
+    height: 15px;
+    accent-color: var(--ui-color-accent);
+}
+.ui-table tr.ui-table__row--selected td { background: var(--ui-color-wash-active); }
+
+/* ----- Закреплённая первая колонка -----
+   Фон обязателен и обязан быть непрозрачным: сквозь полупрозрачный при
+   прокрутке вбок читается уезжающий текст. Слои: шапка 3, липкая колонка 2,
+   их пересечение 4 (схема проверена на графике, 31 колонка). */
+.ui-table--freeze-first td:first-child,
+.ui-table--freeze-first th:first-child {
+    position: sticky;
+    left: 0;
+    z-index: 2;
+    background: var(--ui-color-surface-sunken);
+    border-right: 1px solid var(--ui-color-line-strong);
+}
+.ui-table--freeze-first thead th:first-child { z-index: 4; }
+.ui-table--freeze-first tbody tr:hover td:first-child,
+.ui-table--freeze-first tbody tr.ui-table__row--selected td:first-child {
+    /* Подсветка строки не должна пропадать под закреплённой колонкой, но и
+       просвечивать она не имеет права: цвет накладывается на непрозрачный
+       фон, а не заменяет его. */
+    background:
+        linear-gradient(var(--ui-color-wash-active),
+                        var(--ui-color-wash-active)),
+        var(--ui-color-surface-sunken);
+}
+
+/* ----- Содержимое ячейки: главное и вторичное ----- */
+.ui-table__main {
+    display: block;
+    font-weight: var(--ui-weight-bold);
+    color: var(--ui-color-ink);
+}
+.ui-table__sub {
+    display: block;
+    margin-top: 1px;
+    font-size: 11px;
+    color: var(--ui-color-ink-faint);
+}
+/* Прочерк вместо нуля, когда данных нет. */
+.ui-table__muted { color: var(--ui-color-ink-faint); }
+
+/* ----- Итог под таблицей: «Показано 6 из 14» ----- */
+.ui-table-foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--ui-space-4);
+    padding: var(--ui-space-4) 2px 0;
+    font-size: var(--ui-text-xs);
+    color: var(--ui-color-ink-faint);
+}
+
+/* ----- Полоса массовых действий -----
+   В составе слоя её в брифе нет (dialog.md, Т2), но она есть в макете и нужна
+   трём разделам: Сотрудники, Лиды, Источники. Живёт при таблице с выделением,
+   поэтому объявлена здесь, а не отдельным файлом. */
+.ui-mass-bar {
+    position: sticky;
+    bottom: 0;
+    z-index: 5;
+    display: flex;
+    align-items: center;
+    gap: var(--ui-space-4);
+    padding: var(--ui-space-4) var(--ui-space-5);
+    background: var(--ui-color-surface);
+    border-top: 1px solid var(--ui-color-line);
+}
+.ui-mass-bar__count {
+    font-size: var(--ui-text-sm);
+    font-weight: var(--ui-weight-bold);
+    color: var(--ui-color-ink);
+}

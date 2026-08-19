@@ -66,6 +66,39 @@ app.use('/api/schedule', scheduleRouter);
 // с префиксом operator*/scriptsAdmin*/main*/cpa*/sources*/leads*, чтобы не
 // пересекаться по имени с одноимённой структурой Employees/ — все семь
 // каталогов монтируются в корень "/".
+// Shell/ — общая оболочка и слой элементов (задача «единая оболочка CRM»).
+// Смонтирована ПЕРВОЙ намеренно: со временем в ней появится index.html, и
+// именно она должна отвечать на корневые пути, а не одна из шести папок
+// разделов. Пути /ui/…, /shell/…, /api.js, /ui-catalog.html, /index.html
+// проверены на уникальность относительно остальных семи папок — коллизия
+// статики не даёт ошибки, она молча отдаёт чужой файл.
+// ВНИМАНИЕ на этап 1: как только появится Shell/index.html, express.static
+// начнёт отдавать его на «/» раньше, чем сработает app.get('/') ниже, и
+// редирект на /main.html умрёт сам собой. Это нужное поведение, но оно должно
+// быть снято сознательно, а не обнаружено постфактум.
+// Редиректы со старых адресов на маршруты внутри оболочки. Добавляются ПО
+// ОДНОМУ на каждом этапе переноса и обязательно ДО express.static — иначе
+// статика отдаст старый файл страницы раньше, чем сработает редирект.
+//
+// Закладки, которые владелец уже раздал, продолжают работать.
+//
+// /operator.html и /operator-login.html редиректу не подлежат никогда:
+// страница оператора в задачу не входит и остаётся отдельной.
+// Код 302, а не 301: миграция ещё идёт, и откат раздела возможен. Постоянный
+// редирект браузеры кэшируют надолго — откатив раздел, мы не смогли бы
+// вернуть людей на старую страницу, пока они не почистят кэш вручную.
+// На 301 переведём в конце задачи, если это вообще понадобится.
+//
+// Решение владельца 19.08.2026: все шесть — 302. В половине исполнителя стояло
+// 301; на бой оно не выкатывалось, поэтому ни один браузер его не закэшировал.
+app.get('/main.html', (req, res) => res.redirect(302, '/#/requisites'));
+app.get('/emploees.html', (req, res) => res.redirect(302, '/#/employees'));
+app.get('/leads.html', (req, res) => res.redirect(302, '/#/leads'));
+app.get('/sources.html', (req, res) => res.redirect(302, '/#/sources'));
+app.get('/cpa-networks.html', (req, res) => res.redirect(302, '/#/cpa'));
+app.get('/scripts-admin.html', (req, res) => res.redirect(302, '/#/scripts'));
+
+const shellDir = path.join(__dirname, 'Shell');
 const employeesDir = path.join(__dirname, 'Employees');
 const operatorDir = path.join(__dirname, 'Operator');
 const scriptsAdminDir = path.join(__dirname, 'ScriptsAdmin');
@@ -73,6 +106,7 @@ const mainDir = path.join(__dirname, 'Main');
 const cpaNetworksDir = path.join(__dirname, 'CpaNetworks');
 const sourcesDir = path.join(__dirname, 'Sources');
 const leadsDir = path.join(__dirname, 'Leads');
+app.use(express.static(shellDir));
 app.use(express.static(employeesDir));
 app.use(express.static(operatorDir));
 app.use(express.static(scriptsAdminDir));
@@ -80,9 +114,13 @@ app.use(express.static(mainDir));
 app.use(express.static(cpaNetworksDir));
 app.use(express.static(sourcesDir));
 app.use(express.static(leadsDir));
-app.get('/', (req, res) => {
-    res.redirect('/main.html');
-});
+// Редиректа с «/» на /main.html больше нет: с этапа 1 корень отдаёт
+// Shell/index.html — единую точку входа. Строка не удалена «заодно», она
+// перестала работать в тот момент, когда появился Shell/index.html:
+// express.static отвечает на «/» раньше, чем доходит до app.get('/'), и
+// оставленный редирект врал бы читателю кода. Старые адреса разделов
+// (/main.html, /leads.html, …) продолжают работать до своего этапа переноса,
+// редиректы на них добавляются по одному (бриф, 3.1).
 
 app.use((req, res) => {
     res.status(404).json({ error: 'Маршрут не найден' });

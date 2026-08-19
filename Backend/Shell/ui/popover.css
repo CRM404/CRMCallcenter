@@ -1,0 +1,91 @@
+/* --- ui/popover.css: БЛОК 3 — составные элементы -------------------------
+   Поповер: меню у элемента со вторым шагом внутри себя. Позиционирование —
+   ui/popover.js, здесь только вид.
+
+   Слой ниже модалок (--ui-z-popover < --ui-z-modal-panel): открытое окно
+   должно накрывать поповер, а не наоборот.
+
+   Скрытие — атрибутом hidden. Собственного display у .ui-popover намеренно
+   нет, а у шагов он есть, поэтому всё держится на общем правиле
+   [hidden] { display: none !important } из ui/field.css.
+   ------------------------------------------------------------------------ */
+
+.ui-popover {
+    position: fixed;
+    z-index: var(--ui-z-popover);
+    width: 238px;
+    max-width: calc(100vw - 16px);
+    padding: var(--ui-space-3);
+    background: var(--ui-color-surface);
+    border: 1px solid var(--ui-color-line-strong);
+    border-radius: var(--ui-radius-md);
+    box-shadow: var(--ui-shadow-pop);
+    font-family: var(--ui-font-ui);
+}
+.ui-popover__title {
+    padding: var(--ui-space-1) var(--ui-space-3) var(--ui-space-3);
+    margin-bottom: var(--ui-space-2);
+    border-bottom: 1px solid var(--ui-color-line);
+    font-size: var(--ui-text-xs);
+    font-weight: var(--ui-weight-bold);
+    color: var(--ui-color-ink-soft);
+}
+
+/* Шаг поповера. Второй шаг живёт здесь же: отдельная модалка ради двух полей
+   тяжела для действия, которое делают на бегу. */
+.ui-popover__step { display: grid; gap: var(--ui-space-2); }
+
+.ui-popover__option {
+    display: flex;
+    align-items: center;
+    gap: var(--ui-space-3);
+    width: 100%;
+    padding: var(--ui-space-2) var(--ui-space-3);
+    border: none;
+    border-radius: var(--ui-radius-sm);
+    background: transparent;
+    font-family: var(--ui-font-ui);
+    font-size: var(--ui-text-sm);
+    color: var(--ui-color-ink);
+    text-align: left;
+    cursor: pointer;
+}
+.ui-popover__option:hover { background: var(--ui-color-wash-hover); }
+.ui-popover__option:focus-visible { outline: 2px solid var(--ui-color-accent); outline-offset: -2px; }
+/* Недоступный пункт остаётся видимым и объясняет себя подписью: пропавший
+   пункт читается как поломка. */
+.ui-popover__option--off { opacity: .5; cursor: not-allowed; }
+.ui-popover__option--off:hover { background: transparent; }
+.ui-popover__option-sub {
+    display: block;
+    font-size: 11px;
+    color: var(--ui-color-ink-faint);
+}
+.ui-popover__dot {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+    border-radius: var(--ui-radius-sm);
+    background: var(--ui-color-neutral-bg);
+}
+.ui-popover__sep {
+    border: none;
+    border-top: 1px solid var(--ui-color-line);
+    margin: var(--ui-space-2) var(--ui-space-1);
+}
+.ui-popover__foot {
+    display: flex;
+    align-items: center;
+    gap: var(--ui-space-3);
+    padding-top: var(--ui-space-2);
+    margin-top: 2px;
+    border-top: 1px solid var(--ui-color-line);
+}
+.ui-popover__foot--end { justify-content: flex-end; }
+
+/* Статичный образец для каталога: тот же вид, но в потоке страницы. */
+.ui-popover--static {
+    position: static;
+    width: 100%;
+    box-shadow: none;
+}

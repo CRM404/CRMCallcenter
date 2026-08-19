@@ -1,0 +1,123 @@
+/* --- ui/tabs.css: БЛОК 2 — базовые элементы ------------------------------
+   Вкладки (в том числе с числами) и переключатель режимов «Список | График».
+
+   Три вида, которые сегодня разъехались по страницам:
+     - вкладки с числами — карточка лида, статусы Источников и CPA-сетей
+       (сегодня .platform-tab / .network-tab капсулами; вид приводится к макету);
+     - вкладки-пилюли — категории в подборе офферов (.picker-tabs);
+     - переключатель режимов — Сотрудники, «Список | График».
+
+   Синий здесь — активное состояние, то есть интерактив, а не заливка «просто
+   так». Подсветка — токенами --ui-color-wash-* (dialog.md, Т1).
+   ------------------------------------------------------------------------ */
+
+/* ----- Вкладки ----- */
+.ui-tabs {
+    display: flex;
+    gap: var(--ui-space-1);
+    flex-wrap: wrap;
+    border-bottom: 1px solid var(--ui-color-line);
+    margin-bottom: var(--ui-space-5);
+}
+.ui-tabs__tab {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--ui-space-2);
+    padding: var(--ui-space-3) var(--ui-space-5);
+    margin-bottom: -1px;
+    border: none;
+    border-bottom: 2px solid transparent;
+    border-radius: var(--ui-radius-sm) var(--ui-radius-sm) 0 0;
+    background: transparent;
+    font-family: var(--ui-font-ui);
+    font-size: var(--ui-text-sm);
+    font-weight: var(--ui-weight-bold);
+    color: var(--ui-color-ink-soft);
+    cursor: pointer;
+}
+.ui-tabs__tab:hover { color: var(--ui-color-ink); background: var(--ui-color-wash-hover); }
+.ui-tabs__tab:focus-visible { outline: 2px solid var(--ui-color-accent); outline-offset: -2px; }
+.ui-tabs__tab--active { color: var(--ui-color-accent); border-bottom-color: var(--ui-color-accent); }
+
+/* Число у вкладки: «Офферы 3», «Активные 12». */
+.ui-tabs__count { font-size: 11px; color: var(--ui-color-ink-faint); }
+.ui-tabs__tab--active .ui-tabs__count { color: var(--ui-color-accent); }
+/* Вариант со счётчиком-капсулой — вкладки внутри окна (настройка колонок). */
+.ui-tabs__count--badge {
+    padding: 1px var(--ui-space-2);
+    border-radius: var(--ui-radius-pill);
+    background: var(--ui-color-neutral-bg);
+}
+.ui-tabs__tab--active .ui-tabs__count--badge {
+    background: var(--ui-color-wash-active);
+    color: var(--ui-color-accent);
+}
+/* Вкладка, которой сейчас нечего показать, остаётся видимой и приглушается:
+   пропавшая вкладка читается как поломка. */
+.ui-tabs__tab--quiet { opacity: .55; }
+
+/* Вкладки В СТРОКУ с другими элементами (панель инструментов, полоса сетей).
+   Линия снизу нужна вкладкам, которые стоят НАД содержимым и отделяют себя от
+   него; в одной строке с полем поиска она просто перечёркивает строку. */
+.ui-tabs--inline { border-bottom: none; margin-bottom: 0; }
+
+/* ----- Вкладки-пилюли: узкие места, где подчёркивание не помещается ----- */
+.ui-tabs--pills { border-bottom: none; margin-bottom: 0; }
+.ui-tabs--pills .ui-tabs__tab {
+    margin-bottom: 0;
+    padding: var(--ui-space-1) var(--ui-space-4);
+    border: 1px solid var(--ui-color-line);
+    border-radius: var(--ui-radius-pill);
+    background: var(--ui-color-surface);
+    font-size: var(--ui-text-xs);
+}
+.ui-tabs--pills .ui-tabs__tab:hover { background: var(--ui-color-wash-hover); }
+.ui-tabs--pills .ui-tabs__tab--active {
+    background: var(--ui-color-accent);
+    border-color: var(--ui-color-accent);
+    color: var(--ui-color-ink-invert);
+}
+/* Число на залитой вкладке — тот же белый, что и подпись, но тише. Своего
+   цвета здесь не объявляем: раздел не объявляет цветов, и слой тоже. */
+.ui-tabs--pills .ui-tabs__tab--active .ui-tabs__count {
+    color: var(--ui-color-ink-invert);
+    opacity: .78;
+}
+
+/* ----- Переключатель режимов: «Список | График» ----- */
+.ui-switch {
+    display: inline-flex;
+    gap: 2px;
+    padding: 3px;
+    border: 1px solid var(--ui-color-line);
+    border-radius: var(--ui-radius-md);
+    background: var(--ui-color-neutral-bg);
+}
+.ui-switch__option {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--ui-space-2);
+    min-height: var(--ui-control-h-sm);
+    padding: var(--ui-space-2) var(--ui-space-5);
+    border: none;
+    border-radius: var(--ui-radius-sm);
+    background: transparent;
+    font-family: var(--ui-font-ui);
+    font-size: var(--ui-text-sm);
+    font-weight: var(--ui-weight-bold);
+    color: var(--ui-color-ink-soft);
+    cursor: pointer;
+    transition: background var(--ui-dur-fast), color var(--ui-dur-fast);
+}
+/* Значок внутри переключателя — ступень лестницы, а не размер текста
+   кнопки: без этого он наследовал 13 px и добавлял экрану лишнюю
+   ступень (находка Д11). */
+.ui-switch__option .fa, .ui-switch__option .fas, .ui-switch__option i { font-size: var(--ui-icon-xs); }
+
+.ui-switch__option:hover { color: var(--ui-color-ink); }
+.ui-switch__option:focus-visible { outline: 2px solid var(--ui-color-accent); outline-offset: 2px; }
+.ui-switch__option--active,
+.ui-switch__option--active:hover {
+    background: var(--ui-color-accent);
+    color: var(--ui-color-ink-invert);
+}

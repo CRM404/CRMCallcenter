@@ -1,12 +1,16 @@
 // --- leadsPickList.js: мультивыбор «select "— добавить… —" + теги выбранного» ---
 // Финальный паттерн дизайн-сессии после трёх раундов правок владельца
 // (report_designer.md, 13.08.2026): выпадающий список сверху, выбранное —
-// тегами-пилюлями .param-tag снизу, уже выбранные пункты в списке помечены «✓»
+// тегами-пилюлями снизу, уже выбранные пункты в списке помечены «✓»
 // и задизейблены. Стена из ~59 таблеток-чипов отклонена владельцем.
 //
 // Используется тремя полями сразу: «Статусы показа скрипта» в карточке лида и
 // в окне загрузки (с группировкой по этапам воронки и пунктом «— весь этап (N) —»)
 // и «Сотрудники — пул раздачи» в окне загрузки (плоский список).
+//
+// К ОБОЛОЧКЕ модуль был готов и до переноса: он не знает ни про document, ни
+// про глобальные id — весь DOM строит внутри переданного контейнера. Изменились
+// только имена классов тегов: свои .param-tag заменены на .ui-fchip из слоя.
 
 const WHOLE_STAGE_PREFIX = 'stage:';
 
@@ -20,8 +24,9 @@ function escapeHtml(value) {
 export function createPickList(container, { placeholder = '— добавить… —', emptyText = '', onChange = null } = {}) {
     container.innerHTML = '';
     const select = document.createElement('select');
+    select.className = 'ui-field__control';
     const tagsEl = document.createElement('div');
-    tagsEl.className = 'param-tags';
+    tagsEl.className = 'ui-fchips';
     const emptyEl = document.createElement('div');
     emptyEl.className = 'pick-empty';
     emptyEl.textContent = emptyText;
@@ -76,8 +81,8 @@ export function createPickList(container, { placeholder = '— добавить�
         tagsEl.innerHTML = ordered.map((id) => {
             const item = items[indexOfItem(id)];
             if (!item) return '';
-            const badge = item.stageNumber !== undefined ? `<span class="tag-stage">${item.stageNumber}</span>` : '';
-            return `<span class="param-tag">${badge}${escapeHtml(item.label)}<button type="button" data-remove="${id}" aria-label="Убрать">×</button></span>`;
+            const badge = item.stageNumber !== undefined ? `<span class="ui-tag">${item.stageNumber}</span>` : '';
+            return `<span class="ui-fchip">${badge}${escapeHtml(item.label)}<button type="button" class="ui-fchip__remove" data-remove="${id}" aria-label="Убрать">×</button></span>`;
         }).join('');
         emptyEl.hidden = selectedIds.length > 0 || !emptyText;
     }

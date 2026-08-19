@@ -7,9 +7,10 @@
 // (report_designer.md): в карточке лида это отдельная вкладка (фильтры, список
 // результатов, «Добавить все (N)»), в окне загрузки — компактный инлайн-поиск
 // с подсказками, потому что вкладок там нет.
-
-import { searchOffers, searchOfferIds, fetchOfferFilters } from './leadsStorage.js';
-import { showToast } from './leadsToast.js';
+//
+// ПЕРЕНОС В ОБОЛОЧКУ: модуль больше не импортирует ни storage, ни showToast —
+// получает их зависимостями. Причина не в чистоте: storage теперь свой у
+// каждой панели, а импорт был бы общим на всё приложение.
 
 const SEARCH_DEBOUNCE_MS = 300;
 const SUGGEST_LIMIT = 8;
@@ -48,12 +49,16 @@ function offerSubtitle(offer) {
     return parts.length ? parts.join(' · ') : '—';
 }
 
-function debounce(fn, ms) {
+// Отложенный вызов с явной отменой: таймер обязан сниматься при закрытии
+// панели, иначе поиск уйдёт в уже обнулённый storage.
+function createDebounced(fn, ms) {
     let timer = null;
-    return (...args) => {
+    const call = (...args) => {
         clearTimeout(timer);
         timer = setTimeout(() => fn(...args), ms);
     };
+    call.cancel = () => clearTimeout(timer);
+    return call;
 }
 
 // ============================================================
@@ -62,7 +67,8 @@ function debounce(fn, ms) {
 
 export function createOfferTabPicker({
     rootSelect, platSelect, geoSelects, searchInput, resetBtn,
-    resultsEl, tagsEl, countEl, emptyEl, clearAllBtn, tabCountEl, onChange
+    resultsEl, tagsEl, countEl, emptyEl, clearAllBtn, tabCountEl, onChange,
+    storage, toast, isAlive, isAbort
 }) {
     // id -> name: имя нужно для тегов выбранного, а поиск возвращает только
     // текущую страницу результатов — поэтому выбранное храним со своими именами.
@@ -93,7 +99,7 @@ export function createOfferTabPicker({
         countEl.textContent = selected.size;
         if (tabCountEl) tabCountEl.textContent = selected.size;
         tagsEl.innerHTML = Array.from(selected.entries())
-            .map(([id, name]) => `<span class="param-tag">${escapeHtml(name)}<button type="button" data-remove="${id}" aria-label="Убрать">×</button></span>`)
+            .map(([id, name]) => `<span class="ui-fchip">${escapeHtml(name)}<button type="button" class="ui-fchip__remove" data-remove="${id}" aria-label="Убрать">×</button></span>`)
             .join('');
         emptyEl.hidden = selected.size > 0;
         clearAllBtn.hidden = selected.size === 0;
@@ -115,13 +121,13 @@ export function createOfferTabPicker({
         const overLimit = maxPerLead !== null && lastTotal > maxPerLead;
         const addAllControl = overLimit
             ? `<span>${escapeHtml(TOO_MANY_OFFERS_HINT)}</span>`
-            : `<button type="button" class="btn btn-ghost btn-sm" id="offerAddAllBtn"${allAdded && lastTotal === lastResults.length ? ' disabled' : ''}>${addAllLabel}</button>`;
+            : `<button type="button" class="ui-btn ui-btn--ghost ui-btn--sm" data-role="offer-add-all"${allAdded && lastTotal === lastResults.length ? ' disabled' : ''}>${addAllLabel}</button>`;
 
         const rows = lastResults.map((o) => {
             const added = selected.has(o.id);
             const action = added
                 ? '<span class="added">✓ добавлен</span>'
-                : `<button type="button" class="btn btn-ghost btn-sm" data-add="${o.id}">Добавить</button>`;
+                : `<button type="button" class="ui-btn ui-btn--ghost ui-btn--sm" data-add="${o.id}">Добавить</button>`;
             return `<div class="offer-result-row">
                 <div><div>${escapeHtml(o.name)}</div><div class="offer-result-sub">${escapeHtml(offerSubtitle(o))}</div></div>
                 ${action}
@@ -144,17 +150,19 @@ export function createOfferTabPicker({
 
     async function runSearch() {
         try {
-            const { total, items, maxPerLead: limit } = await searchOffers(currentParams());
+            const { total, items, maxPerLead: limit } = await storage.searchOffers(currentParams());
+            if (!isAlive()) return;
             lastTotal = total;
             lastResults = items;
             if (typeof limit === 'number') maxPerLead = limit;
             renderResults();
         } catch (e) {
-            showToast(e.message, 'error');
+            if (!isAlive() || isAbort(e)) return;
+            toast(e.message, 'error');
         }
     }
 
-    const runSearchDebounced = debounce(runSearch, SEARCH_DEBOUNCE_MS);
+    const runSearchDebounced = createDebounced(runSearch, SEARCH_DEBOUNCE_MS);
 
     async function addAll() {
         try {
@@ -162,20 +170,23 @@ export function createOfferTabPicker({
             // шире потолка внятной ошибкой. Названия для тегов
             // добираем вторым запросом — на весь отбор, а не на видимую
             // страницу: пользователь выбирает ВЕСЬ отбор, а не то, что видит.
-            const { ids } = await searchOfferIds(currentParams());
+            const { ids } = await storage.searchOfferIds(currentParams());
+            if (!isAlive()) return;
             if (ids.length === 0) {
-                showToast('В отборе нет офферов', 'error');
+                toast('В отборе нет офферов', 'error');
                 return;
             }
-            const { items } = await searchOffers({ ...currentParams(), limit: ids.length });
+            const { items } = await storage.searchOffers({ ...currentParams(), limit: ids.length });
+            if (!isAlive()) return;
             const namesById = new Map(items.map((o) => [o.id, o.name]));
             ids.forEach((id) => selected.set(id, namesById.get(id) || `Оффер #${id}`));
             renderSelected();
             renderResults();
             emitChange();
-            showToast(`Добавлено офферов: ${ids.length}`, 'success');
+            toast(`Добавлено офферов: ${ids.length}`, 'success');
         } catch (e) {
-            showToast(e.message, 'error');
+            if (!isAlive() || isAbort(e)) return;
+            toast(e.message, 'error');
         }
     }
 
@@ -192,7 +203,7 @@ export function createOfferTabPicker({
             }
             return;
         }
-        if (e.target.closest('#offerAddAllBtn')) addAll();
+        if (e.target.closest('[data-role="offer-add-all"]')) addAll();
     });
 
     tagsEl.addEventListener('click', (e) => {
@@ -221,6 +232,7 @@ export function createOfferTabPicker({
         geoSelects[level].addEventListener('change', async () => {
             GEO_LEVELS.slice(index + 1).forEach((lower) => { geoSelects[lower].value = ''; });
             await loadFilters({ force: true });
+            if (!isAlive()) return;
             await runSearch();
         });
     });
@@ -231,6 +243,7 @@ export function createOfferTabPicker({
         GEO_LEVELS.forEach((level) => { geoSelects[level].value = ''; });
         searchInput.value = '';
         await loadFilters({ force: true });
+        if (!isAlive()) return;
         await runSearch();
     });
 
@@ -246,11 +259,12 @@ export function createOfferTabPicker({
     async function loadFilters({ force = false } = {}) {
         if (filtersLoaded && !force) return;
         try {
-            const { rootSources, platforms, regions, cities, districts, localities } = await fetchOfferFilters({
+            const { rootSources, platforms, regions, cities, districts, localities } = await storage.fetchOfferFilters({
                 region: geoSelects.region.value,
                 city: geoSelects.city.value,
                 district: geoSelects.district.value
             });
+            if (!isAlive()) return;
             const previousRoot = rootSelect.value;
             rootSelect.innerHTML = '<option value="">Все</option>'
                 + rootSources.map((v) => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
@@ -266,7 +280,8 @@ export function createOfferTabPicker({
             fillSelect(geoSelects.locality, localities);
             filtersLoaded = true;
         } catch (e) {
-            showToast(e.message, 'error');
+            if (!isAlive() || isAbort(e)) return;
+            toast(e.message, 'error');
         }
     }
 
@@ -289,9 +304,13 @@ export function createOfferTabPicker({
             // force: списки гео-уровней могли остаться суженными каскадом от
             // прошлого открытия, а значения мы только что сбросили.
             await loadFilters({ force: true });
+            if (!isAlive()) return;
             await runSearch();
         },
-        getValues
+        getValues,
+        destroy() {
+            runSearchDebounced.cancel();
+        }
     };
 }
 
@@ -299,25 +318,27 @@ export function createOfferTabPicker({
 // Инлайн-поиск офферов в окне загрузки базы
 // ============================================================
 
-export function createOfferInlinePicker(container, { onChange = null } = {}) {
+export function createOfferInlinePicker(container, { onChange = null, storage, toast, isAlive, isAbort } = {}) {
     container.innerHTML = '';
     const input = document.createElement('input');
     input.type = 'text';
+    input.className = 'ui-field__control';
     input.placeholder = 'Начните вводить название оффера…';
     input.autocomplete = 'off';
     const suggest = document.createElement('div');
     suggest.className = 'pick-suggest';
     suggest.hidden = true;
     const tagsEl = document.createElement('div');
-    tagsEl.className = 'param-tags';
+    tagsEl.className = 'ui-fchips';
     container.append(input, suggest, tagsEl);
 
     const selected = new Map();
     let lastItems = [];
+    let blurTimer = null;
 
     function renderTags() {
         tagsEl.innerHTML = Array.from(selected.entries())
-            .map(([id, name]) => `<span class="param-tag">${escapeHtml(name)}<button type="button" data-remove="${id}" aria-label="Убрать">×</button></span>`)
+            .map(([id, name]) => `<span class="ui-fchip">${escapeHtml(name)}<button type="button" class="ui-fchip__remove" data-remove="${id}" aria-label="Убрать">×</button></span>`)
             .join('');
         if (onChange) onChange(Array.from(selected.keys()));
     }
@@ -329,7 +350,8 @@ export function createOfferInlinePicker(container, { onChange = null } = {}) {
             return;
         }
         try {
-            const { total, items } = await searchOffers({ search: query, limit: SUGGEST_LIMIT });
+            const { total, items } = await storage.searchOffers({ search: query, limit: SUGGEST_LIMIT });
+            if (!isAlive()) return;
             lastItems = items;
             if (items.length === 0) {
                 suggest.innerHTML = '<div class="pick-suggest-empty">Ничего не найдено</div>';
@@ -344,12 +366,17 @@ export function createOfferInlinePicker(container, { onChange = null } = {}) {
             }
             suggest.hidden = false;
         } catch (e) {
-            showToast(e.message, 'error');
+            if (!isAlive() || isAbort(e)) return;
+            toast(e.message, 'error');
         }
     }
 
-    input.addEventListener('input', debounce(runSearch, SEARCH_DEBOUNCE_MS));
-    input.addEventListener('blur', () => { setTimeout(() => { suggest.hidden = true; }, 150); });
+    const runSearchDebounced = createDebounced(runSearch, SEARCH_DEBOUNCE_MS);
+    input.addEventListener('input', runSearchDebounced);
+    input.addEventListener('blur', () => {
+        clearTimeout(blurTimer);
+        blurTimer = setTimeout(() => { suggest.hidden = true; }, 150);
+    });
 
     suggest.addEventListener('mousedown', (e) => {
         const item = e.target.closest('[data-pick]');
@@ -379,6 +406,10 @@ export function createOfferInlinePicker(container, { onChange = null } = {}) {
             input.value = '';
             suggest.hidden = true;
             renderTags();
+        },
+        destroy() {
+            runSearchDebounced.cancel();
+            clearTimeout(blurTimer);
         }
     };
 }

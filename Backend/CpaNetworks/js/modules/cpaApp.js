@@ -4,14 +4,8 @@
 // уезжают на будущую страницу "Маркетинг"; backend/cpaStorage.js не трогаем.
 // Композиция/поля/поведение — из живого Artifact дизайн-сессии (см. dialog.md).
 
-import { initHubNav } from './cpaNav.js';
-import { showToast } from './cpaToast.js';
-import { initConfirmModal, confirmAction } from './cpaConfirm.js';
-import {
-    fetchCpaNetworks, createCpaNetwork, updateCpaNetwork, deleteCpaNetwork, fetchOrganization,
-    fetchRealEstateOffers, createRealEstateOffer, updateRealEstateOffer, deleteRealEstateOffer,
-    fetchParamLists, addParamValue, deleteParamValue, fetchGeoSuggest
-} from './cpaStorage.js';
+import { createStorage } from './cpaStorage.js';
+import { isAbort } from '/api.js';
 
 const STATUS_LABEL = { active: 'Активен', paused: 'На паузе', disabled: 'Отключён', draft: 'Черновик' };
 
@@ -44,7 +38,28 @@ const PARAM_META = [
     { key: 'decisionMaker', label: 'ЛПР (карточка лида)', target: null, type: 'select' }
 ];
 
-const $ = (s) => document.querySelector(s);
+// Поиск ТОЛЬКО в границах своей панели. Раньше здесь стоял
+// document.querySelector, и это работало, пока раздел был отдельной страницей.
+// В оболочке при двух открытых панелях он брал бы первый попавшийся узел: у
+// «CPA-сетей» и «Источников» одинаковые id поиска, фильтра статусов и пустого
+// состояния — раздел начал бы управлять чужими элементами. Молча, без единой
+// ошибки в консоли.
+let root = null;
+const $ = (s) => (root ? root.querySelector(s) : null);
+const $$ = (s) => (root ? Array.from(root.querySelectorAll(s)) : []);
+
+let shell = null;
+let storage = null;
+
+// Номер монтирования: панель закрывают и открывают заново, а ответ на запрос,
+// ушедший до закрытия, приходит после. Без этой сверки данные прошлой панели
+// дорисовались бы в новую.
+let generation = 0;
+
+// Слушатели на документе — их надо снимать при закрытии панели, иначе они
+// копятся с каждым открытием раздела.
+let onDocClick = null;
+let onDocKeydown = null;
 
 let networks = [];
 let offers = [];
@@ -81,13 +96,40 @@ function formatMoney(n) {
 
 // --- Сети: переключатель-табы + компактная модалка "Управление сетями" ---
 
+// Пустое состояние заполняется составом — заголовок и причина, — а не одной
+// строкой: правило брифа и находка Д12, из-за которой то же самое чинили в
+// «Реквизитах».
+function setEmpty(title, text) {
+    const titleEl = $('[data-role="empty-title"]');
+    const textEl = $('[data-role="empty-text"]');
+    if (titleEl) titleEl.textContent = title;
+    if (textEl) textEl.textContent = text;
+}
+
+// Пилюля статуса — элемент слоя. Свой `status-chip` раздел держал с тех
+// пор, когда был отдельной страницей; в «Скриптах» и «Источниках» та же
+// задача давно решена `ui-pill` (находка дизайн-сессии Д13).
+const STATUS_PILL = {
+    active: 'ui-pill--ok',
+    paused: 'ui-pill--warn',
+    disabled: 'ui-pill--mute',
+    draft: 'ui-pill--bad'
+};
+
+// Прочерк — ОДИН элемент на всё приложение. Раньше пустое «Тип действия»
+// рисовалось пилюлей с прочерком внутри (пилюля читается как «статус есть»,
+// Д8), а прочерки «Ставки» и «Периода» в одной строке отличались начертанием,
+// потому что доставались от разных классов значения (Д9).
+const DASH = '<span class="ui-dash">—</span>';
+
 function renderTabs() {
     const wrap = $('#networkTabs');
     wrap.innerHTML = networks.map((n) => {
         const count = offers.filter((o) => o.networkId === n.id).length;
-        return `<button type="button" class="network-tab ${n.id === activeNetworkId ? 'active' : ''}" data-id="${n.id}">${escapeHtml(n.name)}<span class="count">${count}</span></button>`;
+        const active = n.id === activeNetworkId ? ' ui-tabs__tab--active' : '';
+        return `<button type="button" class="ui-tabs__tab${active}" data-id="${n.id}">${escapeHtml(n.name)}<span class="ui-tabs__count ui-tabs__count--badge">${count}</span></button>`;
     }).join('');
-    wrap.querySelectorAll('.network-tab').forEach((btn) => {
+    wrap.querySelectorAll('.ui-tabs__tab').forEach((btn) => {
         btn.addEventListener('click', () => {
             activeNetworkId = Number(btn.dataset.id);
             renderTabs();
@@ -129,8 +171,8 @@ function renderNetList() {
                 <div class="n-name">${escapeHtml(n.name)}</div>
                 <div class="n-meta">${escapeHtml(n.organizationName || '—')} · комиссия ${n.commissionPercent ?? '—'}% · ${escapeHtml(n.payoutCurrency || '—')}</div>
             </div>
-            <button type="button" class="m-icon-btn" data-nedit="${n.id}" title="Изменить"><i class="fas fa-pencil-alt" aria-hidden="true"></i></button>
-            <button type="button" class="m-icon-btn danger" data-ndel="${n.id}" title="Удалить"><i class="fas fa-trash" aria-hidden="true"></i></button>
+            <button type="button" class="ui-btn ui-btn--icon ui-btn--sm" data-nedit="${n.id}" title="Изменить"><i class="fas fa-pencil-alt" aria-hidden="true"></i></button>
+            <button type="button" class="ui-btn ui-btn--icon ui-btn--sm ui-btn--danger" data-ndel="${n.id}" title="Удалить"><i class="fas fa-trash" aria-hidden="true"></i></button>
         </div>`).join('');
 
     $('#netList').querySelectorAll('[data-nedit]').forEach((b) => b.addEventListener('click', () => openNetForm(Number(b.dataset.nedit))));
@@ -160,28 +202,37 @@ async function saveNetwork() {
         commissionPercent: $('#nfCommission').value
     };
     if (!data.name) {
-        showToast('Заполните обязательное поле: Название', 'error');
+        shell.toast('Заполните обязательное поле: Название', 'error');
         return;
     }
     if (!data.organizationId) {
-        showToast('Заполните обязательное поле: Юрлицо', 'error');
+        shell.toast('Заполните обязательное поле: Юрлицо', 'error');
         return;
     }
+    const my = generation;
     try {
         if (editingNetworkId === null) {
-            await createCpaNetwork(data);
-            showToast('Сеть добавлена', 'success');
+            await storage.createCpaNetwork(data);
+            if (!alive(my)) return;
+            shell.toast('Сеть добавлена', 'success');
         } else {
-            await updateCpaNetwork(editingNetworkId, data);
-            showToast('Изменения сохранены', 'success');
+            await storage.updateCpaNetwork(editingNetworkId, data);
+            if (!alive(my)) return;
+            shell.toast('Изменения сохранены', 'success');
         }
     } catch (err) {
-        showToast(err.message, 'error');
+        if (!alive(my)) return;
+        if (!isAbort(err)) shell.toast(err.message, 'error');
         return;
     }
+    // Панель могли закрыть, пока шло сохранение: без этой проверки $ вернёт
+    // null и раздел упадёт на .hidden уже после успешного запроса.
+    if (!alive(my)) return;
     $('#netInlineForm').hidden = true;
     await loadNetworks();
+    if (!alive(my)) return;
     await loadOffers();
+    if (!alive(my)) return;
     renderNetList();
     renderTabs();
     renderMeta();
@@ -195,11 +246,15 @@ async function handleDeleteNetwork(id) {
     const message = offerCount > 0
         ? `Сеть «${n.name}» и связанные с ней офферы (${offerCount}) будут удалены без возможности восстановления.`
         : `Удалить сеть «${n.name}»? Действие необратимо.`;
-    const ok = await confirmAction(message);
-    if (!ok) return;
+    // Необратимое действие — окно накрывает весь экран, а не только свою
+    // панель: цена ошибки выше, чем удобство соседней панели.
+    const my = generation;
+    const ok = await shell.confirmDanger({ title: 'Удаление сети', message });
+    if (!ok || !alive(my)) return;
     try {
-        await deleteCpaNetwork(id);
-        showToast('Сеть удалена', 'success');
+        await storage.deleteCpaNetwork(id);
+        if (!alive(my)) return;
+        shell.toast('Сеть удалена', 'success');
         await loadNetworks();
         await loadOffers();
         renderNetList();
@@ -207,7 +262,7 @@ async function handleDeleteNetwork(id) {
         renderMeta();
         renderOffersTable();
     } catch (err) {
-        showToast(err.message, 'error');
+        shell.toast(err.message, 'error');
     }
 }
 
@@ -217,14 +272,17 @@ function renderOffersTable() {
     $('#addOfferBtn').disabled = activeNetworkId === null;
     if (activeNetworkId === null) {
         $('#offersBody').innerHTML = '';
-        $('#emptyState').textContent = 'Сначала добавьте сеть в «Управление сетями».';
-        $('#emptyState').hidden = false;
-        $('#statTotal').textContent = '0';
-        $('#statActive').textContent = '0';
-        $('#statDraft').textContent = '0';
+        setEmpty('Сетей пока нет', 'Добавьте первую сеть в окне «Управление сетями» — офферы заводятся внутри неё.');
+        $('[data-role="empty-state"]').hidden = false;
+        $('[data-role="stat-total"]').textContent = '0';
+        $('[data-role="stat-active"]').textContent = '0';
+        $('[data-role="stat-draft"]').textContent = '0';
         return;
     }
-    $('#emptyState').textContent = 'В этой сети пока нет офферов, подходящих под фильтр.';
+    setEmpty(searchQuery || activeStatus !== 'all' ? 'Ничего не найдено' : 'Офферов пока нет',
+        searchQuery || activeStatus !== 'all'
+            ? 'В этой сети есть офферы, но ни один не подходит под текущий поиск и фильтр статуса.'
+            : 'В этой сети ещё не заведено ни одного оффера.');
 
     let list = offers.filter((o) => o.networkId === activeNetworkId);
     if (activeStatus !== 'all') list = list.filter((o) => o.status === activeStatus);
@@ -233,39 +291,39 @@ function renderOffersTable() {
     $('#offersBody').innerHTML = list.map((o) => `
         <tr data-id="${o.id}">
             <td><div class="offer-name">${escapeHtml(o.name)}</div><div class="offer-cat">${escapeHtml(o.category || '—')}</div></td>
-            <td><span class="action-tag">${escapeHtml(o.actionType || '—')}</span></td>
-            <td><span class="rate-value">${formatMoney(o.rate)}</span>${o.rate !== null && o.rate !== undefined ? '<span class="rate-cur">₽</span>' : ''}</td>
-            <td><span class="period">${o.dateStart ? formatDate(o.dateStart) + ' – ' + (o.dateEnd ? formatDate(o.dateEnd) : 'бессрочно') : '—'}</span></td>
-            <td><span class="status-chip ${o.status}">${STATUS_LABEL[o.status]}</span></td>
+            <td>${o.actionType ? `<span class="action-tag">${escapeHtml(o.actionType)}</span>` : DASH}</td>
+            <td>${o.rate === null || o.rate === undefined ? DASH : `<span class="rate-value">${formatMoney(o.rate)}</span><span class="rate-cur">₽</span>`}</td>
+            <td>${o.dateStart ? `<span class="period">${formatDate(o.dateStart)} – ${o.dateEnd ? formatDate(o.dateEnd) : 'бессрочно'}</span>` : DASH}</td>
+            <td><span class="ui-pill ui-pill--dot ${STATUS_PILL[o.status] || 'ui-pill--mute'}">${STATUS_LABEL[o.status]}</span></td>
             <td>
                 <div class="row-actions">
-                    <button type="button" class="m-icon-btn" data-edit="${o.id}" title="Настроить"><i class="fas fa-pencil-alt" aria-hidden="true"></i></button>
-                    <button type="button" class="m-icon-btn" data-copy="${o.id}" title="Скопировать"><i class="fas fa-copy" aria-hidden="true"></i></button>
-                    <button type="button" class="m-icon-btn danger" data-del="${o.id}" title="Удалить"><i class="fas fa-trash" aria-hidden="true"></i></button>
+                    <button type="button" class="ui-btn ui-btn--icon ui-btn--sm" data-edit="${o.id}" title="Настроить"><i class="fas fa-pencil-alt" aria-hidden="true"></i></button>
+                    <button type="button" class="ui-btn ui-btn--icon ui-btn--sm" data-copy="${o.id}" title="Скопировать"><i class="fas fa-copy" aria-hidden="true"></i></button>
+                    <button type="button" class="ui-btn ui-btn--icon ui-btn--sm ui-btn--danger" data-del="${o.id}" title="Удалить"><i class="fas fa-trash" aria-hidden="true"></i></button>
                 </div>
             </td>
         </tr>`).join('');
 
-    $('#emptyState').hidden = list.length > 0;
+    $('[data-role="empty-state"]').hidden = list.length > 0;
 
     $('#offersBody').querySelectorAll('[data-edit]').forEach((b) => b.addEventListener('click', () => openOfferModal(Number(b.dataset.edit))));
     $('#offersBody').querySelectorAll('[data-copy]').forEach((b) => b.addEventListener('click', () => openOfferModal(Number(b.dataset.copy), { asCopy: true })));
     $('#offersBody').querySelectorAll('[data-del]').forEach((b) => b.addEventListener('click', () => handleDeleteOffer(Number(b.dataset.del))));
 
     const networkOffers = offers.filter((o) => o.networkId === activeNetworkId);
-    $('#statTotal').textContent = networkOffers.length;
-    $('#statActive').textContent = networkOffers.filter((o) => o.status === 'active').length;
-    $('#statDraft').textContent = networkOffers.filter((o) => o.status === 'draft').length;
+    $('[data-role="stat-total"]').textContent = networkOffers.length;
+    $('[data-role="stat-active"]').textContent = networkOffers.filter((o) => o.status === 'active').length;
+    $('[data-role="stat-draft"]').textContent = networkOffers.filter((o) => o.status === 'draft').length;
 }
 
 function renderSelectOptions(id, list, value) {
-    const el = document.getElementById(id);
+    const el = $('#' + id);
     el.innerHTML = (list || []).map((v) => `<option>${escapeHtml(v)}</option>`).join('');
     el.value = value && (list || []).includes(value) ? value : ((list || [])[0] || '');
 }
 
 function renderChipOptions(id, list, selected, onToggle) {
-    const el = document.getElementById(id);
+    const el = $('#' + id);
     el.innerHTML = (list || []).map((v) => `<button type="button" class="chip-opt${(selected || []).includes(v) ? ' on' : ''}" data-v="${escapeHtml(v)}">${escapeHtml(v)}</button>`).join('');
     el.querySelectorAll('.chip-opt').forEach((c) => {
         c.onclick = () => { c.classList.toggle('on'); if (onToggle) onToggle(); };
@@ -273,7 +331,7 @@ function renderChipOptions(id, list, selected, onToggle) {
 }
 
 function getChipValues(containerId) {
-    return Array.from(document.querySelectorAll(`#${containerId} .chip-opt.on`)).map((c) => c.dataset.v);
+    return Array.from($$(`#${containerId} .chip-opt.on`)).map((c) => c.dataset.v);
 }
 
 function renderSegments() {
@@ -289,13 +347,13 @@ function renderSegments() {
             </select>
             <div class="range-pair"><input type="number" class="seg-price-min" placeholder="цена от" value="${s.priceMin ?? ''}"><span>—</span><input type="number" class="seg-price-max" placeholder="цена до" value="${s.priceMax ?? ''}"></div>
             <div class="range-pair"><input type="number" class="seg-area-min" placeholder="S от" value="${s.areaMin ?? ''}"><span>—</span><input type="number" class="seg-area-max" placeholder="S до" value="${s.areaMax ?? ''}"></div>
-            <button type="button" class="m-icon-btn danger rr-remove" data-rm="${i}"><i class="fas fa-trash" aria-hidden="true"></i></button>
-        </div>`).join('') || '<div class="empty-state" style="padding:14px">Сегментов пока нет — по умолчанию действует общий фильтр по типу выше.</div>';
+            <button type="button" class="ui-btn ui-btn--icon ui-btn--sm ui-btn--danger rr-remove" data-rm="${i}"><i class="fas fa-trash" aria-hidden="true"></i></button>
+        </div>`).join('') || '<div class="ui-empty ui-empty--inline"><span class="ui-empty__text">Сегментов пока нет — по умолчанию действует общий фильтр по типу выше.</span></div>';
     $('#fSegments').querySelectorAll('[data-rm]').forEach((b) => b.addEventListener('click', () => { syncSegmentsFromDom(); currentSegments.splice(Number(b.dataset.rm), 1); renderSegments(); }));
 }
 
 function gatherSegments() {
-    return Array.from(document.querySelectorAll('#fSegments .segment-row')).map((row) => ({
+    return Array.from($$('#fSegments .segment-row')).map((row) => ({
         objectClass: row.querySelector('.seg-class').value,
         roomCount: row.querySelector('.seg-rooms').value,
         priceMin: row.querySelector('.seg-price-min').value,
@@ -320,8 +378,8 @@ function renderGeoRows(containerId, store) {
             <div class="geo-field"><input class="geo-city" placeholder="Город" value="${escapeHtml(r.city || '')}"></div>
             <div class="geo-field"><input class="geo-district" placeholder="Район" value="${escapeHtml(r.district || '')}"></div>
             <div class="geo-field"><input class="geo-locality" placeholder="Нас. пункт" value="${escapeHtml(r.locality || '')}"></div>
-            <button type="button" class="m-icon-btn danger rr-remove" data-rm="${i}"><i class="fas fa-trash" aria-hidden="true"></i></button>
-        </div>`).join('') || '<div class="empty-state" style="padding:14px">География не задана — оффер считается доступным по всей стране.</div>';
+            <button type="button" class="ui-btn ui-btn--icon ui-btn--sm ui-btn--danger rr-remove" data-rm="${i}"><i class="fas fa-trash" aria-hidden="true"></i></button>
+        </div>`).join('') || '<div class="ui-empty ui-empty--inline"><span class="ui-empty__text">География не задана — оффер считается доступным по всей стране.</span></div>';
     $('#' + containerId).querySelectorAll('[data-rm]').forEach((b) => b.addEventListener('click', () => { syncGeoRowsFromDom(containerId, store); store.splice(Number(b.dataset.rm), 1); renderGeoRows(containerId, store); }));
     attachGeoAutocomplete(containerId, store);
 }
@@ -338,7 +396,7 @@ let geoSuggestRequestId = 0;
 const GEO_FIELD_BOUND = { region: 'region', city: 'city', district: 'area', locality: 'settlement' };
 
 function closeGeoSuggest() {
-    document.querySelectorAll('.geo-suggest').forEach((el) => el.remove());
+    $$('.geo-suggest').forEach((el) => el.remove());
 }
 
 function escapeRegExp(s) {
@@ -404,14 +462,23 @@ function attachGeoAutocomplete(containerId, store) {
             if (!q) return;
 
             const requestId = ++geoSuggestRequestId;
+            const my = generation;
             geoSuggestTimer = setTimeout(async () => {
+                // Таймер переживает закрытие панели: без этой проверки он
+                // сработает, когда storage уже null, и раздел упадёт на
+                // ровном месте — через полсекунды после того, как человек
+                // закрыл панель.
+                if (!alive(my)) return;
                 let suggestions;
                 try {
                     const regionFiasId = field !== 'region' ? store[i].regionFiasId : undefined;
-                    const result = await fetchGeoSuggest(q, { bound, regionFiasId });
+                    const result = await storage.fetchGeoSuggest(q, { bound, regionFiasId });
+                    if (!alive(my)) return;
                     suggestions = result?.suggestions || [];
                 } catch (err) {
-                    showToast('Подсказки адреса недоступны — сервис не отвечает. Введите вручную.', 'error');
+                    if (!alive(my)) return;
+                    if (isAbort(err)) return;
+                    shell.toast('Подсказки адреса недоступны — сервис не отвечает. Введите вручную.', 'error');
                     return;
                 }
                 if (requestId !== geoSuggestRequestId) return;
@@ -443,10 +510,12 @@ function attachGeoAutocomplete(containerId, store) {
     });
 }
 
-document.addEventListener('click', (e) => { if (!e.target.closest('.geo-field')) closeGeoSuggest(); });
+// Слушатель вешается в mount, а не при импорте модуля: импорт происходит один
+// раз, а раздел открывают много, и слушатель, поставленный на верхнем уровне,
+// пережил бы закрытие панели и остался бы навсегда.
 
 function gatherGeoRows(containerId) {
-    return Array.from(document.querySelectorAll(`#${containerId} .geo-row`)).map((row) => ({
+    return Array.from($$(`#${containerId} .geo-row`)).map((row) => ({
         region: row.querySelector('.geo-region').value,
         city: row.querySelector('.geo-city').value,
         district: row.querySelector('.geo-district').value,
@@ -475,7 +544,7 @@ function refreshParamField(key) {
     if (!meta) return;
     if (!meta.target) return; // список без поля в форме оффера — перерисовывать нечего
     if (meta.type === 'select') {
-        renderSelectOptions(meta.target, paramLists[key], document.getElementById(meta.target).value);
+        renderSelectOptions(meta.target, paramLists[key], $('#' + meta.target).value);
     } else if (meta.type === 'segments') {
         syncSegmentsFromDom();
         renderSegments();
@@ -486,19 +555,22 @@ function refreshParamField(key) {
 }
 
 async function handleAddParamValue(key) {
-    const input = document.getElementById('padd-' + key);
+    const input = $('#' + 'padd-' + key);
     const value = input.value.trim();
     if (!value) return;
     if (paramLists[key].some((v) => v.toLowerCase() === value.toLowerCase())) {
-        showToast('Такое значение уже есть в списке', 'error');
+        shell.toast('Такое значение уже есть в списке', 'error');
         return;
     }
+    const my = generation;
     try {
-        await addParamValue(key, value);
+        await storage.addParamValue(key, value);
     } catch (err) {
-        showToast(err.message, 'error');
+        if (!alive(my)) return;
+        if (!isAbort(err)) shell.toast(err.message, 'error');
         return;
     }
+    if (!alive(my)) return;
     paramLists[key].push(value);
     input.value = '';
     renderParamTags(key);
@@ -508,12 +580,15 @@ async function handleAddParamValue(key) {
 
 async function handleRemoveParamValue(key, index) {
     const value = paramLists[key][index];
+    const my = generation;
     try {
-        await deleteParamValue(key, value);
+        await storage.deleteParamValue(key, value);
     } catch (err) {
-        showToast(err.message, 'error');
+        if (!alive(my)) return;
+        if (!isAbort(err)) shell.toast(err.message, 'error');
         return;
     }
+    if (!alive(my)) return;
     paramLists[key].splice(index, 1);
     renderParamTags(key);
     refreshParamField(key);
@@ -540,7 +615,7 @@ function renderParamsPanel() {
                 <div class="param-tags" id="ptags-${m.key}"></div>
                 <div class="param-add-row">
                     <input type="text" id="padd-${m.key}" placeholder="Новое значение…">
-                    <button type="button" class="btn btn-secondary btn-sm" data-add="${m.key}">Добавить</button>
+                    <button type="button" class="ui-btn ui-btn--secondary ui-btn--sm" data-add="${m.key}">Добавить</button>
                 </div>
             </div>
         </div>`).join('');
@@ -549,7 +624,7 @@ function renderParamsPanel() {
 
     $('#paramsList').querySelectorAll('[data-toggle]').forEach((btn) => {
         btn.addEventListener('click', () => {
-            const body = document.getElementById('pcb-' + btn.dataset.toggle);
+            const body = $('#' + 'pcb-' + btn.dataset.toggle);
             body.hidden = !body.hidden;
             btn.classList.toggle('open', !body.hidden);
         });
@@ -558,7 +633,7 @@ function renderParamsPanel() {
         const key = btn.dataset.add;
         const submit = () => handleAddParamValue(key);
         btn.addEventListener('click', submit);
-        document.getElementById('padd-' + key).addEventListener('keydown', (e) => {
+        $('#' + 'padd-' + key).addEventListener('keydown', (e) => {
             if (e.key === 'Enter') { e.preventDefault(); submit(); }
         });
     });
@@ -586,9 +661,9 @@ async function openOfferModal(id, opts = {}) {
     // при каждом открытии модалки, чтобы форма/панель всегда показывали то, что
     // реально лежит в БД сейчас, а не снимок на момент загрузки страницы.
     try {
-        paramLists = await fetchParamLists();
+        paramLists = await storage.fetchParamLists();
     } catch (err) {
-        showToast(err.message, 'error');
+        shell.toast(err.message, 'error');
     }
 
     const o = id ? offers.find((x) => x.id === id) : null;
@@ -678,27 +753,33 @@ function gatherOfferData() {
 async function saveOffer() {
     const data = gatherOfferData();
     if (!data.name) {
-        showToast('Заполните обязательное поле: Название', 'error');
+        shell.toast('Заполните обязательное поле: Название', 'error');
         return;
     }
     if (!data.networkId) {
-        showToast('Выберите сеть перед добавлением оффера', 'error');
+        shell.toast('Выберите сеть перед добавлением оффера', 'error');
         return;
     }
+    const my = generation;
     try {
         if (editingOfferId === null) {
-            await createRealEstateOffer(data);
-            showToast(savingAsCopy ? 'Копия оффера создана' : 'Оффер добавлен', 'success');
+            await storage.createRealEstateOffer(data);
+            if (!alive(my)) return;
+            shell.toast(savingAsCopy ? 'Копия оффера создана' : 'Оффер добавлен', 'success');
         } else {
-            await updateRealEstateOffer(editingOfferId, data);
-            showToast('Изменения сохранены', 'success');
+            await storage.updateRealEstateOffer(editingOfferId, data);
+            if (!alive(my)) return;
+            shell.toast('Изменения сохранены', 'success');
         }
     } catch (err) {
-        showToast(err.message, 'error');
+        if (!alive(my)) return;
+        if (!isAbort(err)) shell.toast(err.message, 'error');
         return;
     }
+    if (!alive(my)) return;
     $('#offerModal').hidden = true;
     await loadOffers();
+    if (!alive(my)) return;
     renderTabs();
     renderOffersTable();
 }
@@ -706,16 +787,21 @@ async function saveOffer() {
 async function handleDeleteOffer(id) {
     const o = offers.find((x) => x.id === id);
     if (!o) return;
-    const ok = await confirmAction(`Удалить оффер «${o.name}»? Действие необратимо.`);
-    if (!ok) return;
+    const my = generation;
+    const ok = await shell.confirmDanger({
+        title: 'Удаление оффера',
+        message: `Удалить оффер «${o.name}»? Действие необратимо.`
+    });
+    if (!ok || !alive(my)) return;
     try {
-        await deleteRealEstateOffer(id);
-        showToast('Оффер удалён', 'success');
+        await storage.deleteRealEstateOffer(id);
+        if (!alive(my)) return;
+        shell.toast('Оффер удалён', 'success');
         await loadOffers();
         renderTabs();
         renderOffersTable();
     } catch (err) {
-        showToast(err.message, 'error');
+        shell.toast(err.message, 'error');
     }
 }
 
@@ -723,9 +809,9 @@ async function handleDeleteOffer(id) {
 
 async function loadNetworks() {
     try {
-        networks = await fetchCpaNetworks();
+        networks = await storage.fetchCpaNetworks();
     } catch (err) {
-        showToast(err.message, 'error');
+        shell.toast(err.message, 'error');
         networks = [];
     }
     if (!networks.find((n) => n.id === activeNetworkId)) {
@@ -735,16 +821,35 @@ async function loadNetworks() {
 
 async function loadOffers() {
     try {
-        offers = await fetchRealEstateOffers();
+        offers = await storage.fetchRealEstateOffers();
     } catch (err) {
-        showToast(err.message, 'error');
+        shell.toast(err.message, 'error');
         offers = [];
     }
 }
 
-async function init() {
-    initHubNav('cpa');
-    initConfirmModal();
+// Жив ли ТОТ ЖЕ раздел, из которого ушёл запрос.
+function alive(mountId) {
+    return root !== null && mountId === generation;
+}
+
+export async function mount(container, ctx) {
+    const my = ++generation;
+    root = container;
+    shell = ctx;
+    storage = createStorage(ctx.api);
+
+    // Состояние сбрасывается при каждом монтировании: модуль общий, и без
+    // сброса второе открытие раздела показало бы данные от первого.
+    networks = [];
+    offers = [];
+    organization = null;
+    paramLists = {};
+    activeNetworkId = null;
+    activeStatus = 'all';
+    searchQuery = '';
+    editingOfferId = null;
+    editingNetworkId = null;
 
     $('#manageNetworksBtn').addEventListener('click', () => { renderNetList(); $('#netInlineForm').hidden = true; $('#networksModal').hidden = false; });
     $('#networksModalClose').addEventListener('click', () => { $('#networksModal').hidden = true; });
@@ -768,9 +873,9 @@ async function init() {
             // Модалка могла провисеть открытой какое-то время до переключения сюда —
             // перечитываем справочники, чтобы не показать устаревший снимок (см. openOfferModal).
             try {
-                paramLists = await fetchParamLists();
+                paramLists = await storage.fetchParamLists();
             } catch (err) {
-                showToast(err.message, 'error');
+                shell.toast(err.message, 'error');
             }
             renderParamsPanel();
         }
@@ -779,44 +884,83 @@ async function init() {
     $('#addObjGeoBtn').addEventListener('click', () => { syncGeoRowsFromDom('fObjGeo', currentObjGeo); currentObjGeo.push({ region: '', city: '', district: '', locality: '' }); renderGeoRows('fObjGeo', currentObjGeo); });
     $('#addClientGeoBtn').addEventListener('click', () => { syncGeoRowsFromDom('fClientGeo', currentClientGeo); currentClientGeo.push({ region: '', city: '', district: '', locality: '' }); renderGeoRows('fClientGeo', currentClientGeo); });
 
-    $('#searchInput').addEventListener('input', (e) => { searchQuery = e.target.value.trim().toLowerCase(); renderOffersTable(); });
-    $('#statusFilter').addEventListener('click', (e) => {
-        const btn = e.target.closest('.status-pill');
+    $('[data-role="search"]').addEventListener('input', (e) => { searchQuery = e.target.value.trim().toLowerCase(); renderOffersTable(); });
+    $('[data-role="status-filter"]').addEventListener('click', (e) => {
+        const btn = e.target.closest('.ui-tabs__tab');
         if (!btn) return;
-        document.querySelectorAll('.status-pill').forEach((p) => p.classList.remove('active'));
-        btn.classList.add('active');
+        $$('[data-role="status-filter"] .ui-tabs__tab').forEach((p) => p.classList.remove('ui-tabs__tab--active'));
+        btn.classList.add('ui-tabs__tab--active');
         activeStatus = btn.dataset.status;
         renderOffersTable();
     });
 
-    document.querySelectorAll('.modal-overlay').forEach((ov) => {
+    $$('.cpa-modal').forEach((ov) => {
         // Форма оффера длинная — клик мимо неё легко случаен, а закрытие роняет
         // весь ввод без подтверждения, поэтому у неё одной клик по фону не закрывает.
         if (ov.id === 'offerModal') return;
         ov.addEventListener('click', (e) => { if (e.target === ov) ov.hidden = true; });
     });
-    document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') document.querySelectorAll('.modal-overlay:not([hidden])').forEach((m) => { m.hidden = true; });
-    });
+
+    // Слушатели документа ставятся здесь и снимаются в unmount: раздел
+    // открывают много раз, и без снятия они копились бы с каждым открытием.
+    onDocKeydown = (e) => {
+        if (e.key === 'Escape') $$('.cpa-modal:not([hidden])').forEach((m) => { m.hidden = true; });
+    };
+    onDocClick = (e) => { if (!e.target.closest('.geo-field')) closeGeoSuggest(); };
+    document.addEventListener('keydown', onDocKeydown);
+    document.addEventListener('click', onDocClick);
 
     try {
-        organization = await fetchOrganization();
+        const org = await storage.fetchOrganization();
+        if (!alive(my)) return;
+        organization = org;
     } catch (err) {
-        showToast(err.message, 'error');
+        if (!alive(my)) return;
+        if (!isAbort(err)) shell.toast(err.message, 'error');
     }
     try {
-        paramLists = await fetchParamLists();
+        const lists = await storage.fetchParamLists();
+        if (!alive(my)) return;
+        paramLists = lists;
     } catch (err) {
-        showToast(err.message, 'error');
+        if (!alive(my)) return;
+        if (!isAbort(err)) shell.toast(err.message, 'error');
         paramLists = {};
     }
 
     await loadNetworks();
+    if (!alive(my)) return;
     await loadOffers();
+    if (!alive(my)) return;
 
     renderTabs();
     renderMeta();
     renderOffersTable();
 }
 
-init();
+export function unmount() {
+    generation += 1;   // всё, что было в полёте, теперь чужое
+
+    // Отложенный запрос подсказок адреса — иначе он сработает уже после
+    // закрытия панели.
+    clearTimeout(geoSuggestTimer);
+
+    if (onDocKeydown) document.removeEventListener('keydown', onDocKeydown);
+    if (onDocClick) document.removeEventListener('click', onDocClick);
+    onDocKeydown = null;
+    onDocClick = null;
+
+    // Подсказки адреса живут внутри поля, но снять их явно дешевле, чем
+    // выяснять потом, почему в закрытой панели что-то осталось.
+    closeGeoSuggest();
+
+    root = null;
+    shell = null;
+    storage = null;
+    networks = [];
+    offers = [];
+    organization = null;
+    paramLists = {};
+    editingOfferId = null;
+    editingNetworkId = null;
+}

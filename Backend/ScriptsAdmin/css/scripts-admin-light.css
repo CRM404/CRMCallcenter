@@ -1,185 +1,252 @@
-/* ============================================================
-   Страница «Скрипты» в дизайн-языке хаба (макет дизайн-сессии
-   https://claude.ai/code/artifact/55bc5d3c-bb72-4828-8c04-b4c3ffa0fdeb,
-   13.08.2026). Прежний самостоятельный вид страницы («у тебя каждый
-   раз новая страница» — фидбек владельца) заменён на ту же грамматику,
-   что у «Лидов»/«Источников»: хаб-навигация, идентити-шапка со
-   стат-чипами, стеклянные карточки, статус-пилюли, серые кнопки.
+/* --- scripts-admin-light.css: БЛОК 5 — раскладка раздела «Скрипты» -------
+   От прежних 185 строк осталась только раскладка. Кнопки, поля, таблица,
+   пилюли, чипы, модалки и тосты переехали в слой элементов и здесь НЕ
+   объявляются.
 
-   Классы sa-* внизу файла — разметка, которую генерирует
-   scriptsAdminNodes.js (редактор основного текста и возражений). Сам
-   модуль не переписывался: функциональность редактора остаётся 1:1,
-   меняется только его оформление.
-   ============================================================ */
+   ГЛАВНОЕ, ЧТО УБРАНО, — голые селекторы. В файле были `*` (со сбросом
+   отступов и шрифтом), `html`, `body`, `table`, `thead th`, `tbody td`,
+   `tbody tr:hover td`. Пока раздел был отдельной страницей, это работало;
+   в одном документе оболочки они покрасили бы ВСЕ разделы и каталог
+   элементов сразу, а `*` ещё и перебил бы токены слоя — молча, без единой
+   ошибки в консоли.
 
-* { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+   Что ушло и куда:
+     .btn, .btn-primary/secondary/ghost/danger  → ui/button.css
+     .form-group, input, textarea, select       → ui/field.css
+     table / thead / tbody / .sa-selected       → ui/table.css
+     .stat-chip, .status-chip                   → ui/chip.css
+     .modal-overlay / .modal-content / …        → ui/modal.js + ui/modal.css
+     #toastContainer / .toast                   → ui/toast.js + ui/toast.css
+     .sa-empty-state                            → ui/empty-state.css
+     .hub-shell / .hub-nav / .canvas            → оболочка (рейки больше нет)
 
-:root {
-    --surface: rgba(255, 255, 255, .72);
-    --surface-modal: rgba(255, 255, 255, .88);
-    --line: rgba(96, 112, 148, .22);
-    --line-strong: rgba(96, 112, 148, .36);
-    --ink: #1a2433; --ink-soft: #55637c; --ink-faint: #8894a8;
-    --graphite: #696969; --graphite-deep: #555555;
-    --slate: #6c757d; --slate-deep: #5a6268;
-    --accent: #0000ff; --accent-soft: #4a90d9;
-    --danger: #e74c3c; --danger-deep: #c0392b;
-    --ok-ink: #146c43; --ok-bg: #dcf3e6;
-    --draft-ink: #55637c; --draft-bg: rgba(96, 112, 148, .14);
-    --radius-lg: 20px; --radius-md: 12px; --radius-sm: 8px;
-    --shadow-card: 0 10px 34px rgba(23, 32, 55, .14);
-    --shadow-pop: 0 22px 60px rgba(15, 22, 40, .28);
-    --toast-bg: #1e2534; --toast-text: #f1f5f9;
+   Имена — с префиксом раздела (бриф, 1.3): голых .card, .row, .header нет.
+
+   ⚠️ css/foto/images1.jpg НЕ УДАЛЯТЬ вместе с фоном раздела. Отсюда ушло
+   только правило body, а сам файл — единственная физическая копия фоновой
+   картинки на весь проект: CpaNetworks, Leads, Employees и Operator берут её
+   по адресу /css/foto/images1.jpg из общей статики (см. комментарий в
+   cpa-networks-light.css). Уйдёт она — только вместе с последней из этих
+   страниц.
+   ------------------------------------------------------------------------ */
+
+.scr-section {
+    /* Контейнер для запросов по ширине — на секции, а не на внутреннем блоке:
+       элемент не может отвечать на собственный размер, @container всегда
+       спрашивает ближайшего ПРЕДКА-контейнер. */
+    container-type: inline-size;
+    display: flex;
+    flex-direction: column;
+    gap: var(--ui-space-5);
+    min-width: 0;
 }
 
-html { font-variant-numeric: tabular-nums; }
-body {
-    min-height: 100vh;
-    color: var(--ink);
-    background: url('./foto/images1.jpg') center/cover fixed no-repeat, #eef1f6;
+/* ----- Шапка раздела: заголовок → счётчики → действие ----- */
+.scr-head {
+    display: flex;
+    align-items: flex-end;
+    gap: var(--ui-space-5);
+    flex-wrap: wrap;
+}
+.scr-head__titles { min-width: 0; }
+.scr-head__eyebrow {
+    font-size: 11px;
+    font-weight: var(--ui-weight-bold);
+    letter-spacing: .09em;
+    text-transform: uppercase;
+    color: var(--ui-color-ink-faint);
+}
+.scr-head__title {
+    margin: 2px 0 var(--ui-space-1);
+    font-size: var(--ui-text-title);
+    font-weight: var(--ui-weight-bold);
+    line-height: var(--ui-line-tight);
+}
+.scr-head__sub {
+    margin: 0;
+    max-width: 560px;
+    font-size: var(--ui-text-sm);
+    line-height: var(--ui-line-base);
+    color: var(--ui-color-ink-soft);
+}
+.scr-head__stats { margin-left: auto; }
+.scr-head__acts {
+    display: flex;
+    align-items: center;
+    gap: var(--ui-space-3);
+    flex-wrap: wrap;
 }
 
-/* ----- Каркас хаба ----- */
-.hub-shell { display: flex; min-height: 100vh; }
-.hub-nav { width: 64px; flex-shrink: 0; display: flex; flex-direction: column; align-items: center; padding: 20px 0; gap: 6px; background: rgba(30, 42, 58, 0.9); backdrop-filter: blur(8px); }
-.hub-nav-item { position: relative; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; border-radius: 10px; color: #cbd5e1; background: transparent; border: none; cursor: pointer; text-decoration: none; transition: background .2s, color .2s; font-size: 17px; }
-.hub-nav-item:hover { background: rgba(255,255,255,.12); color: #fff; }
-.hub-nav-item.active { background: #0000FF; color: #fff; }
-.hub-nav-item[data-tooltip]:hover::after { content: attr(data-tooltip); position: absolute; left: 56px; top: 50%; transform: translateY(-50%); background: #1e293b; color: #f8fafc; padding: 6px 10px; border-radius: 6px; font-size: 12.5px; font-weight: 500; white-space: nowrap; z-index: 50; box-shadow: 0 4px 12px rgba(0,0,0,.25); }
-.hub-main { flex: 1; padding: 24px; overflow-x: hidden; }
-.canvas { max-width: 1200px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
-
-/* ----- Идентити-шапка ----- */
-.identity-strip { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; background: var(--surface); border: 1px solid #fff6; border-radius: var(--radius-lg); padding: 20px 26px; box-shadow: var(--shadow-card); backdrop-filter: blur(10px); }
-.identity-copy { margin-right: auto; }
-.eyebrow { font-size: 11.5px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 4px; }
-.identity-copy h1 { font-size: 26px; font-weight: 700; color: var(--ink); letter-spacing: -.01em; }
-.identity-copy p { font-size: 13px; color: var(--ink-soft); margin-top: 3px; max-width: 64ch; }
-.stat-chips { display: flex; gap: 10px; list-style: none; }
-.stat-chip { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 8px 16px; border-radius: var(--radius-md); background: rgba(255,255,255,.55); border: 1px solid var(--line); min-width: 88px; }
-.stat-chip dt { font-size: 10.5px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--ink-faint); }
-.stat-chip dd { font-size: 19px; font-weight: 700; color: var(--ink); }
-.stat-chip.ok dd { color: var(--ok-ink); }
-.stat-chip.draft dd { color: var(--draft-ink); }
-
-/* ----- Кнопки ----- */
-.btn { display: inline-flex; align-items: center; gap: 8px; justify-content: center; padding: 11px 22px; border: none; border-radius: 30px; font-size: 14.5px; font-weight: 600; cursor: pointer; color: #fff; white-space: nowrap; transition: transform .15s, background .2s; font-family: inherit; }
-.btn[hidden] { display: none; }
-.btn:active { transform: scale(.97); }
-.btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.btn:disabled { opacity: .55; cursor: not-allowed; }
-.btn-primary { background: var(--graphite); box-shadow: 0 6px 16px rgba(105,105,105,.28); }
-.btn-primary:hover:not(:disabled) { background: var(--graphite-deep); }
-.btn-secondary { background: var(--slate); }
-.btn-secondary:hover:not(:disabled) { background: var(--slate-deep); }
-.btn-success { background: var(--slate); }
-.btn-success:hover:not(:disabled) { background: var(--slate-deep); }
-.btn-danger { background: var(--danger); }
-.btn-danger:hover:not(:disabled) { background: var(--danger-deep); }
-.btn-ghost { background: transparent; color: var(--ink-soft); border: 1px solid var(--line-strong); }
-.btn-ghost:hover:not(:disabled) { border-color: var(--accent-soft); color: var(--ink); background: rgba(74,144,217,.08); }
-.btn-sm { padding: 8px 16px; font-size: 13px; }
-
-/* ----- Таблица скриптов ----- */
-.table-card { background: var(--surface); border: 1px solid #fff6; border-radius: var(--radius-lg); box-shadow: var(--shadow-card); overflow: hidden; backdrop-filter: blur(10px); }
-.table-card[hidden] { display: none; }
-.table-scroll { overflow-x: auto; }
-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
-thead th { background: rgba(241,245,249,.92); text-align: left; font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--ink-faint); padding: 14px 18px; border-bottom: 1px solid var(--line); white-space: nowrap; }
-tbody td { padding: 12px 18px; border-bottom: 1px solid rgba(96,112,148,.12); vertical-align: middle; color: var(--ink); }
-tbody tr:last-child td { border-bottom: none; }
-tbody tr:hover td { background: rgba(255,255,255,.4); }
-tbody tr.sa-selected td { background: rgba(0,0,255,.045); }
-.script-title { font-weight: 600; color: var(--ink); }
-.script-sub { font-size: 11.5px; color: var(--ink-faint); margin-top: 2px; }
-.col-actions { text-align: right; }
-.sa-actions { display: flex; justify-content: flex-end; gap: 8px; align-items: center; flex-wrap: wrap; }
-/* Действие удаления в строке — нейтральная иконка, красная только на hover:
-   тот же паттерн, что в строках «Лидов» и «Сотрудников». Сплошные цветные
-   кнопки в строках проект убрал ещё редизайном «Сотрудников» — восемь красных
-   плашек подряд читаются как сплошной алярм. */
-.m-icon-btn { width: 30px; height: 30px; display: inline-flex; align-items: center; justify-content: center; border-radius: 9px; border: none; background: transparent; color: var(--ink-faint); cursor: pointer; transition: background .15s, color .15s; }
-.m-icon-btn:hover { background: rgba(0,0,255,.08); color: var(--accent); }
-.m-icon-btn.danger:hover { background: rgba(231,76,60,.1); color: var(--danger); }
-
-.status-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; white-space: nowrap; }
-.status-chip::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
-.status-chip.active { background: var(--ok-bg); color: var(--ok-ink); }
-.status-chip.draft { background: var(--draft-bg); color: var(--draft-ink); }
-
-/* ----- Карточки открытого скрипта ----- */
-#saOpenedSection { display: flex; flex-direction: column; gap: 14px; }
-#saOpenedSection[hidden] { display: none; }
-#saNodesPanel { display: flex; flex-direction: column; gap: 14px; }
-.panel-card, .sa-root-box, .sa-objections-box {
-    background: var(--surface); border: 1px solid #fff6; border-radius: var(--radius-lg);
-    box-shadow: var(--shadow-card); padding: 22px 26px; backdrop-filter: blur(10px);
+/* ----- Строка списка: название + подстрока наполненности ----- */
+.scr-title {
+    font-weight: var(--ui-weight-medium);
+    color: var(--ui-color-ink);
 }
-.panel-card[hidden] { display: none; }
-.panel-card h3, .sa-root-box h3, .sa-objections-box h3 {
-    font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
-    color: var(--ink-faint); margin-bottom: 14px;
+.scr-sub {
+    margin-top: 2px;
+    font-size: var(--ui-text-xs);
+    color: var(--ui-color-ink-faint);
 }
 
-/* Шапка открытого скрипта: название (редактируемое) + статус + действия */
-.opened-head { display: flex; align-items: flex-end; gap: 14px; flex-wrap: wrap; }
-.opened-head .form-group { flex: 1; min-width: 260px; }
-.opened-head-actions { display: flex; gap: 8px; align-items: center; padding-bottom: 2px; }
-
-.form-group { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-.form-group label { font-size: 12.5px; font-weight: 600; color: var(--ink-soft); }
-.form-group input, .form-group textarea {
-    padding: 10px 12px; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); font-size: 14px;
-    color: var(--ink); background: rgba(255,255,255,.75); font-family: inherit; width: 100%; min-width: 0;
+/* ----- Карточка: создание, шапка открытого скрипта, блоки наполнения -----
+   Один класс на все четыре места: это одна и та же коробка раздела, и
+   разводить её на четыре имени значило бы разойтись при первой же правке. */
+.scr-card {
+    display: flex;
+    flex-direction: column;
+    gap: var(--ui-space-4);
+    padding: var(--ui-space-5) var(--ui-space-6);
+    border: 1px solid var(--ui-color-line);
+    border-radius: var(--ui-radius-md);
+    background: var(--ui-color-surface-sunken);
 }
-.form-group textarea { resize: vertical; min-height: 76px; }
-.form-group input:focus, .form-group textarea:focus, .sa-rte-editor:focus {
-    outline: none; border-color: var(--accent-soft); box-shadow: 0 0 0 3px rgba(0,0,255,.12);
+.scr-card__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--ui-space-4);
+    flex-wrap: wrap;
+}
+.scr-card__title {
+    margin: 0;
+    font-size: 11px;
+    font-weight: var(--ui-weight-bold);
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--ui-color-ink-faint);
 }
 
-.sa-empty-state { text-align: left; padding: 6px 0 14px; color: var(--ink-faint); font-size: 14px; }
+/* Наполнение открытого скрипта — стопка карточек с тем же шагом, что у секции. */
+[data-role="opened"] {
+    display: flex;
+    flex-direction: column;
+    gap: var(--ui-space-5);
+}
+[data-role="nodes"] {
+    display: flex;
+    flex-direction: column;
+    gap: var(--ui-space-5);
+}
+
+/* ----- Строка «поле + действия»: создание и шапка открытого скрипта ----- */
+.scr-inline {
+    display: flex;
+    align-items: flex-end;
+    gap: var(--ui-space-4);
+    flex-wrap: wrap;
+}
+.scr-inline__field {
+    flex: 1;
+    min-width: 260px;
+}
+.scr-inline__acts {
+    align-items: center;
+    padding-bottom: 2px;
+}
 
 /* ----- Редактор основного текста (разметка из scriptsAdminNodes.js) ----- */
-.sa-rte-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
-.sa-rte-toolbar button, .sa-rte-toolbar .sa-rte-btn {
-    min-width: 34px; height: 30px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--line-strong);
-    background: rgba(255,255,255,.6); color: var(--ink-soft); font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit;
+.scr-rte__toolbar {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--ui-space-2);
+    margin-bottom: var(--ui-space-2);
 }
-.sa-rte-toolbar button:hover { border-color: var(--accent-soft); color: var(--ink); }
-.sa-rte-font-select { height: 30px; padding: 0 8px; border: 1px solid var(--line-strong); border-radius: 8px; font-size: 12.5px; background: rgba(255,255,255,.6); color: var(--ink-soft); font-family: inherit; }
-.sa-rte-swatches { display: flex; align-items: center; gap: 5px; padding: 0 7px; height: 30px; border: 1px solid var(--line-strong); border-radius: 8px; background: rgba(255,255,255,.6); }
-.sa-rte-swatch { width: 16px; height: 16px; min-width: 0; padding: 0; border: 1px solid rgba(0,0,0,.15); border-radius: 50%; cursor: pointer; }
-.sa-rte-swatch:hover { transform: scale(1.15); }
-.sa-rte-editor {
-    padding: 12px 14px; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); font-size: 14px;
-    background: rgba(255,255,255,.75); min-height: 110px; max-height: 480px; overflow-y: auto; line-height: 1.55;
+.scr-rte__font {
+    width: auto;
+    height: var(--ui-control-h-sm);
+    padding: 0 var(--ui-space-2);
+    font-size: var(--ui-text-xs);
 }
-.sa-rte-editor ul, .sa-rte-editor ol, .sa-node-content ul, .sa-node-content ol { padding-left: 20px; }
-.sa-node-content { font-size: 14px; color: var(--ink); line-height: 1.55; white-space: pre-wrap; }
-.sa-root-box .sa-actions, .sa-objection-card .sa-actions { justify-content: flex-start; margin-top: 14px; }
+.scr-rte__swatches {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    height: var(--ui-control-h-sm);
+    padding: 0 7px;
+    border: 1px solid var(--ui-color-line-strong);
+    border-radius: var(--ui-radius-sm);
+    background: var(--ui-color-glass);
+}
+.scr-rte__swatch {
+    width: 16px;
+    height: 16px;
+    padding: 0;
+    border: 1px solid rgba(0, 0, 0, .15);
+    border-radius: 50%;
+    cursor: pointer;
+}
+.scr-rte__swatch:hover { transform: scale(1.15); }
+.scr-rte__swatch:focus-visible {
+    outline: 2px solid var(--ui-color-focus-ring);
+    outline-offset: 2px;
+}
+.scr-rte__editor {
+    min-height: 110px;
+    max-height: 480px;
+    overflow-y: auto;
+    padding: var(--ui-space-3) var(--ui-space-4);
+    border: 1px solid var(--ui-color-line-field);
+    border-radius: var(--ui-radius-sm);
+    background: var(--ui-color-glass);
+    font-size: var(--ui-text-md);
+    line-height: var(--ui-line-base);
+    color: var(--ui-color-ink);
+}
+.scr-rte__editor:focus {
+    outline: none;
+    border-color: var(--ui-color-accent-soft);
+    box-shadow: 0 0 0 3px var(--ui-color-focus-ring);
+}
+/* Пустой редактор без подсказки выглядит сломанным полем. */
+.scr-rte__editor:empty::before {
+    content: attr(data-placeholder);
+    color: var(--ui-color-ink-faint);
+}
+.scr-rte__editor ul,
+.scr-rte__editor ol,
+.scr-node__content ul,
+.scr-node__content ol { padding-left: 20px; }
 
-/* ----- Возражения ----- */
-.sa-objections-list { display: flex; flex-direction: column; gap: 10px; }
-.sa-objection-card { background: rgba(255,255,255,.65); border: 1px solid var(--line); border-radius: var(--radius-md); padding: 14px 16px; }
-.sa-node-label { font-weight: 600; font-size: 13.5px; color: var(--ink); margin-bottom: 6px; }
-.sa-objection-card .sa-node-content { font-size: 13px; color: var(--ink-soft); }
+/* ----- Узлы: основной текст и возражения ----- */
+.scr-node__content {
+    font-size: var(--ui-text-md);
+    line-height: var(--ui-line-base);
+    color: var(--ui-color-ink);
+    /* Переносы строк в тексте оператора — значимые: скрипт читают вслух. */
+    white-space: pre-wrap;
+}
+.scr-node__label {
+    margin-bottom: var(--ui-space-2);
+    font-weight: var(--ui-weight-medium);
+    font-size: var(--ui-text-sm);
+    color: var(--ui-color-ink);
+}
+.scr-objections {
+    display: flex;
+    flex-direction: column;
+    gap: var(--ui-space-3);
+}
+.scr-objection {
+    display: flex;
+    flex-direction: column;
+    gap: var(--ui-space-3);
+    padding: var(--ui-space-4);
+    border: 1px solid var(--ui-color-line);
+    border-radius: var(--ui-radius-sm);
+    background: var(--ui-color-surface);
+}
+.scr-objection .scr-node__content {
+    font-size: var(--ui-text-sm);
+    color: var(--ui-color-ink-soft);
+}
 
-/* ----- Модалка подтверждения ----- */
-.modal-overlay { position: fixed; inset: 0; background: rgba(15,22,40,.42); backdrop-filter: blur(3px); display: flex; align-items: center; justify-content: center; padding: 24px; z-index: 1000; }
-.modal-overlay[hidden] { display: none; }
-.modal-content { background: var(--surface-modal); backdrop-filter: blur(18px); border-radius: var(--radius-lg); border: 1px solid #fff8; box-shadow: var(--shadow-pop); width: 100%; max-width: 440px; padding: 24px 26px; }
-.modal-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 10px; }
-.modal-content h2 { font-size: 18px; font-weight: 700; color: var(--ink); }
-.modal-content p { font-size: 13.5px; color: var(--ink-soft); line-height: 1.5; }
-.modal-close { width: 32px; height: 32px; border-radius: 10px; border: none; background: rgba(96,112,148,.1); color: var(--ink-soft); cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-.modal-close:hover { background: rgba(231,76,60,.12); color: var(--danger); }
-.modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
-
-/* ----- Тосты ----- */
-#toastContainer { position: fixed; bottom: 22px; right: 22px; z-index: 9999; display: flex; flex-direction: column; gap: 10px; max-width: 340px; }
-.toast { padding: 13px 16px; border-radius: var(--radius-md); background: var(--toast-bg); color: var(--toast-text); font-size: 13.5px; box-shadow: var(--shadow-pop); border-left: 3px solid var(--accent-soft); animation: saToastIn .25s ease; }
-.toast.error { border-left-color: var(--danger); }
-@keyframes saToastIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-
-@media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; animation: none !important; } }
-@media (max-width: 760px) { .identity-strip, .opened-head { flex-direction: column; align-items: flex-start; } }
+/* В половинной панели шапка и строки «поле + действия» складываются в
+   колонку: иначе поле названия ужимается до нечитаемого. Точка перелома по
+   ширине КОНТЕЙНЕРА, а не окна — панель может быть узкой на широком экране. */
+@container (max-width: 720px) {
+    .scr-head { flex-direction: column; align-items: flex-start; }
+    .scr-head__stats { margin-left: 0; }
+    .scr-inline { flex-direction: column; align-items: stretch; }
+    .scr-inline__field { min-width: 0; }
+}

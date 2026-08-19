@@ -1,0 +1,89 @@
+/* Полоса «данные не загрузились» (ui/load-error.js).
+
+   Родня пустому состоянию и стоит рядом с ним: оба отвечают на вопрос
+   «почему я ничего не вижу». Разница в правде ответа — пустое состояние
+   говорит «записей нет», полоса говорит «мы не знаем, есть они или нет».
+
+   Липнет к верху панели: раздел прокручивают, и уехавшее предупреждение
+   равносильно его отсутствию. */
+.ui-load-error {
+    position: sticky;
+    top: calc(var(--ui-space-5) * -1);
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    gap: var(--ui-space-4);
+    margin: calc(var(--ui-space-5) * -1) calc(var(--ui-space-5) * -1) var(--ui-space-5);
+    padding: var(--ui-space-4) var(--ui-space-5);
+    border-bottom: 1px solid var(--ui-color-line);
+    background: var(--ui-color-warn-bg);
+    font-family: var(--ui-font-ui);
+    font-size: var(--ui-text-sm);
+    color: var(--ui-color-ink);
+}
+.ui-load-error__icon { color: var(--ui-color-warn-ink); font-size: var(--ui-icon-sm); }
+.ui-load-error__text { flex: 1 1 auto; min-width: 0; }
+.ui-load-error__reason { color: var(--ui-color-ink-soft); }
+
+/* Прочерк: «значения нет» в ячейке таблицы или в карточке.
+
+   Держится здесь, рядом с пустым состоянием, по той же причине: это ответ на
+   вопрос «почему пусто», просто размером в один символ. Раньше каждый раздел
+   отвечал на него по-своему — пилюлей с прочерком внутри (читается как
+   «статус есть»), жирным или обычным начертанием в соседних ячейках одной
+   строки (находки дизайн-сессии Д8 и Д9). */
+.ui-dash {
+    color: var(--ui-color-ink-faint);
+    font-weight: var(--ui-weight-regular);
+}
+
+/* --- ui/empty-state.css: БЛОК 3 — составные элементы ---------------------
+   Пустое состояние. Обязательный состав (бриф, п.4): заголовок + ПРИЧИНА +
+   СЛЕДУЮЩИЙ ШАГ.
+
+   Сегодня пустые состояния в проекте — одна строка серого текста
+   (.sa-empty-state, .m-empty-state, .geo-suggest-empty): человек видит, что
+   пусто, и не понимает, это фильтр или в разделе действительно ничего нет.
+   ------------------------------------------------------------------------ */
+
+.ui-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--ui-space-3);
+    padding: var(--ui-space-8) var(--ui-space-6);
+    border: 1px dashed var(--ui-color-line-strong);
+    border-radius: var(--ui-radius-md);
+    background: var(--ui-color-surface-sunken);
+    text-align: center;
+}
+.ui-empty__icon {
+    color: var(--ui-color-ink-faint);
+    font-size: var(--ui-icon-lg);
+    line-height: 1;
+}
+.ui-empty__title {
+    font-size: var(--ui-text-md);
+    font-weight: var(--ui-weight-bold);
+    color: var(--ui-color-ink);
+}
+/* Причина. Ширина ограничена намеренно: строка во всю панель не читается. */
+.ui-empty__text {
+    max-width: 360px;
+    font-size: var(--ui-text-sm);
+    line-height: var(--ui-line-base);
+    color: var(--ui-color-ink-soft);
+}
+/* Следующий шаг — кнопка из ui/button.css, здесь только отступ. */
+.ui-empty__action { margin-top: var(--ui-space-1); }
+
+/* Внутри окна и в узкой боковой колонке рамка с большим отступом съедает всё
+   место, поэтому есть тихий вариант — тот же состав, меньше веса. */
+.ui-empty--inline {
+    align-items: flex-start;
+    padding: var(--ui-space-4) 0 var(--ui-space-5);
+    border: none;
+    background: none;
+    text-align: left;
+}
+.ui-empty--inline .ui-empty__text { max-width: none; }

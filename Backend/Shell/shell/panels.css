@@ -1,0 +1,152 @@
+/* --- shell/panels.css: БЛОК 4 — оболочка ---------------------------------
+   Панель раздела, разделение экрана, тянущаяся граница.
+
+   ДВА УСЛОВИЯ, КОТОРЫЕ НЕЛЬЗЯ НАРУШАТЬ — от них зависят чужие файлы:
+
+   1. .shell-panel { position: relative; overflow: hidden; }
+      Модалка панели (ui/modal.css) кладётся ВНУТРЬ панели и позиционируется
+      от неё. Убрать position — окно уедет в угол экрана.
+
+   2. Прокручивается .shell-panel__body, а НЕ сама панель.
+      Окно и поповер привязаны к панели, а не к её содержимому. Сделать
+      прокручиваемой панель целиком — и окно уползёт вместе с текстом, а на
+      длинном разделе уйдёт за край экрана. Проверено на слое элементов,
+      проверка «Окно не уезжает при прокрутке содержимого панели».
+   ------------------------------------------------------------------------ */
+
+.shell-workspace {
+    display: flex;
+    align-items: stretch;
+    gap: 0;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+}
+
+/* ----- Панель ------------------------------------------------------------- */
+.shell-panel {
+    position: relative;          /* см. условие 1 */
+    overflow: hidden;            /* см. условие 2 */
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    flex: 1 1 50%;
+    border: 1px solid var(--ui-color-line);
+    border-radius: var(--ui-radius-lg);
+    /* Панель — окно, а не стекло: сквозь полупрозрачную читается текст под
+       ней, и глаз цепляется. Требование дизайн-сессии. */
+    background: var(--ui-color-surface);
+    box-shadow: var(--ui-shadow-panel);
+    font-family: var(--ui-font-ui);
+    color: var(--ui-color-ink);
+}
+
+/* Активная панель: в неё откроется следующий выбранный раздел, и это должно
+   быть видно до того, как человек нажмёт плитку. */
+.shell-panel.is-active {
+    border-color: var(--ui-color-accent);
+    box-shadow: var(--ui-shadow-panel), 0 0 0 1px var(--ui-color-accent);
+}
+
+.shell-panel[hidden] { display: none; }
+
+/* ----- Шапка панели ------------------------------------------------------- */
+.shell-panel__head {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: var(--ui-space-4);
+    padding: var(--ui-space-4) var(--ui-space-5);
+    border-bottom: 1px solid var(--ui-color-line);
+    background: var(--ui-color-surface);
+}
+.shell-panel.is-active .shell-panel__head { background: var(--ui-color-wash-hover); }
+
+.shell-panel__icon {
+    flex: 0 0 auto;
+    width: var(--ui-icon-md);
+    font-size: var(--ui-icon-md);
+    color: var(--ui-color-ink-soft);
+    text-align: center;
+}
+
+.shell-panel__titles { min-width: 0; display: flex; flex-direction: column; }
+
+.shell-panel__title {
+    font-size: var(--ui-text-xl);
+    font-weight: var(--ui-weight-bold);
+    line-height: var(--ui-line-tight);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.shell-panel__sub {
+    font-size: var(--ui-text-sm);
+    color: var(--ui-color-ink-faint);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.shell-panel__tools {
+    margin-left: auto;
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: var(--ui-space-2);
+}
+
+/* ----- Тело панели --------------------------------------------------------
+   Единственное прокручиваемое место. Раздел рисует себя внутрь него. */
+.shell-panel__body {
+    /* position — точка отсчёта для накладки скелета (ui/skeleton.css).
+       Модалка и поповер по-прежнему считаются от самой панели: у них своя
+       опора выше, и условие 1 в шапке файла этим не задето. */
+    position: relative;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    padding: var(--ui-space-5);
+}
+
+/* ----- Граница между панелями ---------------------------------------------
+   Полоса шире, чем выглядит: попасть в 4 px мышью тяжело, поэтому область
+   захвата 10 px, а видимая линия рисуется псевдоэлементом по центру. */
+.shell-splitter {
+    flex: 0 0 10px;
+    position: relative;
+    align-self: stretch;
+    cursor: col-resize;
+    background: transparent;
+    border: none;
+    padding: 0;
+}
+.shell-splitter::before {
+    content: '';
+    position: absolute;
+    top: var(--ui-space-6);
+    bottom: var(--ui-space-6);
+    left: 50%;
+    width: 2px;
+    margin-left: -1px;
+    border-radius: 1px;
+    background: var(--ui-color-line-strong);
+    transition: background-color var(--ui-dur-fast);
+}
+.shell-splitter:hover::before,
+.shell-splitter.is-dragging::before { background: var(--ui-color-accent); }
+.shell-splitter:focus-visible {
+    outline: 2px solid var(--ui-color-accent);
+    outline-offset: -2px;
+}
+
+/* Пока границу тянут, выделение текста и события мыши внутри панелей
+   отключаются: иначе курсор «прилипает» к тексту и таскание рвётся. */
+.shell-workspace.is-resizing { user-select: none; }
+.shell-workspace.is-resizing .shell-panel__body { pointer-events: none; }
+
+@media (prefers-reduced-motion: reduce) {
+    .shell-splitter::before { transition: none; }
+}

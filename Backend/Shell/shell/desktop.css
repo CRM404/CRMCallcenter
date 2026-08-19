@@ -1,0 +1,240 @@
+/* --- shell/desktop.css: БЛОК 4 — оболочка --------------------------------
+   Каркас страницы, рабочий стол и плитки.
+
+   БОКОВОЙ РЕЙКИ НЕТ — решение владельца от 17.08.2026. Навигация целиком на
+   столе и в полосе свёрнутых, 64 px отданы панелям. Отсюда два следствия,
+   которые обязаны работать буквально:
+
+   1. Первый экран после входа — стол, а не раздел.
+   2. Возврат на стол достижим одним действием из любого состояния: кнопка
+      «Главная» в полосе свёрнутых (shell/minimized.css) плюс сам стол, когда
+      панелей нет.
+
+   Плитка = иконка + название. Чисел и статусов на ней нет (решение владельца);
+   пометка «открыт» остаётся — это состояние интерфейса, а не данные.
+   ------------------------------------------------------------------------ */
+
+/* ----- Каркас страницы ---------------------------------------------------- */
+html, body { height: 100%; }
+
+body {
+    margin: 0;
+    /* Фон рабочего стола: стеклянные плитки лежат на нём. Запасной цвет —
+       на случай, если градиент не отрисуется. */
+    background: linear-gradient(-45deg, var(--ui-color-canvas-a), var(--ui-color-canvas-b), #e0eafc, #f0f4ff);
+    background-color: var(--ui-color-canvas-fallback);
+    color: var(--ui-color-ink);
+    font-family: var(--ui-font-ui);
+    font-variant-numeric: tabular-nums;
+}
+
+.shell {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+}
+
+/* Рабочая область: стол лежит в потоке, панели накрывают его целиком. */
+.shell-main {
+    position: relative;
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+/* ----- Сцена панелей ------------------------------------------------------
+   Пока панелей нет, сцена скрыта и виден стол. Нижний отступ появляется
+   вместе с полосой свёрнутых: полоса не имеет права перекрывать панель. */
+.shell-stage {
+    position: absolute;
+    inset: 0;
+    padding: var(--ui-space-5);
+}
+.shell-stage--with-bar { padding-bottom: 74px; }
+
+/* Кнопка «Главная» тоже накрывает панель, а она живёт и без полосы свёрнутых.
+   Без этого отступа подвал таблицы оказывался ПОД кнопкой: на «Сотрудниках»
+   строка «Всего: 14» читалась как «о: 14» (находка дизайн-сессии Д10).
+   46 (кнопка) + 12 (её отступ снизу) + 8 (зазор) = 66. Полоса свёрнутых
+   резервирует больше и стоит ниже по файлу — когда видна она, побеждает её
+   правило. */
+.shell-stage--with-home { padding-bottom: 66px; }
+.shell-stage--with-bar.shell-stage--with-home { padding-bottom: 74px; }
+
+/* ----- Стол ---------------------------------------------------------------- */
+.shell-desktop {
+    height: 100%;
+    overflow: auto;
+    padding: var(--ui-space-7) var(--ui-space-8) 92px;
+}
+.shell-desktop__inner { max-width: 1100px; margin: 0 auto; }
+
+.shell-desktop__head {
+    display: flex;
+    align-items: flex-end;
+    gap: var(--ui-space-6);
+    flex-wrap: wrap;
+    margin-bottom: var(--ui-space-6);
+}
+.shell-desktop__eyebrow {
+    font-size: 11.5px;
+    font-weight: var(--ui-weight-bold);
+    letter-spacing: .09em;
+    text-transform: uppercase;
+    color: var(--ui-color-ink-faint);
+    margin-bottom: var(--ui-space-1);
+}
+.shell-desktop__title {
+    margin: 0;
+    font-size: 27px;
+    font-weight: var(--ui-weight-bold);
+    letter-spacing: -.015em;
+}
+.shell-desktop__date {
+    padding-bottom: var(--ui-space-1);
+    font-size: var(--ui-text-md);
+    color: var(--ui-color-ink-soft);
+}
+.shell-desktop__hint {
+    margin-left: auto;
+    max-width: 320px;
+    padding-bottom: var(--ui-space-1);
+    font-size: var(--ui-text-sm);
+    line-height: var(--ui-line-base);
+    color: var(--ui-color-ink-faint);
+}
+
+.shell-desktop__group {
+    margin: var(--ui-space-7) 0 var(--ui-space-4);
+    font-size: 11px;
+    font-weight: var(--ui-weight-bold);
+    letter-spacing: .09em;
+    text-transform: uppercase;
+    color: var(--ui-color-ink-faint);
+}
+.shell-desktop__group:first-of-type { margin-top: 0; }
+
+/* ----- Плитки -------------------------------------------------------------- */
+.shell-tiles {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+    gap: var(--ui-space-5);
+}
+
+.shell-tile {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--ui-space-4);
+    padding: var(--ui-space-6) var(--ui-space-5) var(--ui-space-5);
+    border: 1px solid var(--ui-color-line);
+    border-radius: var(--ui-radius-lg);
+    /* Стекло — для стола; непрозрачность зарезервирована за панелью. */
+    background: var(--ui-color-glass);
+    box-shadow: var(--ui-shadow-card);
+    font-family: var(--ui-font-ui);
+    /* Служебная плитка — ссылка (открывается в новой вкладке), остальные —
+       кнопки. Выглядеть они обязаны одинаково: подчёркнутый синий текст
+       посреди сетки плиток читается как чужеродный. */
+    color: var(--ui-color-ink);
+    text-decoration: none;
+    cursor: pointer;
+    transition: transform var(--ui-dur-fast), box-shadow var(--ui-dur-fast), border-color var(--ui-dur-fast);
+}
+.shell-tile:hover {
+    transform: translateY(-2px);
+    border-color: var(--ui-color-line-strong);
+    box-shadow: 0 16px 40px rgba(23, 32, 55, .18);
+}
+.shell-tile:focus-visible { outline: 2px solid var(--ui-color-accent); outline-offset: 2px; }
+
+.shell-tile__icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 56px;
+    height: 56px;
+    border-radius: var(--ui-radius-lg);
+    background: var(--ui-color-neutral-bg);
+    color: var(--ui-color-ink-soft);
+    font-size: var(--ui-icon-lg);
+    transition: background var(--ui-dur-fast), color var(--ui-dur-fast);
+}
+.shell-tile:hover .shell-tile__icon {
+    background: var(--ui-color-wash-active);
+    color: var(--ui-color-accent);
+}
+.shell-tile__name {
+    font-size: var(--ui-text-md);
+    font-weight: var(--ui-weight-bold);
+    text-align: center;
+}
+
+/* Открытый раздел: плитка помечена, повторное нажатие не создаёт копию, а
+   переводит фокус на существующую панель. */
+.shell-tile--open { border-color: var(--ui-color-accent-line); }
+.shell-tile__mark {
+    position: absolute;
+    top: var(--ui-space-4);
+    right: var(--ui-space-4);
+    padding: 2px var(--ui-space-3);
+    border: 1px solid var(--ui-color-accent-line);
+    border-radius: var(--ui-radius-pill);
+    background: var(--ui-color-wash-active);
+    font-size: var(--ui-icon-2xs);
+    font-weight: var(--ui-weight-bold);
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    color: var(--ui-color-accent);
+}
+
+/* Неперенесённый раздел помечен честно: приглушённая иконка и метка «в новой
+   вкладке». Без этого человек жмёт плитку, его выбрасывает в другую вкладку,
+   и он считает это поломкой. */
+.shell-tile--legacy .shell-tile__icon {
+    background: var(--ui-color-surface-sunken);
+    color: var(--ui-color-ink-faint);
+}
+.shell-tile--legacy:hover .shell-tile__icon {
+    background: var(--ui-color-surface-sunken);
+    color: var(--ui-color-ink-soft);
+}
+.shell-tile__legacy-mark {
+    position: absolute;
+    top: var(--ui-space-4);
+    right: var(--ui-space-4);
+    display: inline-flex;
+    align-items: center;
+    gap: var(--ui-space-1);
+    font-size: var(--ui-icon-2xs);
+    font-weight: var(--ui-weight-bold);
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    color: var(--ui-color-ink-faint);
+}
+
+/* ----- Список выбора второй панели ----------------------------------------
+   Поповер у кнопки «Разделить экран»: элемент слоя, границей берёт свою
+   панель, поэтому в соседнюю не вылезет. */
+.shell-picker__title {
+    padding: 0 var(--ui-space-3) var(--ui-space-2);
+    font-size: var(--ui-text-sm);
+    font-weight: var(--ui-weight-bold);
+}
+.shell-picker__sub {
+    padding: 0 var(--ui-space-3) var(--ui-space-3);
+    font-size: var(--ui-text-xs);
+    line-height: var(--ui-line-base);
+    color: var(--ui-color-ink-faint);
+}
+.shell-picker__icon {
+    width: var(--ui-icon-md);
+    text-align: center;
+    color: var(--ui-color-ink-soft);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .shell-tile, .shell-tile__icon { transition: none; }
+    .shell-tile:hover { transform: none; }
+}

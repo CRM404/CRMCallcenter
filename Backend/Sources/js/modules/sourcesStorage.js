@@ -1,82 +1,59 @@
-// --- sourcesStorage.js: клиент REST API для страницы "Источники" ---
+// --- sourcesStorage.js: доменные запросы раздела «Источники» ---
+//
+// Транспорт переехал в общий api.js (был дословной копией в шести разделах),
+// доменные методы остались здесь — слить их в один файл на шесть разделов
+// значило бы заменить шесть копий одним монолитом.
+//
+// Каждый метод принимает `api` — транспорт, привязанный к жизни панели
+// (ctx.api). Раздел закрывают — незавершённые запросы обрываются, и ответ не
+// приходит в вырезанный из документа контейнер.
+//
+// Прямых fetch здесь нет и быть не должно: это правило проекта.
 
-export const API_BASE_URL = '/api';
+// --- Площадки (справочник ad_platforms) ---
 
-async function request(path, options = {}) {
-    let response;
-    try {
-        response = await fetch(`${API_BASE_URL}${path}`, {
-            headers: { 'Content-Type': 'application/json' },
-            ...options
-        });
-    } catch (e) {
-        throw new Error('Не удалось связаться с сервером. Проверьте подключение.');
-    }
-
-    if (response.status === 204) return null;
-
-    let body = null;
-    try {
-        body = await response.json();
-    } catch (e) {
-        // тело может отсутствовать при некоторых ошибках — игнорируем
-    }
-
-    if (!response.ok) {
-        const err = new Error((body && body.error) || 'Произошла ошибка на сервере');
-        err.status = response.status;
-        throw err;
-    }
-    return body;
+export function fetchPlatforms(api) {
+    return api.get('/ad-platforms');
 }
 
-// --- Площадки (переиспользует существующий справочник ad_platforms) ---
-
-export function fetchPlatforms() {
-    return request('/ad-platforms');
+export function createPlatform(api, data) {
+    return api.post('/ad-platforms', data);
 }
 
-export function createPlatform(data) {
-    return request('/ad-platforms', { method: 'POST', body: JSON.stringify(data) });
+export function updatePlatform(api, id, data) {
+    return api.put(`/ad-platforms/${id}`, data);
 }
 
-export function updatePlatform(id, data) {
-    return request(`/ad-platforms/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+export function deletePlatform(api, id) {
+    return api.del(`/ad-platforms/${id}`);
 }
 
-export function deletePlatform(id) {
-    return request(`/ad-platforms/${id}`, { method: 'DELETE' });
-}
+// --- CPA-сети: только чтение, справочник для мультивыбора в форме источника ---
 
-// --- CPA-сети (только чтение — справочник для мультивыбора в форме источника) ---
-
-export function fetchCpaNetworks() {
-    return request('/cpa-networks');
+export function fetchCpaNetworks(api) {
+    return api.get('/cpa-networks');
 }
 
 // --- Источники ---
 
-// { platformId } — источники одной площадки; { search } — кросс-площадочный
-// режим (по всем полям сразу, игнорирует platformId). Ровно один из двух.
-export function fetchSources({ platformId, search } = {}) {
-    const params = new URLSearchParams();
-    if (search) params.set('search', search);
-    else if (platformId !== undefined && platformId !== null) params.set('platformId', platformId);
-    return request(`/sources?${params.toString()}`);
+/**
+ * { platformId } — источники одной площадки; { search } — кросс-площадочный
+ * режим (по всем полям сразу, игнорирует platformId). Ровно один из двух.
+ */
+export function fetchSources(api, { platformId, search } = {}) {
+    if (search) return api.get('/sources', { search });
+    if (platformId !== undefined && platformId !== null) return api.get('/sources', { platformId });
+    return api.get('/sources');
 }
 
-export function fetchSourceById(id) {
-    return request(`/sources/${id}`);
+export function createSource(api, data) {
+    return api.post('/sources', data);
 }
 
-export function createSource(data) {
-    return request('/sources', { method: 'POST', body: JSON.stringify(data) });
+export function updateSource(api, id, data) {
+    return api.put(`/sources/${id}`, data);
 }
 
-export function updateSource(id, data) {
-    return request(`/sources/${id}`, { method: 'PUT', body: JSON.stringify(data) });
-}
-
-export function deleteSource(id) {
-    return request(`/sources/${id}`, { method: 'DELETE' });
+export function deleteSource(api, id) {
+    return api.del(`/sources/${id}`);
 }
