@@ -295,7 +295,7 @@ function renderOffersTable() {
             <td>${o.rate === null || o.rate === undefined ? DASH : `<span class="rate-value">${formatMoney(o.rate)}</span><span class="rate-cur">₽</span>`}</td>
             <td>${o.dateStart ? `<span class="period">${formatDate(o.dateStart)} – ${o.dateEnd ? formatDate(o.dateEnd) : 'бессрочно'}</span>` : DASH}</td>
             <td><span class="ui-pill ${STATUS_PILL[o.status] || 'ui-pill--mute'}">${STATUS_LABEL[o.status]}</span></td>
-            <td>
+            <td class="ui-table__acts">
                 <div class="row-actions">
                     <button type="button" class="ui-btn ui-btn--icon ui-btn--row" data-edit="${o.id}" title="Настроить"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-edit"></use></svg></button>
                     <button type="button" class="ui-btn ui-btn--icon ui-btn--row" data-copy="${o.id}" title="Скопировать"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-copy"></use></svg></button>

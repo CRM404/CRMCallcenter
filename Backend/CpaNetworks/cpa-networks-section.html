@@ -20,7 +20,7 @@
 <div class="cpa-wrap">
 <div class="ui-page-head">
         <h2 class="ui-page-head__title">CPA-сети</h2>
-        <span class="ui-page-head__sub">сети и их офферы</span>
+        <span class="ui-page-head__sub">ставки, условия и требования к лиду</span>
         <span class="ui-page-head__acts">
             <button type="button" class="ui-btn ui-btn--ghost" id="cpa-manage-networks"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-gear"></use></svg>Управление сетями</button>
             <button type="button" class="ui-btn" id="cpa-add-offer"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-plus"></use></svg>Добавить оффер</button>
@@ -57,7 +57,7 @@
 
         <div class="table-card">
             <div class="ui-table-wrap">
-                <table class="ui-table">
+                <table class="ui-table ui-table--freeze-acts">
                     <thead>
                         <tr>
                             <th>Оффер</th>
@@ -65,7 +65,7 @@
                             <th>Ставка</th>
                             <th>Период</th>
                             <th>Статус</th>
-                            <th></th>
+                            <th class="ui-table__acts"></th>
                         </tr>
                     </thead>
                     <tbody id="offersBody"></tbody>

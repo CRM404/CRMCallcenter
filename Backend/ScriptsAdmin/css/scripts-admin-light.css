@@ -41,34 +41,9 @@
     min-width: 0;
 }
 
-/* ----- Шапка раздела: заголовок → счётчики → действие ----- */
-    display: flex;
-    align-items: flex-end;
-    gap: var(--ui-space-5);
-    flex-wrap: wrap;
-}
-    font-size: 11px;
-    font-weight: var(--ui-weight-bold);
-    letter-spacing: .09em;
-    text-transform: uppercase;
-    color: var(--ui-color-ink-faint);
-}
-    margin: 2px 0 var(--ui-space-1);
-    font-size: var(--ui-text-title);
-    font-weight: var(--ui-weight-bold);
-    line-height: var(--ui-line-tight);
-}
-    margin: 0;
-    max-width: 560px;
-    font-size: var(--ui-text-sm);
-    line-height: var(--ui-line-base);
-    color: var(--ui-color-ink-soft);
-}
-    display: flex;
-    align-items: center;
-    gap: var(--ui-space-3);
-    flex-wrap: wrap;
-}
+/* ----- Шапка раздела -----
+   Своей шапки у раздела нет: заголовок, подпись и действия рисует
+   .ui-page-head из слоя (ui/page-head.css). */
 
 /* ----- Строка списка: название + подстрока наполненности ----- */
 .scr-title {
