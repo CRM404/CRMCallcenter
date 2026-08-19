@@ -171,6 +171,7 @@ function handlePanelEvent(event) {
         return;
     }
     if (event.type === 'change') {
+        updateTitle();
         if (!restoring) {
             setRoute(getVisibleKeys());
             saveState();
@@ -361,13 +362,33 @@ function renderFailure(container, section, err) {
     title.textContent = `«${section.title}» не открылся`;
     const text = document.createElement('p');
     text.textContent = err && err.message ? err.message : 'Неизвестная ошибка.';
+    // Кнопка ПОВТОРЯЕТ ПОПЫТКУ на месте, а не уводит по старому адресу (К18).
+    // Старые адреса живы, но с переездом в оболочку каждый из них отвечает 302
+    // обратно в неё: «Открыть по старому адресу» открывало новую вкладку с тем
+    // же приложением, которое только что не смогло открыть этот раздел.
     const again = document.createElement('button');
     again.type = 'button';
     again.className = 'ui-btn';
-    again.textContent = 'Открыть по старому адресу';
-    again.addEventListener('click', () => window.open(section.legacyUrl, '_blank', 'noopener'));
+    again.textContent = 'Попробовать снова';
+    again.addEventListener('click', () => {
+        const panel = container.closest('[data-panel-id]');
+        if (!panel) return;
+        remountSection(panel.dataset.panelId, section.key, container);
+    });
     box.append(title, text, again);
     container.appendChild(box);
+}
+
+/**
+ * Заголовок вкладки называет то, что на экране: «Лиды — CRM», при двух панелях
+ * «Лиды + Источники — CRM», на пустом столе просто «CRM» (К20). Раньше он был
+ * прибит к «CRM» и не отличал вкладку приложения от любой другой.
+ */
+function updateTitle() {
+    const titles = getVisibleKeys()
+        .map((key) => (find(key) || {}).title)
+        .filter(Boolean);
+    document.title = titles.length ? `${titles.join(' + ')} — CRM` : 'CRM';
 }
 
 // ---------------------------------------------------------------- маршрут

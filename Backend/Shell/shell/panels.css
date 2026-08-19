@@ -71,7 +71,6 @@
 .shell-panel__icon {
     flex: 0 0 auto;
     width: var(--ui-icon-md);
-    font-size: var(--ui-icon-md);
     color: var(--ui-color-ink-soft);
     text-align: center;
 }

@@ -115,7 +115,7 @@
     border-radius: var(--e-radius-md);
     padding: 12px 16px;
 }
-.emp-wrap .sched-empty-note .ui-ic { color: var(--ui-color-ink-faint); flex-shrink: 0; margin-top: 2px; }
+.emp-wrap .sched-empty-note .ui-ic { flex-shrink: 0; margin-top: 2px; }
 .emp-wrap .sched-empty-note b { display: block; font-size: 13.5px; color: var(--e-ink); margin-bottom: 3px; }
 .emp-wrap .sched-empty-note span { font-size: 12.5px; color: var(--e-ink-soft); line-height: 1.5; }
 
@@ -279,7 +279,7 @@
 .emp-wrap .emp-schedule .es-key { font-size: 11.5px; color: var(--e-ink-faint); min-width: 92px; }
 .emp-wrap .emp-schedule .es-val { font-size: 13.5px; font-weight: 700; color: var(--e-ink); }
 .emp-wrap .emp-schedule .es-note { font-size: 12.5px; color: var(--e-ink-soft); }
-.emp-wrap .emp-schedule .es-note .ui-ic { color: var(--ui-color-ink-faint); width: var(--ui-icon-xs); height: var(--ui-icon-xs); }
+.emp-wrap .emp-schedule .es-note .ui-ic { flex-shrink: 0; }
 /* Краснеет СРАЗУ при выборе сотрудника, а не после нажатия «Заполнить»:
    ругаться, когда человек уже заполнил форму, — худший момент из возможных. */
 .emp-wrap .emp-schedule.bad { background: var(--s-danger-bg); border-color: rgba(192, 57, 43, .3); }
@@ -308,8 +308,9 @@
 .emp-wrap .wk-field .wk-sum.none { color: var(--e-ink-faint); }
 /* Единственный указатель состояния у этой кнопки — поворот шеврона. Правило
    целилось в <i> и перестало работать вместе с переводом значков на SVG:
-   панель открывалась, стрелка не двигалась (Ф3). */
-.emp-wrap .wk-field .ui-ic { color: var(--ui-color-ink-faint); flex-shrink: 0; transition: transform .18s; }
+   панель открывалась, стрелка не двигалась (Ф3). Цвет теперь даёт .ui-ic--quiet
+   из слоя, здесь остаётся только поведение. */
+.emp-wrap .wk-field .ui-ic { flex-shrink: 0; transition: transform .18s; }
 .emp-wrap .wk-field[aria-expanded="true"] .ui-ic { transform: rotate(180deg); }
 
 .emp-wrap .wk-panel {

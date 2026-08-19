@@ -41,7 +41,7 @@
 .ui-toast--success { border-left-color: var(--ui-color-ok-edge); }
 .ui-toast--error { border-left-color: var(--ui-color-off-edge); }
 
-.ui-toast__icon { font-size: var(--ui-icon-md); flex-shrink: 0; }
+.ui-toast__icon { flex-shrink: 0; }
 .ui-toast--info .ui-toast__icon { color: var(--ui-color-info-edge); }
 .ui-toast--success .ui-toast__icon { color: var(--ui-color-ok-edge); }
 .ui-toast--error .ui-toast__icon { color: var(--ui-color-off-edge); }
@@ -59,7 +59,6 @@
     border: none;
     background: none;
     color: var(--ui-color-ink-faint);
-    font-size: var(--ui-icon-sm);
     line-height: 1;
     cursor: pointer;
     transition: color var(--ui-dur-fast);

@@ -574,7 +574,7 @@ function openSourceModal(state, source) {
                 <div class="src-networks" data-field="networks">
                     ${state.cpaNetworks.map((n) => {
                         const checked = source && (source.cpaNetworkIds || []).includes(n.id);
-                        return `<label class="src-network${checked ? ' src-network--checked' : ''}">
+                        return `<label class="ui-choice${checked ? ' ui-choice--on' : ''}">
                             <input type="checkbox" value="${n.id}"${checked ? ' checked' : ''}>${escapeHtml(n.name)}
                         </label>`;
                     }).join('')}
@@ -601,9 +601,9 @@ function openSourceModal(state, source) {
             </div>
         </div>`;
 
-    body.querySelectorAll('.src-network input').forEach((checkbox) => {
+    body.querySelectorAll('.ui-choice input').forEach((checkbox) => {
         checkbox.addEventListener('change', () => {
-            checkbox.closest('.src-network').classList.toggle('src-network--checked', checkbox.checked);
+            checkbox.closest('.ui-choice').classList.toggle('ui-choice--on', checkbox.checked);
         });
     });
 
@@ -620,7 +620,7 @@ function openSourceModal(state, source) {
                 label: 'Сохранить',
                 autofocus: true,
                 onClick: async () => {
-                    const networks = Array.from(body.querySelectorAll('.src-network input:checked')).map((c) => Number(c.value));
+                    const networks = Array.from(body.querySelectorAll('.ui-choice input:checked')).map((c) => Number(c.value));
                     const netsField = field('networks').closest('.ui-field');
                     netsField.classList.toggle('ui-field--error', networks.length === 0);
                     if (networks.length === 0) return false;

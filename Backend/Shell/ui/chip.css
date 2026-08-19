@@ -117,7 +117,6 @@
     border-radius: 50%;
     background: transparent;
     color: var(--ui-color-ink-faint);
-    font-size: var(--ui-icon-sm);
     cursor: pointer;
 }
 .ui-fchip__remove:hover { background: var(--ui-color-wash-active); color: var(--ui-color-accent); }
@@ -132,3 +131,49 @@
     cursor: pointer;
 }
 .ui-fchips__clear:hover { color: var(--ui-color-accent); }
+
+/* ----- Чип-выбор: «выбрать несколько из списка» -----
+   Пятый вид в этом файле, и он ОРГАН УПРАВЛЕНИЯ, а не статус — отсюда радиус
+   кнопки (8 px), а не пилюли (20): двадцать читалось бы статусом, а выбор сети
+   статусом не является.
+
+   Заведён по решению дизайн-сессии (К15) вместо .src-network из «Источников»:
+   тот же вид нужен минимум трижды — офферы у сети, отделы у сотрудника,
+   колонки в настройке списка, — и в слое такого не было (.ui-chip — счётчик,
+   .ui-pill — статус, .ui-fchip — снятый фильтр).
+
+   Фокус берётся по кнопочному правилу (контур со смещением наружу), а не по
+   правилу поля: элемент стоит сам по себе, а не в полосе ввода. */
+.ui-choice {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--ui-space-2);
+    padding: var(--ui-space-2) var(--ui-space-4);
+    border: 1px solid var(--ui-color-line);
+    border-radius: var(--ui-radius-sm);
+    background: var(--ui-color-surface);
+    font-size: var(--ui-text-sm);
+    color: var(--ui-color-ink-soft);
+    cursor: pointer;
+    transition: border-color var(--ui-dur-fast), background-color var(--ui-dur-fast),
+                color var(--ui-dur-fast);
+}
+.ui-choice:hover {
+    border-color: var(--ui-color-line-strong);
+    background: var(--ui-color-wash-hover);
+}
+.ui-choice input { accent-color: var(--ui-color-accent); }
+.ui-choice--on {
+    border-color: var(--ui-color-accent-line);
+    background: var(--ui-color-wash-active);
+    color: var(--ui-color-ink);
+}
+.ui-choice:focus-within {
+    outline: 2px solid var(--ui-color-accent);
+    outline-offset: 2px;
+}
+.ui-choice--disabled,
+.ui-choice:has(input:disabled) {
+    color: var(--ui-color-ink-faint);
+    cursor: not-allowed;
+}

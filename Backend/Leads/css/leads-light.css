@@ -85,7 +85,6 @@
 /* Линия лида — обычный текст со значком направления. Рамка и заливка сняты:
    пилюля в макете означает СТАТУС, а линия статусом не является (М23). */
 .leads-wrap .leads-line { display: inline-flex; align-items: center; gap: 5px; color: var(--ui-color-ink); }
-.leads-wrap .leads-line .ui-ic { color: var(--ui-color-ink-faint); }
 /* Скрипт: название + маркер «повт.». Синий — лид сейчас на этапе 5–6,
    т.е. оператор видит именно повторный скрипт. */
 .leads-wrap .rep-chip { display: inline-block; margin-left: 6px; font-size: 10.5px; font-weight: 700; color: var(--ink-faint); background: rgba(96, 112, 148, .12); padding: 2px 7px; border-radius: 20px; cursor: default; }
@@ -119,7 +118,6 @@
 
 /* ----- Телефон + предупреждение о дубле ----- */
 .leads-wrap .phone-field { display: flex; align-items: center; gap: 10px; background: rgba(255, 255, 255, .6); border: 1px solid var(--line); border-radius: var(--radius-md); padding: 10px 14px; }
-.leads-wrap .phone-field .ui-ic { color: var(--ui-color-accent); }
 .leads-wrap .phone-field input { border: none; background: transparent; font-size: 16px; font-weight: 700; color: var(--ink); padding: 0; flex: 1; font-family: inherit; }
 .leads-wrap .phone-field input:focus { outline: none; }
 .leads-wrap .dup-warning { display: flex; align-items: flex-start; gap: 10px; background: var(--warn-bg); color: var(--warn-ink); border: 1px solid rgba(138, 109, 31, .28); border-radius: var(--radius-md); padding: 11px 14px; font-size: 13px; margin-top: 10px; }
@@ -139,12 +137,11 @@
    обёртке leadsGeo.js держит СВОЙ контекст сужения на адрес. ----- */
 .leads-wrap .geo-block + .geo-block { margin-top: 14px; }
 .leads-wrap .geo-block-title { display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 700; color: var(--ink); margin-bottom: 10px; }
-.leads-wrap .geo-block-title .ui-ic { color: var(--ui-color-accent); }
 .leads-wrap .geo-field { position: relative; min-width: 0; }
 .leads-wrap .geo-suggest { position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 60; background: var(--surface-modal); backdrop-filter: blur(14px); border: 1px solid var(--line-strong); border-radius: var(--radius-sm); box-shadow: var(--shadow-pop); max-height: 230px; overflow-y: auto; }
 .leads-wrap .geo-suggest-item { display: flex; align-items: flex-start; gap: 7px; padding: 8px 10px; font-size: 12.5px; line-height: 1.35; color: var(--ink); cursor: pointer; }
 .leads-wrap .geo-suggest-item:hover { background: rgba(0, 0, 255, .07); }
-.leads-wrap .geo-suggest-item .ui-ic { color: var(--ui-color-ink-faint); margin-top: 2px; flex-shrink: 0; }
+.leads-wrap .geo-suggest-item .ui-ic { margin-top: 2px; flex-shrink: 0; }
 .leads-wrap .geo-suggest-item b { font-weight: 700; }
 .leads-wrap .geo-suggest-empty { padding: 9px 10px; font-size: 12px; color: var(--ink-faint); }
 
@@ -185,7 +182,6 @@
 
 /* ----- Загрузка файла ----- */
 .leads-wrap .file-upload-area { display: flex; align-items: center; gap: 16px; width: 100%; border: 1.5px dashed var(--line-strong); border-radius: var(--radius-sm); padding: 14px 16px; }
-.leads-wrap .file-upload-area .ui-ic { color: var(--ui-color-ink-faint); }
 .leads-wrap .file-upload-area .file-name { font-size: 13px; color: var(--ink-soft); flex: 1; }
 
 .leads-wrap .file-upload-area .file-name:empty::before { content: 'Файл не выбран'; color: var(--ink-faint); font-style: italic; }

@@ -86,7 +86,6 @@
     border-radius: var(--ui-radius-sm);
     background: transparent;
     color: var(--ui-color-ink-faint);
-    font-size: var(--ui-icon-sm);
     cursor: pointer;
 }
 .shell-mini__close:hover { background: var(--ui-color-off-bg); color: var(--ui-color-danger); }
@@ -110,7 +109,6 @@
     background: var(--ui-color-glass-strong);
     box-shadow: var(--ui-shadow-card);
     color: var(--ui-color-ink-soft);
-    font-size: var(--ui-icon-md);
     cursor: pointer;
 }
 .shell-home:hover { border-color: var(--ui-color-accent); color: var(--ui-color-accent); }

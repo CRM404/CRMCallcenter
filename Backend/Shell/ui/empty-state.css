@@ -21,7 +21,7 @@
     font-size: var(--ui-text-sm);
     color: var(--ui-color-ink);
 }
-.ui-load-error__icon { color: var(--ui-color-warn-ink); font-size: var(--ui-icon-sm); }
+.ui-load-error__icon { color: var(--ui-color-warn-ink); }
 .ui-load-error__text { flex: 1 1 auto; min-width: 0; }
 .ui-load-error__reason { color: var(--ui-color-ink-soft); }
 
@@ -59,7 +59,6 @@
 }
 .ui-empty__icon {
     color: var(--ui-color-ink-faint);
-    font-size: var(--ui-icon-lg);
     line-height: 1;
 }
 .ui-empty__title {

@@ -110,7 +110,6 @@
     border-radius: var(--ui-radius-sm);
     background: rgba(96, 112, 148, .1);
     color: var(--ui-color-ink-soft);
-    font-size: var(--ui-icon-sm);
     line-height: 1;
     cursor: pointer;
     transition: color var(--ui-dur-fast), background-color var(--ui-dur-fast);

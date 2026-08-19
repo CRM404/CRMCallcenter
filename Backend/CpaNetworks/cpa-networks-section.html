@@ -23,7 +23,7 @@
         <span class="ui-page-head__sub">ставки, условия и требования к лиду</span>
         <span class="ui-page-head__acts">
             <button type="button" class="ui-btn ui-btn--ghost" id="cpa-manage-networks"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-gear"></use></svg>Управление сетями</button>
-            <button type="button" class="ui-btn" id="cpa-add-offer"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-plus"></use></svg>Добавить оффер</button>
+            <button type="button" class="ui-btn" id="cpa-add-offer"><svg class="ui-ic ui-ic--sm ui-ic--quiet" aria-hidden="true"><use href="#ui-ic-plus"></use></svg>Добавить оффер</button>
         </span>
     </div>
 
@@ -154,11 +154,11 @@
             <div class="ui-field"><label class="ui-field__label" for="fDeadline">Срок сдачи</label><input class="ui-field__control" type="text" id="fDeadline" placeholder="до 4 кв. 2027 / сдан"></div>
             <div class="ui-field ui-field--wide"><label class="ui-field__label">Цена и площадь по сегментам <span class="hint">зависят от типа/класса — можно задать несколько диапазонов</span></label>
                 <div class="repeat-rows" id="fSegments"></div>
-                <button type="button" class="dashed-row" id="addSegmentBtn"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-plus"></use></svg>Добавить сегмент</button>
+                <button type="button" class="dashed-row" id="addSegmentBtn"><svg class="ui-ic ui-ic--sm ui-ic--quiet" aria-hidden="true"><use href="#ui-ic-plus"></use></svg>Добавить сегмент</button>
             </div>
             <div class="ui-field ui-field--wide"><label class="ui-field__label">География объекта <span class="hint">регион / город / район / нас. пункт (посёлки, деревни, сёла — если это не город) — пустой уровень значит «любой», можно несколько строк; начните печатать в любом из полей — подскажет адрес именно для этого уровня, а Город/Район/Нас. пункт сузятся до уже выбранного региона</span></label>
                 <div class="repeat-rows" id="fObjGeo"></div>
-                <button type="button" class="dashed-row" id="addObjGeoBtn"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-plus"></use></svg>Добавить географию</button>
+                <button type="button" class="dashed-row" id="addObjGeoBtn"><svg class="ui-ic ui-ic--sm ui-ic--quiet" aria-hidden="true"><use href="#ui-ic-plus"></use></svg>Добавить географию</button>
             </div>
         </div>
 
@@ -185,7 +185,7 @@
             </div>
             <div class="ui-field ui-field--wide"><label class="ui-field__label">География клиента <span class="hint">регион / город / район / нас. пункт (посёлки, деревни, сёла — если это не город) — тот же принцип, что у объекта, но про самого покупателя; подсказки адреса по каждому полю — так же</span></label>
                 <div class="repeat-rows" id="fClientGeo"></div>
-                <button type="button" class="dashed-row" id="addClientGeoBtn"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-plus"></use></svg>Добавить географию</button>
+                <button type="button" class="dashed-row" id="addClientGeoBtn"><svg class="ui-ic ui-ic--sm ui-ic--quiet" aria-hidden="true"><use href="#ui-ic-plus"></use></svg>Добавить географию</button>
             </div>
         </div>
 
@@ -217,7 +217,7 @@
 <div class="ui-modal__body">
     <div class="empty-state" id="networksLockedNote" hidden>Сначала заполните организацию в разделе <a href="#/requisites">Реквизиты</a> — CPA-сеть привязывается к юрлицу.</div>
     <div class="net-list" id="netList"></div>
-    <button type="button" class="dashed-row" id="addNetworkBtn" style="margin-top:10px"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-plus"></use></svg>Добавить сеть</button>
+    <button type="button" class="dashed-row" id="addNetworkBtn" style="margin-top:10px"><svg class="ui-ic ui-ic--sm ui-ic--quiet" aria-hidden="true"><use href="#ui-ic-plus"></use></svg>Добавить сеть</button>
     <div class="inline-form" id="netInlineForm" hidden>
         <div class="ui-form-grid">
             <div class="ui-field ui-field--wide"><label class="ui-field__label" for="nfName">Название *</label><input class="ui-field__control" type="text" id="nfName" placeholder="AdCombo"></div>

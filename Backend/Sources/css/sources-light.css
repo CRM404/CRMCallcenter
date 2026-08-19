@@ -194,24 +194,8 @@
     flex-wrap: wrap;
     gap: var(--ui-space-3);
 }
-.src-network {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--ui-space-2);
-    padding: var(--ui-space-2) var(--ui-space-4);
-    border: 1px solid var(--ui-color-line);
-    border-radius: var(--ui-radius-lg);
-    background: var(--ui-color-surface);
-    font-size: var(--ui-text-sm);
-    color: var(--ui-color-ink-soft);
-    cursor: pointer;
-}
-.src-network input { accent-color: var(--ui-color-accent); }
-.src-network--checked {
-    border-color: var(--ui-color-accent-line);
-    background: var(--ui-color-wash-active);
-    color: var(--ui-color-ink);
-}
+/* Чип выбора сети — элемент слоя .ui-choice (К15). Свой .src-network раздел
+   больше не объявляет: тот же вид нужен ещё трём местам проекта. */
 
 .src-context-note {
     padding: var(--ui-space-3) var(--ui-space-4);

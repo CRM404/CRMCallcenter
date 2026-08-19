@@ -143,7 +143,7 @@ function serviceTile(item) {
 
     const mark = document.createElement('span');
     mark.className = 'shell-tile__legacy-mark';
-    mark.append(iconNode('ext', '2xs'), document.createTextNode('в новой вкладке'));
+    mark.append(iconNode('ext', 'xs'), document.createTextNode('в новой вкладке'));
 
     const icon = document.createElement('span');
     icon.className = 'shell-tile__icon';
@@ -167,6 +167,10 @@ function serviceTile(item) {
  * он остаётся под ней: спрятать и собрать заново значило бы терять позицию
  * прокрутки на каждом открытии.
  */
+// Какие разделы были открыты на прошлой перерисовке стола: по разнице
+// вычисляется закрытый раздел, чтобы вернуть на его плитку фокус (К19).
+let prevOpen = [];
+
 function sync() {
     const open = openKeys();
 
@@ -189,12 +193,36 @@ function sync() {
         } else if (legacy) {
             const mark = document.createElement('span');
             mark.className = 'shell-tile__legacy-mark';
-            mark.append(iconNode('ext', '2xs'), document.createTextNode('в новой вкладке'));
+            mark.append(iconNode('ext', 'xs'), document.createTextNode('в новой вкладке'));
             tile.prepend(mark);
         }
     });
 
-    stageEl.hidden = visibleKeys().length === 0;
+    const stageVisible = visibleKeys().length > 0;
+    stageEl.hidden = !stageVisible;
+
+    // Стол НЕ разрушается, когда открыта панель, — это осознанное решение, и
+    // менять его нельзя. Но пока сцена накрывает его, плитки не должны быть
+    // достижимы: до этой строки первые четыре остановки Tab с начала документа
+    // приходились на плитки ПОД панелью, и только пятая заходила внутрь неё
+    // (К11). `inert` заодно убирает стол из дерева доступности — отдельный
+    // aria-hidden не нужен и был бы вторым источником правды.
+    desktopEl.inert = stageVisible;
+
+    // Фокус ВОЗВРАЩАЕТСЯ на плитку закрытого раздела. Без этого он терялся в
+    // начало документа: панель, в которой он стоял, исчезала, и следующий Tab
+    // начинал обход заново (К19). Возвращаем только если фокус действительно
+    // потерян, — иначе перебьём осознанный переход человека в другое место.
+    //
+    // Строго ПОСЛЕ снятия inert: в inert-контейнере focus() молча не работает,
+    // и первая версия этой правки не делала ничего.
+    const closed = prevOpen.filter((key) => !open.includes(key));
+    prevOpen = open;
+    if (closed.length === 1 && !desktopEl.inert
+        && (!document.activeElement || document.activeElement === document.body)) {
+        const tile = tilesEl.querySelector(`[data-key="${closed[0]}"]`);
+        if (tile) tile.focus();
+    }
 }
 
 /** Открытые разделы: видимые панели плюс свёрнутые. */

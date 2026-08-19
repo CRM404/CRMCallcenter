@@ -96,10 +96,10 @@ export function createTable(root, deps) {
     function renderContactsCell(emp, hidden) {
         const lines = [];
         if (!hidden.has('phone') && emp.phone) {
-            lines.push(`<div class="contact-line contact-phone"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-phone"></use></svg>${escapeHtml(emp.phone)}</div>`);
+            lines.push(`<div class="contact-line contact-phone"><svg class="ui-ic ui-ic--sm ui-ic--quiet" aria-hidden="true"><use href="#ui-ic-phone"></use></svg>${escapeHtml(emp.phone)}</div>`);
         }
         if (!hidden.has('email') && emp.email) {
-            lines.push(`<div class="contact-line"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-mail"></use></svg>${escapeHtml(emp.email)}</div>`);
+            lines.push(`<div class="contact-line"><svg class="ui-ic ui-ic--sm ui-ic--quiet" aria-hidden="true"><use href="#ui-ic-mail"></use></svg>${escapeHtml(emp.email)}</div>`);
         }
         return `<div class="contact-cell">${lines.join('')}</div>`;
     }
@@ -130,7 +130,7 @@ export function createTable(root, deps) {
 
     function renderManagerCell(emp) {
         if (!emp.managerName) return '<span class="manager-cell manager-empty">—</span>';
-        return `<span class="manager-cell"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-share"></use></svg>${escapeHtml(emp.managerName)}</span>`;
+        return `<span class="manager-cell"><svg class="ui-ic ui-ic--sm ui-ic--quiet" aria-hidden="true"><use href="#ui-ic-share"></use></svg>${escapeHtml(emp.managerName)}</span>`;
     }
 
     function renderStatusBadge(emp) {

@@ -5,6 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CRM</title>
 
+    <!-- Значок вкладки — из НАШЕГО набора (ui/icons.js, ключ home), инлайном:
+         внешних адресов у приложения не осталось ни одного, и заводить ради
+         значка отдельный файл незачем. До этого вкладка была пустым листом,
+         хотя у CRM свои 52 значка (К20). Заголовок вкладки меняется вместе с
+         открытыми разделами — shell/app.js, updateTitle(). -->
+    <link rel="icon" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="%230000ff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11.5 12 5l8 6.5V19a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 19z"/><path d="M9.5 20.5v-6h5v6"/></svg>'>
+
     <!-- Значков из сети больше нет. Набор проекта — инлайновый SVG, ui/icons.js:
          спрайт кладётся в документ при старте, размеры задаёт ui/icons.css.
          Font Awesome с cdnjs был единственной внешней таблицей стилей проекта —

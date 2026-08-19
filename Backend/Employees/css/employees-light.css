@@ -107,7 +107,6 @@
     left: 11px;
     top: 50%;
     transform: translateY(-50%);
-    color: var(--ui-color-ink-faint);
     pointer-events: none;
 }
 .emp-wrap .emp-search input { padding-left: 32px; }
@@ -139,9 +138,9 @@
 /* ----- Составная ячейка «Контакты» ----- */
 .emp-wrap .contact-cell { display: flex; flex-direction: column; gap: 3px; min-width: 160px; }
 .emp-wrap .contact-line { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--e-ink-soft); white-space: nowrap; }
-/* Значок в строке контакта мельче строчного и приглушён — так было до
-   перевода на свой набор, где правило целилось в <i> и умерло молча (Ф4). */
-.emp-wrap .contact-line .ui-ic { color: var(--ui-color-ink-faint); width: var(--ui-icon-xs); height: var(--ui-icon-xs); }
+/* Своих правил для значков здесь больше нет (К13, К14): цвет даёт класс слоя
+   .ui-ic--quiet, размер — ступень по правилу «по кеглю соседнего текста».
+   Контакты и руководитель — текст 13 px, значит ступень sm, а не xs. */
 .emp-wrap .contact-line.contact-phone { font-weight: 600; color: var(--e-ink); font-variant-numeric: tabular-nums; }
 
 /* ----- Составная ячейка «Мессенджеры» -----
@@ -153,11 +152,12 @@
    Отдел выводится обычным текстом: серая пилюля означала бы статус, которым
    отдел не является (М26). */
 .emp-wrap .manager-cell { display: flex; align-items: center; gap: 6px; color: var(--e-ink-soft); font-size: 13px; }
-.emp-wrap .manager-cell .ui-ic { color: var(--ui-color-ink-faint); width: var(--ui-icon-xs); height: var(--ui-icon-xs); }
 .emp-wrap .manager-cell.manager-empty { font-style: italic; color: var(--e-ink-faint); }
 
 /* Кнопка удаления строки — единственная, что краснеет при наведении. */
-.emp-wrap .sort-icon { margin-left: 6px; font-size: var(--ui-icon-xs); color: var(--e-accent); }
+/* Стрелка сортировки стоит рядом с шапкой таблицы (10.5 px) — ступень xs;
+   цвет акцентный, потому что она несёт смысл, а не сопровождает текст (К14). */
+.emp-wrap .sort-icon { margin-left: 6px; color: var(--ui-color-accent); }
 
 /* Списки в полосе массовых действий: рост под полосу, а не под форму. */
 .emp-wrap .mass-select { width: auto; min-width: 190px; min-height: 34px; padding: 6px 10px; font-size: 13px; }

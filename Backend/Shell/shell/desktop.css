@@ -62,6 +62,12 @@ body {
 .shell-stage--with-bar.shell-stage--with-home { padding-bottom: 74px; }
 
 /* ----- Стол ---------------------------------------------------------------- */
+/* Нижний отступ 92 px посчитан, а не подобран (К17): по столу могут стоять
+   ОБА нижних элемента сразу — полоса свёрнутых (46 высотой + 12 отступ снизу)
+   и кнопка «Главная» той же высоты слева от неё. 46 + 12 = 58 занимает полоса,
+   плюс 34 зазора, чтобы последний ряд плиток не подлезал под неё вплотную при
+   прокрутке. Сцена резервирует меньше (66 и 74) — там панель, а не сетка
+   плиток, и её содержимое прокручивается внутри себя. */
 .shell-desktop {
     height: 100%;
     overflow: auto;
@@ -140,12 +146,22 @@ body {
     color: var(--ui-color-ink);
     text-decoration: none;
     cursor: pointer;
+    /* Промах мимо плитки при быстром клике оставлял выделенный кусок подписи —
+       на кнопке это читается как сбой (К21). Та же идиома уже стоит у
+       сортируемой шапки таблицы. */
+    user-select: none;
     transition: transform var(--ui-dur-fast), box-shadow var(--ui-dur-fast), border-color var(--ui-dur-fast);
 }
 .shell-tile:hover {
     transform: translateY(-2px);
     border-color: var(--ui-color-line-strong);
     box-shadow: 0 16px 40px rgba(23, 32, 55, .18);
+}
+/* Нажатие: плитка садится обратно на стол. Без этого она оставалась
+   приподнятой всё нажатие и не отвечала на него ничем (К16). */
+.shell-tile:active {
+    transform: translateY(0);
+    box-shadow: var(--ui-shadow-card);
 }
 .shell-tile:focus-visible { outline: 2px solid var(--ui-color-accent); outline-offset: 2px; }
 
@@ -158,7 +174,6 @@ body {
     border-radius: var(--ui-radius-lg);
     background: var(--ui-color-neutral-bg);
     color: var(--ui-color-ink-soft);
-    font-size: var(--ui-icon-lg);
     transition: background var(--ui-dur-fast), color var(--ui-dur-fast);
 }
 .shell-tile:hover .shell-tile__icon {
@@ -182,7 +197,7 @@ body {
     border: 1px solid var(--ui-color-accent-line);
     border-radius: var(--ui-radius-lg);
     background: var(--ui-color-wash-active);
-    font-size: var(--ui-icon-2xs);
+    font-size: var(--ui-text-2xs);
     font-weight: var(--ui-weight-bold);
     letter-spacing: .04em;
     text-transform: uppercase;
@@ -207,7 +222,7 @@ body {
     display: inline-flex;
     align-items: center;
     gap: var(--ui-space-1);
-    font-size: var(--ui-icon-2xs);
+    font-size: var(--ui-text-2xs);
     font-weight: var(--ui-weight-bold);
     letter-spacing: .04em;
     text-transform: uppercase;

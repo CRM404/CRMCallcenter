@@ -125,7 +125,7 @@ const RICH_CELLS = {
         : null),
     // Линия — обычный текст со значком направления, без рамки-пилюли (М23).
     lineType: (l) => (l.lineType
-        ? `<span class="leads-line">${icon(l.lineType === 'Входящая' ? 'arrow-down-left' : 'arrow-up-right', 'sm')}${escapeHtml(l.lineType)}</span>`
+        ? `<span class="leads-line">${icon(l.lineType === 'Входящая' ? 'arrow-down-left' : 'arrow-up-right', 'sm', 'ui-ic--quiet')}${escapeHtml(l.lineType)}</span>`
         : null),
     // Название основного скрипта + мини-чип «повт.», если задан повторный.
     // Чип синий, когда лид сейчас на этапе 5–6 — то есть оператор видит
