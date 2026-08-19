@@ -13,6 +13,7 @@
 
 import { createApiScope } from '../api.js';
 import { showToast } from '../ui/toast.js';
+import { createSkeleton } from '../ui/skeleton.js';
 import { confirm, confirmDanger } from '../ui/modal.js';
 import { startRouter, setRoute } from './router.js';
 import {
@@ -30,6 +31,8 @@ import {
 //   module     — путь к модулю раздела; пока раздел не перенесён — null
 //   template   — путь к фрагменту разметки; грузится при первом монтировании
 //   styles     — файл раскладки раздела или список файлов
+//   skeleton   — форма скелета загрузки: 'table' (список) или 'form'
+//                (карточка). Не указано — 'table'.
 //   legacyUrl  — старый адрес: пока раздел не перенесён, открывается там,
 //                в новой вкладке, и плитка это честно показывает
 
@@ -39,7 +42,7 @@ import {
 // дожил до конца — это дефект»).
 
 export const registry = [
-    { key: 'requisites', title: 'Реквизиты',  icon: 'fas fa-building',       module: '/js/modules/mainApp.js', template: '/main-section.html', styles: '/css/main-light.css', legacyUrl: '/main.html' },
+    { key: 'requisites', title: 'Реквизиты',  icon: 'fas fa-building',       module: '/js/modules/mainApp.js', template: '/main-section.html', styles: '/css/main-light.css', skeleton: 'form', legacyUrl: '/main.html' },
     { key: 'employees',  title: 'Сотрудники', icon: 'fas fa-users',          module: '/js/modules/employeesApp.js', template: '/employees-section.html', styles: ['/css/employees-light.css', '/css/employees-schedule.css'], legacyUrl: '/emploees.html' },
     { key: 'leads',      title: 'Лиды',       icon: 'fas fa-address-book',   module: '/js/modules/leadsApp.js', template: '/leads-section.html', styles: '/css/leads-light.css', legacyUrl: '/leads.html' },
     { key: 'sources',    title: 'Источники',  icon: 'fas fa-diagram-project',module: '/js/modules/sourcesSection.js', template: '/sources-section.html', styles: '/css/sources-light.css', legacyUrl: '/sources.html' },
@@ -195,6 +198,13 @@ async function mountSection(panelId, key, container) {
 
     mounted.set(panelId, { key, api, unmount: null, container });
 
+    // Скелет ставится ДО первого await — иначе он опоздает ровно к тому
+    // кадру, ради которого нужен: между открытием панели и первым ответом
+    // сервера человек видел бы пустой белый прямоугольник и не знал бы,
+    // грузится раздел или сломался (находки Н1 ревизора и Д1 дизайн-сессии).
+    const skeleton = createSkeleton(section.skeleton, section.title);
+    container.appendChild(skeleton);
+
     try {
         // Стили раздела — пятый блок структуры («раскладка разделов»).
         // Грузятся при первом открытии раздела, а не все шестью ссылками в
@@ -210,17 +220,27 @@ async function mountSection(panelId, key, container) {
             const fragment = await loadTemplate(section.template);
             // Панель могли закрыть, пока грузилась разметка.
             if (!mounted.has(panelId)) return;
+            // Чистим тело, но скелет оставляем: раздел ещё не показал данных,
+            // и убрать накладку сейчас значит вернуть тот же пустой кадр.
             container.innerHTML = '';
+            container.appendChild(skeleton);
             container.appendChild(fragment);
         }
         const module = await import(section.module);
         // И пока грузился модуль — тоже.
         if (!mounted.has(panelId)) return;
+        // mount каждого раздела завершается после первых данных — на этом
+        // накладку и снимаем: раньше показали бы пустую таблицу, позже
+        // держали бы скелет поверх готового раздела.
         await module.mount(container, ctx);
         const record = mounted.get(panelId);
         if (record) record.unmount = module.unmount;
     } catch (err) {
         renderFailure(container, section, err);
+    } finally {
+        // finally, а не хвост try: при отказе раздела скелет тоже обязан
+        // уйти, иначе поверх объяснения ошибки останутся мигающие полосы.
+        skeleton.remove();
     }
 }
 

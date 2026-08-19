@@ -106,6 +106,10 @@ function sync() {
     // столе она вела бы туда, где человек и так находится.
     const hasPanels = items.length > 0 || !stageEl.hidden;
     homeEl.hidden = !hasPanels;
+
+    // Кнопка накрывает панель — сцена резервирует под неё полосу ровно тогда,
+    // когда кнопка видна (Д10).
+    stageEl.classList.toggle('shell-stage--with-home', hasPanels);
 }
 
 function chip(item) {

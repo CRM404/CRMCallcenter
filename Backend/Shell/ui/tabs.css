@@ -56,6 +56,11 @@
    пропавшая вкладка читается как поломка. */
 .ui-tabs__tab--quiet { opacity: .55; }
 
+/* Вкладки В СТРОКУ с другими элементами (панель инструментов, полоса сетей).
+   Линия снизу нужна вкладкам, которые стоят НАД содержимым и отделяют себя от
+   него; в одной строке с полем поиска она просто перечёркивает строку. */
+.ui-tabs--inline { border-bottom: none; margin-bottom: 0; }
+
 /* ----- Вкладки-пилюли: узкие места, где подчёркивание не помещается ----- */
 .ui-tabs--pills { border-bottom: none; margin-bottom: 0; }
 .ui-tabs--pills .ui-tabs__tab {
@@ -104,6 +109,11 @@
     cursor: pointer;
     transition: background var(--ui-dur-fast), color var(--ui-dur-fast);
 }
+/* Значок внутри переключателя — ступень лестницы, а не размер текста
+   кнопки: без этого он наследовал 13 px и добавлял экрану лишнюю
+   ступень (находка Д11). */
+.ui-switch__option .fa, .ui-switch__option .fas, .ui-switch__option i { font-size: var(--ui-icon-xs); }
+
 .ui-switch__option:hover { color: var(--ui-color-ink); }
 .ui-switch__option:focus-visible { outline: 2px solid var(--ui-color-accent); outline-offset: 2px; }
 .ui-switch__option--active,

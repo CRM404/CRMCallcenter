@@ -136,7 +136,7 @@
     top: 50%;
     transform: translateY(-50%);
     color: var(--e-ink-faint);
-    font-size: 13px;
+    font-size: var(--ui-icon-xs);
     pointer-events: none;
 }
 .emp-wrap .search-wrap input {
@@ -199,7 +199,7 @@
 /* ----- Составная ячейка «Контакты» ----- */
 .emp-wrap .contact-cell { display: flex; flex-direction: column; gap: 3px; min-width: 160px; }
 .emp-wrap .contact-line { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--e-ink-soft); white-space: nowrap; }
-.emp-wrap .contact-line i { color: var(--e-ink-faint); font-size: 11px; width: 12px; text-align: center; }
+.emp-wrap .contact-line i { color: var(--e-ink-faint); font-size: var(--ui-icon-xs); width: 12px; text-align: center; }
 .emp-wrap .contact-line.contact-phone { font-weight: 600; color: var(--e-ink); font-variant-numeric: tabular-nums; }
 
 /* ----- Составная ячейка «Мессенджеры» ----- */
@@ -233,12 +233,12 @@
     white-space: nowrap;
 }
 .emp-wrap .manager-cell { display: flex; align-items: center; gap: 6px; color: var(--e-ink-soft); font-size: 13px; }
-.emp-wrap .manager-cell i { color: var(--e-ink-faint); font-size: 11px; }
+.emp-wrap .manager-cell i { color: var(--e-ink-faint); font-size: var(--ui-icon-xs); }
 .emp-wrap .manager-cell.manager-empty { font-style: italic; color: var(--e-ink-faint); }
 
 /* Кнопка удаления строки — единственная, что краснеет при наведении. */
 .emp-wrap .row-del:hover { color: var(--e-danger); }
-.emp-wrap .sort-icon { margin-left: 6px; font-size: 10px; color: var(--e-accent); }
+.emp-wrap .sort-icon { margin-left: 6px; font-size: var(--ui-icon-xs); color: var(--e-accent); }
 
 /* Списки в полосе массовых действий: рост под полосу, а не под форму. */
 .emp-wrap .mass-select { width: auto; min-width: 190px; min-height: 34px; padding: 6px 10px; font-size: 13px; }

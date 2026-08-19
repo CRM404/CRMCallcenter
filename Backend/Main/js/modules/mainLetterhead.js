@@ -41,7 +41,10 @@ export function renderPreview(container, organization) {
         container.innerHTML = `
             <div class="m-preview-tag">Так это увидят в счёте</div>
             <div class="m-letterhead">
-                <div class="m-empty-state">Появится после заполнения организации.</div>
+                <div class="ui-empty ui-empty--inline m-empty">
+                    <div class="ui-empty__title">Пока нечего показать</div>
+                    <p class="ui-empty__text">Бланк соберётся сам, как только будут заполнены данные организации выше.</p>
+                </div>
             </div>
         `;
         return;

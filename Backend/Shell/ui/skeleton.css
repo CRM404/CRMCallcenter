@@ -16,6 +16,21 @@
    ------------------------------------------------------------------------ */
 
 .ui-skeleton { display: grid; gap: var(--ui-space-4); }
+
+/* Накладка: скелет живёт ПОВЕРХ пустого тела панели, а не вместо него.
+   Так фрагмент раздела успевает встать в разметку под скелетом, и снятие
+   накладки не вызывает второго перерисовывания с пустым кадром между ними.
+   Тело панели прокручиваемое, поэтому inset считается от него — накладка
+   не наезжает на шапку панели и не перекрывает её кнопки. */
+.ui-skeleton--overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    align-content: start;
+    padding: var(--ui-space-5);
+    background: var(--ui-color-surface);
+    pointer-events: none;
+}
 .ui-skeleton__row {
     display: flex;
     align-items: center;

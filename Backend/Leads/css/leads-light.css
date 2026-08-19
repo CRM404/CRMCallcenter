@@ -98,7 +98,7 @@
 
 /* Линия: компактная пилюля со стрелкой */
 .leads-wrap .line-tag { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; background: rgba(96, 112, 148, .10); color: var(--ink-soft); border: 1px solid var(--line); }
-.leads-wrap .line-tag i { font-size: 10px; }
+.leads-wrap .line-tag i { font-size: var(--ui-icon-xs); }
 /* Скрипт: название + маркер «повт.». Синий — лид сейчас на этапе 5–6,
    т.е. оператор видит именно повторный скрипт. */
 .leads-wrap .rep-chip { display: inline-block; margin-left: 6px; font-size: 10.5px; font-weight: 700; color: var(--ink-faint); background: rgba(96, 112, 148, .12); padding: 2px 7px; border-radius: 20px; cursor: default; }

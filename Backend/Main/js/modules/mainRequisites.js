@@ -22,11 +22,16 @@ function escapeHtml(value) {
         .replace(/>/g, '&gt;');
 }
 
-// "Общие данные" — фиксированная сетка (см. m-org-grid в CSS): Название на
-// одном уровне с остальными короткими полями, ОПФ — короткая подпись + узкий
-// инпут, Юридический адрес — осознанно full-width отдельной строкой.
+// "Общие данные" — фиксированная сетка (см. m-org-grid в CSS): ОПФ —
+// короткая подпись + узкий инпут, Юридический адрес — осознанно full-width
+// отдельной строкой.
+//
+// Название тоже во всю строку: это самое длинное значение блока, и в узкой
+// колонке оно обрезалось — «КУРАТОР-ТЕСТ ООО» читалось как «КУРАТОР-ТЕСТ ООС»
+// (находка дизайн-сессии Д7). Правило п. 35: широкое поле занимает всю ширину
+// сетки, а не подгоняется по месту.
 const ORG_GENERAL_FIELDS = [
-    { key: 'name', label: 'Название', type: 'text', required: true },
+    { key: 'name', label: 'Название', type: 'text', required: true, fullWidth: true },
     { key: 'legalForm', label: 'ОПФ', type: 'text', narrow: true },
     { key: 'generalDirector', label: 'Генеральный директор', type: 'text' },
     { key: 'registrationCountry', label: 'Страна регистрации', type: 'text' },
@@ -119,7 +124,11 @@ export function renderOrganizationForm(container, organization, handlers) {
             </div>
             <button type="button" class="ui-btn ui-btn--sm" data-action="save-org">${isNew ? 'Создать организацию' : 'Сохранить изменения'}</button>
         </div>
-        ${isNew ? '<div class="m-empty-state">Организация ещё не создана.</div>' : ''}
+        ${isNew ? `
+            <div class="ui-empty ui-empty--inline m-empty">
+                <div class="ui-empty__title">Организация ещё не создана</div>
+                <p class="ui-empty__text">Заполните поля ниже и нажмите «Создать организацию» — банковские счета и налоги привязываются к ней.</p>
+            </div>` : ''}
         <div class="m-section">
             <div class="m-section-label">Общие данные</div>
             <div class="m-org-grid">
@@ -224,7 +233,7 @@ function recordsWord(count, forms) {
 // uiState = { adding, editingId }
 // handlers = { onAddStart, onAddCancel, onCreate(data), onEditStart(id),
 //              onEditCancel, onSave(record, data), onDelete(id) }
-export function renderRecordsSection(container, { title, records, fields, uiState, idPrefix, emptyText, addButtonLabel, wordForms, handlers, validators, toast }) {
+export function renderRecordsSection(container, { title, records, fields, uiState, idPrefix, emptyTitle, emptyText, addButtonLabel, wordForms, handlers, validators, toast }) {
     const cards = records.map((r) => renderRecordCard(r, fields, uiState.editingId === r.id, idPrefix)).join('');
     const countText = records.length && wordForms ? `${records.length} ${recordsWord(records.length, wordForms)}` : '';
     const addForm = uiState.adding ? `
@@ -246,7 +255,11 @@ export function renderRecordsSection(container, { title, records, fields, uiStat
                 <div><h2>${title}</h2>${countText ? `<small>${countText}</small>` : ''}</div>
             </div>
         </div>
-        ${records.length ? `<div class="m-row-list">${cards}</div>` : `<div class="m-empty-state">${emptyText}</div>`}
+        ${records.length ? `<div class="m-row-list">${cards}</div>` : `
+            <div class="ui-empty ui-empty--inline m-empty">
+                <div class="ui-empty__title">${escapeHtml(emptyTitle || 'Пока пусто')}</div>
+                <p class="ui-empty__text">${escapeHtml(emptyText)}</p>
+            </div>`}
         ${!uiState.adding ? `
             <div class="m-add-row" data-action="add" role="button" tabindex="0">
                 <i class="fas fa-plus" aria-hidden="true"></i>${addButtonLabel}

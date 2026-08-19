@@ -24,10 +24,10 @@
             <h1>CPA-сети</h1>
             <p>Офферы недвижимости с настройками и требованиями к клиенту</p>
         </div>
-        <dl class="stat-chips">
-            <div class="stat-chip"><dt>Офферов всего</dt><dd data-role="stat-total">0</dd></div>
-            <div class="stat-chip ok"><dt>Активны</dt><dd data-role="stat-active">0</dd></div>
-            <div class="stat-chip draft"><dt>Черновики</dt><dd data-role="stat-draft">0</dd></div>
+        <dl class="ui-chips">
+            <div class="ui-chip"><dd class="ui-chip__value" data-role="stat-total">0</dd><dt class="ui-chip__label">Офферов всего</dt></div>
+            <div class="ui-chip ui-chip--ok"><dd class="ui-chip__value" data-role="stat-active">0</dd><dt class="ui-chip__label">Активны</dt></div>
+            <div class="ui-chip ui-chip--muted"><dd class="ui-chip__value" data-role="stat-draft">0</dd><dt class="ui-chip__label">Черновики</dt></div>
         </dl>
     </div>
 
@@ -35,22 +35,22 @@
     <div data-view="offers" class="active">
 
         <div class="network-bar">
-            <div class="network-tabs" id="networkTabs"></div>
+            <div class="ui-tabs ui-tabs--inline network-tabs" id="networkTabs"></div>
             <div class="network-meta" id="networkMeta"></div>
             <button type="button" class="ui-btn ui-btn--sm ui-btn--ghost" id="manageNetworksBtn"><i class="fas fa-gear" aria-hidden="true"></i>Управление сетями</button>
         </div>
 
         <div class="toolbar">
-            <div class="search-field">
-                <i class="fas fa-magnifying-glass" aria-hidden="true"></i>
-                <input type="text" data-role="search" placeholder="Найти оффер по названию…">
+            <div class="ui-field cpa-search">
+                <input type="search" class="ui-field__control" data-role="search"
+                       placeholder="Найти оффер по названию…" aria-label="Поиск офферов">
             </div>
-            <div class="status-filter" data-role="status-filter">
-                <button type="button" class="status-pill active" data-status="all">Все</button>
-                <button type="button" class="status-pill" data-status="active">Активные</button>
-                <button type="button" class="status-pill" data-status="paused">На паузе</button>
-                <button type="button" class="status-pill" data-status="disabled">Отключённые</button>
-                <button type="button" class="status-pill" data-status="draft">Черновики</button>
+            <div class="ui-tabs ui-tabs--inline" data-role="status-filter">
+                <button type="button" class="ui-tabs__tab ui-tabs__tab--active" data-status="all">Все</button>
+                <button type="button" class="ui-tabs__tab" data-status="active">Активные</button>
+                <button type="button" class="ui-tabs__tab" data-status="paused">На паузе</button>
+                <button type="button" class="ui-tabs__tab" data-status="disabled">Отключённые</button>
+                <button type="button" class="ui-tabs__tab" data-status="draft">Черновики</button>
             </div>
             <button type="button" class="ui-btn" id="addOfferBtn"><i class="fas fa-plus" aria-hidden="true"></i>Добавить оффер</button>
         </div>

@@ -96,13 +96,20 @@ function formatMoney(n) {
 
 // --- Сети: переключатель-табы + компактная модалка "Управление сетями" ---
 
+// Прочерк — ОДИН элемент на всё приложение. Раньше пустое «Тип действия»
+// рисовалось пилюлей с прочерком внутри (пилюля читается как «статус есть»,
+// Д8), а прочерки «Ставки» и «Периода» в одной строке отличались начертанием,
+// потому что доставались от разных классов значения (Д9).
+const DASH = '<span class="ui-dash">—</span>';
+
 function renderTabs() {
     const wrap = $('#networkTabs');
     wrap.innerHTML = networks.map((n) => {
         const count = offers.filter((o) => o.networkId === n.id).length;
-        return `<button type="button" class="network-tab ${n.id === activeNetworkId ? 'active' : ''}" data-id="${n.id}">${escapeHtml(n.name)}<span class="count">${count}</span></button>`;
+        const active = n.id === activeNetworkId ? ' ui-tabs__tab--active' : '';
+        return `<button type="button" class="ui-tabs__tab${active}" data-id="${n.id}">${escapeHtml(n.name)}<span class="ui-tabs__count ui-tabs__count--badge">${count}</span></button>`;
     }).join('');
-    wrap.querySelectorAll('.network-tab').forEach((btn) => {
+    wrap.querySelectorAll('.ui-tabs__tab').forEach((btn) => {
         btn.addEventListener('click', () => {
             activeNetworkId = Number(btn.dataset.id);
             renderTabs();
@@ -261,9 +268,9 @@ function renderOffersTable() {
     $('#offersBody').innerHTML = list.map((o) => `
         <tr data-id="${o.id}">
             <td><div class="offer-name">${escapeHtml(o.name)}</div><div class="offer-cat">${escapeHtml(o.category || '—')}</div></td>
-            <td><span class="action-tag">${escapeHtml(o.actionType || '—')}</span></td>
-            <td><span class="rate-value">${formatMoney(o.rate)}</span>${o.rate !== null && o.rate !== undefined ? '<span class="rate-cur">₽</span>' : ''}</td>
-            <td><span class="period">${o.dateStart ? formatDate(o.dateStart) + ' – ' + (o.dateEnd ? formatDate(o.dateEnd) : 'бессрочно') : '—'}</span></td>
+            <td>${o.actionType ? `<span class="action-tag">${escapeHtml(o.actionType)}</span>` : DASH}</td>
+            <td>${o.rate === null || o.rate === undefined ? DASH : `<span class="rate-value">${formatMoney(o.rate)}</span><span class="rate-cur">₽</span>`}</td>
+            <td>${o.dateStart ? `<span class="period">${formatDate(o.dateStart)} – ${o.dateEnd ? formatDate(o.dateEnd) : 'бессрочно'}</span>` : DASH}</td>
             <td><span class="status-chip ${o.status}">${STATUS_LABEL[o.status]}</span></td>
             <td>
                 <div class="row-actions">
@@ -856,10 +863,10 @@ export async function mount(container, ctx) {
 
     $('[data-role="search"]').addEventListener('input', (e) => { searchQuery = e.target.value.trim().toLowerCase(); renderOffersTable(); });
     $('[data-role="status-filter"]').addEventListener('click', (e) => {
-        const btn = e.target.closest('.status-pill');
+        const btn = e.target.closest('.ui-tabs__tab');
         if (!btn) return;
-        $$('.status-pill').forEach((p) => p.classList.remove('active'));
-        btn.classList.add('active');
+        $$('[data-role="status-filter"] .ui-tabs__tab').forEach((p) => p.classList.remove('ui-tabs__tab--active'));
+        btn.classList.add('ui-tabs__tab--active');
         activeStatus = btn.dataset.status;
         renderOffersTable();
     });
