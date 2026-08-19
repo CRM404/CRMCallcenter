@@ -200,7 +200,7 @@
     gap: var(--ui-space-2);
     padding: var(--ui-space-2) var(--ui-space-4);
     border: 1px solid var(--ui-color-line);
-    border-radius: var(--ui-radius-pill);
+    border-radius: var(--ui-radius-lg);
     background: var(--ui-color-surface);
     font-size: var(--ui-text-sm);
     color: var(--ui-color-ink-soft);

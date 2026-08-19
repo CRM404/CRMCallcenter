@@ -113,11 +113,6 @@
     cursor: pointer;
     transition: background var(--ui-dur-fast), color var(--ui-dur-fast);
 }
-/* Значок внутри переключателя — ступень лестницы, а не размер текста
-   кнопки: без этого он наследовал 13 px и добавлял экрану лишнюю
-   ступень (находка Д11). */
-.ui-switch__option .fa, .ui-switch__option .fas, .ui-switch__option i { font-size: var(--ui-icon-xs); }
-
 .ui-switch__option:hover { color: var(--ui-color-ink); }
 .ui-switch__option:focus-visible { outline: 2px solid var(--ui-color-accent); outline-offset: 2px; }
 .ui-switch__option--active,

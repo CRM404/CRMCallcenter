@@ -139,7 +139,9 @@
 /* ----- Составная ячейка «Контакты» ----- */
 .emp-wrap .contact-cell { display: flex; flex-direction: column; gap: 3px; min-width: 160px; }
 .emp-wrap .contact-line { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--e-ink-soft); white-space: nowrap; }
-.emp-wrap .contact-line i { color: var(--e-ink-faint); font-size: var(--ui-icon-xs); width: 12px; text-align: center; }
+/* Значок в строке контакта мельче строчного и приглушён — так было до
+   перевода на свой набор, где правило целилось в <i> и умерло молча (Ф4). */
+.emp-wrap .contact-line .ui-ic { color: var(--ui-color-ink-faint); width: var(--ui-icon-xs); height: var(--ui-icon-xs); }
 .emp-wrap .contact-line.contact-phone { font-weight: 600; color: var(--e-ink); font-variant-numeric: tabular-nums; }
 
 /* ----- Составная ячейка «Мессенджеры» -----
@@ -151,7 +153,7 @@
    Отдел выводится обычным текстом: серая пилюля означала бы статус, которым
    отдел не является (М26). */
 .emp-wrap .manager-cell { display: flex; align-items: center; gap: 6px; color: var(--e-ink-soft); font-size: 13px; }
-.emp-wrap .manager-cell i { color: var(--e-ink-faint); font-size: var(--ui-icon-xs); }
+.emp-wrap .manager-cell .ui-ic { color: var(--ui-color-ink-faint); width: var(--ui-icon-xs); height: var(--ui-icon-xs); }
 .emp-wrap .manager-cell.manager-empty { font-style: italic; color: var(--e-ink-faint); }
 
 /* Кнопка удаления строки — единственная, что краснеет при наведении. */

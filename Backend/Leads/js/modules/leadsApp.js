@@ -107,12 +107,21 @@ const REPEAT_STAGE_FROM = 5;
 
 // Ячейки, которые собираются в готовый HTML (пилюли/чипы), а не в текст.
 const RICH_CELLS = {
-    // Статус — ПИЛЮЛЯ СЛОЯ. Свой класс stage-badge удалён: раздел не объявляет
-    // своих пилюль, а этот к тому же нёс внутри номер этапа («0 Новый»), чего
-    // нет ни в макете, ни в языке пилюли — она называет состояние, а не
-    // нумерует его (Н7, М22; номер убран решением владельца 19.08.2026).
+    // Статус — ПИЛЮЛЯ СЛОЯ, ОДНОГО ЦВЕТА для всех статусов (решение владельца
+    // 19.08.2026). Свой класс stage-badge удалён: раздел не объявляет своих
+    // пилюль, а этот к тому же нёс внутри номер этапа («0 Новый»), чего нет ни
+    // в макете, ни в языке пилюли — она называет состояние, а не нумерует его
+    // (Н7, М22).
+    //
+    // Окраски по номеру этапа здесь БОЛЬШЕ НЕТ и заводить её обратно нельзя.
+    // Она красила зелёным всё с этапа 5 и выше, а на реальном справочнике этап 5
+    // это «Повторный контакт» — «Не удалось связаться повторно», «Выбрал другой
+    // объект», «Отложил покупку»; настоящий успех «Лид переведен «ЯН»» сидит на
+    // этапе 4 и оставался серым. Зелёный читался как «хорошо», а означал
+    // «этап ≥ 5». Признак «успешный статус» появится полем в справочнике
+    // lead_funnel_statuses, а не порогом в коде раздела.
     funnelStatus: (l) => (l.funnelStatusId
-        ? `<span class="ui-pill ${l.stageNumber >= REPEAT_STAGE_FROM ? 'ui-pill--ok' : 'ui-pill--mute'}">${escapeHtml(l.statusName)}</span>`
+        ? `<span class="ui-pill ui-pill--mute">${escapeHtml(l.statusName)}</span>`
         : null),
     // Линия — обычный текст со значком направления, без рамки-пилюли (М23).
     lineType: (l) => (l.lineType
@@ -251,6 +260,9 @@ async function loadStats(mountId) {
         $('[data-role="stat-total"]').textContent = stats.total;
         $('[data-role="stat-queue"]').textContent = stats.queue;
         $('[data-role="stat-today"]').textContent = stats.today;
+        // Подпись шапки — из того же ответа, что и счётчики: день, по которому
+        // они посчитаны, и день в подписи обязаны совпадать.
+        fillQueueDate(stats.todayDate);
     } catch (e) {
         fail(mountId, e);
     }
@@ -553,11 +565,21 @@ function renderColumnsModalBody() {
 
 // Подпись шапки раздела: «очередь на 19 августа». Раньше здесь стоял абзац на
 // две строки, который отодвигал таблицу вниз при каждом открытии (М24).
-function fillQueueDate() {
+//
+// ДЕНЬ ПРИХОДИТ С СЕРВЕРА (stats.todayDate, YYYY-MM-DD в поясе приложения), а не
+// из new Date() браузера. Очередь и счётчик «за сегодня» считает сервер в поясе
+// Europe/Moscow; часы браузера у оператора могут стоять в другом поясе, и тогда
+// подпись расходилась бы с таблицей под ней (Ф7). Правило проекта: «сегодня»
+// фронт берёт только с сервера.
+function fillQueueDate(todayDate) {
     const node = $('[data-role="queue-date"]');
-    if (!node) return;
-    const today = new Date().toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
-    node.textContent = `очередь на ${today}`;
+    if (!node || !todayDate) return;
+    // Разбираем строку сами: new Date('2026-08-19') читается как UTC-полночь и
+    // в минусовых поясах отдаёт предыдущий день.
+    const [year, month, day] = todayDate.split('-').map(Number);
+    const shown = new Date(year, month - 1, day)
+        .toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
+    node.textContent = `очередь на ${shown}`;
 }
 
 export async function mount(container, ctx) {
@@ -582,8 +604,6 @@ export async function mount(container, ctx) {
     massApplying = false;
 
     const isAlive = () => alive(my);
-
-    fillQueueDate();
 
     leadModal = createLeadModal(container, {
         storage,

@@ -68,7 +68,12 @@
     outline-offset: 2px;
 }
 
-.ui-btn .fa, .ui-btn .fas, .ui-btn .far, .ui-btn i { font-size: var(--ui-icon-sm); }
+/* Размер значка в кнопке задаётся ступенью у самого значка (ui-ic--sm и
+   далее), а не правилом кнопки: SVG не отвечает на font-size. Прежние правила
+   целились в .fa/.fas/.far и в тег <i> — набора Font Awesome в проекте больше
+   нет, и такое правило только приглашало бы его обратно. Заодно они молча
+   уменьшали единственный оставшийся честный <i> — курсивную «К» на панели
+   форматирования скрипта (Ф2). */
 
 /* ----- Вид: вторичная ---------------------------------------------------- */
 .ui-btn--secondary { background-color: var(--ui-color-slate); }
@@ -107,9 +112,6 @@
 }
 .ui-btn--icon::before { background-color: var(--ui-color-wash-strong); }
 .ui-btn--icon:hover { color: var(--ui-color-accent); }
-.ui-btn--icon .fa, .ui-btn--icon .fas, .ui-btn--icon .far, .ui-btn--icon i {
-    font-size: var(--ui-icon-md);
-}
 
 /* ----- Вид: кнопка-иконка в строке таблицы -------------------------------
    Мельче тулбарной и с меньшим радиусом — в макете это .icon-btn 28×28/6px.
@@ -121,8 +123,7 @@
     padding: 0;
     border-radius: var(--ui-radius-xs);
 }
-.ui-btn--row .fa, .ui-btn--row .fas, .ui-btn--row .far, .ui-btn--row i,
-.ui-btn--row .ui-ic { font-size: var(--ui-icon-sm); }
+
 
 /* Иконка опасного действия — красная. Без этого правила сочетание
    `ui-btn--icon ui-btn--danger` не давало красного НИ В ОДНОМ состоянии:

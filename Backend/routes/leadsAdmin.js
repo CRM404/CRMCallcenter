@@ -11,6 +11,7 @@
 
 const express = require('express');
 const { pool } = require('../db');
+const { startOfDay, startOfNextDay, zonedParts } = require('../services/appTime');
 const { distributePendingLeads, findNewFunnelStatusId } = require('../services/leadDistribution');
 
 const router = express.Router();
@@ -408,19 +409,35 @@ router.get('/', async (req, res) => {
     }
 });
 
-// GET /api/leads-admin/stats — три цифры шапки страницы (всего / без
-// оператора / за сегодня), считаются по ВСЕМ лидам, не по текущим фильтрам.
+// GET /api/leads-admin/stats — три цифры шапки раздела (всего / без оператора /
+// за сегодня), считаются по ВСЕМ лидам, не по текущим фильтрам.
+//
+// СУТКИ СЧИТАЮТСЯ В ПОЯСЕ ПРИЛОЖЕНИЯ, а не в поясе сессии БД. Раньше здесь
+// стояло `created_at::date = CURRENT_DATE`: на Railway контейнер идёт в UTC, и
+// с полуночи до трёх ночи по Москве цифра показывала вчерашний день. Это было
+// единственное место в routes/* с CURRENT_DATE.
+//
+// Ответ несёт ещё и само серверное «сегодня» (todayDate, YYYY-MM-DD в поясе
+// приложения): подпись раздела «очередь на 19 августа» обязана совпадать с тем
+// днём, по которому посчитан счётчик, а часы браузера у оператора могут стоять
+// в другом поясе.
 router.get('/stats', async (req, res) => {
     try {
+        const now = new Date();
+        const dayStart = startOfDay(now);
+        const dayEnd = startOfNextDay(now);
+        const p = zonedParts(now);
+        const todayDate = `${p.year}-${String(p.month).padStart(2, '0')}-${String(p.day).padStart(2, '0')}`;
+
         const result = await pool.query(`
             SELECT
                 count(*)::int AS total,
                 count(*) FILTER (WHERE employee_id IS NULL)::int AS queue,
-                count(*) FILTER (WHERE created_at::date = CURRENT_DATE)::int AS today
+                count(*) FILTER (WHERE created_at >= $1 AND created_at < $2)::int AS today
             FROM leads
-        `);
+        `, [dayStart, dayEnd]);
         const row = result.rows[0];
-        res.json({ total: row.total, queue: row.queue, today: row.today });
+        res.json({ total: row.total, queue: row.queue, today: row.today, todayDate });
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: 'Не удалось получить статистику' });
