@@ -81,7 +81,7 @@
 
 
 <!-- Модалка оффера: основное + 4 блока настроек одним прокручиваемым телом -->
-    <div class="ui-modal cpa-modal" id="offerModal" hidden>
+    <div class="ui-modal ui-modal--in-panel cpa-modal" id="offerModal" hidden>
         <div class="ui-modal__box ui-modal__box--wide">
 <div class="ui-modal__head">
     <div>
@@ -201,14 +201,14 @@
     </form>
 </div>
 <div class="ui-modal__actions">
-    <button type="button" class="ui-btn ui-btn--secondary" id="offerModalCancel">Отмена</button>
+    <button type="button" class="ui-btn ui-btn--ghost" id="offerModalCancel">Отмена</button>
     <button type="button" class="ui-btn" id="offerModalSave">Сохранить</button>
 </div>
         </div>
     </div>
 
 <!-- Модалка «Управление сетями»: список + инлайн-форма (тот же паттерн, что «Отделы») -->
-    <div class="ui-modal cpa-modal" id="networksModal" hidden>
+    <div class="ui-modal ui-modal--in-panel cpa-modal" id="networksModal" hidden>
         <div class="ui-modal__box">
 <div class="ui-modal__head">
     <div><h2>Управление сетями</h2><p class="modal-sub">Название, юрлицо, условия подключения</p></div>
@@ -228,10 +228,15 @@
             <div class="ui-field"><label class="ui-field__label" for="nfCommission">Комиссия %</label><input class="ui-field__control" type="number" step="any" id="nfCommission" placeholder="15"></div>
         </div>
         <div class="form-actions">
-            <button type="button" class="ui-btn ui-btn--secondary" id="netFormCancel">Отмена</button>
+            <button type="button" class="ui-btn ui-btn--ghost" id="netFormCancel">Отмена</button>
             <button type="button" class="ui-btn" id="netFormSave">Сохранить</button>
         </div>
     </div>
+</div>
+<!-- Подвал у окна-списка (Н3). Сети правятся прямо в списке, каждое действие
+     уходит на сервер сразу, поэтому «Готово» — выход, а не «применить». -->
+<div class="ui-modal__actions">
+    <button type="button" class="ui-btn" id="networksModalDone">Готово</button>
 </div>
         </div>
     </div>

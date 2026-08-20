@@ -134,6 +134,10 @@
             <span class="cat-item"><span class="cat-cap">shadow-card</span><span class="tok-box" style="box-shadow: var(--ui-shadow-card)"></span></span>
             <span class="cat-item"><span class="cat-cap">shadow-panel</span><span class="tok-box" style="box-shadow: var(--ui-shadow-panel)"></span></span>
             <span class="cat-item"><span class="cat-cap">shadow-pop</span><span class="tok-box" style="box-shadow: var(--ui-shadow-pop)"></span></span>
+            <!-- Тень окна показана здесь, а не только объявлена в токенах: вид,
+                 которого нет в каталоге, раздел изобретает заново. Место
+                 освободилось после radius-pill, снятого частью 1. -->
+            <span class="cat-item"><span class="cat-cap">shadow-modal</span><span class="tok-box" style="box-shadow: var(--ui-shadow-modal)"></span></span>
         </div>
         <div class="cat-row" style="align-items: flex-end">
             <span class="cat-item"><span class="cat-cap">space-1 · 4</span><span class="tok-space" style="width: var(--ui-space-1)"></span></span>
@@ -391,6 +395,7 @@
             <div class="cat-panel__body">
                 <div class="cat-row" style="margin: 0; flex-wrap: nowrap">
                     <button type="button" class="ui-btn" data-role="panel-modal">Окно этой панели</button>
+                    <button type="button" class="ui-btn ui-btn--ghost" data-role="markup-modal">Окно из разметки</button>
                     <span class="cat-cap">кнопка справа открывает меню у самой границы</span>
                     <!-- Кнопка прижата к ПРАВОМУ краю панели намеренно: поповер,
                          который не умеет прижиматься к границе, вылезет отсюда
@@ -411,6 +416,30 @@
                             <tr><td>Четвёртая</td><td class="ui-table__num">4</td></tr>
                         </tbody>
                     </table>
+                </div>
+            </div>
+
+            <!-- ВТОРОЙ ВИД ОКНА: объявленное РАЗМЕТКОЙ раздела, а не вызовом.
+                 Так собраны пятнадцать окон пяти разделов — сложные формы,
+                 которые проще держать в шаблоне. Класс ui-modal--in-panel
+                 обещает им то же затемнение, что openModal({ scope }) даёт
+                 своим: на всю панель, включая её шапку.
+                 Чего у такого окна НЕТ: Esc, закрытия щелчком по затемнению и
+                 ловушки фокуса — это поведение живёт в ui/modal.js и приходит
+                 только с вызовом. -->
+            <div class="ui-modal ui-modal--in-panel" data-role="markup-modal-window" hidden>
+                <div class="ui-modal__box ui-modal__box--narrow">
+                    <div class="ui-modal__head">
+                        <h2 class="ui-modal__title">Окно из разметки</h2>
+                        <button type="button" class="ui-modal__close" data-role="markup-modal-close" aria-label="Закрыть"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-close"></use></svg></button>
+                    </div>
+                    <div class="ui-modal__body">
+                        <p>Затемнение накрывает панель целиком — вместе с её шапкой, а не только тело.</p>
+                    </div>
+                    <div class="ui-modal__actions">
+                        <button type="button" class="ui-btn ui-btn--ghost" data-role="markup-modal-cancel">Отмена</button>
+                        <button type="button" class="ui-btn" data-role="markup-modal-ok">Готово</button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -545,6 +574,18 @@
 
     document.querySelector('[data-role="panel-modal"]').addEventListener('click', () => {
         openModal({ title: 'Изменение сотрудника', body: employeeForm(), actions: modalActions, scope: panel });
+    });
+
+    // Окно из разметки открывается и закрывается снятием hidden — ровно так,
+    // как это делают разделы.
+    const markupWindow = document.querySelector('[data-role="markup-modal-window"]');
+    document.querySelector('[data-role="markup-modal"]').addEventListener('click', () => {
+        markupWindow.hidden = false;
+    });
+    ['markup-modal-close', 'markup-modal-cancel', 'markup-modal-ok'].forEach((role) => {
+        document.querySelector(`[data-role="${role}"]`).addEventListener('click', () => {
+            markupWindow.hidden = true;
+        });
     });
 
     document.querySelector('[data-role="demo-confirm"]').addEventListener('click', async () => {

@@ -63,8 +63,12 @@ export async function mount(container, ctx) {
     const isAlive = () => alive(my);
     const deps = { storage, toast: ctx.toast, isAlive, isAbort };
 
+    // Колонкам сервер больше не нужен: настройки общие и лежат в
+    // sessionStorage до появления входа (см. шапку employeesColumns.js), —
+    // поэтому сюда идёт не общий набор зависимостей, а только то, чем модуль
+    // пользуется.
     columns = createColumns(container, {
-        ...deps,
+        toast: ctx.toast,
         // Настройки колонок меняют только вид таблицы — данные перезапрашивать
         // незачем, но перерисовать нужно.
         onApplied: () => table.draw()

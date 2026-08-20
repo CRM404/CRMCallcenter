@@ -189,7 +189,7 @@
     </section>
 
     <!-- ================= ОКНО СОТРУДНИКА ================= -->
-    <div class="ui-modal emp-modal" data-role="employee-modal" hidden>
+    <div class="ui-modal ui-modal--in-panel emp-modal" data-role="employee-modal" hidden>
         <div class="ui-modal__box ui-modal__box--wide">
             <div class="ui-modal__head">
                 <div>
@@ -324,7 +324,7 @@
                 </div>
 
                 <div class="ui-modal__actions">
-                    <button type="button" class="ui-btn ui-btn--secondary" data-role="employee-cancel">Отмена</button>
+                    <button type="button" class="ui-btn ui-btn--ghost" data-role="employee-cancel">Отмена</button>
                     <button type="button" class="ui-btn ui-btn--secondary" data-role="prev-step" hidden><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-arrow-left"></use></svg>Назад</button>
                     <button type="button" class="ui-btn" data-role="next-step">Далее<svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-arrow-right"></use></svg></button>
                     <button type="submit" class="ui-btn" data-role="employee-save" hidden>Сохранить</button>
@@ -334,7 +334,7 @@
     </div>
 
     <!-- ================= ОКНО ФИЛЬТРОВ ================= -->
-    <div class="ui-modal emp-modal" data-role="filter-modal" hidden>
+    <div class="ui-modal ui-modal--in-panel emp-modal" data-role="filter-modal" hidden>
         <div class="ui-modal__box">
             <div class="ui-modal__head">
                 <h2 class="ui-modal__title">Фильтры</h2>
@@ -369,33 +369,8 @@
         </div>
     </div>
 
-    <!-- ================= ОКНО «ПОДТВЕРДИТЕ ЛИЧНОСТЬ» ================= -->
-    <div class="ui-modal emp-modal" data-role="identity-modal" hidden>
-        <div class="ui-modal__box ui-modal__box--narrow">
-            <div class="ui-modal__head">
-                <div>
-                    <h2 class="ui-modal__title">Подтвердите личность</h2>
-                    <p class="modal-sub">Настройки колонок — свои у каждого сотрудника</p>
-                </div>
-                <button type="button" class="ui-modal__close" data-role="identity-close" aria-label="Закрыть"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-close"></use></svg></button>
-            </div>
-            <form data-role="identity-form">
-                <div class="ui-modal__body">
-                    <div class="ui-form-grid ui-form-grid--single">
-                        <div class="ui-field"><label class="ui-field__label" for="empIdentityEmployee">Вы</label><select class="ui-field__control" id="empIdentityEmployee" required><option value="">Выберите себя…</option></select></div>
-                        <div class="ui-field"><label class="ui-field__label" for="empIdentityPassword">Пароль</label><input class="ui-field__control" type="password" id="empIdentityPassword" required></div>
-                    </div>
-                </div>
-                <div class="ui-modal__actions">
-                    <button type="button" class="ui-btn ui-btn--secondary" data-role="identity-cancel">Отмена</button>
-                    <button type="submit" class="ui-btn">Войти</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
     <!-- ================= ОКНО «ВИДИМЫЕ КОЛОНКИ» ================= -->
-    <div class="ui-modal emp-modal" data-role="columns-modal" hidden>
+    <div class="ui-modal ui-modal--in-panel emp-modal" data-role="columns-modal" hidden>
         <div class="ui-modal__box">
             <div class="ui-modal__head">
                 <h2 class="ui-modal__title">Видимые колонки таблицы</h2>
@@ -407,7 +382,7 @@
             <div class="ui-modal__actions ui-modal__actions--spread">
                 <button type="button" class="ui-btn ui-btn--secondary" data-role="columns-reset">Сбросить</button>
                 <div class="actions-right">
-                    <button type="button" class="ui-btn ui-btn--secondary" data-role="columns-cancel">Отмена</button>
+                    <button type="button" class="ui-btn ui-btn--ghost" data-role="columns-cancel">Отмена</button>
                     <button type="button" class="ui-btn" data-role="columns-apply">Применить</button>
                 </div>
             </div>
@@ -415,7 +390,7 @@
     </div>
 
     <!-- ================= ОКНО «УПРАВЛЕНИЕ ОТДЕЛАМИ» ================= -->
-    <div class="ui-modal emp-modal" data-role="departments-modal" hidden>
+    <div class="ui-modal ui-modal--in-panel emp-modal" data-role="departments-modal" hidden>
         <div class="ui-modal__box">
             <div class="ui-modal__head">
                 <h2 class="ui-modal__title">Управление отделами</h2>
@@ -426,6 +401,13 @@
                 <div class="ui-empty ui-empty--inline" data-role="departments-empty" hidden>
                     <p class="ui-empty__text">Пока нет отделов. Добавьте первый!</p>
                 </div>
+            </div>
+            <!-- Подвал у окна-списка (Н3). Кнопка одна и она не сохраняет:
+                 отделы заводятся и правятся прямо в списке, каждое действие
+                 уходит на сервер сразу. «Готово» здесь — выход, а не «применить»,
+                 поэтому второй кнопки рядом нет. -->
+            <div class="ui-modal__actions">
+                <button type="button" class="ui-btn" data-role="departments-done">Готово</button>
             </div>
         </div>
     </div>
@@ -460,7 +442,7 @@
     </div>
 
     <!-- ================= ОКНО «ДОБАВИТЬ ГРАФИК» ================= -->
-    <div class="ui-modal emp-modal" data-role="fill-modal" hidden>
+    <div class="ui-modal ui-modal--in-panel emp-modal" data-role="fill-modal" hidden>
         <div class="ui-modal__box">
             <div class="ui-modal__head">
                 <h2 class="ui-modal__title">Добавить график</h2>

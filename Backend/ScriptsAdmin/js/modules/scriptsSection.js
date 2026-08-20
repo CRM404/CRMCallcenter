@@ -19,6 +19,7 @@
 // Тексты — из кода страницы как есть (правило брифа: источник истины по
 // текстам — код, а не макет).
 
+import { openModal } from '/ui/modal.js';
 import { isAbort } from '/api.js';
 import { createStorage } from './scriptsAdminStorage.js';
 import { renderScriptRows, CONFIRM_TEXTS } from './scriptsAdminScriptList.js';
@@ -38,6 +39,10 @@ export async function mount(container, ctx) {
 
     const state = {
         container,
+        // Панель нужна окнам: затемнение накрывает свою панель, а не весь
+        // экран, — иначе непонятно, к какой из двух открытых панелей окно
+        // относится.
+        panel: container.closest('.shell-panel'),
         ctx,
         storage: createStorage(ctx.api),
         scripts: [],
@@ -261,7 +266,6 @@ function renderNodes(state) {
 async function openScript(state, script) {
     state.selectedScript = script;
     state.nodesUi = { rootEditing: false, addingObjection: false, editingObjectionId: null };
-    $(state, 'create-panel').hidden = true;
     $(state, 'list-wrap').hidden = true;
     $(state, 'opened').hidden = false;
     $(state, 'meta-title').value = script.title;
@@ -278,18 +282,53 @@ function hideOpened(state) {
     $(state, 'list-wrap').hidden = false;
 }
 
-function openCreatePanel(state) {
-    hideOpened(state);
-    $(state, 'list-wrap').hidden = true;
-    $(state, 'create-panel').hidden = false;
-    const field = $(state, 'new-title');
-    field.value = '';
-    field.focus();
-}
+/**
+ * Окно «Новый скрипт». Единственное поле — название; после создания скрипт
+ * сразу открывается на наполнение.
+ *
+ * Список при этом ОСТАЁТСЯ НА ЭКРАНЕ. Прежняя карточка показывалась вместо
+ * него: нажав «Новый скрипт», человек терял таблицу скриптов целиком и не мог
+ * посмотреть, как называются соседние (Н9). Окно берётся из слоя, поэтому
+ * заодно приходят Esc, закрытие щелчком по затемнению, ловушка фокуса и
+ * блокировка кнопки на время запроса — раздел ничего этого не пишет.
+ */
+function openCreateModal(state) {
+    const body = document.createElement('div');
+    body.className = 'ui-form-grid ui-form-grid--single';
+    body.innerHTML = '<div class="ui-field">'
+        + '<label class="ui-field__label" for="scrNewTitle">Название</label>'
+        + '<input type="text" class="ui-field__control" id="scrNewTitle" '
+        + 'placeholder="Например: Первичный обзвон — новостройки">'
+        + '</div>';
+    const input = body.querySelector('#scrNewTitle');
 
-function closeCreatePanel(state) {
-    $(state, 'create-panel').hidden = true;
-    $(state, 'list-wrap').hidden = false;
+    const modal = openModal({
+        title: 'Новый скрипт',
+        body,
+        scope: state.panel,
+        size: 'narrow',
+        actions: [
+            { label: 'Отмена', variant: 'ghost', value: false },
+            {
+                label: 'Создать',
+                // Пустое название проверяется не здесь, а в createScript — там
+                // же, где запрос: одно место, где решается судьба окна.
+                onClick: () => createScript(state, input.value.trim())
+            }
+        ]
+    });
+
+    // Фокус в поле, а не на кнопке: окно с одним полем открывают, чтобы
+    // печатать. Enter отправляет — как в любой однопольной форме.
+    input.focus();
+    input.addEventListener('keydown', (event) => {
+        if (event.key !== 'Enter') return;
+        event.preventDefault();
+        const create = modal.box.querySelectorAll('.ui-modal__actions .ui-btn')[1];
+        if (create && !create.disabled) create.click();
+    });
+
+    return modal;
 }
 
 // ---------------------------------------------------------------- события
@@ -301,18 +340,7 @@ function bindEvents(state) {
         const target = event.target;
 
         if (target.closest('[data-role="new-script"]') || target.closest('[data-role="empty-action"]')) {
-            openCreatePanel(state);
-            return;
-        }
-
-        if (target.closest('[data-role="create-cancel"]')) {
-            closeCreatePanel(state);
-            return;
-        }
-
-        const createBtn = target.closest('[data-role="create"]');
-        if (createBtn) {
-            await withBusy(createBtn, () => createScript(state));
+            openCreateModal(state);
             return;
         }
 
@@ -346,19 +374,11 @@ function bindEvents(state) {
             await removeScript(state, script);
         }
     });
-
-    // Enter в поле названия — то же, что кнопка: поле одно, и тянуться мышью
-    // к «Создать» после набора названия незачем.
-    $(state, 'new-title').addEventListener('keydown', async (event) => {
-        if (event.key !== 'Enter') return;
-        event.preventDefault();
-        await withBusy($(state, 'create'), () => createScript(state));
-    });
 }
 
 /**
- * Кнопка на время запроса выключается: без этого двойной клик по «Создать»
- * заводит два скрипта, а по «Сохранить» — шлёт два PUT подряд.
+ * Кнопка на время запроса выключается: без этого двойной клик по «Сохранить»
+ * шлёт два PUT подряд. Кнопкам окна это делает слой — там своя блокировка.
  */
 async function withBusy(btn, fn) {
     if (btn.disabled) return;
@@ -374,22 +394,29 @@ async function withBusy(btn, fn) {
 
 // ---------------------------------------------------------------- действия
 
-async function createScript(state) {
-    const title = $(state, 'new-title').value.trim();
+/**
+ * Создаёт скрипт по названию из окна.
+ *
+ * Возвращает false, когда окно закрывать НЕЛЬЗЯ: пустое название и отказ
+ * сервера. Это язык кнопок слоя — false оставляет окно открытым и разблокирует
+ * кнопку, чтобы набранное не пропало вместе с окном.
+ */
+async function createScript(state, title) {
     if (!title) {
         state.ctx.toast('Укажите название скрипта', 'error');
-        return;
+        return false;
     }
     try {
         const created = await state.storage.createScript({ title });
-        if (state.destroyed) return;
+        if (state.destroyed) return true;
         state.ctx.toast('Скрипт создан', 'success');
-        closeCreatePanel(state);
         await reloadScripts(state);
-        if (state.destroyed) return;
+        if (state.destroyed) return true;
         await openScript(state, created);
+        return true;
     } catch (err) {
         if (!isAbort(err)) state.ctx.toast(err.message, 'error');
+        return false;
     }
 }
 

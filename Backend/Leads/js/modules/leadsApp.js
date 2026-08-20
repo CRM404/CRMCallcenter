@@ -224,6 +224,15 @@ let hasMore = true;
 let loadingMore = false;
 let massApplying = false;
 
+// Номер последнего ушедшего запроса списка. Сторожит НЕ размонтирование
+// (для него есть generation), а устаревание: смена статуса в тулбаре и набор
+// текста в поиске — два разных обработчика, задержка в 300 мс их не разводит,
+// и два запроса летят одновременно. Если первый ответит вторым, он перезапишет
+// строки и total чужим фильтром: на экране останется прежний список, подвал
+// посчитает его по прежнему числу, а чипы будут показывать новый фильтр — и
+// само это не исправится до следующего действия человека (К-Ф3 куратора).
+let listRequest = 0;
+
 const $ = (sel) => (root ? root.querySelector(sel) : null);
 const $$ = (sel) => (root ? Array.from(root.querySelectorAll(sel)) : []);
 
@@ -272,24 +281,36 @@ async function loadStats(mountId) {
     }
 }
 
+/**
+ * Забирает страницу списка. Возвращает false, если ответ устарел, — вызывающий
+ * по этому признаку не рисует: показать устаревшую страницу хуже, чем не
+ * показать ничего.
+ *
+ * Смещение и накопленный список меняются ТОЛЬКО после проверки номера. Пока
+ * они менялись до неё, устаревший ответ успевал сдвинуть offset, и следующая
+ * догрузка перепрыгивала через страницу.
+ */
 async function loadLeads({ reset }) {
-    if (reset) offset = 0;
+    const my = (listRequest += 1);
+    const from = reset ? 0 : offset;
     // Ответ сервера — { items, total }: total посчитан теми же фильтрами и нужен
     // подвалу. «Есть ли ещё» тоже берётся из него, а не из длины порции:
     // прежняя проверка «пришло ровно PAGE_SIZE» показывала «Показать ещё» и
     // тогда, когда следующая страница пустая.
-    const page = await storage.fetchLeads({ ...filters, limit: PAGE_SIZE, offset });
+    const page = await storage.fetchLeads({ ...filters, limit: PAGE_SIZE, offset: from });
+    if (my !== listRequest) return false;
     const batch = page.items;
     leads = reset ? batch : leads.concat(batch);
     total = page.total;
-    offset += batch.length;
+    offset = from + batch.length;
     hasMore = leads.length < total;
+    return true;
 }
 
 async function reloadAll() {
     const my = generation;
-    await loadLeads({ reset: true });
-    if (!alive(my)) return;
+    const fresh = await loadLeads({ reset: true });
+    if (!alive(my) || !fresh) return;
     renderAll();
     await loadStats(my);
 }
@@ -365,7 +386,11 @@ function renderAll() {
 function renderFooter() {
     const foot = $('[data-role="table-foot"]');
     if (!foot) return;
-    foot.hidden = total === 0;
+    // Подвал не прячется даже при нуле строк: «Показано 0 из 0» — тоже ответ,
+    // а исчезающая строка дёргает таблицу вверх-вниз на каждом уточнении
+    // фильтра. Решение дизайн-сессии от 20.08.2026; до К-Ф1 куратора код делал
+    // ровно обратное записанному решению.
+    foot.hidden = false;
     $('[data-role="shown-count"]').textContent = `Показано ${leads.length} из ${total}`;
     $('[data-role="load-more"]').hidden = !hasMore;
 }
@@ -435,8 +460,8 @@ async function applyFilterState(mountId) {
     syncFilterControls();
     clearSelection();
     try {
-        await loadLeads({ reset: true });
-        if (!alive(mountId)) return;
+        const fresh = await loadLeads({ reset: true });
+        if (!alive(mountId) || !fresh) return;
         renderTable();
     } catch (e) {
         fail(mountId, e);
@@ -806,8 +831,8 @@ function bindHandlers() {
         loadingMore = true;
         setBusy('[data-role="load-more"]', true);
         try {
-            await loadLeads({ reset: false });
-            if (!alive(my)) return;
+            const fresh = await loadLeads({ reset: false });
+            if (!alive(my) || !fresh) return;
             renderTable();
         } catch (e) {
             fail(my, e);

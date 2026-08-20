@@ -60,7 +60,7 @@ export function createDepartments(root, deps) {
                     </div>
                 </div>
                 <div class="department-form-actions">
-                    <button type="button" class="ui-btn ui-btn--secondary" data-role="department-cancel">Отмена</button>
+                    <button type="button" class="ui-btn ui-btn--ghost" data-role="department-cancel">Отмена</button>
                     <button type="button" class="ui-btn" data-role="department-save">Сохранить</button>
                 </div>
             </div>`;
@@ -165,14 +165,18 @@ export function createDepartments(root, deps) {
             modal.hidden = false;
             await loadAndRender();
         });
-        $('[data-role="departments-close"]').addEventListener('click', () => {
+        // Крестик, «Готово» и щелчок по затемнению закрывают окно одинаково:
+        // три входа в один выход, чтобы незакрытая форма не осталась висеть
+        // после одного из них.
+        const close = () => {
             modal.hidden = true;
             activeForm = null;
-        });
+        };
+        $('[data-role="departments-close"]').addEventListener('click', close);
+        $('[data-role="departments-done"]').addEventListener('click', close);
         modal.addEventListener('click', (e) => {
             if (e.target !== modal) return;
-            modal.hidden = true;
-            activeForm = null;
+            close();
         });
 
         // Делегирование: строки перерисовываются на каждое действие, и подписка

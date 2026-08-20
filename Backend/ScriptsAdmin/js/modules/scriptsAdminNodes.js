@@ -380,7 +380,7 @@ function renderRootBlock(root, editing) {
                 </div>
                 <div class="ui-btn-row">
                     <button type="button" class="ui-btn" data-role="root-save">Сохранить</button>
-                    <button type="button" class="ui-btn ui-btn--secondary" data-role="root-cancel">Отмена</button>
+                    <button type="button" class="ui-btn ui-btn--ghost" data-role="root-cancel">Отмена</button>
                 </div>
             </div>
         `;
@@ -410,7 +410,7 @@ function renderObjectionCard(node, editing) {
                 </div>
                 <div class="ui-btn-row">
                     <button type="button" class="ui-btn" data-action="save-objection" data-id="${node.id}">Сохранить</button>
-                    <button type="button" class="ui-btn ui-btn--secondary" data-action="cancel-edit-objection" data-id="${node.id}">Отмена</button>
+                    <button type="button" class="ui-btn ui-btn--ghost" data-action="cancel-edit-objection" data-id="${node.id}">Отмена</button>
                 </div>
             </div>
         `;
@@ -441,7 +441,7 @@ function renderObjectionsBlock(objections, uiState) {
             </div>
             <div class="ui-btn-row">
                 <button type="button" class="ui-btn" data-role="objection-create">Добавить</button>
-                <button type="button" class="ui-btn ui-btn--secondary" data-role="objection-create-cancel">Отмена</button>
+                <button type="button" class="ui-btn ui-btn--ghost" data-role="objection-create-cancel">Отмена</button>
             </div>
         </div>
     ` : '';

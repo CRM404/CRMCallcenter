@@ -54,22 +54,10 @@
         </div>
     </div>
 
-    <!-- Создание: единственное поле — название, после создания скрипт сразу
-         открывается на наполнение. -->
-    <div class="scr-card" data-role="create-panel" hidden>
-        <h3 class="scr-card__title">Новый скрипт</h3>
-        <div class="scr-inline">
-            <div class="ui-field scr-inline__field">
-                <label class="ui-field__label">Название</label>
-                <input type="text" class="ui-field__control" data-role="new-title"
-                       placeholder="Например: Первичный обзвон — новостройки" aria-label="Название скрипта">
-            </div>
-            <div class="ui-btn-row scr-inline__acts">
-                <button type="button" class="ui-btn" data-role="create">Создать</button>
-                <button type="button" class="ui-btn ui-btn--ghost" data-role="create-cancel">Отмена</button>
-            </div>
-        </div>
-    </div>
+    <!-- Создание живёт в ОКНЕ СЛОЯ, а не в разметке раздела: карточка, которая
+         была здесь, показывалась вместо списка — нажатие «Новый скрипт»
+         стирало с экрана таблицу скриптов (Н9). Окно собирается в
+         scriptsSection.js через openModal({ scope }). -->
 
     <!-- Открытый скрипт: шапка (название + статус) → наполнение. -->
     <section data-role="opened" hidden>

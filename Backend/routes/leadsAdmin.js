@@ -418,7 +418,13 @@ router.get('/', async (req, res) => {
                 `${BASE_SELECT} ${whereClause} ORDER BY l.created_at DESC, l.id DESC LIMIT $${limitIdx} OFFSET $${offsetIdx}`,
                 params
             ),
-            pool.query(`SELECT count(*)::int AS total FROM leads l ${whereClause}`, filterParams)
+            // ГРАНИЦА: подсчёт идёт по одной таблице, без шести джойнов основного
+        // запроса, — сегодня это верно, потому что все условия фильтра ссылаются
+        // только на алиас `l.`. Появится фильтр по полю из джойна (например по
+        // названию источника) — джойн обязан приехать и сюда, иначе упадёт
+        // ТОЛЬКО подсчёт, и раздел ответит 500 там, где выборка отработала бы
+        // (К-Ф5 куратора).
+        pool.query(`SELECT count(*)::int AS total FROM leads l ${whereClause}`, filterParams)
         ]);
         res.json({ items: rows.rows.map(rowToLead), total: totals.rows[0].total });
     } catch (err) {

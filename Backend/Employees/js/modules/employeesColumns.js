@@ -1,16 +1,32 @@
-// --- employeesColumns.js: идентификация сотрудника + персональные настройки
-// видимых колонок ---
+// --- employeesColumns.js: настройка видимых колонок таблицы сотрудников ---
 //
-// Настройки свои у каждого сотрудника и хранятся на сервере, поэтому перед
-// открытием окна человек подтверждает, кто он: выбирает себя и вводит пароль.
-// Опознанная личность живёт в sessionStorage — переживает F5, умирает вместе с
-// вкладкой (правило проекта: в sessionStorage состояние ИНТЕРФЕЙСА, не данные).
+// НАСТРОЙКИ ОБЩИЕ, А НЕ ПЕРСОНАЛЬНЫЕ. Решение владельца от 19.08.2026: пока в
+// проекте нет входа, спрашивать пароль ради галочек в таблице — плата без
+// покупки. Окно «Подтвердите личность» (выбор себя из списка + пароль) из
+// сценария колонок убрано целиком вместе с разметкой и обработчиками
+// (Н10 дизайн-сессии, К28 приёмки «Сотрудников»).
+//
+// ФОРМА ХРАНЕНИЯ НЕ СЛОМАНА — второе условие того же решения. Серверная
+// сторона осталась ровно как была и НИЧЕГО из неё не удалено:
+//   - таблица employee_column_settings (employee_id, hidden_columns);
+//   - маршруты GET/PUT /api/employees/column-settings/:employeeId;
+//   - методы storage.fetchColumnSettings / saveColumnSettings.
+// Хранится тот же самый список — массив ключей СКРЫТЫХ колонок, — так что
+// возврат к персональным настройкам, когда появится вход, это вернуть сюда
+// employeeId и заменить два обращения к sessionStorage двумя обращениями к
+// storage. Ни схему, ни формат при этом трогать не придётся.
+//
+// ПОЧЕМУ sessionStorage. До входа адресата у настроек нет, и на сервер их
+// класть некуда: employee_column_settings ключуется сотрудником. Состав
+// видимых колонок — состояние ИНТЕРФЕЙСА, а не данные, а такое состояние в
+// проекте живёт в sessionStorage (там же состав панелей оболочки): переживает
+// F5, умирает вместе с вкладкой.
 //
 // Переименован из columnSettings.js и переведён на фабрику: узлы искались через
 // document на верхнем уровне модуля, то есть один раз при импорте. В оболочке
 // модуль импортируется один раз, а монтируется много.
 
-const SESSION_KEY = 'crm_identifiedEmployeeId';
+const STORAGE_KEY = 'crm_employeesHiddenColumns';
 
 // Порядок и подписи — ровно те колонки, что есть в таблице.
 // ID и «Действия» сюда не входят: это структурные элементы, показываются всегда.
@@ -32,83 +48,49 @@ export const CONFIGURABLE_COLUMNS = [
     { key: 'workSchedule', label: 'График работы' }
 ];
 
-export function getIdentifiedEmployeeId() {
-    const raw = sessionStorage.getItem(SESSION_KEY);
-    return raw ? Number(raw) : null;
+const KNOWN_KEYS = new Set(CONFIGURABLE_COLUMNS.map((c) => c.key));
+
+/**
+ * Список ключей скрытых колонок. Чужие и устаревшие ключи отсеиваются: состав
+ * колонок со временем меняется, а в хранилище остаётся то, что записали
+ * прежней версией, — и скрытая «колонка», которой больше нет, ничего не
+ * значит.
+ */
+function readHidden() {
+    let raw;
+    try {
+        raw = JSON.parse(sessionStorage.getItem(STORAGE_KEY) || '[]');
+    } catch (err) {
+        return [];
+    }
+    if (!Array.isArray(raw)) return [];
+    return raw.filter((key) => KNOWN_KEYS.has(key));
+}
+
+function writeHidden(keys) {
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(keys));
 }
 
 /**
  * @param {HTMLElement} root  контейнер панели
- * @param {Object}      deps  { storage, toast, isAlive, isAbort, onApplied }
+ * @param {Object}      deps  { toast, onApplied }
  */
 export function createColumns(root, deps) {
-    const { storage, toast, isAlive, isAbort, onApplied } = deps;
+    const { toast, onApplied } = deps;
 
     const $ = (sel) => root.querySelector(sel);
-    const identityModal = $('[data-role="identity-modal"]');
     const columnsModal = $('[data-role="columns-modal"]');
     const list = $('[data-role="columns-list"]');
 
-    // Кэш скрытых колонок для уже опознанного в этой вкладке сотрудника — чтобы
-    // не дёргать сервер на каждую перерисовку таблицы. Сбрасывается при новой
-    // идентификации и после «Применить».
-    let cachedHiddenColumns = null;
-
-    /**
-     * Set ключей СКРЫТЫХ колонок для опознанной личности. Личность не
-     * подтверждена — пустой набор: показываем всё, как и раньше.
-     */
-    async function getHiddenColumns() {
-        const employeeId = getIdentifiedEmployeeId();
-        if (!employeeId) return new Set();
-        if (cachedHiddenColumns) return cachedHiddenColumns;
-        try {
-            const { hiddenColumns } = await storage.fetchColumnSettings(employeeId);
-            if (!isAlive()) return new Set();
-            cachedHiddenColumns = new Set(hiddenColumns);
-        } catch (err) {
-            // Настройки — не то, ради чего стоит ломать открытие раздела:
-            // не удалось прочитать, значит показываем все колонки.
-            cachedHiddenColumns = new Set();
-        }
-        return cachedHiddenColumns;
+    /** Set ключей СКРЫТЫХ колонок. Пусто — показываем всё. */
+    function getHiddenColumns() {
+        return new Set(readHidden());
     }
 
-    async function openIdentityModal() {
-        $('[data-role="identity-form"]').reset();
-        const select = $('#empIdentityEmployee');
-        select.innerHTML = '<option value="">Выберите себя…</option>';
-        let employees;
-        try {
-            employees = await storage.fetchEmployees();
-            if (!isAlive()) return;
-        } catch (err) {
-            if (!isAbort(err)) toast(err.message, 'error');
-            return;
-        }
-        employees
-            .slice()
-            .sort((a, b) => `${a.lastName} ${a.firstName}`.localeCompare(`${b.lastName} ${b.firstName}`, 'ru'))
-            .forEach((emp) => {
-                const opt = document.createElement('option');
-                opt.value = String(emp.id);
-                opt.textContent = `${emp.lastName} ${emp.firstName}`;
-                select.appendChild(opt);
-            });
-        identityModal.hidden = false;
-    }
-
-    async function openColumnsModal(employeeId) {
-        let hidden;
-        try {
-            const { hiddenColumns } = await storage.fetchColumnSettings(employeeId);
-            if (!isAlive()) return;
-            hidden = new Set(hiddenColumns);
-        } catch (err) {
-            if (!isAbort(err)) toast(err.message, 'error');
-            return;
-        }
-
+    // Окно открывается сразу по нажатию «Колонки» — ни запроса, ни ожидания
+    // между нажатием и окном больше нет.
+    function openColumnsModal() {
+        const hidden = getHiddenColumns();
         list.innerHTML = '';
         CONFIGURABLE_COLUMNS.forEach((col) => {
             const label = document.createElement('label');
@@ -124,65 +106,19 @@ export function createColumns(root, deps) {
         columnsModal.hidden = false;
     }
 
-    async function handleGearClick() {
-        const employeeId = getIdentifiedEmployeeId();
-        if (employeeId) await openColumnsModal(employeeId);
-        else await openIdentityModal();
-    }
-
-    async function handleIdentitySubmit(e) {
-        e.preventDefault();
-        const employeeId = $('#empIdentityEmployee').value;
-        const password = $('#empIdentityPassword').value;
-        if (!employeeId || !password) {
-            toast('Выберите себя и введите пароль', 'error');
-            return;
-        }
-        try {
-            await storage.verifyEmployeeIdentity(Number(employeeId), password);
-            if (!isAlive()) return;
-        } catch (err) {
-            if (!isAlive()) return;
-            if (!isAbort(err)) toast(err.message, 'error');
-            return;
-        }
-        sessionStorage.setItem(SESSION_KEY, employeeId);
-        cachedHiddenColumns = null;
-        identityModal.hidden = true;
-        await openColumnsModal(Number(employeeId));
-    }
-
     async function handleApply() {
-        const employeeId = getIdentifiedEmployeeId();
-        if (!employeeId) return;
-
         const hiddenColumns = Array.from(list.querySelectorAll('input[type="checkbox"]'))
             .filter((cb) => !cb.checked)
             .map((cb) => cb.dataset.columnKey);
 
-        try {
-            await storage.saveColumnSettings(employeeId, hiddenColumns);
-            if (!isAlive()) return;
-        } catch (err) {
-            if (!isAlive()) return;
-            if (!isAbort(err)) toast(err.message, 'error');
-            return;
-        }
-
-        cachedHiddenColumns = new Set(hiddenColumns);
+        writeHidden(hiddenColumns);
         columnsModal.hidden = true;
         if (onApplied) await onApplied();
-        if (!isAlive()) return;
         toast('Настройки колонок сохранены', 'success');
     }
 
     function init() {
-        $('[data-role="columns-btn"]').addEventListener('click', handleGearClick);
-
-        $('[data-role="identity-form"]').addEventListener('submit', handleIdentitySubmit);
-        $('[data-role="identity-cancel"]').addEventListener('click', () => { identityModal.hidden = true; });
-        $('[data-role="identity-close"]').addEventListener('click', () => { identityModal.hidden = true; });
-        identityModal.addEventListener('click', (e) => { if (e.target === identityModal) identityModal.hidden = true; });
+        $('[data-role="columns-btn"]').addEventListener('click', openColumnsModal);
 
         $('[data-role="columns-reset"]').addEventListener('click', () => {
             list.querySelectorAll('input[type="checkbox"]').forEach((cb) => { cb.checked = true; });

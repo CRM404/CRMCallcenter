@@ -42,10 +42,20 @@ export function createStorage(api) {
         uploadEmployeeDocument: (employeeId, documentType, fileName, fileData) =>
             api.post(`/employees/${employeeId}/documents`, { documentType, fileName, fileData }),
 
-        // --- Идентификация и настройки видимых колонок ---
-
-        verifyEmployeeIdentity: (employeeId, password) =>
-            api.post('/auth/verify-employee', { employeeId, password }),
+        // --- Настройки видимых колонок ---
+        //
+        // ОБА МЕТОДА СЕЙЧАС НИКТО НЕ ЗОВЁТ, и это намеренно. Колонки перестали
+        // быть персональными (решение владельца, К28): до появления входа
+        // настройки общие и лежат в sessionStorage — см. шапку
+        // employeesColumns.js. Условие того же решения — не ломать форму
+        // хранения, поэтому маршруты, таблица и эта пара методов остаются на
+        // месте: вернуть персональные настройки значит вернуть сюда employeeId,
+        // а не восстанавливать удалённое.
+        //
+        // Проверка пароля (`POST /api/auth/verify-employee`) отсюда убрана —
+        // единственным её потребителем было окно «Подтвердите личность», а его
+        // больше нет. Сам маршрут на сервере не тронут: он понадобится входу,
+        // когда тот появится отдельной задачей.
 
         fetchColumnSettings: (employeeId) => api.get(`/employees/column-settings/${employeeId}`),
 

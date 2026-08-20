@@ -855,7 +855,9 @@ export async function mount(container, ctx) {
     editingNetworkId = null;
 
     $('#cpa-manage-networks').addEventListener('click', () => { renderNetList(); $('#netInlineForm').hidden = true; $('#networksModal').hidden = false; });
-    $('#networksModalClose').addEventListener('click', () => { $('#networksModal').hidden = true; });
+    const closeNetworks = () => { $('#networksModal').hidden = true; };
+    $('#networksModalClose').addEventListener('click', closeNetworks);
+    $('#networksModalDone').addEventListener('click', closeNetworks);
     $('#addNetworkBtn').addEventListener('click', () => openNetForm(null));
     $('#netFormCancel').addEventListener('click', () => { $('#netInlineForm').hidden = true; });
     $('#netFormSave').addEventListener('click', saveNetwork);
