@@ -30,6 +30,7 @@ import { createUpload } from './leadsUpload.js';
 // Путь АБСОЛЮТНЫЙ: физическая структура папок не совпадает с адресами —
 // Backend/Shell/ монтируется в корень «/».
 import { isAbort } from '/api.js';
+import { readHiddenColumns, writeHiddenColumns, hasHiddenColumns } from '/viewPrefs.js';
 import { icon } from '/ui/icons.js';
 
 const PAGE_SIZE = 30;
@@ -102,6 +103,28 @@ const COLUMN_DEFAULT = COLUMN_ORDER.reduce((acc, key) => {
     acc[key] = DEFAULT_VISIBLE.has(key);
     return acc;
 }, {});
+
+/**
+ * Состав колонок на начало работы: сохранённый — если человек его настраивал,
+ * иначе умолчание раздела.
+ *
+ * Хранится СПИСОК СКРЫТЫХ ключей — тот же формат, что у «Сотрудников» и что
+ * ждёт сервер, когда настройки станут персональными. Поэтому «ничего не
+ * сохранено» и «сохранено, что не скрыто ничего» — разные состояния, и
+ * различает их hasHiddenColumns: иначе человек, показавший ВСЕ колонки,
+ * получал бы обратно умолчание при каждом открытии.
+ */
+function initialVisibleColumns() {
+    if (!hasHiddenColumns(COLUMNS_SECTION)) return { ...COLUMN_DEFAULT };
+    const hidden = new Set(readHiddenColumns(COLUMNS_SECTION, COLUMN_ORDER));
+    return COLUMN_ORDER.reduce((acc, key) => {
+        acc[key] = !hidden.has(key);
+        return acc;
+    }, {});
+}
+
+// Имя раздела в общем хранилище настроек вида.
+const COLUMNS_SECTION = 'leads';
 
 const REPEAT_STAGE_FROM = 5;
 
@@ -211,7 +234,7 @@ let filters = { q: '', fio: '', phone: '', sourceId: '', employeeId: '', funnelS
 // подвала «Показано N из M».
 let total = 0;
 let searchTimer = null;
-let visibleColumns = { ...COLUMN_DEFAULT };
+let visibleColumns = initialVisibleColumns();
 let selectedIds = new Set();
 let offset = 0;
 let hasMore = true;
@@ -733,7 +756,7 @@ export async function mount(container, ctx) {
     filters = { q: '', fio: '', phone: '', sourceId: '', employeeId: '', funnelStatusId: '' };
     total = 0;
     clearTimeout(searchTimer);
-    visibleColumns = { ...COLUMN_DEFAULT };
+    visibleColumns = initialVisibleColumns();
     selectedIds = new Set();
     offset = 0;
     hasMore = true;
@@ -865,6 +888,13 @@ function bindHandlers() {
     const filterModal = $('[data-role="filter-modal"]');
     $('[data-role="filter-toggle"]').addEventListener('click', () => { filterModal.hidden = false; });
     $('[data-role="filter-close"]').addEventListener('click', () => { filterModal.hidden = true; });
+    // «Отмена» возвращает поля к применённому отбору и закрывает окно (К56):
+    // набранное, но не применённое, не должно притворяться действующим
+    // фильтром при следующем открытии.
+    $('[data-role="filter-cancel"]').addEventListener('click', () => {
+        syncFilterControls();
+        filterModal.hidden = true;
+    });
     filterModal.addEventListener('click', (e) => { if (e.target === filterModal) filterModal.hidden = true; });
     $('[data-role="filter-clear"]').addEventListener('click', () => {
         ['#fltFio', '#fltPhone', '#fltSource', '#fltEmployee', '#fltStatus'].forEach((sel) => { $(sel).value = ''; });
@@ -917,12 +947,19 @@ function bindHandlers() {
         columnsModal.hidden = false;
     });
     $('[data-role="columns-close"]').addEventListener('click', () => { columnsModal.hidden = true; });
+    // «Отмена» закрывает окно, ничего не применив: галки при следующем
+    // открытии всё равно проставляются от действующего состава колонок (К56).
+    $('[data-role="columns-cancel"]').addEventListener('click', () => { columnsModal.hidden = true; });
     columnsModal.addEventListener('click', (e) => { if (e.target === columnsModal) columnsModal.hidden = true; });
     $('[data-role="columns-reset"]').addEventListener('click', () => {
         $$('[data-col-check]').forEach((cb) => { cb.checked = COLUMN_DEFAULT[cb.dataset.colCheck]; });
     });
     $('[data-role="columns-apply"]').addEventListener('click', () => {
         $$('[data-col-check]').forEach((cb) => { visibleColumns[cb.dataset.colCheck] = cb.checked; });
+        // Настройка переживает и панель, и вкладку — общее хранилище вида
+        // (К53). Раньше «сохранено» означало «до закрытия панели», и тост об
+        // этом умалчивал.
+        writeHiddenColumns(COLUMNS_SECTION, COLUMN_ORDER.filter((key) => !visibleColumns[key]));
         columnsModal.hidden = true;
         renderTable();
         shell.toast('Настройки колонок сохранены', 'success');

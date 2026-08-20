@@ -268,7 +268,6 @@
 /* ----- Мелочи окон ----- */
 .emp-wrap .modal-sub { font-size: 12.5px; color: var(--e-ink-faint); margin-top: 3px; }
 .emp-wrap .ui-form-grid--single { grid-template-columns: 1fr; }
-.emp-wrap .actions-right { display: flex; gap: 10px; }
 
 @media (max-width: 760px) {
     .emp-wrap .column-checkbox-list { grid-template-columns: 1fr; }

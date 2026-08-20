@@ -202,6 +202,15 @@
 .ui-modal__actions .ui-btn--icon { width: var(--ui-btn-h-lg); padding: 0; }
 /* Второстепенное действие слева («Удалить» рядом с «Сохранить»). */
 .ui-modal__actions--spread { justify-content: space-between; }
+/* Пара кнопок справа при разведённом подвале: «Сбросить» слева, «Отмена» и
+   действие — вместе справа. Класс в слое, потому что таких подвалов теперь
+   четыре в трёх разделах; до этого группу объявлял один раздел у себя
+   (.emp-wrap .actions-right), и следующему пришлось бы объявить её заново. */
+.ui-modal__actions-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
 
 @keyframes ui-modal-in {
     from { opacity: 0; transform: translateY(8px); }

@@ -13,20 +13,22 @@
 //   - методы storage.fetchColumnSettings / saveColumnSettings.
 // Хранится тот же самый список — массив ключей СКРЫТЫХ колонок, — так что
 // возврат к персональным настройкам, когда появится вход, это вернуть сюда
-// employeeId и заменить два обращения к sessionStorage двумя обращениями к
-// storage. Ни схему, ни формат при этом трогать не придётся.
+// employeeId и заменить два обращения к общему хранилищу вида двумя
+// обращениями к storage. Ни схему, ни формат при этом трогать не придётся.
 //
-// ПОЧЕМУ sessionStorage. До входа адресата у настроек нет, и на сервер их
-// класть некуда: employee_column_settings ключуется сотрудником. Состав
-// видимых колонок — состояние ИНТЕРФЕЙСА, а не данные, а такое состояние в
-// проекте живёт в sessionStorage (там же состав панелей оболочки): переживает
-// F5, умирает вместе с вкладкой.
+// ГДЕ ХРАНИТСЯ ДО ВХОДА. В общем хранилище настроек вида — /viewPrefs.js,
+// localStorage. Раньше здесь был свой ключ в sessionStorage, и одно и то же
+// окно помнило выбор по-разному в двух разделах: у «Сотрудников» — до закрытия
+// вкладки, у «Лидов» — до закрытия панели (К53). Состав колонок это не
+// состояние сеанса, а настройка: до К28 он жил на сервере и переживал всё.
 //
 // Переименован из columnSettings.js и переведён на фабрику: узлы искались через
 // document на верхнем уровне модуля, то есть один раз при импорте. В оболочке
 // модуль импортируется один раз, а монтируется много.
 
-const STORAGE_KEY = 'crm_employeesHiddenColumns';
+import { readHiddenColumns, writeHiddenColumns } from '/viewPrefs.js';
+
+const SECTION = 'employees';
 
 // Порядок и подписи — ровно те колонки, что есть в таблице.
 // ID и «Действия» сюда не входят: это структурные элементы, показываются всегда.
@@ -48,28 +50,7 @@ export const CONFIGURABLE_COLUMNS = [
     { key: 'workSchedule', label: 'График работы' }
 ];
 
-const KNOWN_KEYS = new Set(CONFIGURABLE_COLUMNS.map((c) => c.key));
-
-/**
- * Список ключей скрытых колонок. Чужие и устаревшие ключи отсеиваются: состав
- * колонок со временем меняется, а в хранилище остаётся то, что записали
- * прежней версией, — и скрытая «колонка», которой больше нет, ничего не
- * значит.
- */
-function readHidden() {
-    let raw;
-    try {
-        raw = JSON.parse(sessionStorage.getItem(STORAGE_KEY) || '[]');
-    } catch (err) {
-        return [];
-    }
-    if (!Array.isArray(raw)) return [];
-    return raw.filter((key) => KNOWN_KEYS.has(key));
-}
-
-function writeHidden(keys) {
-    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(keys));
-}
+const KNOWN_KEYS = CONFIGURABLE_COLUMNS.map((c) => c.key);
 
 /**
  * @param {HTMLElement} root  контейнер панели
@@ -84,7 +65,7 @@ export function createColumns(root, deps) {
 
     /** Set ключей СКРЫТЫХ колонок. Пусто — показываем всё. */
     function getHiddenColumns() {
-        return new Set(readHidden());
+        return new Set(readHiddenColumns(SECTION, KNOWN_KEYS));
     }
 
     // Окно открывается сразу по нажатию «Колонки» — ни запроса, ни ожидания
@@ -111,7 +92,7 @@ export function createColumns(root, deps) {
             .filter((cb) => !cb.checked)
             .map((cb) => cb.dataset.columnKey);
 
-        writeHidden(hiddenColumns);
+        writeHiddenColumns(SECTION, hiddenColumns);
         columnsModal.hidden = true;
         if (onApplied) await onApplied();
         toast('Настройки колонок сохранены', 'success');

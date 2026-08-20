@@ -182,6 +182,27 @@ export function createTable(root, deps) {
         return `Показано ${to - from} из ${totalItems}`;
     }
 
+    /**
+     * Пустое состояние отвечает на вопрос «почему я ничего не вижу», и ответов
+     * два: в разделе никого нет — или никто не подошёл под отбор. Разница не
+     * косметическая: второй случай прежде выглядел как первый и звал завести
+     * сотрудника, который уже заведён (К52). Дубль человека стоит дороже
+     * лишнего щелчка.
+     */
+    function showEmptyState() {
+        const filtered = hasActiveFilters();
+        const box = $('[data-role="empty-state"]');
+        const action = $('[data-role="empty-action"]');
+        $('[data-role="empty-title"]').textContent = filtered
+            ? 'Ничего не найдено по текущим фильтрам'
+            : 'Нет сотрудников';
+        $('[data-role="empty-text"]').textContent = filtered
+            ? 'Сотрудники в разделе есть — просто ни один не подходит под отбор. Проверьте написание или сбросьте фильтры.'
+            : 'Добавьте первого — кнопка «Новый сотрудник» в шапке раздела.';
+        action.hidden = !filtered;
+        box.hidden = false;
+    }
+
     function renderPagination(totalItems) {
         const totalPages = Math.ceil(totalItems / PAGE_SIZE) || 1;
         const box = $('[data-role="pagination"]');
@@ -237,6 +258,22 @@ export function createTable(root, deps) {
             hireDateFrom: $('#empFilterHireFrom').value,
             hireDateTo: $('#empFilterHireTo').value
         };
+    }
+
+    /** Вернуть поля окна и тулбара к применённому отбору. */
+    function syncFilterControls() {
+        const f = appliedFilters || {};
+        const set = (sel, value) => { const node = $(sel); if (node) node.value = value || ''; };
+        set('[data-role="search"]', f.search);
+        set('#empFilterStatus', f.status);
+        set('#empFilterDepartment', f.department);
+        set('[data-role="quick-department"]', f.department);
+        set('[data-role="quick-line"]', f.lineType);
+        set('#empFilterPosition', f.position);
+        set('#empFilterHireFrom', f.hireDateFrom);
+        set('#empFilterHireTo', f.hireDateTo);
+        $('#empFilterWhatsapp').checked = Boolean(f.hasWhatsapp);
+        $('#empFilterTelegram').checked = Boolean(f.hasTelegram);
     }
 
     function updateFilterBadge(filters = {}) {
@@ -353,7 +390,7 @@ export function createTable(root, deps) {
             // Рамку таблицы прячем целиком: она забирает всю оставшуюся высоту
             // панели, и над сообщением висел бы пустой прямоугольник.
             $('[data-role="table-wrap"]').hidden = true;
-            $('[data-role="empty-state"]').hidden = false;
+            showEmptyState();
             $('[data-role="pagination-row"]').hidden = true;
             updateMassBar();
             return;
@@ -635,6 +672,13 @@ export function createTable(root, deps) {
         const filterModal = $('[data-role="filter-modal"]');
         $('[data-role="filter-toggle"]').addEventListener('click', () => { filterModal.hidden = false; });
         $('[data-role="filter-close"]').addEventListener('click', () => { filterModal.hidden = true; });
+        // «Отмена» — выход, названный словом (К56). Поля возвращаются к
+        // ПРИМЕНЁННОМУ отбору: иначе снятая, но не применённая галка осталась
+        // бы в окне и при следующем открытии выглядела бы действующей.
+        $('[data-role="filter-cancel"]').addEventListener('click', () => {
+            syncFilterControls();
+            filterModal.hidden = true;
+        });
         filterModal.addEventListener('click', (e) => { if (e.target === filterModal) filterModal.hidden = true; });
         $('[data-role="filter-apply"]').addEventListener('click', () => {
             currentPage = 1;
@@ -666,6 +710,14 @@ export function createTable(root, deps) {
         //
         // Слушатель на контейнере: чипы перерисовываются при каждом изменении
         // отбора, и вешать обработчики на них пришлось бы заново.
+        // Кнопка сброса из пустого состояния делает то же, что «Сбросить все»
+        // в строке чипов: строки чипов в этот момент человек может и не видеть.
+        $('[data-role="empty-action"]').addEventListener('click', () => {
+            clearAllFilters();
+            currentPage = 1;
+            reload();
+        });
+
         $('[data-role="filter-chips"]').addEventListener('click', (e) => {
             const drop = e.target.closest('[data-drop-filter]');
             if (drop) {

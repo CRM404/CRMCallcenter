@@ -118,8 +118,15 @@
             </table>
         </div>
 
+        <!-- Пустое состояние двуликое (К52): текст статикой утверждал, что
+             сотрудников нет, даже когда их четырнадцать и просто не подошли под
+             отбор — и звал завести человека, который уже заведён. Тексты ставит
+             employeesTable.js по признаку «есть ли активные фильтры». -->
         <div class="ui-empty ui-empty--inline" data-role="empty-state" hidden>
-            <p class="ui-empty__text">Нет сотрудников. Добавьте первого!</p>
+            <b class="ui-empty__title" data-role="empty-title"></b>
+            <span class="ui-empty__text" data-role="empty-text"></span>
+            <button type="button" class="ui-btn ui-btn--ghost ui-empty__action"
+                    data-role="empty-action" hidden>Сбросить фильтры</button>
         </div>
 
         <div class="ui-table-foot" data-role="pagination-row">
@@ -362,9 +369,12 @@
                     <div class="ui-field"><label class="ui-field__label" for="empFilterHireTo">Дата найма (по)</label><input class="ui-field__control" type="date" id="empFilterHireTo"></div>
                 </div>
             </div>
-            <div class="ui-modal__actions">
+            <div class="ui-modal__actions ui-modal__actions--spread">
                 <button type="button" class="ui-btn ui-btn--secondary" data-role="filter-clear">Сбросить</button>
-                <button type="button" class="ui-btn" data-role="filter-apply">Применить</button>
+                <div class="ui-modal__actions-group">
+                    <button type="button" class="ui-btn ui-btn--ghost" data-role="filter-cancel">Отмена</button>
+                    <button type="button" class="ui-btn" data-role="filter-apply">Применить</button>
+                </div>
             </div>
         </div>
     </div>
@@ -381,7 +391,7 @@
             </div>
             <div class="ui-modal__actions ui-modal__actions--spread">
                 <button type="button" class="ui-btn ui-btn--secondary" data-role="columns-reset">Сбросить</button>
-                <div class="actions-right">
+                <div class="ui-modal__actions-group">
                     <button type="button" class="ui-btn ui-btn--ghost" data-role="columns-cancel">Отмена</button>
                     <button type="button" class="ui-btn" data-role="columns-apply">Применить</button>
                 </div>

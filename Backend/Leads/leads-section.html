@@ -165,9 +165,12 @@
                     <div class="ui-field ui-field--wide"><label class="ui-field__label" for="fltStatus">Статус воронки</label><select class="ui-field__control" id="fltStatus"><option value="">Все статусы</option></select></div>
                 </div>
             </div>
-            <div class="ui-modal__actions">
+            <div class="ui-modal__actions ui-modal__actions--spread">
                 <button type="button" class="ui-btn ui-btn--secondary" data-role="filter-clear">Сбросить</button>
-                <button type="button" class="ui-btn" data-role="filter-apply">Применить</button>
+                <div class="ui-modal__actions-group">
+                    <button type="button" class="ui-btn ui-btn--ghost" data-role="filter-cancel">Отмена</button>
+                    <button type="button" class="ui-btn" data-role="filter-apply">Применить</button>
+                </div>
             </div>
         </div>
     </div>
@@ -183,9 +186,12 @@
                 <button type="button" class="ui-modal__close" data-role="columns-close" aria-label="Закрыть"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-close"></use></svg></button>
             </div>
             <div class="ui-modal__body" data-role="columns-body"></div>
-            <div class="ui-modal__actions">
+            <div class="ui-modal__actions ui-modal__actions--spread">
                 <button type="button" class="ui-btn ui-btn--secondary" data-role="columns-reset">Сбросить</button>
-                <button type="button" class="ui-btn" data-role="columns-apply">Применить</button>
+                <div class="ui-modal__actions-group">
+                    <button type="button" class="ui-btn ui-btn--ghost" data-role="columns-cancel">Отмена</button>
+                    <button type="button" class="ui-btn" data-role="columns-apply">Применить</button>
+                </div>
             </div>
         </div>
     </div>
@@ -417,7 +423,11 @@
                 </dl>
             </div>
             <div class="ui-modal__actions">
-                <button type="button" class="ui-btn ui-btn--secondary" data-role="upload-cancel">Закрыть</button>
+                <!-- Название кнопки меняется по ходу дела (К55): пока партия не
+                     загружена, уйти значит «Отмена»; после сводки отменять уже
+                     нечего, и та же кнопка становится «Закрыть». Ставит текст
+                     leadsUpload.js. -->
+                <button type="button" class="ui-btn ui-btn--ghost" data-role="upload-cancel">Отмена</button>
                 <button type="button" class="ui-btn" data-role="upload-go">Загрузить</button>
             </div>
         </div>

@@ -114,6 +114,8 @@ export function createUpload(root, deps) {
 
     function resetSummary() {
         $('[data-role="upload-summary"]').hidden = true;
+        // Партии ещё нет — уход из окна отменяет начатое (К55).
+        $('[data-role="upload-cancel"]').textContent = 'Отмена';
         $('[data-role="up-total"]').textContent = '0';
         $('[data-role="up-assigned"]').textContent = '0';
         $('[data-role="up-queued"]').textContent = '0';
@@ -216,6 +218,8 @@ export function createUpload(root, deps) {
             // увидел бы красную ошибку сразу после успешной загрузки.
             $('[data-role="up-dupes"]').textContent = (result.duplicates || []).length;
             $('[data-role="upload-summary"]').hidden = false;
+            // Партия уже в базе: отменять нечего, окно теперь просто закрывают.
+            $('[data-role="upload-cancel"]').textContent = 'Закрыть';
             toast(`Загружено лидов: ${result.imported}`, 'success');
             if (onImported) await onImported();
         } catch (e) {
