@@ -10,6 +10,7 @@
 // документе и на окне теперь снимаются при закрытии панели: раньше они
 // копились с каждым открытием раздела.
 
+import { createPopover } from '/ui/popover.js';
 import { formatRangeSpaced, formatDayGenitive, weekdayShort, shortName, dayOf } from './employeesScheduleTime.js';
 
 const STATE_TOASTS = {
@@ -28,29 +29,32 @@ export function createScheduleDay(root, deps) {
     const $ = (sel) => root.querySelector(sel);
     const pop = $('[data-role="cell-pop"]');
     const popMain = $('[data-role="pop-main"]');
-    const popExtra = $('[data-role="pop-extra"]');
 
     let target = null;   // { employeeId, day }
-    let onDocClick = null;
-    let onDocKeydown = null;
-    let onWinResize = null;
+
+    // ПОПОВЕР ВЕДЁТ СЛОЙ (К118).
+    //
+    // Раздел считал координаты сам и прижимал меню к краю ОКНА БРАУЗЕРА: у
+    // крайней левой колонки графика оно вставало на x = 8 при панели на
+    // x = 16, то есть на 8 px за её границей. Панелей на экране бывает две, и
+    // меню, вылезшее в соседнюю, читается как чужое.
+    //
+    // В слое прижатие к границе панели, переворот вверх у нижнего края, Esc с
+    // возвратом со второго шага на первый, закрытие щелчком мимо и слежение за
+    // прокруткой написаны один раз — раздел их больше не повторяет.
+    //
+    // scope — там, где поповер ОБЪЯВЛЕН, то есть внутри .emp-wrap. По
+    // умолчанию слой переносит поповер в панель; здесь это отключило бы его
+    // собственный вид: ширина 236, точки состояний и подписи пунктов объявлены
+    // правилами вида `.emp-wrap .cell-pop` (замер: 238 вместо 236 сразу после
+    // переноса). Границей остаётся панель — за неё-то он и вылезал.
+    const popover = createPopover(pop, {
+        scope: pop.parentElement,
+        onClose: () => { target = null; }
+    });
 
     function closePop() {
-        pop.hidden = true;
-        popMain.hidden = false;
-        popExtra.hidden = true;
-        target = null;
-    }
-
-    function positionPop(button) {
-        const rect = button.getBoundingClientRect();
-        const width = pop.offsetWidth;
-        const height = pop.offsetHeight;
-        const x = Math.min(Math.max(8, rect.left + rect.width / 2 - width / 2), window.innerWidth - width - 8);
-        let y = rect.bottom + 6;
-        if (y + height > window.innerHeight - 8) y = Math.max(8, rect.top - height - 6);
-        pop.style.left = `${x}px`;
-        pop.style.top = `${y}px`;
+        popover.close();
     }
 
     function openPop(button) {
@@ -80,10 +84,7 @@ export function createScheduleDay(root, deps) {
             optShiftText.appendChild(sub);
         }
 
-        popMain.hidden = false;
-        popExtra.hidden = true;
-        pop.hidden = false;
-        positionPop(button);
+        popover.open(button);
     }
 
     async function applyDay(employeeId, day, payload, toastText) {
@@ -140,9 +141,7 @@ export function createScheduleDay(root, deps) {
             const existing = schedule.getDay(employeeId, day);
             $('[data-role="extra-from"]').value = existing && existing.state === 'shift' ? existing.shiftStart : '';
             $('[data-role="extra-to"]').value = existing && existing.state === 'shift' ? existing.shiftEnd : '';
-            popMain.hidden = true;
-            popExtra.hidden = false;
-            $('[data-role="extra-from"]').focus();
+            popover.step('extra');
             return;
         }
 
@@ -212,41 +211,16 @@ export function createScheduleDay(root, deps) {
             e.stopPropagation();
         });
 
-        $('[data-role="extra-back"]').addEventListener('click', () => {
-            popMain.hidden = false;
-            popExtra.hidden = true;
-        });
+        $('[data-role="extra-back"]').addEventListener('click', () => popover.step('main'));
         $('[data-role="extra-apply"]').addEventListener('click', handleExtraApply);
-
-        onDocClick = (e) => { if (!pop.hidden && !pop.contains(e.target)) closePop(); };
-        onDocKeydown = (e) => {
-            if (e.key !== 'Escape' || pop.hidden) return;
-            // Esc на втором шаге сначала возвращает на первый.
-            if (!popExtra.hidden) {
-                popMain.hidden = false;
-                popExtra.hidden = true;
-                return;
-            }
-            closePop();
-        };
-        onWinResize = () => { if (!pop.hidden) closePop(); };
-
-        document.addEventListener('click', onDocClick);
-        document.addEventListener('keydown', onDocKeydown);
-        window.addEventListener('resize', onWinResize);
     }
 
     return {
         init,
-        isOpen: () => !pop.hidden,
+        isOpen: () => popover.isOpen(),
         close: closePop,
         destroy() {
-            if (onDocClick) document.removeEventListener('click', onDocClick);
-            if (onDocKeydown) document.removeEventListener('keydown', onDocKeydown);
-            if (onWinResize) window.removeEventListener('resize', onWinResize);
-            onDocClick = null;
-            onDocKeydown = null;
-            onWinResize = null;
+            popover.destroy();
         }
     };
 }

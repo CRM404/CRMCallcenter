@@ -29,12 +29,30 @@ const OPEN_STACK = [];
  * @param {string}      opts.title            заголовок
  * @param {string}      [opts.sub]            подпись под заголовком
  * @param {Node|string} [opts.body]           содержимое; строка вставляется текстом
- * @param {Array}       [opts.actions]        [{ label, variant, value, autofocus, onClick }]
+ * @param {Array}       [opts.actions]        кнопки подвала, см. ниже
+ * @param {boolean}     [opts.spread]         развести подвал: side:'start' слева, прочие справа
  * @param {HTMLElement} [opts.scope]          панель, которую надо накрыть
  * @param {boolean}     [opts.screen]         накрыть весь экран (необратимое действие)
  * @param {string}      [opts.size]           'narrow' | 'wide'
  * @param {boolean}     [opts.dismissable]    закрытие по Esc и клику вне (по умолчанию да)
- * @returns {{ el: HTMLElement, close: Function, result: Promise }}
+ * @param {Function}    [opts.confirmClose]   спросить перед закрытием; см. ниже
+ * @returns {{ el, box, body, close, requestClose, result }}
+ *
+ * КНОПКА ПОДВАЛА: { label, variant, value, autofocus, role, side, onClick }
+ *   role     — data-role кнопки. Раздел находит её у себя и управляет ею:
+ *              прячет («Далее» на втором шаге), блокирует («Заполнить» без
+ *              времени смены), переименовывает («Добавить» → «Сохранить
+ *              изменения»). Без этого окно-форму на слой не перевести: у
+ *              разметочного окна такие кнопки были своими.
+ *   side     — 'start' ставит кнопку в ЛЕВУЮ часть разведённого подвала.
+ *   onClick  — вернуть false, чтобы окно осталось открытым (ошибка проверки).
+ *
+ * ТРИ ДВЕРИ ИЗ ОКНА. Esc, щелчок по затемнению и крестик закрывают окно
+ * одинаково — и все три проходят через confirmClose, если он задан. Пока
+ * дверей было три, а проверка стояла на одной, окно с набранными данными
+ * выпускало молча именно через ту, которую нажимают не глядя (К112).
+ * confirmClose возвращает true (закрыть) или false (остаться); пока висит
+ * его вопрос, повторное Esc второго вопроса не задаёт.
  */
 export function openModal(opts = {}) {
     const {
@@ -42,10 +60,12 @@ export function openModal(opts = {}) {
         sub = '',
         body = null,
         actions = [],
+        spread = false,
         scope = null,
         screen = false,
         size = '',
-        dismissable = true
+        dismissable = true,
+        confirmClose = null
     } = opts;
 
     const host = screen || !scope ? document.body : scope;
@@ -112,7 +132,12 @@ export function openModal(opts = {}) {
     let actionsBox = null;
     if (actions.length) {
         actionsBox = document.createElement('div');
-        actionsBox.className = 'ui-modal__actions';
+        actionsBox.className = 'ui-modal__actions' + (spread ? ' ui-modal__actions--spread' : '');
+        // Разведённый подвал: «Сбросить» у левого края, «Отмена» и действие —
+        // парой у правого. Группа нужна именно как узел: без неё
+        // space-between растащил бы все три кнопки по углам.
+        const group = spread ? document.createElement('div') : null;
+        if (group) group.className = 'ui-modal__actions-group';
         actions.forEach((action) => {
             const btn = document.createElement('button');
             btn.type = 'button';
@@ -140,8 +165,11 @@ export function openModal(opts = {}) {
                 close(action.value !== undefined ? action.value : true);
             });
             if (action.autofocus) btn.dataset.autofocus = 'true';
-            actionsBox.appendChild(btn);
+            if (action.role) btn.dataset.role = action.role;
+            const host = group && action.side !== 'start' ? group : actionsBox;
+            host.appendChild(btn);
         });
+        if (group) actionsBox.appendChild(group);
         box.appendChild(actionsBox);
     }
 
@@ -160,7 +188,7 @@ export function openModal(opts = {}) {
             // Закрывается только верхнее окно стопки.
             if (OPEN_STACK[OPEN_STACK.length - 1] === entry) {
                 event.stopPropagation();
-                close(false);
+                requestClose(false);
             }
             return;
         }
@@ -168,7 +196,26 @@ export function openModal(opts = {}) {
     }
 
     function onOverlayClick(event) {
-        if (event.target === overlay && dismissable) close(false);
+        if (event.target === overlay && dismissable) requestClose(false);
+    }
+
+    // Закрытие ПО ПРОСЬБЕ ЧЕЛОВЕКА — через вопрос, если он задан. Программное
+    // закрытие (сохранили и уходим) идёт мимо: спрашивать «точно закрыть?»
+    // после успешного сохранения незачем.
+    let asking = false;
+    async function requestClose(value) {
+        if (closed || asking) return;
+        if (typeof confirmClose === 'function') {
+            asking = true;
+            let ok = false;
+            try {
+                ok = await confirmClose();
+            } finally {
+                asking = false;
+            }
+            if (!ok) return;
+        }
+        close(value);
     }
 
     let closed = false;
@@ -189,11 +236,11 @@ export function openModal(opts = {}) {
 
     document.addEventListener('keydown', onKeyDown, true);
     overlay.addEventListener('mousedown', onOverlayClick);
-    closeBtn.addEventListener('click', () => close(false));
+    closeBtn.addEventListener('click', () => requestClose(false));
 
     focusFirst(box);
 
-    return { el: overlay, box, body: bodyBox, close, result };
+    return { el: overlay, box, body: bodyBox, close, requestClose, result };
 }
 
 /**

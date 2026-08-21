@@ -184,13 +184,22 @@ export function formatDateGenitive(dateKey, openMonthKey) {
 }
 
 // день / дня / дней
-export function pluralDays(n) {
+/**
+ * Русское числительное: 1 смена, 2 смены, 5 смен. Общий вид — потому что
+ * склонять приходится не только дни: предпросмотр заполнения обещал «1 смен»
+ * и «1 выходных» (К117), а строкой выше в том же окне дни склонялись верно.
+ */
+export function plural(n, one, few, many) {
     const tens = n % 100;
     const units = n % 10;
-    if (tens > 10 && tens < 20) return 'дней';
-    if (units === 1) return 'день';
-    if (units >= 2 && units <= 4) return 'дня';
-    return 'дней';
+    if (tens > 10 && tens < 20) return many;
+    if (units === 1) return one;
+    if (units >= 2 && units <= 4) return few;
+    return many;
+}
+
+export function pluralDays(n) {
+    return plural(n, 'день', 'дня', 'дней');
 }
 
 // --- Имя сотрудника ---

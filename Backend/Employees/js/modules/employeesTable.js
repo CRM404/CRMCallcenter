@@ -12,6 +12,7 @@
 // внутри составной ячейки — гранулярно, у остальных — колонкой целиком.
 
 import { iconNode } from '/ui/icons.js';
+import { openModal } from '/ui/modal.js';
 
 const PAGE_SIZE = 20;
 const SEARCH_DEBOUNCE_MS = 300;
@@ -62,9 +63,28 @@ export function createTable(root, deps) {
     let sortDirection = 'asc';
     let currentPage = 1;
     let rows = [];
-    // Отбор, с которым реально сходили на сервер. Поля окна фильтров — это
-    // ещё не отбор: их можно заполнить и закрыть окно, не нажимая «Применить».
+
+    // ОТБОР ЖИВЁТ В ОБЪЕКТЕ, А НЕ В ПОЛЯХ ОКНА.
+    //
+    // Пока окно фильтров было объявлено разметкой, оно существовало всегда, и
+    // значение отбора можно было прочитать прямо из его полей в любой момент.
+    // Окно слоя существует, только пока открыто (К110), — читать из него
+    // состояние в момент запроса больше нельзя.
+    //
+    // draft — что набрано: тулбар пишет сюда сразу, окно — по «Применить».
+    // applied — с чем реально сходили на сервер. Поля окна это ещё не отбор:
+    // их можно заполнить и закрыть окно, не нажимая «Применить».
+    const EMPTY_FILTERS = {
+        search: '', status: '', department: '', position: '', lineType: '',
+        hasWhatsapp: false, hasTelegram: false, hireDateFrom: '', hireDateTo: ''
+    };
+    let draftFilters = { ...EMPTY_FILTERS };
     let appliedFilters = {};
+    // Открытое окно фильтров или null.
+    let filterModal = null;
+    // Списки «Отдел» и «Должность» собираются из самих сотрудников. Раньше они
+    // жили прямо в <select> окна; теперь окна между открытиями нет.
+    let filterOptions = { departments: [], positions: [] };
     let selectedIds = new Set();
     let massApplying = false;
     // Полный список — только для наполнения списков «Отдел» и «Должность» в
@@ -130,7 +150,9 @@ export function createTable(root, deps) {
 
     function renderManagerCell(emp) {
         if (!emp.managerName) return '<span class="manager-cell manager-empty">—</span>';
-        return `<span class="manager-cell"><svg class="ui-ic ui-ic--sm ui-ic--quiet" aria-hidden="true"><use href="#ui-ic-share"></use></svg>${escapeHtml(emp.managerName)}</span>`;
+        // Значок `user`, а не `share` (К119): руководитель — человек, а `share`
+        // рисует три соединённых узла, то есть связь, а не людей.
+        return `<span class="manager-cell"><svg class="ui-ic ui-ic--sm ui-ic--quiet" aria-hidden="true"><use href="#ui-ic-user"></use></svg>${escapeHtml(emp.managerName)}</span>`;
     }
 
     function renderStatusBadge(emp) {
@@ -200,7 +222,10 @@ export function createTable(root, deps) {
             : 'Нет сотрудников';
         $('[data-role="empty-text"]').textContent = filtered
             ? 'Сотрудники в разделе есть — просто ни один не подходит под отбор. Проверьте написание или сбросьте фильтры.'
-            : 'Добавьте первого — кнопка «Новый сотрудник» в шапке раздела.';
+            // Кнопка названа ровно так, как подписана в шапке (К116). До этого
+            // текст звал к «Новому сотруднику» — так называется ЗАГОЛОВОК окна,
+            // которое ещё не открыто, а кнопка в шапке подписана иначе.
+            : 'Добавьте первого — кнопка «Добавить сотрудника» в шапке раздела.';
         action.hidden = !filtered;
         box.hidden = false;
     }
@@ -253,40 +278,29 @@ export function createTable(root, deps) {
     }
 
     function currentFilters() {
-        return {
-            search: $('[data-role="search"]').value.trim(),
-            status: $('#empFilterStatus').value,
-            department: $('#empFilterDepartment').value,
-            lineType: $('[data-role="quick-line"]').value,
-            position: $('#empFilterPosition').value,
-            hasWhatsapp: $('#empFilterWhatsapp').checked,
-            hasTelegram: $('#empFilterTelegram').checked,
-            hireDateFrom: $('#empFilterHireFrom').value,
-            hireDateTo: $('#empFilterHireTo').value
-        };
+        return { ...draftFilters };
     }
 
-    /** Вернуть поля окна и тулбара к применённому отбору. */
-    function syncFilterControls() {
-        const f = appliedFilters || {};
+    /** Тулбар показывает набранное: отдел и линию видно и без окна. */
+    function syncToolbar() {
         const set = (sel, value) => { const node = $(sel); if (node) node.value = value || ''; };
-        set('[data-role="search"]', f.search);
-        set('#empFilterStatus', f.status);
-        set('#empFilterDepartment', f.department);
-        set('[data-role="quick-department"]', f.department);
-        set('[data-role="quick-line"]', f.lineType);
-        set('#empFilterPosition', f.position);
-        set('#empFilterHireFrom', f.hireDateFrom);
-        set('#empFilterHireTo', f.hireDateTo);
-        $('#empFilterWhatsapp').checked = Boolean(f.hasWhatsapp);
-        $('#empFilterTelegram').checked = Boolean(f.hasTelegram);
+        set('[data-role="search"]', draftFilters.search);
+        set('[data-role="quick-department"]', draftFilters.department);
+        set('[data-role="quick-line"]', draftFilters.lineType);
     }
+
+    /**
+     * Счётчик на кнопке «Фильтры» считает ТОЛЬКО то, что лежит в этом окне
+     * (К121). Линия и поиск — тулбарные, в окне их нет и по паспорту быть не
+     * должно: кнопка обещала действующий отбор, а окно за ней показывало
+     * пустоту. Обе они видны своими чипами в строке активных фильтров.
+     */
+    const MODAL_FILTER_KEYS = ['status', 'department', 'position', 'hireDateFrom', 'hireDateTo'];
 
     function updateFilterBadge(filters = {}) {
         const badge = $('[data-role="filter-badge"]');
-        const activeCount = [filters.status, filters.department, filters.position, filters.lineType,
-            filters.hireDateFrom, filters.hireDateTo]
-            .filter(Boolean).length + (filters.hasWhatsapp ? 1 : 0) + (filters.hasTelegram ? 1 : 0);
+        const activeCount = MODAL_FILTER_KEYS.filter((key) => filters[key]).length
+            + (filters.hasWhatsapp ? 1 : 0) + (filters.hasTelegram ? 1 : 0);
         badge.textContent = String(activeCount);
         badge.hidden = activeCount === 0;
     }
@@ -304,8 +318,10 @@ export function createTable(root, deps) {
             select.value = values.includes(previous) ? previous : '';
         };
         const departments = [...new Set(allEmployees.map((e) => e.department).filter(Boolean))];
-        fill($('#empFilterDepartment'), departments, 'Все отделы');
-        fill($('#empFilterPosition'), [...new Set(allEmployees.map((e) => e.position).filter(Boolean))], 'Все должности');
+        const positions = [...new Set(allEmployees.map((e) => e.position).filter(Boolean))];
+        // Состав запоминается: окно фильтров собирается при открытии, и на
+        // момент этого вызова его может не быть на экране.
+        filterOptions = { departments: [...departments].sort(), positions: [...positions].sort() };
         // Тот же список отделов в тулбаре: состав берётся из одних данных,
         // иначе два «Все отделы» однажды разойдутся.
         fill($('[data-role="quick-department"]'), departments, 'Все отделы');
@@ -461,28 +477,14 @@ export function createTable(root, deps) {
     }
 
     function dropFilter(key) {
-        const controls = {
-            search: '[data-role="search"]',
-            status: '#empFilterStatus',
-            department: '#empFilterDepartment',
-            position: '#empFilterPosition',
-            lineType: '[data-role="quick-line"]',
-            hireDateFrom: '#empFilterHireFrom',
-            hireDateTo: '#empFilterHireTo'
-        };
-        if (key === 'hasWhatsapp' || key === 'hasTelegram') {
-            $(key === 'hasWhatsapp' ? '#empFilterWhatsapp' : '#empFilterTelegram').checked = false;
-        } else if (controls[key]) {
-            $(controls[key]).value = '';
-        }
-        // Отдел живёт в двух местах — снимаем в обоих.
-        if (key === 'department') $('[data-role="quick-department"]').value = '';
+        if (!(key in draftFilters)) return;
+        draftFilters[key] = typeof EMPTY_FILTERS[key] === 'boolean' ? false : '';
+        syncToolbar();
     }
 
     function clearAllFilters() {
-        Object.keys(FILTER_LABELS).forEach(dropFilter);
-        dropFilter('hasWhatsapp');
-        dropFilter('hasTelegram');
+        draftFilters = { ...EMPTY_FILTERS };
+        syncToolbar();
     }
 
     // ------------------------------------------------------------ выделение
@@ -527,12 +529,19 @@ export function createTable(root, deps) {
 
     // ------------------------------------------------------------ действия
 
+    /**
+     * Вопрос стоит в ЗАГОЛОВКЕ, а текст занят ПОСЛЕДСТВИЕМ (К114). Было
+     * наоборот: заголовок спрашивал «Удалить сотрудника?», текст повторял тот
+     * же вопрос с именем, и место последствия уходило на повтор — человек не
+     * узнавал, что вместе с карточкой пропадёт весь проставленный ему месяц.
+     * Ровно то же правилось у окна закрытия карточки (К92).
+     */
     async function handleDelete(id, name) {
         const ok = await confirmDanger({
             title: 'Удалить сотрудника?',
             message: name
-                ? `Удалить сотрудника «${name}»? Действие необратимо.`
-                : 'Удалить этого сотрудника? Действие необратимо.'
+                ? `Вместе с карточкой «${name}» удалятся все проставленные дни графика. Восстановить их из интерфейса нельзя.`
+                : 'Вместе с карточкой удалятся все проставленные дни графика. Восстановить их из интерфейса нельзя.'
         });
         if (!ok || !isAlive()) return;
         try {
@@ -575,7 +584,9 @@ export function createTable(root, deps) {
     async function runMassDelete(ids) {
         const ok = await confirmDanger({
             title: 'Удалить сотрудников?',
-            message: `Будет удалено: ${ids.length}. Действие необратимо.`
+            // Последствие то же, что у одиночного удаления (К114): дни графика
+            // уходят вместе с карточками, и здесь их разом больше.
+            message: `Будет удалено карточек: ${ids.length}. Вместе с ними удалятся все проставленные им дни графика. Восстановить их из интерфейса нельзя.`
         });
         if (!ok || !isAlive()) return;
         let deleted = 0;
@@ -644,8 +655,86 @@ export function createTable(root, deps) {
 
     const renderDebounced = createDebounced(() => { currentPage = 1; reload(); }, SEARCH_DEBOUNCE_MS);
 
+    // ------------------------------------------------------------ окно «Фильтры»
+
+    /** Заполнить <select> окна значениями, собранными из самих сотрудников. */
+    function fillModalSelect(select, values, placeholder, selected) {
+        select.innerHTML = `<option value="">${placeholder}</option>`;
+        values.forEach((v) => {
+            const opt = document.createElement('option');
+            opt.value = v;
+            opt.textContent = v;
+            select.appendChild(opt);
+        });
+        select.value = values.includes(selected) ? selected : '';
+    }
+
+    function openFilterModal() {
+        if (filterModal) return;
+        const body = document.createElement('div');
+        body.appendChild($('[data-role="filter-tpl"]').content.cloneNode(true));
+
+        const field = (sel) => body.querySelector(sel);
+        // Окно открывается на НАБРАННОМ отборе, а не на применённом: тулбар и
+        // окно держат одно состояние (паспорт: «сменил в одном — видно в другом»).
+        field('#empFilterStatus').value = draftFilters.status || '';
+        fillModalSelect(field('#empFilterDepartment'), filterOptions.departments, 'Все отделы', draftFilters.department);
+        fillModalSelect(field('#empFilterPosition'), filterOptions.positions, 'Все должности', draftFilters.position);
+        field('#empFilterWhatsapp').checked = Boolean(draftFilters.hasWhatsapp);
+        field('#empFilterTelegram').checked = Boolean(draftFilters.hasTelegram);
+        field('#empFilterHireFrom').value = draftFilters.hireDateFrom || '';
+        field('#empFilterHireTo').value = draftFilters.hireDateTo || '';
+
+        const readModal = () => {
+            draftFilters = {
+                ...draftFilters,
+                status: field('#empFilterStatus').value,
+                department: field('#empFilterDepartment').value,
+                position: field('#empFilterPosition').value,
+                hasWhatsapp: field('#empFilterWhatsapp').checked,
+                hasTelegram: field('#empFilterTelegram').checked,
+                hireDateFrom: field('#empFilterHireFrom').value,
+                hireDateTo: field('#empFilterHireTo').value
+            };
+            syncToolbar();
+        };
+
+        filterModal = openModal({
+            title: 'Фильтры',
+            body,
+            scope: root,
+            spread: true,
+            actions: [
+                // «Сбросить» сбрасывает и применяет разом: держать в окне
+                // пустые поля, пока список показывает прежний отбор, незачем.
+                {
+                    label: 'Сбросить',
+                    variant: 'secondary',
+                    side: 'start',
+                    role: 'filter-clear',
+                    onClick: () => { clearAllFilters(); currentPage = 1; reload(); }
+                },
+                // «Отмена» — выход, названный словом (К56). Набранное в окне
+                // просто не читается: отбор остаётся тем, что был.
+                { label: 'Отмена', variant: 'ghost', role: 'filter-cancel', value: false },
+                {
+                    label: 'Применить',
+                    role: 'filter-apply',
+                    onClick: () => { readModal(); currentPage = 1; reload(); }
+                }
+            ]
+        });
+        filterModal.result.then(() => { filterModal = null; });
+
+        // Фокус — в первое поле окна, а не на крестик (К110).
+        field('#empFilterStatus').focus();
+    }
+
     function init() {
-        $('[data-role="search"]').addEventListener('input', renderDebounced);
+        $('[data-role="search"]').addEventListener('input', (e) => {
+            draftFilters.search = e.target.value.trim();
+            renderDebounced();
+        });
 
         $('thead').addEventListener('click', (e) => {
             const th = e.target.closest('th[data-field]');
@@ -699,39 +788,19 @@ export function createTable(root, deps) {
         $('[data-role="mass-apply"]').addEventListener('click', handleMassApply);
 
         // --- фильтры ---
-        const filterModal = $('[data-role="filter-modal"]');
-        $('[data-role="filter-toggle"]').addEventListener('click', () => { filterModal.hidden = false; });
-        $('[data-role="filter-close"]').addEventListener('click', () => { filterModal.hidden = true; });
-        // «Отмена» — выход, названный словом (К56). Поля возвращаются к
-        // ПРИМЕНЁННОМУ отбору: иначе снятая, но не применённая галка осталась
-        // бы в окне и при следующем открытии выглядела бы действующей.
-        $('[data-role="filter-cancel"]').addEventListener('click', () => {
-            syncFilterControls();
-            filterModal.hidden = true;
-        });
-        filterModal.addEventListener('click', (e) => { if (e.target === filterModal) filterModal.hidden = true; });
-        $('[data-role="filter-apply"]').addEventListener('click', () => {
-            currentPage = 1;
-            filterModal.hidden = true;
-            reload();
-        });
-        $('[data-role="filter-clear"]').addEventListener('click', () => {
-            clearAllFilters();
-            currentPage = 1;
-            filterModal.hidden = true;
-            reload();
-        });
+        $('[data-role="filter-toggle"]').addEventListener('click', openFilterModal);
 
         // --- тулбар: отдел и линия ---
         //
-        // Отдел выбирается и здесь, и в окне «Фильтры»; состояние одно, поэтому
-        // выбор в тулбаре сразу проставляется в окне, а не живёт рядом с ним.
+        // Отдел выбирается и здесь, и в окне «Фильтры»; состояние одно — оба
+        // пишут в один объект отбора, а не проставляют значение друг другу.
         $('[data-role="quick-department"]').addEventListener('change', (e) => {
-            $('#empFilterDepartment').value = e.target.value;
+            draftFilters.department = e.target.value;
             currentPage = 1;
             reload();
         });
-        $('[data-role="quick-line"]').addEventListener('change', () => {
+        $('[data-role="quick-line"]').addEventListener('change', (e) => {
+            draftFilters.lineType = e.target.value;
             currentPage = 1;
             reload();
         });

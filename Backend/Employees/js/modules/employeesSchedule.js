@@ -374,9 +374,12 @@ export function createSchedule(root, deps) {
         $('[data-role="schedule-section"]').hidden = !isSchedule;
         $('[data-role="list-chips"]').hidden = isSchedule;
         $('[data-role="sched-chips"]').hidden = !isSchedule;
-        // Сотрудников заводят в «Списке» — в графике эта кнопка ведёт не туда,
-        // куда человек в этот момент смотрит.
-        $('[data-role="add-wrap"]').hidden = isSchedule;
+        // Кнопки шапки принадлежат «Списку» целиком (К115). Раньше пряталась
+        // только «Добавить сотрудника», а «Отделы», «Фильтры» и «Колонки»
+        // оставались: окно колонок настраивало таблицу, которой на экране нет,
+        // а отбор, применённый прямо из графика, не менял в сетке ни строки —
+        // и при этом зажигал счётчик на кнопке.
+        $('[data-role="list-acts"]').hidden = isSchedule;
         $('[data-role="view-list"]').classList.toggle('ui-switch__option--active', !isSchedule);
         $('[data-role="view-schedule"]').classList.toggle('ui-switch__option--active', isSchedule);
         $('[data-role="view-list"]').setAttribute('aria-selected', String(!isSchedule));

@@ -10,9 +10,10 @@
 // счётчик снятых лежали в переменных уровня модуля, то есть переживали закрытие
 // панели и всплывали в следующем открытии.
 
+import { openModal } from '/ui/modal.js';
 import {
     daysInMonth, dayKey, dayOf, monthKeyOf, monthLabel, monthGenitive,
-    formatRangeSpaced, formatDayGenitive, pluralDays, shortName
+    formatRangeSpaced, formatDayGenitive, plural, pluralDays, shortName
 } from './employeesScheduleTime.js';
 
 const WEEK_DAYS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
@@ -25,12 +26,16 @@ export function createScheduleFill(root, deps) {
     const { storage, toast, isAlive, isAbort, schedule } = deps;
 
     const $ = (sel) => root.querySelector(sel);
-    const modal = $('[data-role="fill-modal"]');
-    const empSelect = $('#empFillEmployee');
-    const fromInput = $('#empFillFrom');
-    const applyBtn = $('[data-role="fill-apply"]');
-    const wkPanel = $('[data-role="wk-panel"]');
-    const wkGrid = $('[data-role="wk-grid"]');
+    const tpl = $('[data-role="fill-tpl"]');
+
+    // Окно собирает слой (К110, К111) — узлы полей существуют, только пока оно
+    // открыто, и берутся заново на каждое открытие.
+    let modal = null;
+    let empSelect = null;
+    let fromInput = null;
+    let wkPanel = null;
+    let wkGrid = null;
+    const applyBtn = () => $('[data-role="fill-apply"]');
 
     // Выходные, отмеченные администратором для ЭТОГО заполнения. Система их не
     // вычисляет и нигде не хранит.
@@ -41,7 +46,6 @@ export function createScheduleFill(root, deps) {
     // подряд, и счётчик «за один пересчёт» стирался бы вторым же вызовом — то
     // есть сообщение мелькало бы и исчезало.
     let dropped = 0;
-    let onDocKeydown = null;
 
     function selectedEmployee() {
         return schedule.getEmployee(empSelect.value);
@@ -104,11 +108,12 @@ export function createScheduleFill(root, deps) {
     // правилам, что и на сервере, — иначе предпросмотр обещал бы одно, а
     // заполнение делало другое.
     function syncFill() {
+        if (!modal) return;
         const employee = selectedEmployee();
         const month = schedule.getState().month;
         const box = $('[data-role="fill-emp-schedule"]');
         if (!employee) {
-            applyBtn.disabled = true;
+            applyBtn().disabled = true;
             return;
         }
 
@@ -126,7 +131,7 @@ export function createScheduleFill(root, deps) {
         const daysNote = document.createElement('i');
         daysNote.textContent = employee.workSchedule ? '— справочно, выходные отмечаете вы' : 'не указан';
         daysBox.appendChild(daysNote);
-        applyBtn.disabled = !ready || submitting;
+        applyBtn().disabled = !ready || submitting;
 
         // Отметки, выпавшие из диапазона после сдвига даты, снимаются — но не
         // молча: иначе человек нажмёт «Заполнить», рассчитывая на то, чего уже нет.
@@ -166,9 +171,11 @@ export function createScheduleFill(root, deps) {
             if (existing && existing.state === 'sick') sick++;
         }
 
+        // Числительные склоняются (К117): при одной смене строка обещала
+        // «1 смен», при одном выходном — «1 выходных».
         previewEl.innerHTML =
-            `Заполнит <b>${from}–${last} ${monthGenitive(month)}</b>: <b>${shifts}</b> смен по <b>${formatRangeSpaced(employee.shiftStart, employee.shiftEnd)}</b>`
-            + (daysOff ? ` и <b>${daysOff}</b> выходных по вашим отметкам` : ' — выходные не отмечены')
+            `Заполнит <b>${from}–${last} ${monthGenitive(month)}</b>: <b>${shifts}</b> ${plural(shifts, 'смена', 'смены', 'смен')} по <b>${formatRangeSpaced(employee.shiftStart, employee.shiftEnd)}</b>`
+            + (daysOff ? ` и <b>${daysOff}</b> ${plural(daysOff, 'выходной', 'выходных', 'выходных')} по вашим отметкам` : ' — выходные не отмечены')
             + `. Дни до ${from}-го не меняются.`
             + (dropped ? ` <i>Снято отметок вне диапазона: ${dropped}.</i>` : '');
 
@@ -183,17 +190,44 @@ export function createScheduleFill(root, deps) {
         }
     }
 
-    function closeModal() {
-        modal.hidden = true;
+    function closeFill() {
+        if (modal) modal.close(false);
     }
 
-    function openModal() {
+    function openFill() {
+        if (modal) return;
         const state = schedule.getState();
         if (!state.month) return;
         if (state.employees.length === 0) {
             toast('Нет активных сотрудников — график заполнять некому', 'error');
             return;
         }
+
+        const body = document.createElement('div');
+        body.appendChild(tpl.content.cloneNode(true));
+        empSelect = body.querySelector('#empFillEmployee');
+        fromInput = body.querySelector('#empFillFrom');
+        wkPanel = body.querySelector('[data-role="wk-panel"]');
+        wkGrid = body.querySelector('[data-role="wk-grid"]');
+
+        modal = openModal({
+            title: 'Добавить график',
+            body,
+            scope: root,
+            actions: [
+                { label: 'Отмена', variant: 'ghost', role: 'fill-cancel', value: false },
+                { label: 'Заполнить', role: 'fill-apply', onClick: () => handleApply() }
+            ]
+        });
+        modal.result.then(() => {
+            modal = null;
+            empSelect = null;
+            fromInput = null;
+            wkPanel = null;
+            wkGrid = null;
+        });
+
+        bindFormEvents(body);
 
         empSelect.innerHTML = '';
         state.employees.forEach((employee) => {
@@ -218,52 +252,50 @@ export function createScheduleFill(root, deps) {
         $('[data-role="wk-field"]').setAttribute('aria-expanded', 'false');
         $('[data-role="wk-month"]').textContent = monthLabel(state.month);
         syncFill();
-        modal.hidden = false;
+
+        // Фокус — в первое поле окна, а не на крестик (К110).
+        empSelect.focus();
     }
 
     async function handleApply() {
         const employee = selectedEmployee();
-        if (!employee || !schedule.hasShiftTime(employee) || submitting) return;
+        // false — окно остаётся открытым: слой понимает это как «не удалось».
+        if (!employee || !schedule.hasShiftTime(employee) || submitting) return false;
         const month = schedule.getState().month;
         const from = fromDayNumber();
         const fromDate = dayKey(month, from);
         const dayOffDates = [...picked].sort((a, b) => a - b).map((d) => dayKey(month, d));
 
         submitting = true;
-        applyBtn.disabled = true;
         let result;
         try {
             result = await storage.fillSchedule({ employeeId: employee.id, fromDate, dayOffDates });
-            if (!isAlive()) return;
+            if (!isAlive()) return false;
         } catch (err) {
             submitting = false;
-            applyBtn.disabled = false;
-            if (!isAlive() || isAbort(err)) return;
+            if (!isAlive() || isAbort(err)) return false;
             toast(err.message, 'error');
-            return;
+            return false;
         }
         submitting = false;
-        applyBtn.disabled = false;
-        closeModal();
+        closeFill();
         // Числа в тосте — из ответа сервера: только он знает, сколько строк
         // реально записано после пропуска дней вне периода работы.
         await schedule.loadMonth(month);
-        if (!isAlive()) return;
+        if (!isAlive()) return true;
         toast(
-            `${shortName(employee)}: с ${formatDayGenitive(month, from)} проставлено ${result.shifts} смен и ${result.daysOff} выходных`,
+            `${shortName(employee)}: с ${formatDayGenitive(month, from)} проставлено ${result.shifts} ${plural(result.shifts, 'смена', 'смены', 'смен')} и ${result.daysOff} ${plural(result.daysOff, 'выходной', 'выходных', 'выходных')}`,
             'success'
         );
+        return true;
     }
 
     function init() {
-        $('[data-role="sched-fill"]').addEventListener('click', openModal);
-        $('[data-role="fill-close"]').addEventListener('click', closeModal);
-        $('[data-role="fill-cancel"]').addEventListener('click', closeModal);
-        modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
+        $('[data-role="sched-fill"]').addEventListener('click', openFill);
+    }
 
-        onDocKeydown = (e) => { if (e.key === 'Escape' && !modal.hidden) closeModal(); };
-        document.addEventListener('keydown', onDocKeydown);
-
+    /** Подписки на поля окна — они клонируются на каждое открытие. */
+    function bindFormEvents(form) {
         // Смена сотрудника — новые границы найма, прежний счётчик снятых отметок
         // к ним отношения не имеет.
         empSelect.addEventListener('change', () => { dropped = 0; syncFill(); });
@@ -273,10 +305,11 @@ export function createScheduleFill(root, deps) {
         // Календарь раскрывается прямо под полем, а не вторым шагом: какие дни
         // отмечать, зависит от того, с какого числа идёт заполнение, — эту связь
         // второй шаг разрывает.
-        $('[data-role="wk-field"]').addEventListener('click', () => {
+        const wkField = form.querySelector('[data-role="wk-field"]');
+        wkField.addEventListener('click', () => {
             const open = wkPanel.hidden;
             wkPanel.hidden = !open;
-            $('[data-role="wk-field"]').setAttribute('aria-expanded', String(open));
+            wkField.setAttribute('aria-expanded', String(open));
         });
         wkGrid.addEventListener('click', (e) => {
             const button = e.target.closest('.wk-day');
@@ -290,17 +323,15 @@ export function createScheduleFill(root, deps) {
             const again = wkGrid.querySelector(`.wk-day[data-day="${day}"]`);
             if (again) again.focus();
         });
-        $('[data-role="wk-clear"]').addEventListener('click', () => { picked.clear(); dropped = 0; syncFill(); });
-
-        applyBtn.addEventListener('click', handleApply);
+        form.querySelector('[data-role="wk-clear"]')
+            .addEventListener('click', () => { picked.clear(); dropped = 0; syncFill(); });
     }
 
     return {
         init,
-        isOpen: () => !modal.hidden,
-        destroy() {
-            if (onDocKeydown) document.removeEventListener('keydown', onDocKeydown);
-            onDocKeydown = null;
-        }
+        isOpen: () => modal !== null,
+        // Слушателей документа у окна больше нет: Esc и щелчок мимо окна —
+        // работа слоя.
+        destroy() {}
     };
 }

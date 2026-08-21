@@ -7,7 +7,20 @@
 //
 // Подтверждение «закрыть без сохранения» больше не своё окно, а ctx.confirm из
 // слоя. Удаление сотрудника подтверждает таблица, тоже слоем.
+//
+// САМО ОКНО ТОЖЕ СОБИРАЕТ СЛОЙ (К110, К111). Раньше карточка была объявлена
+// разметкой и показывалась снятием hidden: вид у неё был правильный, а
+// поведения окна не было — Tab на первом же шаге уводил в панель под
+// затемнением, фокус при открытии оставался на кнопке-открывашке, и после
+// закрытия уходил в BODY.
+//
+// ТРИ ДВЕРИ — ОДНА ПРОВЕРКА (К112). Esc, щелчок по затемнению и крестик ведут
+// через confirmClose слоя, «Отмена» — через свой onClick, и все четыре
+// спрашивают об одном и том же. До этого Esc обрабатывался общим слушателем
+// раздела и ставил hidden напрямую, мимо проверки изменений: окно с набранной
+// фамилией закрывалось молча — именно той дверью, которую нажимают не глядя.
 
+import { openModal } from '/ui/modal.js';
 import { DOCUMENT_TYPE_MAP } from './employeesStorage.js';
 import { validatePhone, validateEmail, formatPhone } from './employeesValidation.js';
 import { parseShiftInput, parseWorkDaysInput, formatShiftInput } from './employeesScheduleTime.js';
@@ -56,9 +69,13 @@ export function createCard(root, deps) {
     const { storage, toast, confirm, isAlive, isAbort, onSaved } = deps;
 
     const $ = (sel) => root.querySelector(sel);
-    const $$ = (sel) => Array.from(root.querySelectorAll(sel));
-    const modal = $('[data-role="employee-modal"]');
-    const saveBtn = $('[data-role="employee-save"]');
+    const tpl = $('[data-role="employee-tpl"]');
+
+    // Открытое окно слоя или null. Кнопки подвала строит слой, поэтому они
+    // ищутся по роли КАЖДЫЙ РАЗ, а не запоминаются при монтировании: до
+    // открытия окна их не существует.
+    let modal = null;
+    const saveBtn = () => $('[data-role="employee-save"]');
 
     let editingId = null;
     let currentStep = 1;
@@ -113,16 +130,6 @@ export function createCard(root, deps) {
         $('#empCountry').value = 'Российская Федерация';
     }
 
-    function clearFileInputs() {
-        DOC_FIELDS.forEach((key) => {
-            const input = docInput(key);
-            input.value = '';
-            const area = input.closest('.file-upload-area');
-            area.querySelector('.file-name').textContent = '';
-            area.querySelector('.file-status-icon').hidden = true;
-        });
-    }
-
     function currentFormData() {
         const data = {};
         FIELDS.forEach((key) => { data[key] = $(fieldId(key)).value; });
@@ -140,13 +147,50 @@ export function createCard(root, deps) {
     }
 
     function goToStep(step) {
+        if (!modal) return;
         currentStep = step;
         $('[data-role="step-1-fields"]').hidden = step !== 1;
         $('[data-role="step-2-fields"]').hidden = step !== 2;
-        $('[data-role="step-indicator"]').textContent = `Шаг ${step} из 2`;
+        // Подпись под заголовком строит слой (параметр sub), своей роли у неё
+        // больше нет — берётся классом слоя из коробки открытого окна.
+        const stepNote = modal.box.querySelector('.ui-modal__sub');
+        if (stepNote) stepNote.textContent = `Шаг ${step} из 2`;
         $('[data-role="prev-step"]').hidden = step !== 2;
         $('[data-role="next-step"]').hidden = step !== 1;
-        saveBtn.hidden = step !== 2;
+        saveBtn().hidden = step !== 2;
+    }
+
+    // ------------------------------------------------------------ ошибка поля
+
+    /**
+     * Ошибка поля живёт ПОД ПОЛЕМ, а не только в тосте (К113). Тост говорил
+     * «Заполните обязательные поля: Фамилия, Имя, Email, Телефон» и исчезал —
+     * какие из семнадцати полей виноваты, человек искал глазами.
+     *
+     * Механизм — слоя (`ui-field--error` + `.ui-field__error`), тот же, что в
+     * «Источниках»: рамка и подложка красным, подсказка поля уступает место
+     * тексту ошибки. Своего раздел не заводит.
+     */
+    function markFieldError(sel, message) {
+        const control = $(sel);
+        const field = control && control.closest('.ui-field');
+        if (!field) return;
+        field.classList.add('ui-field--error');
+        let note = field.querySelector('.ui-field__error');
+        if (!note) {
+            note = document.createElement('span');
+            note.className = 'ui-field__error';
+            field.appendChild(note);
+        }
+        note.textContent = message;
+    }
+
+    /** Исправленное поле не должно оставаться красным. */
+    function clearFieldErrors() {
+        if (!modal) return;
+        modal.box.querySelectorAll('.ui-field--error').forEach((field) => {
+            field.classList.remove('ui-field--error');
+        });
     }
 
     // ------------------------------------------------------------ «График работы»
@@ -203,83 +247,150 @@ export function createCard(root, deps) {
 
     // ------------------------------------------------------------ открытие/закрытие
 
+    /** Набрано ли что-то, чего ещё нет на сервере. */
+    function isDirty() {
+        if (!modal) return false;
+        const data = currentFormData();
+        return Object.keys(originalFormData).some((key) => originalFormData[key] !== data[key]);
+    }
+
+    /**
+     * Вопрос перед уходом — общий для всех четырёх дверей (К112).
+     * Вопрос стоит в ЗАГОЛОВКЕ, последствие — в тексте (К92).
+     */
+    async function confirmDiscard() {
+        if (!isDirty()) return true;
+        const ok = await confirm({
+            title: 'Закрыть без сохранения?',
+            message: 'Введённые данные сотрудника не сохранятся.',
+            confirmLabel: 'Закрыть без сохранения'
+        });
+        return Boolean(ok) && isAlive();
+    }
+
     async function open(title, employee = null) {
-        modal.hidden = false;
-        $('[data-role="employee-modal-title"]').textContent = employee
-            ? `${title} (ID: ${String(employee.id).padStart(4, '0')})`
-            : title;
+        if (modal) return;
+
+        const body = document.createElement('div');
+        body.appendChild(tpl.content.cloneNode(true));
+
+        modal = openModal({
+            title: employee
+                ? `${title} (ID: ${String(employee.id).padStart(4, '0')})`
+                : title,
+            sub: 'Шаг 1 из 2',
+            body,
+            scope: root,
+            size: 'wide',
+
+
+            confirmClose: confirmDiscard,
+            actions: [
+                {
+                    label: 'Отмена',
+                    variant: 'ghost',
+                    role: 'employee-cancel',
+                    // Возврат false оставляет окно открытым: человек передумал уходить.
+                    onClick: () => confirmDiscard()
+                },
+                {
+                    label: 'Назад',
+                    variant: 'secondary',
+                    role: 'prev-step',
+                    onClick: () => { goToStep(1); return false; }
+                },
+                {
+                    label: 'Далее',
+                    role: 'next-step',
+                    onClick: () => { if (checkStep1()) goToStep(2); return false; }
+                },
+                {
+                    label: 'Сохранить',
+                    role: 'employee-save',
+                    onClick: () => handleSubmit()
+                }
+            ]
+        });
+        modal.result.then(() => { modal = null; editingId = null; });
+
+        bindFormEvents(body);
         goToStep(1);
 
-        // Выбор файла с прошлого открытия мог остаться — иначе каждая новая
-        // карточка начиналась бы с «призрачного» файла.
-        clearFileInputs();
-
+        // Выбор файла с прошлого открытия сюда не переносится: поля клонируются
+        // из шаблона, а не переиспользуются.
         await populateManagerSelect(employee ? employee.id : null);
-        if (!isAlive()) return;
+        if (!isAlive() || !modal) return;
 
         if (employee) {
             fillForm(employee);
-            saveBtn.textContent = 'Сохранить изменения';
+            saveBtn().textContent = 'Сохранить изменения';
             editingId = employee.id;
         } else {
             clearForm();
-            saveBtn.textContent = 'Добавить сотрудника';
+            saveBtn().textContent = 'Добавить сотрудника';
             editingId = null;
         }
 
         resetScheduleFieldHints();
         captureOriginalData();
+
+        // Фокус — в ПЕРВОЕ ПОЛЕ, а не на крестик (К110). Слой по умолчанию
+        // берёт первый фокусируемый элемент коробки, а это кнопка закрытия:
+        // она стоит выше по разметке.
+        const first = $('#empLastName');
+        if (first) first.focus();
     }
 
+    /** Закрыть окно. skipConfirm — после сохранения, вопрос там неуместен. */
     async function close(skipConfirm = false) {
-        if (!skipConfirm && !modal.hidden) {
-            const data = currentFormData();
-            const changed = Object.keys(originalFormData).some((key) => originalFormData[key] !== data[key]);
-            if (changed) {
-                // Вопрос стоит в ЗАГОЛОВКЕ, последствие — в тексте (К92).
-                // Было наоборот: заголовок существительным, вопрос уехал в
-                // сообщение, — и окно спрашивало дважды в разных местах.
-                const ok = await confirm({
-                    title: 'Закрыть без сохранения?',
-                    message: 'Введённые данные сотрудника не сохранятся.',
-                    confirmLabel: 'Закрыть без сохранения'
-                });
-                if (!ok || !isAlive()) return;
-            }
-        }
-        modal.hidden = true;
-        editingId = null;
+        if (!modal) return;
+        if (skipConfirm) { modal.close(true); return; }
+        await modal.requestClose(false);
     }
 
     // ------------------------------------------------------------ сохранение
 
-    function focusFirstInvalidStep1Field(lastName, firstName, email, phone) {
-        if (!lastName) { $('#empLastName').focus(); return; }
-        if (!firstName) { $('#empFirstName').focus(); return; }
-        if (!email || !validateEmail(email)) { $('#empEmail').focus(); return; }
-        if (!phone || !validatePhone(phone)) { $('#empPhone').focus(); }
-    }
+    // Порядок тот же, что в форме: подпись из него идёт и в тост, и под поле.
+    const REQUIRED_STEP1 = [
+        { sel: '#empLastName', label: 'Фамилия' },
+        { sel: '#empFirstName', label: 'Имя' },
+        { sel: '#empEmail', label: 'Email' },
+        { sel: '#empPhone', label: 'Телефон' }
+    ];
 
     // Общая проверка первого шага: она же на кнопке «Далее» и на сохранении.
     function checkStep1() {
+        clearFieldErrors();
+        // Ошибка первого шага, найденная при сохранении, показывается на самом
+        // первом шаге: краснеющее поле, которого не видно, не объясняет ничего.
+        if (currentStep !== 1) goToStep(1);
+
         const lastName = $('#empLastName').value.trim();
         const firstName = $('#empFirstName').value.trim();
         const email = $('#empEmail').value.trim();
         const phone = $('#empPhone').value.trim();
 
-        if (!lastName || !firstName || !email || !phone) {
-            toast('Заполните обязательные поля: Фамилия, Имя, Email, Телефон', 'error');
-            focusFirstInvalidStep1Field(lastName, firstName, email, phone);
+        const empty = REQUIRED_STEP1.filter((f) => !$(f.sel).value.trim());
+        if (empty.length) {
+            toast(`Заполните обязательные поля: ${empty.map((f) => f.label).join(', ')}`, 'error');
+            // Краснеют ВСЕ незаполненные, а не только первое: тост перечисляет
+            // их все, и глазами их искать не нужно.
+
+            empty.forEach((f) => markFieldError(f.sel, 'Поле обязательно'));
+            $(empty[0].sel).focus();
             return null;
         }
         if (!validateEmail(email)) {
             toast('Введите корректный email', 'error');
-            focusFirstInvalidStep1Field(lastName, firstName, email, phone);
+            markFieldError('#empEmail', 'Нужен адрес вида ivan@company.ru');
+            $('#empEmail').focus();
             return null;
         }
         if (!validatePhone(phone)) {
-            toast('Номер должен соответствовать форматам: +7 9xx xxx-xx-xx (Россия), +7 7xx xxx-xx-xx (Казахстан), +998 xx xxx-xx-xx (Узбекистан), +996 xx xxx-xx-xx (Кыргызстан)', 'error');
-            focusFirstInvalidStep1Field(lastName, firstName, email, phone);
+            const message = 'Номер должен соответствовать форматам: +7 9xx xxx-xx-xx (Россия), +7 7xx xxx-xx-xx (Казахстан), +998 xx xxx-xx-xx (Узбекистан), +996 xx xxx-xx-xx (Кыргызстан)';
+            toast(message, 'error');
+            markFieldError('#empPhone', message);
+            $('#empPhone').focus();
             return null;
         }
         return { lastName, firstName, email, phone };
@@ -303,18 +414,21 @@ export function createCard(root, deps) {
         return errors;
     }
 
-    async function handleSubmit(e) {
-        if (e) e.preventDefault();
+    /**
+     * Возвращает false, если окно должно остаться открытым: слой понимает это
+     * как «действие не удалось» и возвращает кнопке рабочее состояние.
+     */
+    async function handleSubmit() {
         // Двойной щелчок по «Сохранить» создавал бы двух сотрудников: запрос
         // идёт секунду, а кнопка всё это время активна.
-        if (saving) return;
+        if (saving) return false;
         if (currentStep !== 2) {
             toast('Сначала заполните поля первого шага и нажмите «Далее»', 'error');
-            return;
+            return false;
         }
 
         const base = checkStep1();
-        if (!base) return;
+        if (!base) return false;
 
         // Блок «График работы»: сохранить непонятное значение нельзя. Ошибка
         // показывается второй раз (первый — при уходе из поля).
@@ -322,8 +436,9 @@ export function createCard(root, deps) {
         const shiftTimes = validateShiftTimeField();
         if (!workDays || !shiftTimes) {
             toast('Проверьте блок «График работы»: значение не распознано', 'error');
+            goToStep(1);
             $(workDays ? '#empShiftTime' : '#empWorkSchedule').focus();
-            return;
+            return false;
         }
 
         const empData = {
@@ -357,7 +472,6 @@ export function createCard(root, deps) {
         };
 
         saving = true;
-        saveBtn.disabled = true;
         const wasEditing = editingId !== null;
         let saved;
         try {
@@ -365,27 +479,27 @@ export function createCard(root, deps) {
                 ? await storage.updateEmployee(editingId, empData)
                 : await storage.createEmployee(empData);
         } catch (err) {
-            if (!isAlive()) return;
+            if (!isAlive()) return false;
             if (!isAbort(err)) toast(err.message, 'error');
-            return;
+            return false;
         } finally {
             saving = false;
-            saveBtn.disabled = false;
         }
-        if (!isAlive()) return;
+        if (!isAlive()) return false;
 
         const docErrors = await uploadChangedDocuments(saved.id);
-        if (!isAlive()) return;
+        if (!isAlive()) return false;
 
         await close(true);
         if (onSaved) await onSaved();
-        if (!isAlive()) return;
+        if (!isAlive()) return true;
 
         if (docErrors.length > 0) {
             toast(`Сотрудник сохранён, но не удалось загрузить документы: ${docErrors.join('; ')}`, 'error');
         } else {
             toast(wasEditing ? 'Изменения сохранены' : 'Сотрудник добавлен', 'success');
         }
+        return true;
     }
 
     /** Открыть карточку по id — из таблицы. */
@@ -408,33 +522,42 @@ export function createCard(root, deps) {
         await open('Редактирование сотрудника', { ...emp, ...docsByKey });
     }
 
-    function init() {
-        $('[data-role="add-employee"]').addEventListener('click', () => open('Новый сотрудник'));
-        $('[data-role="employee-close"]').addEventListener('click', () => close());
-        $('[data-role="employee-cancel"]').addEventListener('click', () => close());
-        modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
-
-        $('[data-role="next-step"]').addEventListener('click', () => {
-            if (checkStep1()) goToStep(2);
-        });
-        $('[data-role="prev-step"]').addEventListener('click', () => goToStep(1));
-
+    /**
+     * Подписки на поля окна. Раньше стояли в init() один раз на всю жизнь
+     * панели — поля были в разметке и не менялись. Теперь поля клонируются на
+     * каждое открытие, и подписываться надо на свежие узлы.
+     */
+    function bindFormEvents(form) {
         // Ошибка формата показывается при уходе из поля и повторно при сохранении.
-        $('#empWorkSchedule').addEventListener('blur', validateWorkDaysField);
-        $('#empShiftTime').addEventListener('blur', validateShiftTimeField);
+        form.querySelector('#empWorkSchedule').addEventListener('blur', validateWorkDaysField);
+        form.querySelector('#empShiftTime').addEventListener('blur', validateShiftTimeField);
 
-        $('[data-role="generate-password"]').addEventListener('click', () => {
+        // Исправляют поле — красная рамка уходит сразу, а не после следующей
+        // проверки: иначе исправленное поле остаётся помеченным ошибкой.
+        form.addEventListener('input', (e) => {
+            const field = e.target.closest && e.target.closest('.ui-field--error');
+            if (field) field.classList.remove('ui-field--error');
+        });
+
+        form.querySelector('[data-role="generate-password"]').addEventListener('click', () => {
             const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()';
             let password = '';
             for (let i = 0; i < 10; i++) password += chars.charAt(Math.floor(Math.random() * chars.length));
-            $('#empPassword').value = password;
+            form.querySelector('#empPassword').value = password;
         });
 
-        $('[data-role="employee-form"]').addEventListener('submit', handleSubmit);
-        saveBtn.addEventListener('click', handleSubmit);
+        // Enter в поле нажимает главную кнопку шага: на первом «Далее», на
+        // втором «Сохранить». Это давала разметочная <form>, и терять привычку
+        // из-за переезда незачем.
+        form.addEventListener('keydown', (event) => {
+            if (event.key !== 'Enter' || event.target.tagName === 'TEXTAREA') return;
+            event.preventDefault();
+            const btn = currentStep === 1 ? $('[data-role="next-step"]') : saveBtn();
+            if (btn && !btn.disabled) btn.click();
+        });
 
         // Загрузчики файлов
-        $$('.file-upload-area').forEach((area) => {
+        Array.from(form.querySelectorAll('.file-upload-area')).forEach((area) => {
             const input = area.querySelector('.hidden-file-input');
             const nameSpan = area.querySelector('.file-name');
             const icon = area.querySelector('.file-status-icon');
@@ -462,5 +585,9 @@ export function createCard(root, deps) {
         });
     }
 
-    return { init, open, openById, close, isOpen: () => !modal.hidden };
+    function init() {
+        $('[data-role="add-employee"]').addEventListener('click', () => open('Новый сотрудник'));
+    }
+
+    return { init, open, openById, close, isOpen: () => modal !== null };
 }

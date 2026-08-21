@@ -59,14 +59,18 @@
     --e-wend-ink: #b0736c;
     --e-row-wash: #fafbfe;
 
-    /* Состояния ячейки графика — используются вторым файлом раздела. */
+    /* Состояния ячейки графика — используются вторым файлом раздела.
+       Три из них — алиасы слоя, а не свои значения (К120): раздел повторял
+       #7a5c1e и #fdecea цифрами, то есть завёл вторые имена тем же цветам.
+       Жёлтая подложка отличалась от слоя неразличимо (#f3e9cf против #f6eed9):
+       глазом разницы нет, а в проекте от неё заводилось два жёлтых. */
     --s-shift-bg: #ffffff;
     --s-shift-ink: #2c3a55;
     --s-off-bg: rgba(96, 112, 148, .13);
     --s-off-ink: #6a778f;
-    --s-vac-bg: #f3e9cf;
-    --s-vac-ink: #7a5c1e;
-    --s-danger-bg: #fdecea;
+    --s-vac-bg: var(--ui-color-warn-bg);
+    --s-vac-ink: var(--ui-color-warn-ink);
+    --s-danger-bg: var(--ui-color-danger-wash);
 
     --e-radius-lg: var(--ui-radius-lg);
     --e-radius-md: var(--ui-radius-md);

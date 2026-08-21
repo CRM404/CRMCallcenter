@@ -27,6 +27,7 @@
 // модуль импортируется один раз, а монтируется много.
 
 import { readHiddenColumns, writeHiddenColumns } from '/viewPrefs.js';
+import { openModal } from '/ui/modal.js';
 
 const SECTION = 'employees';
 
@@ -60,8 +61,11 @@ export function createColumns(root, deps) {
     const { toast, onApplied } = deps;
 
     const $ = (sel) => root.querySelector(sel);
-    const columnsModal = $('[data-role="columns-modal"]');
-    const list = $('[data-role="columns-list"]');
+    const tpl = $('[data-role="columns-tpl"]');
+
+    // Открытое окно слоя или null. Прежде окно жило в разметке всегда и
+    // пряталось атрибутом; теперь оно существует ровно пока открыто.
+    let modal = null;
 
     /** Set ключей СКРЫТЫХ колонок. Пусто — показываем всё. */
     function getHiddenColumns() {
@@ -71,8 +75,12 @@ export function createColumns(root, deps) {
     // Окно открывается сразу по нажатию «Колонки» — ни запроса, ни ожидания
     // между нажатием и окном больше нет.
     function openColumnsModal() {
+        if (modal) return;
         const hidden = getHiddenColumns();
-        list.innerHTML = '';
+        const body = document.createElement('div');
+        body.appendChild(tpl.content.cloneNode(true));
+        const list = body.querySelector('[data-role="columns-list"]');
+
         CONFIGURABLE_COLUMNS.forEach((col) => {
             const label = document.createElement('label');
             label.className = 'column-checkbox-item';
@@ -84,31 +92,50 @@ export function createColumns(root, deps) {
             label.appendChild(document.createTextNode(col.label));
             list.appendChild(label);
         });
-        columnsModal.hidden = false;
+
+        modal = openModal({
+            title: 'Видимые колонки таблицы',
+            body,
+            scope: root,
+            spread: true,
+            actions: [
+                {
+                    label: 'Сбросить',
+                    variant: 'secondary',
+                    side: 'start',
+                    role: 'columns-reset',
+                    // Показать все — и остаться в окне: «Сбросить» здесь не
+                    // применяет, а возвращает флажки в исходное.
+                    onClick: () => {
+                        list.querySelectorAll('input[type="checkbox"]').forEach((cb) => { cb.checked = true; });
+                        return false;
+                    }
+                },
+                { label: 'Отмена', variant: 'ghost', role: 'columns-cancel', value: false },
+                { label: 'Применить', role: 'columns-apply', onClick: () => handleApply(list) }
+            ]
+        });
+        modal.result.then(() => { modal = null; });
+
+        // Фокус — в первый флажок, а не на крестик: окно открывают, чтобы
+        // менять состав колонок (К110).
+        const first = list.querySelector('input[type="checkbox"]');
+        if (first) first.focus();
     }
 
-    async function handleApply() {
+    async function handleApply(list) {
         const hiddenColumns = Array.from(list.querySelectorAll('input[type="checkbox"]'))
             .filter((cb) => !cb.checked)
             .map((cb) => cb.dataset.columnKey);
 
         writeHiddenColumns(SECTION, hiddenColumns);
-        columnsModal.hidden = true;
         if (onApplied) await onApplied();
         toast('Настройки колонок сохранены', 'success');
     }
 
     function init() {
         $('[data-role="columns-btn"]').addEventListener('click', openColumnsModal);
-
-        $('[data-role="columns-reset"]').addEventListener('click', () => {
-            list.querySelectorAll('input[type="checkbox"]').forEach((cb) => { cb.checked = true; });
-        });
-        $('[data-role="columns-apply"]').addEventListener('click', handleApply);
-        $('[data-role="columns-cancel"]').addEventListener('click', () => { columnsModal.hidden = true; });
-        $('[data-role="columns-close"]').addEventListener('click', () => { columnsModal.hidden = true; });
-        columnsModal.addEventListener('click', (e) => { if (e.target === columnsModal) columnsModal.hidden = true; });
     }
 
-    return { init, getHiddenColumns };
+    return { init, getHiddenColumns, isOpen: () => modal !== null };
 }

@@ -420,6 +420,7 @@
             <div class="cat-panel__body">
                 <div class="cat-row" style="margin: 0; flex-wrap: nowrap">
                     <button type="button" class="ui-btn" data-role="panel-modal">Окно этой панели</button>
+                    <button type="button" class="ui-btn ui-btn--secondary" data-role="panel-form-modal">Окно-форма</button>
                     <button type="button" class="ui-btn ui-btn--ghost" data-role="markup-modal">Окно из разметки</button>
                     <span class="cat-cap">кнопка справа открывает меню у самой границы</span>
                     <!-- Кнопка прижата к ПРАВОМУ краю панели намеренно: поповер,
@@ -599,6 +600,41 @@
 
     document.querySelector('[data-role="panel-modal"]').addEventListener('click', () => {
         openModal({ title: 'Изменение сотрудника', body: employeeForm(), actions: modalActions, scope: panel });
+    });
+
+    // ОКНО-ФОРМА: четыре возможности окна, которых у него не было, пока окна
+    // разделов объявлялись разметкой.
+    //   sub          — подпись под заголовком («Шаг 1 из 2», «подставляется
+    //                  в документы»);
+    //   spread       — разведённый подвал: side:'start' у левого края;
+    //   role         — data-role на кнопке подвала: раздел прячет её,
+    //                  блокирует и переименовывает;
+    //   confirmClose — вопрос перед уходом, общий для Esc, затемнения и
+    //                  крестика.
+    document.querySelector('[data-role="panel-form-modal"]').addEventListener('click', () => {
+        const body = employeeForm();
+        const form = openModal({
+            title: 'Изменение сотрудника',
+            sub: 'Шаг 1 из 2',
+            body,
+            scope: panel,
+            spread: true,
+            confirmClose: () => confirm('Закрыть без сохранения?'),
+            actions: [
+                {
+                    label: 'Сбросить',
+                    variant: 'secondary',
+                    side: 'start',
+                    role: 'demo-reset',
+                    onClick: () => { body.querySelector('#mDays').value = '5/2'; return false; }
+                },
+                { label: 'Отмена', variant: 'ghost', value: false },
+                { label: 'Далее', role: 'demo-next', onClick: () => { showToast('Второй шаг', 'info'); return false; } }
+            ]
+        });
+        // Фокус — в первое поле, а не на крестик: у окна-формы это всегда так.
+        body.querySelector('.ui-field__control').focus();
+        form.result.then(() => {});
     });
 
     // Окно из разметки открывается и закрывается снятием hidden — ровно так,

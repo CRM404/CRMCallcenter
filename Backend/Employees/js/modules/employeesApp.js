@@ -42,10 +42,6 @@ let schedule = null;
 let scheduleDay = null;
 let scheduleFill = null;
 
-// Слушатель на документе — снимается при закрытии панели, иначе они копятся с
-// каждым открытием раздела.
-let onDocKeydown = null;
-
 // Номер монтирования: панель закрывают и открывают заново, а ответ на запрос,
 // ушедший до закрытия, приходит после.
 let generation = 0;
@@ -114,18 +110,10 @@ export async function mount(container, ctx) {
     scheduleDay.init();
     scheduleFill.init();
 
-    // Esc закрывает верхнее открытое окно раздела. Окна раздела разметочные
-    // (сложные формы, а не подтверждения), поэтому Esc им даётся вручную;
-    // окна слоя и поповер дня обрабатывают его сами.
-    onDocKeydown = (e) => {
-        if (e.key !== 'Escape' || !root) return;
-        if (document.querySelector('.ui-modal--screen')) return;   // окно подтверждения из слоя
-        if (scheduleDay.isOpen()) return;                          // поповер закрывает себя сам
-        const open = Array.from(root.querySelectorAll('.emp-modal')).filter((m) => !m.hidden);
-        if (open.length === 0) return;
-        open[open.length - 1].hidden = true;
-    };
-    document.addEventListener('keydown', onDocKeydown);
+    // Esc здесь больше не обрабатывается: все пять окон раздела собирает слой,
+    // и Esc им даёт он же (К110, К111). Прежний общий слушатель ставил
+    // hidden = true НАПРЯМУЮ, мимо close() карточки, где живёт проверка
+    // изменений, — и карточка с набранной фамилией закрывалась молча (К112).
 
     try {
         // Один запрос, а не два: при пустом отборе список для таблицы и полный
@@ -144,9 +132,7 @@ export function unmount() {
     if (table) table.destroy();
     if (scheduleDay) scheduleDay.destroy();
     if (scheduleFill) scheduleFill.destroy();
-    if (onDocKeydown) document.removeEventListener('keydown', onDocKeydown);
 
-    onDocKeydown = null;
     root = null;
     shell = null;
     storage = null;

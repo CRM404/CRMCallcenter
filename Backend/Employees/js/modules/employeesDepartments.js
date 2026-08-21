@@ -7,6 +7,11 @@
 // сотрудниками модалка удаления: раньше «Удалить отдел» переиспользовал
 // #deleteModal и каждый раз навешивал на его кнопки свои обработчики со своей
 // уборкой — это работало, но ровно до второго владельца того же окна.
+//
+// Само окно списка собирает слой (К110, К111): в разметке раздела остался
+// только шаблон полей.
+
+import { openModal } from '/ui/modal.js';
 
 /**
  * @param {HTMLElement} root  контейнер панели
@@ -16,9 +21,10 @@ export function createDepartments(root, deps) {
     const { storage, toast, confirmDanger, isAlive, isAbort, onChanged } = deps;
 
     const $ = (sel) => root.querySelector(sel);
-    const modal = $('[data-role="departments-modal"]');
-    const list = $('[data-role="departments-list"]');
+    const tpl = $('[data-role="departments-tpl"]');
 
+    let modal = null;   // открытое окно слоя или null
+    let list = null;    // список внутри открытого окна
     let departments = [];
     let organization = null;
     let activeForm = null;   // null | { mode: 'add' } | { mode: 'edit', id }
@@ -82,14 +88,23 @@ export function createDepartments(root, deps) {
     }
 
     function renderList() {
+        if (!list) return;
         const showEmpty = departments.length === 0 && !(activeForm && activeForm.mode === 'add');
-        $('[data-role="departments-empty"]').hidden = !showEmpty;
+        list.parentElement.querySelector('[data-role="departments-empty"]').hidden = !showEmpty;
 
         const rows = departments.map(rowHtml).join('');
         const addRow = activeForm && activeForm.mode === 'add'
             ? formRowHtml(null)
             : '<button type="button" class="department-add-row" data-role="department-add"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-plus"></use></svg> Добавить отдел</button>';
         list.innerHTML = rows + addRow;
+
+        // Форма развернулась на месте кнопки, которой её открыли, — фокус надо
+        // перевести руками, иначе он падает в документ вместе с исчезнувшей
+        // кнопкой и следующий Tab начинает обход заново.
+        if (activeForm) {
+            const nameInput = list.querySelector('#empDepartmentName');
+            if (nameInput) nameInput.focus();
+        }
     }
 
     async function loadAndRender() {
@@ -107,9 +122,9 @@ export function createDepartments(root, deps) {
     }
 
     async function handleSave() {
-        if (saving) return;
-        const name = $('#empDepartmentName').value.trim();
-        const organizationId = $('#empDepartmentOrg').value;
+        if (saving || !list) return;
+        const name = list.querySelector('#empDepartmentName').value.trim();
+        const organizationId = list.querySelector('#empDepartmentOrg').value;
 
         if (!name) { toast('Заполните обязательное поле: Название', 'error'); return; }
         if (!organizationId) { toast('Заполните обязательное поле: Юрлицо', 'error'); return; }
@@ -119,7 +134,7 @@ export function createDepartments(root, deps) {
         const id = activeForm.id;
 
         saving = true;
-        const btn = $('[data-role="department-save"]');
+        const btn = list.querySelector('[data-role="department-save"]');
         if (btn) btn.disabled = true;
         try {
             if (mode === 'edit') await storage.updateDepartment(id, data);
@@ -159,40 +174,57 @@ export function createDepartments(root, deps) {
         if (onChanged) await onChanged();
     }
 
-    function init() {
-        $('[data-role="departments-btn"]').addEventListener('click', async () => {
-            activeForm = null;
-            modal.hidden = false;
-            await loadAndRender();
-        });
-        // Крестик, «Готово» и щелчок по затемнению закрывают окно одинаково:
-        // три входа в один выход, чтобы незакрытая форма не осталась висеть
-        // после одного из них.
-        const close = () => {
-            modal.hidden = true;
-            activeForm = null;
-        };
-        $('[data-role="departments-close"]').addEventListener('click', close);
-        $('[data-role="departments-done"]').addEventListener('click', close);
-        modal.addEventListener('click', (e) => {
-            if (e.target !== modal) return;
-            close();
-        });
+    async function openDepartments() {
+        if (modal) return;
+        activeForm = null;
+        const body = document.createElement('div');
+        body.appendChild(tpl.content.cloneNode(true));
+        list = body.querySelector('[data-role="departments-list"]');
 
         // Делегирование: строки перерисовываются на каждое действие, и подписка
         // на каждую кнопку после каждой перерисовки копила бы обработчики.
-        list.addEventListener('click', (e) => {
-            const editBtn = e.target.closest('[data-action="edit"]');
-            if (editBtn) { activeForm = { mode: 'edit', id: Number(editBtn.dataset.id) }; renderList(); return; }
+        list.addEventListener('click', onListClick);
 
-            const delBtn = e.target.closest('[data-action="delete"]');
-            if (delBtn) { handleDelete(Number(delBtn.dataset.id), delBtn.dataset.name); return; }
-
-            if (e.target.closest('[data-role="department-add"]')) { activeForm = { mode: 'add' }; renderList(); return; }
-            if (e.target.closest('[data-role="department-cancel"]')) { activeForm = null; renderList(); return; }
-            if (e.target.closest('[data-role="department-save"]')) handleSave();
+        modal = openModal({
+            title: 'Управление отделами',
+            body,
+            scope: root,
+            // Подвал у окна-списка (Н3). Кнопка одна и она не сохраняет: отделы
+            // заводятся и правятся прямо в списке, каждое действие уходит на
+            // сервер сразу. «Готово» здесь — выход, а не «применить».
+            actions: [{ label: 'Готово', role: 'departments-done', value: true }]
         });
+        // Крестик, «Готово», Esc и щелчок по затемнению — четыре двери в один
+        // выход: незакрытая форма не должна пережить ни одну из них.
+        modal.result.then(() => { modal = null; list = null; activeForm = null; });
+
+        await loadAndRender();
+        if (!modal) return;   // окно успели закрыть, пока шёл запрос
+
+        // Фокус — не на крестик (К110). Поля, которое ждала дизайн-сессия, на
+        // момент открытия ещё нет: окно начинается со списка, а поле нового
+        // отдела появляется по «Добавить отдел». Поэтому фокус берёт эта
+        // кнопка, а поле получает его, когда разворачивается форма.
+        const add = list.querySelector('[data-role="department-add"]')
+            || list.querySelector('button, input');
+        if (add) add.focus();
     }
 
-    return { init, isOpen: () => !modal.hidden };
+    function init() {
+        $('[data-role="departments-btn"]').addEventListener('click', openDepartments);
+    }
+
+    function onListClick(e) {
+        const editBtn = e.target.closest('[data-action="edit"]');
+        if (editBtn) { activeForm = { mode: 'edit', id: Number(editBtn.dataset.id) }; renderList(); return; }
+
+        const delBtn = e.target.closest('[data-action="delete"]');
+        if (delBtn) { handleDelete(Number(delBtn.dataset.id), delBtn.dataset.name); return; }
+
+        if (e.target.closest('[data-role="department-add"]')) { activeForm = { mode: 'add' }; renderList(); return; }
+        if (e.target.closest('[data-role="department-cancel"]')) { activeForm = null; renderList(); return; }
+        if (e.target.closest('[data-role="department-save"]')) handleSave();
+    }
+
+    return { init, isOpen: () => modal !== null };
 }
