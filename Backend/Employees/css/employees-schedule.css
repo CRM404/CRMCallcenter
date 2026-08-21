@@ -37,7 +37,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: background .15s, color .15s;
+    transition: background var(--ui-dur-fast), color var(--ui-dur-fast);
 }
 .emp-wrap .month-pill button:hover { background: rgba(0, 0, 255, .06); color: var(--e-accent); }
 .emp-wrap .month-pill button:focus-visible { outline: 2px solid var(--e-accent); outline-offset: -2px; }
@@ -135,7 +135,7 @@
 .emp-wrap .sched th.day .dow { display: block; font-size: 10px; font-weight: 600; letter-spacing: .03em; color: var(--e-ink-faint); }
 /* Суббота-воскресенье и «сегодня» — это КАЛЕНДАРНАЯ разметка, а не выходные
    сотрудника: совпадать они не обязаны. */
-.emp-wrap .sched th.day.wend .dow { color: #b0736c; }
+.emp-wrap .sched th.day.wend .dow { color: var(--e-wend-ink); }
 .emp-wrap .sched th.day.today .dnum,
 .emp-wrap .sched th.day.today .dow { color: var(--e-accent); }
 
@@ -145,7 +145,7 @@
     position: sticky;
     left: 0;
     z-index: 2;
-    background: #fafbfe;
+    background: var(--e-row-wash);
     min-width: 224px;
     max-width: 244px;
     border-right: 1px solid var(--e-line-strong);
@@ -164,7 +164,31 @@
 .emp-wrap .sched .total-sub { font-size: 11px; color: var(--e-ink-faint); }
 
 .emp-wrap .sched .emp-cell { display: flex; align-items: center; gap: 10px; }
-.emp-wrap .sched .avatar-initials { width: 34px; height: 34px; font-size: 12.5px; }
+/* Аватар колонки сотрудника. Базового класса не было нигде: инициалы
+   рисовались голым текстом без круга, а четыре цветовых токена раздела лежали
+   мёртвыми (К32). Цвет выбирается по номеру сотрудника и потому не меняется от
+   захода к заходу — кружок отличает строки быстрее, чем чтение фамилий. В
+   СПИСКЕ аватара нет намеренно (находка Э4): там колонка широкая и кружок
+   ничего не добавляет. */
+.emp-wrap .avatar-initials {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: var(--e-av-1);
+    color: #fff;
+    font-size: 12.5px;
+    font-weight: var(--ui-weight-bold);
+    letter-spacing: .02em;
+    text-transform: uppercase;
+}
+.emp-wrap .avatar-initials.av-0 { background: var(--e-av-1); }
+.emp-wrap .avatar-initials.av-1 { background: var(--e-av-2); }
+.emp-wrap .avatar-initials.av-2 { background: var(--e-av-3); }
+.emp-wrap .avatar-initials.av-3 { background: var(--e-av-4); }
 .emp-wrap .sched .emp-name { font-size: 13.5px; font-weight: 600; color: var(--e-ink); line-height: 1.25; }
 .emp-wrap .sched .emp-sub {
     font-size: 11px;
@@ -198,7 +222,7 @@
 .emp-wrap .sched tbody tr:hover td { background-color: rgba(255, 255, 255, .55); }
 .emp-wrap .sched tbody tr:hover td.wend { background-color: rgba(96, 112, 148, .09); }
 .emp-wrap .sched tbody tr:hover td.today { background-color: rgba(0, 0, 255, .06); }
-.emp-wrap .sched tbody tr:hover .col-emp { background-color: #fafbfe; }
+.emp-wrap .sched tbody tr:hover .col-emp { background-color: var(--e-row-wash); }
 
 /* ----- Ячейка дня ----- */
 .emp-wrap .cellbtn {
@@ -217,7 +241,7 @@
     line-height: 1.15;
     background: transparent;
     color: var(--e-ink-faint);
-    transition: box-shadow .15s;
+    transition: box-shadow var(--ui-dur-fast);
 }
 .emp-wrap .cellbtn:hover { box-shadow: 0 0 0 2px var(--e-accent) inset; }
 .emp-wrap .cellbtn:focus-visible { outline: 2px solid var(--e-accent); outline-offset: 2px; }
@@ -345,7 +369,7 @@
     text-align: center;
     padding-bottom: 2px;
 }
-.emp-wrap .wk-dow.wend { color: #b0736c; }
+.emp-wrap .wk-dow.wend { color: var(--e-wend-ink); }
 .emp-wrap .wk-day {
     height: 32px;
     border: 1px solid transparent;
@@ -359,7 +383,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: background .15s, color .15s;
+    transition: background var(--ui-dur-fast), color var(--ui-dur-fast);
 }
 .emp-wrap .wk-day:hover { background: rgba(0, 0, 255, .08); }
 .emp-wrap .wk-day:focus-visible { outline: 2px solid var(--e-accent); outline-offset: 1px; }
@@ -400,6 +424,8 @@
     .emp-wrap .wk-field .ui-ic { transition: none !important; }
 }
 
-@media (max-width: 700px) {
+/* Точка перелома по ширине КОНТЕЙНЕРА, а не окна (К38): панель бывает узкой на
+   широком экране, и запрос по окну в ней не срабатывал никогда. */
+@container (max-width: 700px) {
     .emp-wrap [data-role="sched-fill"] { margin-left: 0; }
 }

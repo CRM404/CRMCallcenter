@@ -82,7 +82,6 @@
 .leads-wrap .leads-search { flex: 1 1 200px; min-width: 200px; }
 
 /* ----- Ячейки списка ----- */
-.leads-wrap .lead-phone { font-variant-numeric: tabular-nums; }
 .leads-wrap .queue-tag { margin-left: 6px; vertical-align: 1px; }
 
 /* Линия лида — обычный текст со значком направления. Рамка и заливка сняты:
@@ -172,14 +171,27 @@
 .leads-wrap .offer-result-row .added { font-size: 12px; font-weight: 600; color: var(--ok-ink); flex-shrink: 0; }
 .leads-wrap .offer-result-sub { font-size: 11.5px; color: var(--ink-faint); margin-top: 2px; }
 .leads-wrap .offer-results-note { padding: 8px 14px; font-size: 11.5px; color: var(--ink-faint); border-top: 1px solid var(--line); background: rgba(241, 245, 249, .6); }
-.leads-wrap .offer-search-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 10px; }
+/* Строка под поиском офферов переносится САМА, без точки перелома (К38):
+   кнопка не ужимается (её подпись обрезалась посреди слова — 73 px при
+   содержимом 104), а переносится подсказка рядом. */
+.leads-wrap .offer-search-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 10px;
+}
+.leads-wrap .offer-search-row > .ui-btn { flex-shrink: 0; }
 .leads-wrap .offer-search-hint { font-size: 12.5px; color: var(--ink-faint); }
 
 /* ----- Настройка колонок: сгруппированный список ----- */
 .leads-wrap .col-group { margin-bottom: 16px; }
 .leads-wrap .col-group:last-child { margin-bottom: 0; }
 .leads-wrap .col-group-label { font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 8px; }
-.leads-wrap .column-checkbox-list { display: grid; grid-template-columns: 1fr 1fr; gap: 9px 16px; }
+/* Колонки списка считаются от МЕСТА, а не от ширины окна: в узкой панели
+   пункты встают в один столбец сами (К38). */
+.leads-wrap .column-checkbox-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 9px 16px; }
 .leads-wrap .column-checkbox-item { display: flex; align-items: center; gap: 8px; font-size: 13.5px; color: var(--ink); cursor: pointer; }
 .leads-wrap .column-checkbox-item input { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; }
 
@@ -187,14 +199,15 @@
 .leads-wrap .file-upload-area { display: flex; align-items: center; gap: 16px; width: 100%; border: 1.5px dashed var(--line-strong); border-radius: var(--radius-sm); padding: 14px 16px; }
 .leads-wrap .file-upload-area .file-name { font-size: 13px; color: var(--ink-soft); flex: 1; }
 
-.leads-wrap .file-upload-area .file-name:empty::before { content: 'Файл не выбран'; color: var(--ink-faint); font-style: italic; }
+.leads-wrap .file-upload-area .file-name:empty::before { content: 'Файл не выбран — выберите или перетащите сюда'; color: var(--ink-faint); font-style: italic; }
+/* Файл над областью: рамка становится акцентной и сплошной — видно, что
+   отпускать можно именно здесь (К48). */
+.leads-wrap .file-upload-area.is-dropping {
+    border-style: solid;
+    border-color: var(--ui-color-accent);
+    background: var(--ui-color-wash-active);
+}
 .leads-wrap .hidden-file-input { display: none; }
 .leads-wrap .upload-note { font-size: 12px; color: var(--ink-soft); margin-top: 10px; line-height: 1.5; }
 .leads-wrap .upload-summary { margin-top: 16px; }
 
-/* ----- Узкая панель: сетка формы уже свернётся сама (auto-fit), а вот
-   двухколоночный список колонок и строка под поиском офферов — нет. ----- */
-@media (max-width: 760px) {
-    .leads-wrap .column-checkbox-list { grid-template-columns: 1fr; }
-    .leads-wrap .offer-search-row { flex-direction: column; align-items: flex-start; }
-}

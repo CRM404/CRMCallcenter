@@ -34,6 +34,17 @@ const SEARCH_DEBOUNCE_MS = 300;
 
 const STATUSES = ['Активен', 'Неактивен', 'Актуализация', 'Архив'];
 
+// Подписи вкладок отбора — во множественном числе и в порядке макета:
+// «Активные», «Актуализация», «Неактивные», «Архив» (М15). Значения статуса
+// при этом остаются как в базе — вкладка подписана иначе, чем хранится, и
+// путать одно с другим нельзя: по значению идёт отбор, подпись только читается.
+const STATUS_TABS = [
+    ['Активен', 'Активные'],
+    ['Актуализация', 'Актуализация'],
+    ['Неактивен', 'Неактивные'],
+    ['Архив', 'Архив']
+];
+
 const STATUS_PILL = {
     'Активен': 'ui-pill--ok',
     'Неактивен': 'ui-pill--bad',
@@ -211,22 +222,12 @@ function isCrossPlatform(state) {
 }
 
 function renderAll(state) {
-    renderStats(state);
     renderPlatforms(state);
     renderTabs(state);
     fillToolbarSelects(state);
     renderChips(state);
     renderRows(state);
     renderSelection(state);
-}
-
-function renderStats(state) {
-    // Числа считаются по ВСЕМ источникам, а не по текущей выборке: это состав
-    // раздела, а не результат фильтра.
-    const all = state.allSources || [];
-    $(state, 'stat-platforms').textContent = state.platforms.length;
-    $(state, 'stat-sources').textContent = all.length;
-    $(state, 'stat-active').textContent = all.filter((s) => s.status === 'Активен').length;
 }
 
 function renderPlatforms(state) {
@@ -267,7 +268,7 @@ function renderTabs(state) {
         counts[status] = state.sources.filter((s) => s.status === status).length;
     });
 
-    const tabs = [['all', 'Все']].concat(STATUSES.map((s) => [s, s]));
+    const tabs = [['all', 'Все']].concat(STATUS_TABS);
     $(state, 'status-tabs').innerHTML = tabs.map(([key, label]) => `
         <button type="button" class="ui-tabs__tab${key === state.status ? ' ui-tabs__tab--active' : ''}${counts[key] === 0 && key !== 'all' ? ' ui-tabs__tab--quiet' : ''}"
                 data-status="${escapeHtml(key)}">
@@ -281,29 +282,29 @@ function renderChips(state) {
     const chips = [];
     if (state.search) {
         chips.push(`<span class="ui-fchip">Поиск: <b>${escapeHtml(state.search)}</b>
-            <button type="button" class="ui-fchip__remove" data-clear="search" aria-label="Сбросить поиск"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-close"></use></svg></button></span>`);
+            <button type="button" class="ui-fchip__remove" data-clear="search" aria-label="Сбросить поиск"><svg class="ui-ic ui-ic--xs" aria-hidden="true"><use href="#ui-ic-close"></use></svg></button></span>`);
     }
     if (state.platformId !== null && !state.search) {
         const platform = state.platforms.find((p) => p.id === state.platformId);
         if (platform) {
             chips.push(`<span class="ui-fchip">Площадка: <b>${escapeHtml(platform.name)}</b>
-                <button type="button" class="ui-fchip__remove" data-clear="platform" aria-label="Показать все площадки"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-close"></use></svg></button></span>`);
+                <button type="button" class="ui-fchip__remove" data-clear="platform" aria-label="Показать все площадки"><svg class="ui-ic ui-ic--xs" aria-hidden="true"><use href="#ui-ic-close"></use></svg></button></span>`);
         }
     }
     if (state.region) {
         chips.push(`<span class="ui-fchip">Регион: <b>${escapeHtml(state.region)}</b>
-            <button type="button" class="ui-fchip__remove" data-clear="region" aria-label="Сбросить фильтр региона"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-close"></use></svg></button></span>`);
+            <button type="button" class="ui-fchip__remove" data-clear="region" aria-label="Сбросить фильтр региона"><svg class="ui-ic ui-ic--xs" aria-hidden="true"><use href="#ui-ic-close"></use></svg></button></span>`);
     }
     if (state.networkId) {
         const network = state.cpaNetworks.find((n) => String(n.id) === String(state.networkId));
         if (network) {
             chips.push(`<span class="ui-fchip">CPA-сеть: <b>${escapeHtml(network.name)}</b>
-                <button type="button" class="ui-fchip__remove" data-clear="network" aria-label="Сбросить фильтр сети"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-close"></use></svg></button></span>`);
+                <button type="button" class="ui-fchip__remove" data-clear="network" aria-label="Сбросить фильтр сети"><svg class="ui-ic ui-ic--xs" aria-hidden="true"><use href="#ui-ic-close"></use></svg></button></span>`);
         }
     }
     if (state.status !== 'all') {
         chips.push(`<span class="ui-fchip">Статус: <b>${escapeHtml(state.status)}</b>
-            <button type="button" class="ui-fchip__remove" data-clear="status" aria-label="Сбросить фильтр статуса"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-close"></use></svg></button></span>`);
+            <button type="button" class="ui-fchip__remove" data-clear="status" aria-label="Сбросить фильтр статуса"><svg class="ui-ic ui-ic--xs" aria-hidden="true"><use href="#ui-ic-close"></use></svg></button></span>`);
     }
 
     const box = $(state, 'filter-chips');

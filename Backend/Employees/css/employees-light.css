@@ -22,6 +22,13 @@
    они теперь указывают на слой, а не задают свой цвет. Тем же блоком
    пользуется employees-schedule.css — он применяется к той же обёртке. */
 .emp-wrap {
+    /* Контейнер для запросов по ширине (К38). Панель бывает узкой на широком
+       экране, поэтому правила раздела спрашивают ширину КОНТЕЙНЕРА, а не окна;
+       тот же приём уже стоит в «Источниках». Объявлено на корне раздела: сам
+       элемент на свою ширину отвечать не может, @container всегда спрашивает
+       ближайшего предка-контейнер. */
+    container-type: inline-size;
+
     --e-surface: var(--ui-color-glass);
     --e-surface-modal: var(--ui-color-glass-strong);
     --e-line: var(--ui-color-line);
@@ -47,6 +54,10 @@
     --e-av-2: #6b7f74;
     --e-av-3: #7c6f8a;
     --e-av-4: #8a6f63;
+    /* Два значения «Графика», которые повторялись по файлу россыпью (К35):
+       цвет подписи выходного и подложка выделенной строки/столбца. */
+    --e-wend-ink: #b0736c;
+    --e-row-wash: #fafbfe;
 
     /* Состояния ячейки графика — используются вторым файлом раздела. */
     --s-shift-bg: #ffffff;
@@ -157,7 +168,6 @@
 /* Кнопка удаления строки — единственная, что краснеет при наведении. */
 /* Стрелка сортировки стоит рядом с шапкой таблицы (10.5 px) — ступень xs;
    цвет акцентный, потому что она несёт смысл, а не сопровождает текст (К14). */
-.emp-wrap .sort-icon { margin-left: 6px; color: var(--ui-color-accent); }
 
 /* Списки в полосе массовых действий: рост под полосу, а не под форму. */
 .emp-wrap .mass-select { width: auto; min-width: 190px; min-height: 34px; padding: 6px 10px; font-size: 13px; }
@@ -176,7 +186,7 @@
     font-size: 13px;
     font-weight: 600;
     cursor: pointer;
-    transition: background .15s, color .15s, border-color .15s;
+    transition: background var(--ui-dur-fast), color var(--ui-dur-fast), border-color var(--ui-dur-fast);
 }
 .emp-wrap .page-btn:hover { border-color: var(--e-accent-soft); color: var(--e-ink); background: #fff; }
 .emp-wrap .page-btn.active { background: var(--e-accent); border-color: var(--e-accent); color: #fff; }
@@ -222,7 +232,9 @@
 .emp-wrap .filter-checkbox input { width: 16px; height: 16px; accent-color: var(--e-accent); cursor: pointer; }
 
 /* ----- Окно «Видимые колонки» ----- */
-.emp-wrap .column-checkbox-list { display: grid; grid-template-columns: 1fr 1fr; gap: 9px 16px; }
+/* Как и в «Лидах» (К38): колонки считаются от места, а не от ширины окна —
+   точка перелома по окну в панели не срабатывала никогда. */
+.emp-wrap .column-checkbox-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 9px 16px; }
 .emp-wrap .column-checkbox-item { display: flex; align-items: center; gap: 8px; font-size: 13.5px; color: var(--e-ink); cursor: pointer; }
 .emp-wrap .column-checkbox-item input { width: 16px; height: 16px; accent-color: var(--e-accent); cursor: pointer; }
 
@@ -261,7 +273,7 @@
     font-size: 13.5px;
     font-weight: 600;
     cursor: pointer;
-    transition: border-color .15s, color .15s, background .15s;
+    transition: border-color var(--ui-dur-fast), color var(--ui-dur-fast), background var(--ui-dur-fast);
 }
 .emp-wrap .department-add-row:hover { border-color: var(--e-accent); color: var(--e-accent); background: rgba(0, 0, 255, .04); }
 
@@ -269,6 +281,3 @@
 .emp-wrap .modal-sub { font-size: 12.5px; color: var(--e-ink-faint); margin-top: 3px; }
 .emp-wrap .ui-form-grid--single { grid-template-columns: 1fr; }
 
-@media (max-width: 760px) {
-    .emp-wrap .column-checkbox-list { grid-template-columns: 1fr; }
-}

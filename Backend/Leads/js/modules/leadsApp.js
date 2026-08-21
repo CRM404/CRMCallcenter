@@ -365,7 +365,7 @@ function rowHtml(lead) {
             <td class="ui-table__sel"><input type="checkbox" data-check-id="${lead.id}" aria-label="Выбрать лида ${lead.id}"${checked}></td>
             <td>${lead.id}</td>
             <td>${name}</td>
-            <td class="lead-phone">${escapeHtml(lead.phone)}</td>
+            <td>${escapeHtml(lead.phone)}</td>
             ${cells}
             <td class="ui-table__acts">
                 <button type="button" class="ui-btn ui-btn--icon ui-btn--row" data-edit="${lead.id}" title="Изменить" aria-label="Изменить"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-edit"></use></svg></button>
@@ -385,7 +385,7 @@ function renderTable() {
         // панели, и над сообщением «ничего не найдено» висела бы пустая рамка
         // в треть экрана.
         $('[data-role="table-wrap"]').hidden = true;
-        $('[data-role="empty-state"]').hidden = false;
+        showEmptyState();
         updateMassActionsUI();
         return;
     }
@@ -424,6 +424,23 @@ function renderFooter() {
     $('[data-role="load-more"]').hidden = !hasMore;
 }
 
+/**
+ * Пустое состояние отвечает на вопрос «почему я ничего не вижу», и ответов два:
+ * лидов нет вовсе — или ни один не подошёл под отбор. Прежде текст был один на
+ * оба случая и винил фильтры даже там, где их никто не ставил: человек шёл
+ * искать и сбрасывать несуществующее (К39).
+ */
+function showEmptyState() {
+    const filtered = activeFilterLabels().length > 0;
+    $('[data-role="empty-title"]').textContent = filtered
+        ? 'Ничего не найдено по текущим фильтрам'
+        : 'Лидов пока нет';
+    $('[data-role="empty-text"]').textContent = filtered
+        ? 'Лиды в разделе есть — просто ни один не подходит под отбор. Снимите лишний фильтр в строке выше.'
+        : 'Добавьте первого или загрузите базу файлом — обе кнопки в шапке раздела.';
+    $('[data-role="empty-state"]').hidden = false;
+}
+
 // Подписи активных фильтров: человек видит не «sourceId=4», а
 // «Источник: Яндекс.Директ».
 function activeFilterLabels() {
@@ -457,7 +474,7 @@ function renderFilterChips() {
     const chips = active.map((f) => `
         <span class="ui-fchip">${f.label ? `${escapeHtml(f.label)}: ` : ''}<b>${escapeHtml(String(f.value))}</b>
             <button type="button" class="ui-fchip__remove" data-drop-filter="${f.key}"
-                    aria-label="Снять фильтр">${icon('close', 'sm')}</button>
+                    aria-label="Снять фильтр">${icon('close', 'xs')}</button>
         </span>`).join('');
     box.innerHTML = active.length
         ? `${chips}<button type="button" class="ui-fchips__clear" data-role="clear-filters">Сбросить все</button>`
@@ -508,9 +525,31 @@ async function applyFilterState(mountId) {
 // захардкоженными парами «действие+значение» — вариантов слишком много
 // (~59 статусов, N сотрудников), report_designer.md, п.5.
 
+/**
+ * Причина, по которой действие не пойдёт, — строкой в полосе (К46).
+ * Исчезает вместе с причиной: при смене выделения, смене действия и после
+ * удачного применения. Тост для этого не годился — он уходит через несколько
+ * секунд, а выделение и полоса остаются, и объяснения на экране больше нет.
+ */
+function showMassWarn(text) {
+    const node = $('[data-role="mass-warn"]');
+    if (!node) return;
+    node.textContent = text;
+    node.hidden = false;
+}
+
+function hideMassWarn() {
+    const node = $('[data-role="mass-warn"]');
+    if (!node) return;
+    node.textContent = '';
+    node.hidden = true;
+}
+
 function updateMassActionsUI() {
     $('[data-role="selected-count"]').textContent = `Выбрано: ${selectedIds.size}`;
     $('[data-role="mass-bar"]').hidden = selectedIds.size === 0;
+    // Выделение изменилось — прежняя причина могла перестать быть правдой.
+    hideMassWarn();
     $('[data-role="head-checkbox"]').checked = leads.length > 0 && leads.every((l) => selectedIds.has(l.id));
 }
 
@@ -569,16 +608,24 @@ function fillMassEmployeeSelect(line) {
 
 function handleMassActionChange() {
     const action = $('[data-role="mass-action"]').value;
+    hideMassWarn();
 
     if (action === 'employee') {
         const { error, line } = selectedLeadsLine();
         if (error) {
-            shell.toast(error, 'error');
+            showMassWarn(error);
             $('[data-role="mass-action"]').value = '';
             $('[data-role="mass-employee"]').hidden = true;
             return;
         }
         fillMassEmployeeSelect(line);
+        // Третий случай, которого раньше не было вовсе: линия одна, но
+        // активных операторов у неё нет. Список приезжал с единственным
+        // пунктом «— не назначен —», и «Применить» снимал оператора со всех
+        // выделенных — действие законное, но человек шёл не за ним (К46).
+        if ($('[data-role="mass-employee"]').options.length <= 1) {
+            showMassWarn('Нет сотрудников для изменения (уже неактивные)');
+        }
     }
 
     $('[data-role="mass-employee"]').hidden = action !== 'employee';
@@ -596,45 +643,60 @@ async function handleMassApply() {
 
     const my = generation;
     const action = $('[data-role="mass-action"]').value;
-    if (!action) { shell.toast('Выберите действие', 'error'); return; }
-    if (selectedIds.size === 0) { shell.toast('Выберите хотя бы одного лида', 'error'); return; }
+    if (!action) { showMassWarn('Выберите действие'); return; }
+    if (selectedIds.size === 0) { showMassWarn('Выберите хотя бы одного лида'); return; }
     const ids = Array.from(selectedIds);
 
     const config = MASS_PATCH_ACTIONS[action];
-    let select = null;
-    if (action !== 'delete') {
-        if (!config) return;
-        // Выделение могли изменить уже после выбора действия — перепроверяем.
-        if (action === 'employee') {
-            const { error } = selectedLeadsLine();
-            if (error) { shell.toast(error, 'error'); return; }
-        }
-        select = $(`[data-role="${config.role}"]`);
-        if (config.required && !select.value) { shell.toast(config.prompt, 'error'); return; }
+    if (!config) return;
+    // Выделение могли изменить уже после выбора действия — перепроверяем.
+    if (action === 'employee') {
+        const { error } = selectedLeadsLine();
+        if (error) { showMassWarn(error); return; }
     }
+    const select = $(`[data-role="${config.role}"]`);
+    if (config.required && !select.value) { showMassWarn(config.prompt); return; }
 
     massApplying = true;
     setBusy('[data-role="mass-apply"]', true);
     try {
-        if (action === 'delete') {
-            await runMassDelete(ids, my);
-        } else {
-            await runMassPatch(config, select, ids, my);
-        }
+        await runMassPatch(config, select, ids, my);
     } finally {
         massApplying = false;
         setBusy('[data-role="mass-apply"]', false);
     }
 }
 
+/**
+ * Удаление — своя кнопка и свой путь (К47). Пятым пунктом в списке действий оно
+ * выбиралось тем же движением руки, что «Сменить статус», а стоит дороже всех
+ * остальных вместе взятых.
+ */
+async function handleMassDelete() {
+    if (massApplying) return;
+    const my = generation;
+    if (selectedIds.size === 0) { showMassWarn('Выберите хотя бы одного лида'); return; }
+    const ids = Array.from(selectedIds);
+
+    massApplying = true;
+    setBusy('[data-role="mass-delete"]', true);
+    try {
+        await runMassDelete(ids, my);
+    } finally {
+        massApplying = false;
+        setBusy('[data-role="mass-delete"]', false);
+    }
+}
+
 async function runMassDelete(ids, my) {
     const ok = await shell.confirmDanger({
-        title: 'Удаление лидов',
+        title: 'Удалить лиды?',
         message: `Будет удалено: ${ids.length}. Действие необратимо.`
     });
     if (!ok || !alive(my)) return;
     let deleted = 0;
     let failed = 0;
+    const counter = $('[data-role="selected-count"]');
     for (const id of ids) {
         try {
             await storage.deleteLead(id);
@@ -646,6 +708,10 @@ async function runMassDelete(ids, my) {
             failed++;
         }
         if (!alive(my)) return;
+        // Полоса считает вслух (К47): удаление идёт по запросу на лида, и на
+        // сорока шести выделенных это десятки секунд, в которые раньше на
+        // экране была только заблокированная кнопка.
+        if (counter) counter.textContent = `Удалено ${deleted + failed} из ${ids.length}`;
     }
     clearSelection();
     await reloadAll();
@@ -826,7 +892,7 @@ function bindHandlers() {
         // Удаление необратимо — подтверждение накрывает весь экран, а не только
         // свою панель (правило дизайн-сессии, бриф 5.4).
         const ok = await shell.confirmDanger({
-            title: 'Удаление лида',
+            title: 'Удалить лид?',
             message: `Лид #${lead.id}${fullName(lead) ? ' («' + fullName(lead) + '»)' : ''} будет удалён без возможности восстановления.`
         });
         if (!ok || !alive(my)) return;
@@ -882,6 +948,7 @@ function bindHandlers() {
     // --- массовые действия ---
     $('[data-role="mass-clear"]').addEventListener('click', clearSelection);
     $('[data-role="mass-action"]').addEventListener('change', handleMassActionChange);
+    $('[data-role="mass-delete"]').addEventListener('click', handleMassDelete);
     $('[data-role="mass-apply"]').addEventListener('click', handleMassApply);
 
     // --- фильтры ---

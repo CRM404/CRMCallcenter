@@ -113,8 +113,13 @@
         </table>
     </div>
 
+    <!-- Пустое состояние двуликое (К39): один текст на оба случая винил
+         фильтры даже тогда, когда никаких фильтров нет и раздел просто пуст, —
+         и человек шёл искать и сбрасывать несуществующее. Тексты ставит
+         leadsApp.js по признаку «есть ли активные фильтры». -->
     <div class="ui-empty ui-empty--inline" data-role="empty-state" hidden>
-        <p class="ui-empty__text">Ничего не найдено по текущим фильтрам.</p>
+        <b class="ui-empty__title" data-role="empty-title"></b>
+        <span class="ui-empty__text" data-role="empty-text"></span>
     </div>
 
     <!-- Подвал: сколько показано из скольких подходящих под фильтр. «M» —
@@ -131,19 +136,24 @@
     <div class="ui-mass-bar" data-role="mass-bar" hidden>
         <span class="ui-mass-bar__count" data-role="selected-count">Выбрано: 0</span>
         <select class="ui-field__control mass-select" data-role="mass-action" aria-label="Массовое действие">
-            <option value="">Выберите действие</option>
+            <option value="">— выберите действие —</option>
             <option value="employee">Сменить оператора</option>
             <option value="status">Сменить статус</option>
             <option value="script">Сменить скрипт</option>
             <option value="repeatScript">Сменить скрипт для повторных</option>
-            <option value="delete">Удалить</option>
         </select>
         <select class="ui-field__control mass-select" data-role="mass-employee" aria-label="Оператор" hidden><option value="">— не назначен —</option></select>
         <select class="ui-field__control mass-select" data-role="mass-status" aria-label="Статус" hidden></select>
         <select class="ui-field__control mass-select" data-role="mass-script" aria-label="Скрипт" hidden></select>
         <select class="ui-field__control mass-select" data-role="mass-repeat-script" aria-label="Скрипт для повторных" hidden></select>
         <button type="button" class="ui-btn" data-role="mass-apply">Применить</button>
+        <!-- Удаление — ОТДЕЛЬНАЯ кнопка (К47). Пятым пунктом в списке действий
+             необратимое выбиралось тем же движением руки, что «Сменить статус». -->
+        <button type="button" class="ui-btn ui-btn--danger" data-role="mass-delete">Удалить</button>
         <button type="button" class="ui-btn ui-btn--ghost ui-btn--icon ui-btn--row" data-role="mass-clear" aria-label="Сбросить выделение" title="Сбросить выделение"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-close"></use></svg></button>
+        <!-- Причина, по которой действие не пойдёт: живёт в полосе и исчезает
+             вместе с причиной (К46). -->
+        <span class="ui-mass-bar__warn" data-role="mass-warn" hidden></span>
     </div>
 
     <!-- ================= ОКНО «ФИЛЬТРЫ» ================= -->
@@ -405,7 +415,10 @@
                     </div>
                     <div class="ui-field ui-field--wide">
                         <span class="ui-field__label ui-field__label--required">Файл (.xlsx / .xls / .csv)</span>
-                        <div class="file-upload-area">
+                        <!-- Пунктирная рамка обещает перетаскивание, и теперь оно
+                             работает (К48). Приглашение написано словами: рамка
+                             сама по себе понятна не всем. -->
+                        <div class="file-upload-area" data-role="up-drop">
                             <svg class="ui-ic ui-ic--sm ui-ic--quiet" aria-hidden="true"><use href="#ui-ic-upload"></use></svg>
                             <span class="file-name" data-role="up-file-name"></span>
                             <button type="button" class="ui-btn ui-btn--secondary" data-role="up-file-trigger">Выбрать файл</button>

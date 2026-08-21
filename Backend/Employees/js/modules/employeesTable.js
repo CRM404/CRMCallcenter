@@ -147,7 +147,9 @@ export function createTable(root, deps) {
     }
 
     function rowHtml(emp, hidden) {
-        const idFormatted = String(emp.id).padStart(4, '0');
+        // Номер записи как есть: «0001» выглядит как код или артикул, а это
+        // просто id строки (М29, подтверждено паспортом — «ID · номер записи»).
+        const idFormatted = String(emp.id);
         const hiddenAttr = (key) => (hidden.has(key) ? ' hidden' : '');
         const fullName = `${emp.lastName || ''} ${emp.firstName || ''}`.trim();
         const checked = selectedIds.has(emp.id) ? ' checked' : '';
@@ -227,11 +229,15 @@ export function createTable(root, deps) {
 
     function renderSortIcons() {
         $$('thead th[data-field]').forEach((th) => {
-            const icon = th.querySelector('.sort-icon');
+            const icon = th.querySelector('.ui-table__sort-icon');
             if (th.dataset.field === sortField) {
                 const key = sortDirection === 'asc' ? 'sort-asc' : 'sort-desc';
                 if (icon) icon.remove();
-                th.appendChild(iconNode(key, 'sm', 'sort-icon'));
+                // Ступень `xs`, а не `sm`: значок стоит рядом с текстом шапки в
+                // 10.5 px, и по правилу выбора ступени крупнее подписи он быть
+                // не может (К29). Класс — из слоя: свой `.sort-icon` раздел
+                // объявлял ради того же отступа и цвета.
+                th.appendChild(iconNode(key, 'xs', 'ui-table__sort-icon'));
             } else if (icon) {
                 icon.remove();
             }
@@ -447,7 +453,10 @@ export function createTable(root, deps) {
                 + '<button type="button" class="ui-fchips__clear" data-role="clear-filters">Сбросить все</button>'
             : '';
         box.querySelectorAll('.ui-fchip__remove').forEach((btn) => {
-            btn.appendChild(iconNode('close', 'sm'));
+            // Текст чипа — 11.5 px, значок рядом с ним по правилу ступеней
+            // берёт `xs`: на `sm` крестик был почти вдвое выше букв слова,
+            // которое снимает (К41).
+            btn.appendChild(iconNode('close', 'xs'));
         });
     }
 
@@ -500,7 +509,7 @@ export function createTable(root, deps) {
 
     async function handleDelete(id, name) {
         const ok = await confirmDanger({
-            title: 'Удаление сотрудника',
+            title: 'Удалить сотрудника?',
             message: name
                 ? `Удалить сотрудника «${name}»? Действие необратимо.`
                 : 'Удалить этого сотрудника? Действие необратимо.'
@@ -545,7 +554,7 @@ export function createTable(root, deps) {
 
     async function runMassDelete(ids) {
         const ok = await confirmDanger({
-            title: 'Удаление сотрудников',
+            title: 'Удалить сотрудников?',
             message: `Будет удалено: ${ids.length}. Действие необратимо.`
         });
         if (!ok || !isAlive()) return;

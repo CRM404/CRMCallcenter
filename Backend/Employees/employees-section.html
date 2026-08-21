@@ -100,17 +100,17 @@
                 <thead>
                     <tr>
                         <th class="ui-table__sel"><input type="checkbox" data-role="select-all" aria-label="Выделить всех"></th>
-                        <th data-field="id">ID</th>
-                        <th data-field="lastName">Сотрудник</th>
-                        <th data-col="department" data-field="department">Отдел</th>
+                        <th class="ui-table__sortable" data-field="id">ID</th>
+                        <th class="ui-table__sortable" data-field="lastName">Сотрудник</th>
+                        <th class="ui-table__sortable" data-col="department" data-field="department">Отдел</th>
                         <th>Контакты</th>
                         <th>Мессенджеры</th>
-                        <th data-col="managerName" data-field="managerName">Руководитель</th>
-                        <th data-col="hireDate" data-field="hireDate">Дата найма</th>
-                        <th data-col="status" data-field="status">Статус</th>
-                        <th data-col="terminationDate" data-field="terminationDate">Дата увольнения</th>
-                        <th data-col="lineType" data-field="lineType">Тип линии</th>
-                        <th data-col="workSchedule" data-field="workSchedule">График работы</th>
+                        <th class="ui-table__sortable" data-col="managerName" data-field="managerName">Руководитель</th>
+                        <th class="ui-table__sortable" data-col="hireDate" data-field="hireDate">Дата найма</th>
+                        <th class="ui-table__sortable" data-col="status" data-field="status">Статус</th>
+                        <th class="ui-table__sortable" data-col="terminationDate" data-field="terminationDate">Дата увольнения</th>
+                        <th class="ui-table__sortable" data-col="lineType" data-field="lineType">Тип линии</th>
+                        <th class="ui-table__sortable" data-col="workSchedule" data-field="workSchedule">График работы</th>
                         <th class="ui-table__acts"></th>
                     </tr>
                 </thead>
@@ -140,7 +140,7 @@
         <div class="ui-mass-bar" data-role="mass-bar" hidden>
             <span class="ui-mass-bar__count" data-role="selected-count">Выбрано: 0</span>
             <select class="ui-field__control mass-select" data-role="mass-action" aria-label="Массовое действие">
-                <option value="">Выберите действие</option>
+                <option value="">— выберите действие —</option>
                 <option value="inactive">Перевести в неактивные</option>
                 <option value="delete">Удалить</option>
             </select>
@@ -216,8 +216,8 @@
                             <div class="ui-field"><label class="ui-field__label" for="empMiddleName">Отчество</label><input class="ui-field__control" type="text" id="empMiddleName" placeholder="Иванович"></div>
                             <div class="ui-field"><label class="ui-field__label ui-field__label--required" for="empEmail">Email</label><input class="ui-field__control" type="email" id="empEmail" placeholder="ivan@company.ru"></div>
                             <div class="ui-field"><label class="ui-field__label ui-field__label--required" for="empPhone">Телефон</label><input class="ui-field__control" type="tel" id="empPhone" placeholder="+7 900 123-45-67"></div>
-                            <div class="ui-field"><label class="ui-field__label" for="empWhatsapp"> WhatsApp</label><input class="ui-field__control" type="tel" id="empWhatsapp" placeholder="+7 900 111-22-33"></div>
-                            <div class="ui-field"><label class="ui-field__label" for="empTelegram"> Telegram</label><input class="ui-field__control" type="text" id="empTelegram" placeholder="@username или номер"></div>
+                            <div class="ui-field"><label class="ui-field__label" for="empWhatsapp">WhatsApp</label><input class="ui-field__control" type="tel" id="empWhatsapp" placeholder="+7 900 111-22-33"></div>
+                            <div class="ui-field"><label class="ui-field__label" for="empTelegram">Telegram</label><input class="ui-field__control" type="text" id="empTelegram" placeholder="@username или номер"></div>
                             <div class="ui-field"><label class="ui-field__label" for="empPosition">Должность</label><input class="ui-field__control" type="text" id="empPosition" placeholder="Оператор"></div>
                             <div class="ui-field"><label class="ui-field__label" for="empDepartment">Отдел</label><input class="ui-field__control" type="text" id="empDepartment" placeholder="Отдел продаж"></div>
                             <div class="ui-field"><label class="ui-field__label" for="empManager">Руководитель</label><select class="ui-field__control" id="empManager"><option value="">Без руководителя</option></select></div>
@@ -361,8 +361,8 @@
                     <div class="ui-field">
                         <span class="ui-field__label">Контакты</span>
                         <div class="filter-checks">
-                            <label class="filter-checkbox"><input type="checkbox" id="empFilterWhatsapp"> WhatsApp</label>
-                            <label class="filter-checkbox"><input type="checkbox" id="empFilterTelegram"> Telegram</label>
+                            <label class="filter-checkbox"><input type="checkbox" id="empFilterWhatsapp">WhatsApp</label>
+                            <label class="filter-checkbox"><input type="checkbox" id="empFilterTelegram">Telegram</label>
                         </div>
                     </div>
                     <div class="ui-field"><label class="ui-field__label" for="empFilterHireFrom">Дата найма (с)</label><input class="ui-field__control" type="date" id="empFilterHireFrom"></div>

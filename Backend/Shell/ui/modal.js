@@ -18,6 +18,8 @@
 // снаружи, — на прошлой задаче незаэкранированное имя сотрудника в innerHTML
 // уже становилось находкой приёмки.
 
+import { iconNode } from './icons.js';
+
 const OPEN_STACK = [];
 
 /**
@@ -67,7 +69,10 @@ export function openModal(opts = {}) {
     closeBtn.type = 'button';
     closeBtn.className = 'ui-modal__close';
     closeBtn.setAttribute('aria-label', 'Закрыть');
-    closeBtn.textContent = '×';
+    // Значок, а не символ шрифта: символ не слушается ступеней значков и
+     // живёт в метрике шрифта, из-за чего крестик окна слоя отличался от
+     // крестика разметочных окон (родня К40).
+    closeBtn.appendChild(iconNode('close', 'sm'));
     head.appendChild(closeBtn);
 
     box.appendChild(head);

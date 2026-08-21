@@ -82,7 +82,7 @@ export function createPickList(container, { placeholder = '— добавить�
             const item = items[indexOfItem(id)];
             if (!item) return '';
             const badge = item.stageNumber !== undefined ? `<span class="ui-tag">${item.stageNumber}</span>` : '';
-            return `<span class="ui-fchip">${badge}${escapeHtml(item.label)}<button type="button" class="ui-fchip__remove" data-remove="${id}" aria-label="Убрать">×</button></span>`;
+            return `<span class="ui-fchip">${badge}${escapeHtml(item.label)}<button type="button" class="ui-fchip__remove" data-remove="${id}" aria-label="Убрать"><svg class="ui-ic ui-ic--xs" aria-hidden="true"><use href="#ui-ic-close"></use></svg></button></span>`;
         }).join('');
         emptyEl.hidden = selectedIds.length > 0 || !emptyText;
     }

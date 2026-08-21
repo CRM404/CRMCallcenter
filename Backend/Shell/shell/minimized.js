@@ -42,7 +42,7 @@ export function destroy() {
 function renderFrame() {
     const label = document.createElement('span');
     label.className = 'shell-minimized__label';
-    label.textContent = 'Свёрнуто';
+    label.textContent = 'Свёрнутые';
 
     listEl = document.createElement('div');
     listEl.className = 'shell-minimized__list';

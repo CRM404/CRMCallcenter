@@ -99,7 +99,7 @@ export function createOfferTabPicker({
         countEl.textContent = selected.size;
         if (tabCountEl) tabCountEl.textContent = selected.size;
         tagsEl.innerHTML = Array.from(selected.entries())
-            .map(([id, name]) => `<span class="ui-fchip">${escapeHtml(name)}<button type="button" class="ui-fchip__remove" data-remove="${id}" aria-label="Убрать">×</button></span>`)
+            .map(([id, name]) => `<span class="ui-fchip">${escapeHtml(name)}<button type="button" class="ui-fchip__remove" data-remove="${id}" aria-label="Убрать"><svg class="ui-ic ui-ic--xs" aria-hidden="true"><use href="#ui-ic-close"></use></svg></button></span>`)
             .join('');
         emptyEl.hidden = selected.size > 0;
         clearAllBtn.hidden = selected.size === 0;
@@ -338,7 +338,7 @@ export function createOfferInlinePicker(container, { onChange = null, storage, t
 
     function renderTags() {
         tagsEl.innerHTML = Array.from(selected.entries())
-            .map(([id, name]) => `<span class="ui-fchip">${escapeHtml(name)}<button type="button" class="ui-fchip__remove" data-remove="${id}" aria-label="Убрать">×</button></span>`)
+            .map(([id, name]) => `<span class="ui-fchip">${escapeHtml(name)}<button type="button" class="ui-fchip__remove" data-remove="${id}" aria-label="Убрать"><svg class="ui-ic ui-ic--xs" aria-hidden="true"><use href="#ui-ic-close"></use></svg></button></span>`)
             .join('');
         if (onChange) onChange(Array.from(selected.keys()));
     }

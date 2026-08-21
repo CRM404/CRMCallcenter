@@ -142,7 +142,7 @@ export function createDepartments(root, deps) {
 
     async function handleDelete(id, name) {
         const ok = await confirmDanger({
-            title: 'Удаление отдела',
+            title: 'Удалить отдел?',
             message: `Удалить отдел «${name}»? Действие необратимо.`
         });
         if (!ok || !isAlive()) return;

@@ -128,6 +128,9 @@ function renderList(state) {
     $(state, 'rows').innerHTML = renderScriptRows(state.scripts, selectedId);
     $(state, 'empty').hidden = state.scripts.length > 0;
     state.container.querySelector('.ui-table-wrap').hidden = state.scripts.length === 0;
+    // Подпись объясняет, что делать со СПИСКОМ: пустому списку она не нужна —
+    // там своё пустое состояние со своим следующим шагом.
+    $(state, 'list-note').hidden = state.scripts.length === 0;
 }
 
 function syncOpenStatus(state) {
@@ -242,7 +245,7 @@ function renderNodes(state) {
 
         onDeleteObjection: async (id) => {
             const ok = await state.ctx.confirmDanger({
-                title: 'Удалить возражение',
+                title: 'Удалить это возражение?',
                 message: 'Удалить это возражение?'
             });
             if (!ok || state.destroyed) return;
@@ -461,7 +464,7 @@ async function changeStatus(state, script, status) {
 // нельзя отменить).
 async function removeScript(state, script) {
     const ok = await state.ctx.confirmDanger({
-        title: 'Удалить скрипт',
+        title: 'Удалить скрипт?',
         message: CONFIRM_TEXTS.remove(script.title)
     });
     if (!ok || state.destroyed) return;

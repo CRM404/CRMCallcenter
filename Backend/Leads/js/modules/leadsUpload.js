@@ -112,6 +112,12 @@ export function createUpload(root, deps) {
     let allEmployees = [];
     let allStatuses = [];
 
+    /** Один вход для выбранного файла — и из диалога, и из перетаскивания. */
+    function takeFile(file) {
+        selectedFile = file;
+        $('[data-role="up-file-name"]').textContent = file ? file.name : '';
+    }
+
     function resetSummary() {
         $('[data-role="upload-summary"]').hidden = true;
         // Партии ещё нет — уход из окна отменяет начатое (К55).
@@ -264,8 +270,34 @@ export function createUpload(root, deps) {
 
         $('[data-role="up-file-trigger"]').addEventListener('click', () => fileInput.click());
         fileInput.addEventListener('change', () => {
-            selectedFile = fileInput.files[0] || null;
-            $('[data-role="up-file-name"]').textContent = selectedFile ? selectedFile.name : '';
+            takeFile(fileInput.files[0] || null);
+        });
+
+        // Перетаскивание (К48). preventDefault на dragover обязателен: без него
+        // браузер считает, что бросать сюда нельзя, и отпущенный файл просто
+        // откроется вместо страницы. Проверка расширения здесь же — тот же
+        // список, что у поля выбора: браузер фильтрует по accept только в
+        // диалоге, перетащить можно что угодно.
+        const drop = $('[data-role="up-drop"]');
+        const stop = (e) => { e.preventDefault(); e.stopPropagation(); };
+        drop.addEventListener('dragover', (e) => {
+            stop(e);
+            drop.classList.add('is-dropping');
+        });
+        drop.addEventListener('dragleave', (e) => {
+            stop(e);
+            drop.classList.remove('is-dropping');
+        });
+        drop.addEventListener('drop', (e) => {
+            stop(e);
+            drop.classList.remove('is-dropping');
+            const file = e.dataTransfer && e.dataTransfer.files ? e.dataTransfer.files[0] : null;
+            if (!file) return;
+            if (!/\.(xlsx|xls|csv)$/i.test(file.name)) {
+                toast('Нужен файл .xlsx, .xls или .csv', 'error');
+                return;
+            }
+            takeFile(file);
         });
 
         goBtn.addEventListener('click', handleGo);

@@ -41,18 +41,22 @@
             <div class="network-meta" id="networkMeta"></div>
         </div>
 
+        <!-- Поиск сверху, вкладки статусов ПОД ним — как в макете (М31). В одной
+             строке вкладки читались как продолжение поиска, хотя отбирают
+             другое и другим способом. -->
         <div class="ui-toolbar">
             <div class="ui-field cpa-search">
                 <input type="search" class="ui-field__control" data-role="search"
                        placeholder="Найти оффер по названию…" aria-label="Поиск офферов">
             </div>
-            <div class="ui-tabs ui-tabs--inline" data-role="status-filter">
-                <button type="button" class="ui-tabs__tab ui-tabs__tab--active" data-status="all">Все</button>
-                <button type="button" class="ui-tabs__tab" data-status="active">Активные</button>
-                <button type="button" class="ui-tabs__tab" data-status="paused">На паузе</button>
-                <button type="button" class="ui-tabs__tab" data-status="disabled">Отключённые</button>
-                <button type="button" class="ui-tabs__tab" data-status="draft">Черновики</button>
-            </div>
+        </div>
+
+        <div class="ui-tabs ui-tabs--inline cpa-status-tabs" data-role="status-filter">
+            <button type="button" class="ui-tabs__tab ui-tabs__tab--active" data-status="all">Все</button>
+            <button type="button" class="ui-tabs__tab" data-status="active">Активные</button>
+            <button type="button" class="ui-tabs__tab" data-status="paused">На паузе</button>
+            <button type="button" class="ui-tabs__tab" data-status="disabled">Отключённые</button>
+            <button type="button" class="ui-tabs__tab" data-status="draft">Черновики</button>
         </div>
 
         <div class="table-card">

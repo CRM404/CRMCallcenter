@@ -249,7 +249,7 @@ async function handleDeleteNetwork(id) {
     // Необратимое действие — окно накрывает весь экран, а не только свою
     // панель: цена ошибки выше, чем удобство соседней панели.
     const my = generation;
-    const ok = await shell.confirmDanger({ title: 'Удаление сети', message });
+    const ok = await shell.confirmDanger({ title: 'Удалить сеть?', message });
     if (!ok || !alive(my)) return;
     try {
         await storage.deleteCpaNetwork(id);
@@ -291,8 +291,8 @@ function renderOffersTable() {
     $('#offersBody').innerHTML = list.map((o) => `
         <tr data-id="${o.id}">
             <td><div class="offer-name">${escapeHtml(o.name)}</div><div class="offer-cat">${escapeHtml(o.category || '—')}</div></td>
-            <td>${o.actionType ? `<span class="action-tag">${escapeHtml(o.actionType)}</span>` : DASH}</td>
-            <td>${o.rate === null || o.rate === undefined ? DASH : `<span class="rate-value">${formatMoney(o.rate)}</span><span class="rate-cur">₽</span>`}</td>
+            <td>${o.actionType ? escapeHtml(o.actionType) : DASH}</td>
+            <td>${o.rate === null || o.rate === undefined ? DASH : `<span class="rate-value">${formatMoney(o.rate)} ₽</span>`}</td>
             <td>${o.dateStart ? `<span class="period">${formatDate(o.dateStart)} – ${o.dateEnd ? formatDate(o.dateEnd) : 'бессрочно'}</span>` : DASH}</td>
             <td><span class="ui-pill ${STATUS_PILL[o.status] || 'ui-pill--mute'}">${STATUS_LABEL[o.status]}</span></td>
             <td class="ui-table__acts">
@@ -789,7 +789,7 @@ async function handleDeleteOffer(id) {
     if (!o) return;
     const my = generation;
     const ok = await shell.confirmDanger({
-        title: 'Удаление оффера',
+        title: 'Удалить оффер?',
         message: `Удалить оффер «${o.name}»? Действие необратимо.`
     });
     if (!ok || !alive(my)) return;

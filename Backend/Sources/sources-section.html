@@ -24,15 +24,12 @@
         </span>
     </div>
 
-    <!-- Чипов-счётчиков у этого раздела в макете нет (М16): числа площадок и
-         источников видны в самом мастер-детали, и второй раз их не показываем.
-         Узлы счётчиков сохранены скрытыми — модуль продолжает их наполнять, и
-         вернуть строку чипов можно снятием hidden. -->
-    <ul class="ui-chips ui-page-chips" hidden>
-        <li class="ui-chip"><span class="ui-chip__value" data-role="stat-platforms">—</span><span class="ui-chip__label">Площадок</span></li>
-        <li class="ui-chip"><span class="ui-chip__value" data-role="stat-sources">—</span><span class="ui-chip__label">Источников</span></li>
-        <li class="ui-chip ui-chip--ok"><span class="ui-chip__value" data-role="stat-active">—</span><span class="ui-chip__label">Активных</span></li>
-    </ul>
+    <!-- Строки чипов-счётчиков у раздела НЕТ — решение дизайн-сессии (М16,
+         подтверждено паспортом): числа и так на виду, у каждой площадки свой
+         счётчик источников, у каждой вкладки статуса — свой. Второй раз те же
+         числа не показываем. Узлы не оставлены скрытыми намеренно: скрытая
+         разметка, которую никто не наполняет, через месяц читается как поломка.
+         -->
 
     <!-- Мастер-деталь: слева площадки, справа их источники (бриф, п.6). -->
     <div class="src-master">
@@ -102,7 +99,7 @@
             <div class="ui-mass-bar" data-role="mass-bar" hidden>
                 <span class="ui-mass-bar__count" data-role="selected-count">Выбрано: 0</span>
                 <select class="ui-field__control src-mass-select" data-role="mass-action" aria-label="Массовое действие">
-                    <option value="">Выберите действие</option>
+                    <option value="">— выберите действие —</option>
                     <option value="Активен">Статус → Активен</option>
                     <option value="Неактивен">Статус → Неактивен</option>
                     <option value="Архив">Статус → Архив</option>
