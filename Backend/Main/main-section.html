@@ -39,7 +39,11 @@
                 Счета, налоги и бланк письма правятся своими окнами — на них режим правки формы не распространяется.
             </div>
 
-            <div class="ui-empty ui-empty--inline m-empty" data-role="locked-note">
+            <!-- Класс `m-empty` убран: он не объявлен ни в одном файле стилей
+                 (в main-light.css есть только `.m-empty-val` — другой класс), то
+                 есть ничего не делал и читался как забытая правка (К27). Вид
+                 берётся из слоя. -->
+            <div class="ui-empty ui-empty--inline" data-role="locked-note">
                 <div class="ui-empty__title">Сначала создайте организацию</div>
                 <p class="ui-empty__text">Банковские счета, налоги и бланк письма привязываются к организации — заполните и сохраните её данные слева.</p>
             </div>
@@ -94,118 +98,78 @@
         <button type="button" class="ui-btn" data-role="edit-save">Сохранить изменения</button>
     </div>
 
-    <!-- ================= ОКНО СЧЁТА ================= -->
-    <div class="ui-modal ui-modal--in-panel m-modal" data-role="account-modal" hidden>
-        <div class="ui-modal__box">
-            <div class="ui-modal__head">
-                <h2 class="ui-modal__title" data-role="account-title">Банковский счёт</h2>
-                <button type="button" class="ui-modal__close" data-role="account-close" aria-label="Закрыть"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-close"></use></svg></button>
-            </div>
-            <form data-role="account-form">
-                <div class="ui-modal__body">
-                    <div class="ui-form-grid">
-                        <div class="ui-field">
-                            <label class="ui-field__label ui-field__label--required" for="mAccBank">Название банка</label>
-                            <input class="ui-field__control" type="text" id="mAccBank" data-field="bankName" placeholder="Т-Банк">
-                        </div>
-                        <div class="ui-field">
-                            <label class="ui-field__label" for="mAccBik">БИК</label>
-                            <input class="ui-field__control m-mono" type="text" id="mAccBik" data-field="bik" placeholder="044525974">
-                        </div>
-                        <div class="ui-field">
-                            <label class="ui-field__label" for="mAccChecking">Расчётный счёт</label>
-                            <input class="ui-field__control m-mono" type="text" id="mAccChecking" data-field="checkingAccount" placeholder="40702810400000004501">
-                        </div>
-                        <div class="ui-field">
-                            <label class="ui-field__label" for="mAccCorr">Корреспондентский счёт</label>
-                            <input class="ui-field__control m-mono" type="text" id="mAccCorr" data-field="correspondentAccount" placeholder="30101810145250000974">
-                        </div>
-                        <div class="ui-field">
-                            <label class="ui-field__label" for="mAccCurrency">Валюта</label>
-                            <select class="ui-field__control" id="mAccCurrency" data-field="currency">
-                                <option value="₽">₽</option>
-                                <option value="$">$</option>
-                                <option value="€">€</option>
-                            </select>
-                        </div>
-                        <div class="ui-field">
-                            <label class="ui-field__label" for="mAccOpened">Дата открытия</label>
-                            <input class="ui-field__control" type="date" id="mAccOpened" data-field="openedAt">
-                        </div>
-                    </div>
-                </div>
-                <div class="ui-modal__actions">
-                    <button type="button" class="ui-btn ui-btn--ghost" data-role="account-cancel">Отмена</button>
-                    <button type="submit" class="ui-btn" data-role="account-save">Сохранить</button>
-                </div>
-            </form>
-        </div>
-    </div>
+    <!-- ================= ОКНА РАЗДЕЛА =================
+         Здесь лежат только ПОЛЯ. Заголовок, крестик, подвал с кнопками и всё
+         поведение окна — Esc, закрытие щелчком по затемнению, кольцо фокуса,
+         возврат фокуса на кнопку-открывашку — даёт openModal из слоя
+         (mainApp.js). Раньше раздел объявлял три окна разметкой целиком, и
+         четыре из шести обещанных поведений не работали: человек, открывший
+         окно с клавиатуры, не мог его ни закрыть, ни покинуть (К25). -->
 
-    <!-- ================= ОКНО НАЛОГА ================= -->
-    <div class="ui-modal ui-modal--in-panel m-modal" data-role="tax-modal" hidden>
-        <div class="ui-modal__box">
-            <div class="ui-modal__head">
-                <h2 class="ui-modal__title" data-role="tax-title">Налог</h2>
-                <button type="button" class="ui-modal__close" data-role="tax-close" aria-label="Закрыть"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-close"></use></svg></button>
+    <template data-role="account-tpl">
+        <div class="ui-form-grid">
+            <div class="ui-field">
+                <label class="ui-field__label ui-field__label--required" for="mAccBank">Название банка</label>
+                <input class="ui-field__control" type="text" id="mAccBank" data-field="bankName" placeholder="Т-Банк">
             </div>
-            <form data-role="tax-form">
-                <div class="ui-modal__body">
-                    <div class="ui-form-grid">
-                        <div class="ui-field">
-                            <label class="ui-field__label ui-field__label--required" for="mTaxType">Вид налога</label>
-                            <input class="ui-field__control" type="text" id="mTaxType" data-field="taxType" placeholder="УСН «Доходы»">
-                        </div>
-                        <div class="ui-field">
-                            <label class="ui-field__label" for="mTaxRate">Ставка</label>
-                            <input class="ui-field__control" type="text" id="mTaxRate" data-field="rate" placeholder="6 %">
-                        </div>
-                        <div class="ui-field">
-                            <label class="ui-field__label" for="mTaxPeriod">Периодичность</label>
-                            <select class="ui-field__control" id="mTaxPeriod" data-field="periodicity">
-                                <option value="Ежеквартально">Ежеквартально</option>
-                                <option value="Ежемесячно">Ежемесячно</option>
-                                <option value="Ежегодно">Ежегодно</option>
-                            </select>
-                        </div>
-                    </div>
-                </div>
-                <div class="ui-modal__actions">
-                    <button type="button" class="ui-btn ui-btn--ghost" data-role="tax-cancel">Отмена</button>
-                    <button type="submit" class="ui-btn" data-role="tax-save">Сохранить</button>
-                </div>
-            </form>
+            <div class="ui-field">
+                <label class="ui-field__label" for="mAccBik">БИК</label>
+                <input class="ui-field__control m-mono" type="text" id="mAccBik" data-field="bik" placeholder="044525974">
+            </div>
+            <div class="ui-field">
+                <label class="ui-field__label" for="mAccChecking">Расчётный счёт</label>
+                <input class="ui-field__control m-mono" type="text" id="mAccChecking" data-field="checkingAccount" placeholder="40702810400000004501">
+            </div>
+            <div class="ui-field">
+                <label class="ui-field__label" for="mAccCorr">Корреспондентский счёт</label>
+                <input class="ui-field__control m-mono" type="text" id="mAccCorr" data-field="correspondentAccount" placeholder="30101810145250000974">
+            </div>
+            <div class="ui-field">
+                <label class="ui-field__label" for="mAccCurrency">Валюта</label>
+                <select class="ui-field__control" id="mAccCurrency" data-field="currency">
+                    <option value="₽">₽</option>
+                    <option value="$">$</option>
+                    <option value="€">€</option>
+                </select>
+            </div>
+            <div class="ui-field">
+                <label class="ui-field__label" for="mAccOpened">Дата открытия</label>
+                <input class="ui-field__control" type="date" id="mAccOpened" data-field="openedAt">
+            </div>
         </div>
-    </div>
+    </template>
 
-    <!-- ================= ОКНО БЛАНКА ПИСЬМА ================= -->
-    <div class="ui-modal ui-modal--in-panel m-modal" data-role="letterhead-modal" hidden>
-        <div class="ui-modal__box">
-            <div class="ui-modal__head">
-                <div>
-                    <h2 class="ui-modal__title">Бланк письма</h2>
-                    <p class="ui-modal__sub">подставляется в документы</p>
-                </div>
-                <button type="button" class="ui-modal__close" data-role="letterhead-close" aria-label="Закрыть"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-close"></use></svg></button>
+    <template data-role="tax-tpl">
+        <div class="ui-form-grid">
+            <div class="ui-field">
+                <label class="ui-field__label ui-field__label--required" for="mTaxType">Вид налога</label>
+                <input class="ui-field__control" type="text" id="mTaxType" data-field="taxType" placeholder="УСН «Доходы»">
             </div>
-            <form data-role="letterhead-form">
-                <div class="ui-modal__body">
-                    <div class="ui-field">
-                        <label class="ui-field__label" for="mLhHeader">Шапка</label>
-                        <textarea class="ui-field__control m-textarea" id="mLhHeader" data-field="letterheadHeader" rows="3"></textarea>
-                        <span class="ui-field__hint">Пусто — бланк соберётся сам из реквизитов организации.</span>
-                    </div>
-                    <div class="ui-field">
-                        <label class="ui-field__label" for="mLhSign">Подпись</label>
-                        <input class="ui-field__control" type="text" id="mLhSign" data-field="letterheadSignature" placeholder="Генеральный директор Ковалёв С. А.">
-                    </div>
-                </div>
-                <div class="ui-modal__actions">
-                    <button type="button" class="ui-btn ui-btn--ghost" data-role="letterhead-cancel">Отмена</button>
-                    <button type="submit" class="ui-btn" data-role="letterhead-save">Сохранить</button>
-                </div>
-            </form>
+            <div class="ui-field">
+                <label class="ui-field__label" for="mTaxRate">Ставка</label>
+                <input class="ui-field__control" type="text" id="mTaxRate" data-field="rate" placeholder="6 %">
+            </div>
+            <div class="ui-field">
+                <label class="ui-field__label" for="mTaxPeriod">Периодичность</label>
+                <select class="ui-field__control" id="mTaxPeriod" data-field="periodicity">
+                    <option value="Ежеквартально">Ежеквартально</option>
+                    <option value="Ежемесячно">Ежемесячно</option>
+                    <option value="Ежегодно">Ежегодно</option>
+                </select>
+            </div>
         </div>
-    </div>
+    </template>
+
+    <template data-role="letterhead-tpl">
+        <div class="ui-field">
+            <label class="ui-field__label" for="mLhHeader">Шапка</label>
+            <textarea class="ui-field__control m-textarea" id="mLhHeader" data-field="letterheadHeader" rows="3"></textarea>
+            <span class="ui-field__hint">Пусто — бланк соберётся сам из реквизитов организации.</span>
+        </div>
+        <div class="ui-field">
+            <label class="ui-field__label" for="mLhSign">Подпись</label>
+            <input class="ui-field__control" type="text" id="mLhSign" data-field="letterheadSignature" placeholder="Генеральный директор Ковалёв С. А.">
+        </div>
+    </template>
 
 </div>

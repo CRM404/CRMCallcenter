@@ -26,7 +26,8 @@ import {
     renderOrganization, makeDraft, countChanges, validateDraft, fieldsWord, ORG_FIELDS
 } from './mainRequisites.js';
 import { renderAccounts, renderTaxes, renderLetterhead, defaultLetterhead, defaultSignature } from './mainLetterhead.js';
-import { validateFields } from './mainValidation.js';
+import { openModal } from '/ui/modal.js';
+import { findFieldError } from './mainValidation.js';
 import { BANK_ACCOUNT_FIELD_VALIDATORS } from './mainValidation.js';
 // Путь АБСОЛЮТНЫЙ: физическая структура папок не совпадает с адресами —
 // Backend/Shell/ монтируется в корень «/».
@@ -71,14 +72,13 @@ export async function mount(container, ctx) {
         secondOrg: $('second-org'),
         saveBar: $('save-bar'),
         saveNote: $('save-note'),
-        accountModal: $('account-modal'),
-        accountForm: $('account-form'),
-        accountTitle: $('account-title'),
-        taxModal: $('tax-modal'),
-        taxForm: $('tax-form'),
-        taxTitle: $('tax-title'),
-        letterheadModal: $('letterhead-modal'),
-        letterheadForm: $('letterhead-form')
+        // Панель нужна окнам: затемнение накрывает свою панель, а не весь
+        // экран, — иначе непонятно, к какой из двух открытых панелей окно
+        // относится.
+        panel: container.closest('.shell-panel'),
+        accountTpl: $('account-tpl'),
+        taxTpl: $('tax-tpl'),
+        letterheadTpl: $('letterhead-tpl')
     };
 
     organization = null;
@@ -143,9 +143,6 @@ function onClick(event) {
     if (role === 'tax-add') return openTaxModal(null);
     if (role === 'letterhead-edit') return openLetterheadModal();
     if (role === 'org-add') return shell.toast('Добавление второй организации — отдельный сценарий, он ещё не сделан');
-    if (role === 'account-close' || role === 'account-cancel') return closeModal(nodes.accountModal);
-    if (role === 'tax-close' || role === 'tax-cancel') return closeModal(nodes.taxModal);
-    if (role === 'letterhead-close' || role === 'letterhead-cancel') return closeModal(nodes.letterheadModal);
 
     if (btn.dataset.copy !== undefined) return copyValue(btn);
     if (btn.dataset.accountEdit) return openAccountModal(Number(btn.dataset.accountEdit));
@@ -164,12 +161,11 @@ function onInput(event) {
     updateSaveBar();
 }
 
+// Форма организации отправляется Enter'ом и в режиме правки — перехватываем,
+// чтобы браузер не перезагрузил страницу. Окна раздела своих форм больше не
+// держат: их отправляет кнопка подвала окна слоя.
 function onSubmit(event) {
     event.preventDefault();
-    const form = event.target;
-    if (form === nodes.accountForm) return saveAccount();
-    if (form === nodes.taxForm) return saveTax();
-    if (form === nodes.letterheadForm) return saveLetterhead();
 }
 
 // ---------------------------------------------------------------- отрисовка
@@ -287,14 +283,85 @@ async function saveOrganization() {
 
 // ---------------------------------------------------------------- окна
 
-function openModal(modal) {
-    modal.hidden = false;
-    const first = modal.querySelector('.ui-field__control');
-    if (first) first.focus();
+/**
+ * Окно раздела = окно СЛОЯ с полями из шаблона (К25).
+ *
+ * Раньше три окна были объявлены разметкой целиком, и вместе с разметкой
+ * приходилось бы писать своё поведение — чего никто не сделал: Esc не
+ * закрывал, щелчок по затемнению не закрывал, Tab уходил из окна в страницу
+ * под затемнением, фокус после закрытия падал в BODY. Теперь всё это даёт
+ * слой, а раздел отвечает только за поля и за то, что с ними делать.
+ *
+ * @param {Object} opts { tpl, title, sub, size, values, save }
+ *        save(body) → false, если окно закрывать нельзя (ошибка в полях).
+ */
+function openFormModal({ tpl, title, sub, size, values, save }) {
+    const body = document.createElement('div');
+    body.appendChild(tpl.content.cloneNode(true));
+
+    const modal = openModal({
+        title,
+        sub,
+        body,
+        scope: nodes.panel,
+        size,
+        actions: [
+            { label: 'Отмена', variant: 'ghost', value: false },
+            { label: 'Сохранить', onClick: () => save(body) }
+        ]
+    });
+
+    fillForm(body, values);
+
+    // Фокус — в ПЕРВОЕ ПОЛЕ, а не на крестик. Слой по умолчанию берёт первый
+    // фокусируемый элемент коробки, а это кнопка закрытия: она стоит выше по
+    // разметке. Для окна-формы это неверно — паспорт обещает поле, и человек,
+    // открывший окно, начинает печатать.
+    const firstControl = body.querySelector('.ui-field__control');
+    if (firstControl) firstControl.focus();
+
+    // Enter в поле отправляет форму — это давала разметочная <form>, и терять
+    // привычку из-за переезда незачем. В многострочном поле Enter остаётся
+    // переводом строки.
+    body.addEventListener('keydown', (event) => {
+        if (event.key !== 'Enter' || event.target.tagName === 'TEXTAREA') return;
+        event.preventDefault();
+        const saveBtn = modal.box.querySelectorAll('.ui-modal__actions .ui-btn')[1];
+        if (saveBtn && !saveBtn.disabled) saveBtn.click();
+    });
+
+    return modal;
 }
 
-function closeModal(modal) {
-    modal.hidden = true;
+/**
+ * Ошибка в окне: поле краснеет, под полем подсказка, и первая ошибка
+ * дополнительно уходит тостом (К26). До этого окна отвечали ТОЛЬКО тостом —
+ * он говорил «БИК должен содержать 9 цифр» и исчезал, а какое из шести полей
+ * виновато, человек искал глазами.
+ *
+ * Механизм тот же, что у формы организации (mainRequisites.js): класс `is-bad`
+ * на обёртке поля и `.m-hint-bad` под ним.
+ */
+function showFieldError(form, key, message) {
+    const control = form.querySelector(`[data-field="${key}"]`);
+    if (!control) return;
+    const field = control.closest('.ui-field');
+    if (!field) return;
+    field.classList.add('is-bad');
+    let hint = field.querySelector('.m-hint-bad');
+    if (!hint) {
+        hint = document.createElement('span');
+        hint.className = 'ui-field__hint m-hint-bad';
+        field.appendChild(hint);
+    }
+    hint.textContent = message;
+    control.focus();
+}
+
+/** Снять прошлые ошибки — иначе исправленное поле остаётся красным. */
+function clearFieldErrors(form) {
+    form.querySelectorAll('.ui-field.is-bad').forEach((field) => field.classList.remove('is-bad'));
+    form.querySelectorAll('.m-hint-bad').forEach((hint) => hint.remove());
 }
 
 function fillForm(form, values) {
@@ -315,61 +382,84 @@ function readForm(form) {
 function openAccountModal(id) {
     editingAccountId = id;
     const record = id === null ? {} : (organization.bankAccounts || []).find((a) => a.id === id) || {};
-    nodes.accountTitle.textContent = id === null ? 'Новый счёт' : 'Банковский счёт';
-    fillForm(nodes.accountForm, { currency: '₽', ...record });
-    openModal(nodes.accountModal);
+    openFormModal({
+        tpl: nodes.accountTpl,
+        title: id === null ? 'Новый счёт' : 'Банковский счёт',
+        values: { currency: '₽', ...record },
+        save: saveAccount
+    });
 }
 
 function openTaxModal(id) {
     editingTaxId = id;
     const record = id === null ? {} : (organization.taxes || []).find((t) => t.id === id) || {};
-    nodes.taxTitle.textContent = id === null ? 'Новый налог' : 'Налог';
-    fillForm(nodes.taxForm, { periodicity: 'Ежеквартально', ...record });
-    openModal(nodes.taxModal);
+    openFormModal({
+        tpl: nodes.taxTpl,
+        title: id === null ? 'Новый налог' : 'Налог',
+        values: { periodicity: 'Ежеквартально', ...record },
+        save: saveTax
+    });
 }
 
 function openLetterheadModal() {
     // В окно подставляется то, что человек видит в карточке: если своего
     // текста нет, там стоит собранный из реквизитов. Пустое окно заставило бы
     // набирать заново то, что уже показано рядом.
-    fillForm(nodes.letterheadForm, {
-        letterheadHeader: organization.letterheadHeader || defaultLetterhead(organization),
-        letterheadSignature: organization.letterheadSignature || defaultSignature(organization)
+    openFormModal({
+        tpl: nodes.letterheadTpl,
+        title: 'Бланк письма',
+        sub: 'подставляется в документы',
+        values: {
+            letterheadHeader: organization.letterheadHeader || defaultLetterhead(organization),
+            letterheadSignature: organization.letterheadSignature || defaultSignature(organization)
+        },
+        save: saveLetterhead
     });
-    openModal(nodes.letterheadModal);
 }
 
 // ---------------------------------------------------------------- счета
 
-async function saveAccount() {
-    const data = readForm(nodes.accountForm);
+/**
+ * Возвращает false, когда окно закрывать НЕЛЬЗЯ: не заполнено обязательное
+ * поле, не сошёлся формат или отказал сервер. Это язык кнопок слоя — false
+ * оставляет окно открытым и разблокирует кнопку, чтобы набранное не пропало
+ * вместе с окном.
+ */
+async function saveAccount(form) {
+    const data = readForm(form);
+    clearFieldErrors(form);
     if (!data.bankName) {
+        showFieldError(form, 'bankName', 'Без названия банка счёт не опознать');
         shell.toast('Заполните обязательное поле: Название банка', 'error');
-        return;
+        return false;
     }
-    const error = validateFields(data, BANK_ACCOUNT_FIELD_VALIDATORS);
-    if (error) {
-        shell.toast(error, 'error');
-        return;
+    const bad = findFieldError(data, BANK_ACCOUNT_FIELD_VALIDATORS);
+    if (bad) {
+        showFieldError(form, bad.key, bad.message);
+        shell.toast(bad.message, 'error');
+        return false;
     }
 
     const my = generation;
     try {
         if (editingAccountId === null) {
             const created = await storage.createBankAccount(organization.id, data);
-            if (!alive(my)) return;
+            if (!alive(my)) return true;
             organization.bankAccounts = [...(organization.bankAccounts || []), created];
             shell.toast('Счёт добавлен', 'success');
         } else {
             const updated = await storage.updateBankAccount(organization.id, editingAccountId, data);
-            if (!alive(my)) return;
+            if (!alive(my)) return true;
             organization.bankAccounts = organization.bankAccounts.map((a) => (a.id === editingAccountId ? updated : a));
             shell.toast('Изменения сохранены', 'success');
         }
-        closeModal(nodes.accountModal);
         renderAside();
+        return true;
     } catch (err) {
         fail(my, err);
+        // Окно остаётся открытым: набранное человеком не должно пропадать
+        // из-за отказа сервера.
+        return false;
     }
 }
 
@@ -400,30 +490,33 @@ async function deleteAccount(id) {
 
 // ---------------------------------------------------------------- налоги
 
-async function saveTax() {
-    const data = readForm(nodes.taxForm);
+async function saveTax(form) {
+    const data = readForm(form);
+    clearFieldErrors(form);
     if (!data.taxType) {
+        showFieldError(form, 'taxType', 'Без вида налога запись ничего не значит');
         shell.toast('Заполните обязательное поле: Вид налога', 'error');
-        return;
+        return false;
     }
 
     const my = generation;
     try {
         if (editingTaxId === null) {
             const created = await storage.createTax(organization.id, data);
-            if (!alive(my)) return;
+            if (!alive(my)) return true;
             organization.taxes = [...(organization.taxes || []), created];
             shell.toast('Налоговая запись добавлена', 'success');
         } else {
             const updated = await storage.updateTax(organization.id, editingTaxId, data);
-            if (!alive(my)) return;
+            if (!alive(my)) return true;
             organization.taxes = organization.taxes.map((t) => (t.id === editingTaxId ? updated : t));
             shell.toast('Изменения сохранены', 'success');
         }
-        closeModal(nodes.taxModal);
         renderAside();
+        return true;
     } catch (err) {
         fail(my, err);
+        return false;
     }
 }
 
@@ -452,8 +545,8 @@ async function deleteTax(id) {
 
 // ---------------------------------------------------------------- бланк
 
-async function saveLetterhead() {
-    const data = readForm(nodes.letterheadForm);
+async function saveLetterhead(form) {
+    const data = readForm(form);
     const my = generation;
     try {
         // ПОЛНЫЙ набор полей, а не только два своих. PUT организации — полная
@@ -466,13 +559,14 @@ async function saveLetterhead() {
             letterheadHeader: data.letterheadHeader,
             letterheadSignature: data.letterheadSignature
         }));
-        if (!alive(my)) return;
+        if (!alive(my)) return true;
         organization = { ...organization, ...updated };
-        closeModal(nodes.letterheadModal);
         shell.toast('Бланк сохранён', 'success');
         renderAside();
+        return true;
     } catch (err) {
         fail(my, err);
+        return false;
     }
 }
 

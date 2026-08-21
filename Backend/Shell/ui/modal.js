@@ -27,6 +27,7 @@ const OPEN_STACK = [];
  *
  * @param {Object}      opts
  * @param {string}      opts.title            заголовок
+ * @param {string}      [opts.sub]            подпись под заголовком
  * @param {Node|string} [opts.body]           содержимое; строка вставляется текстом
  * @param {Array}       [opts.actions]        [{ label, variant, value, autofocus, onClick }]
  * @param {HTMLElement} [opts.scope]          панель, которую надо накрыть
@@ -38,6 +39,7 @@ const OPEN_STACK = [];
 export function openModal(opts = {}) {
     const {
         title = '',
+        sub = '',
         body = null,
         actions = [],
         scope = null,
@@ -60,10 +62,24 @@ export function openModal(opts = {}) {
     const head = document.createElement('div');
     head.className = 'ui-modal__head';
 
+    // Заголовок и подпись — одной колонкой: подпись объясняет заголовок и
+    // стоит под ним, а не рядом. Класс подписи в слое был давно, но окно,
+    // собранное вызовом, его не строило — и раздел с подписью в паспорте не мог
+    // переехать на окно слоя, не потеряв её.
     const heading = document.createElement('h2');
     heading.className = 'ui-modal__title';
     heading.textContent = title;
-    head.appendChild(heading);
+
+    if (sub) {
+        const titles = document.createElement('div');
+        const subEl = document.createElement('p');
+        subEl.className = 'ui-modal__sub';
+        subEl.textContent = sub;
+        titles.append(heading, subEl);
+        head.appendChild(titles);
+    } else {
+        head.appendChild(heading);
+    }
 
     const closeBtn = document.createElement('button');
     closeBtn.type = 'button';

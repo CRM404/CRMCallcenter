@@ -42,11 +42,17 @@ export const BANK_ACCOUNT_FIELD_VALIDATORS = {
     bik: validateBik
 };
 
-// Возвращает текст первой найденной ошибки или null, если все поля прошли.
-export function validateFields(data, validators) {
+/**
+ * Первая ошибка вместе С ИМЕНЕМ ПОЛЯ: без него окно может показать текст, но не
+ * может показать, где ошибка (К26). Форма организации давно красит поле и
+ * пишет подсказку под ним — окнам не хватало ровно этого имени.
+ *
+ * @returns {{ key: string, message: string } | null}
+ */
+export function findFieldError(data, validators) {
     for (const [key, validate] of Object.entries(validators)) {
-        const error = validate(data[key]);
-        if (error) return error;
+        const message = validate(data[key]);
+        if (message) return { key, message };
     }
     return null;
 }
