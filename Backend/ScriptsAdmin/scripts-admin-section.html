@@ -30,8 +30,13 @@
         <li class="ui-chip ui-chip--muted"><span class="ui-chip__value" data-role="stat-draft">—</span><span class="ui-chip__label">Черновиков</span></li>
     </ul>
 
-    <!-- Список скриптов. Прячется целиком, пока открыт скрипт или панель
-         создания — как и на прежней странице. -->
+    <!-- Список скриптов ОСТАЁТСЯ НА ЭКРАНЕ, когда скрипт открыт на наполнение
+         (К154). Прежде он прятался целиком — это имело смысл на отдельной
+         странице, но не в панели: чтобы перейти к соседнему скрипту, нужно было
+         нажать «Скрыть», дождаться списка и найти строку заново, а тот, кто
+         правит возражения, ходит по двум-трём похожим скриптам подряд. Строка
+         открытого скрипта отмечена .ui-table__row--selected, и список заодно не
+         даёт завести второй скрипт с тем же названием — поиска в разделе нет. -->
     <div data-role="list-wrap">
         <div class="ui-table-wrap">
             <table class="ui-table ui-table--freeze-acts">
@@ -52,7 +57,10 @@
 
         <p class="ui-table-note" data-role="list-note">Откройте скрипт, чтобы наполнить его основным текстом и возражениями.</p>
         <div class="ui-empty" data-role="empty" hidden>
-            <span class="ui-empty__icon"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-scripts"></use></svg></span>
+            <!-- Ступень lg, а не sm (К88): у значка пустого состояния нет
+                 соседнего текста — он знак самого блока, а не подпись к строке,
+                 и ступень берёт не по соседу. -->
+            <span class="ui-empty__icon"><svg class="ui-ic ui-ic--lg" aria-hidden="true"><use href="#ui-ic-scripts"></use></svg></span>
             <b class="ui-empty__title">Пока нет ни одного скрипта</b>
             <span class="ui-empty__text">Создайте первый — название можно будет изменить позже.</span>
             <button type="button" class="ui-btn ui-btn--ghost ui-empty__action" data-role="empty-action">Новый скрипт</button>
@@ -66,7 +74,10 @@
 
     <!-- Открытый скрипт: шапка (название + статус) → наполнение. -->
     <section data-role="opened" hidden>
-        <div class="scr-card">
+        <!-- Карточка открытого скрипта отмечена цветом (К164): она относится к
+             строке, подсвеченной в списке выше, и связь между ними должна
+             читаться без чтения текста. -->
+        <div class="scr-card scr-card--open">
             <div class="scr-inline">
                 <div class="ui-field scr-inline__field">
                     <label class="ui-field__label">Название</label>

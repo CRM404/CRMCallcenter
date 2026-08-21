@@ -48,13 +48,20 @@ export async function mount(container, ctx) {
         scripts: [],
         selectedScript: null,
         nodes: [],
-        nodesUi: { rootEditing: false, addingObjection: false, editingObjectionId: null },
+        nodesUi: emptyNodesUi(),
         destroyed: false
     };
     instances.push(state);
 
     bindEvents(state);
     await reloadScripts(state);
+}
+
+// Состояние наполнения: что сейчас открыто на правку. rootCreating — редактор
+// пустого основного текста, развёрнутый кнопкой пустого состояния: до нажатия
+// его нет, иначе пустой блок с открытым полем читается как сломанное поле.
+function emptyNodesUi() {
+    return { rootEditing: false, rootCreating: false, addingObjection: false, editingObjectionId: null };
 }
 
 export function unmount() {
@@ -128,9 +135,10 @@ function renderList(state) {
     $(state, 'rows').innerHTML = renderScriptRows(state.scripts, selectedId);
     $(state, 'empty').hidden = state.scripts.length > 0;
     state.container.querySelector('.ui-table-wrap').hidden = state.scripts.length === 0;
-    // Подпись объясняет, что делать со СПИСКОМ: пустому списку она не нужна —
-    // там своё пустое состояние со своим следующим шагом.
-    $(state, 'list-note').hidden = state.scripts.length === 0;
+    // Подпись объясняет, что делать со СПИСКОМ, и исчезает в двух случаях:
+    // скриптов нет вовсе (там своё пустое состояние со своим следующим шагом)
+    // и скрипт уже открыт — сказанное уже сделано.
+    $(state, 'list-note').hidden = state.scripts.length === 0 || state.selectedScript !== null;
 }
 
 function syncOpenStatus(state) {
@@ -149,8 +157,13 @@ function renderNodes(state) {
         // помощника так же, как тост: одна реализация на раздел.
         busy: withBusy,
 
+        onCreateRootStart: () => { state.nodesUi.rootCreating = true; renderNodes(state); },
         onEditRootStart: () => { state.nodesUi.rootEditing = true; renderNodes(state); },
-        onCancelRootEdit: () => { state.nodesUi.rootEditing = false; renderNodes(state); },
+        onCancelRootEdit: () => {
+            state.nodesUi.rootEditing = false;
+            state.nodesUi.rootCreating = false;
+            renderNodes(state);
+        },
 
         onCreateRoot: async (content) => {
             if (!content || !content.trim()) {
@@ -163,6 +176,7 @@ function renderNodes(state) {
                 });
                 if (state.destroyed) return;
                 state.ctx.toast('Основной текст создан', 'success');
+                state.nodesUi.rootCreating = false;
                 await reloadNodes(state);
                 await reloadScripts(state);
             } catch (err) {
@@ -244,9 +258,14 @@ function renderNodes(state) {
         },
 
         onDeleteObjection: async (id) => {
+            // Заголовок спрашивает, текст называет последствия и НАЗЫВАЕТ САМО
+            // возражение (К161). Прежний текст дословно повторял заголовок —
+            // такое окно закрывают не читая, и именно на нём случаются потери.
+            const node = state.nodes.find((n) => n.id === id);
+            const label = node && node.label ? node.label : '(без метки)';
             const ok = await state.ctx.confirmDanger({
                 title: 'Удалить это возражение?',
-                message: 'Удалить это возражение?'
+                message: `Возражение «${label}» будет удалено из скрипта. Это необратимо.`
             });
             if (!ok || state.destroyed) return;
             try {
@@ -265,24 +284,27 @@ function renderNodes(state) {
 // ---------------------------------------------------------------- режимы
 
 // «Открыть» — шапка (название + статус) и наполнение (основной текст +
-// возражения). Список скриптов на это время прячется, как и раньше.
+// возражения). СПИСОК ОСТАЁТСЯ НА ЭКРАНЕ (К154), а его строка отмечается: тот,
+// кто правит возражения, ходит по двум-трём похожим скриптам подряд и
+// переключается «Открыть» → «Открыть». Прячется только подпись под списком —
+// она зовёт открыть скрипт, а он уже открыт.
 async function openScript(state, script) {
     state.selectedScript = script;
-    state.nodesUi = { rootEditing: false, addingObjection: false, editingObjectionId: null };
-    $(state, 'list-wrap').hidden = true;
+    state.nodesUi = emptyNodesUi();
     $(state, 'opened').hidden = false;
     $(state, 'meta-title').value = script.title;
     syncOpenStatus(state);
+    renderList(state);
     await reloadNodes(state);
 }
 
 function hideOpened(state) {
     state.selectedScript = null;
     state.nodes = [];
-    state.nodesUi = { rootEditing: false, addingObjection: false, editingObjectionId: null };
+    state.nodesUi = emptyNodesUi();
     $(state, 'opened').hidden = true;
     $(state, 'nodes').innerHTML = '';
-    $(state, 'list-wrap').hidden = false;
+    renderList(state);
 }
 
 /**
@@ -442,7 +464,7 @@ async function saveMeta(state) {
 async function changeStatus(state, script, status) {
     const message = status === 'active'
         ? CONFIRM_TEXTS.activate(script.title)
-        : CONFIRM_TEXTS.deactivate(script.title);
+        : CONFIRM_TEXTS.deactivate();
     const ok = await state.ctx.confirm({
         // Окно то же и правило то же, что у удалений: заголовок спрашивает (К92).
         title: status === 'active' ? 'Активировать скрипт?' : 'Вернуть скрипт в черновик?',

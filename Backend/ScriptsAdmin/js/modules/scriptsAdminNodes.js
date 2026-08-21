@@ -10,7 +10,13 @@
 // сервер санитизирует его белым списком тегов при сохранении (routes/scriptsAdmin.js) —
 // здесь при отображении (read-режим и при заполнении формы редактирования)
 // content корня вставляется как HTML, БЕЗ escapeHtml, ему уже можно доверять.
-// Возражения остаются обычным plain-text textarea + escapeHtml, как раньше.
+//
+// ВОЗРАЖЕНИЯ ТЕПЕРЬ ИДУТ ТЕМ ЖЕ ПУТЁМ (К156): тот же редактор, тот же
+// санитайзер, та же вставка разметкой. Три вещи менялись одним движением —
+// поле, серверная чистка и отображение: любая из них по отдельности означала бы
+// либо разметку, которую негде ввести, либо разметку, которую никто не чистит.
+// Старые записи, сохранённые до этого как обычный текст, приведены разовой
+// правкой данных в schema.sql (2026-08-21-escape-objection-content).
 //
 // ПЕРЕЕЗД В ОБОЛОЧКУ. Механика редактора не тронута — она выстрадана
 // эмпирически (перенос строки, ZWSP, потеря выделения при открытии палитры), и
@@ -44,15 +50,32 @@ const MAX_FONT_SIZE_PX = 200;
 // была неудобной/нестабильной в реальном использовании (два раунда фиксов
 // вокруг потери выделения при открытии нативного picker'а). Значения строго
 // совпадают с TEXT_COLOR_PATTERN в routes/scriptsAdmin.js (обычный hex, 6 знаков).
+//
+// ЦВЕТА — ПРОЕКТНЫЕ, а не произвольная радуга (К159). Прежние семь были взяты
+// со стороны (#000000, #d92b2b, #1a56db…) и не совпадали ни с одним цветом
+// интерфейса: скрипт печатают и показывают на планёрках вместе с остальным
+// экраном, и семь чужих ярких цветов в нём видно сразу.
+//
+// Значения повторяют токены слоя (--ui-color-ink, --ui-color-accent,
+// --ui-color-ok-ink, --ui-color-off-ink и три из палитры макета) ЧИСЛАМИ, и
+// иначе нельзя: цвет уезжает в сохранённый content и в белый список
+// санитайзера (TEXT_COLOR_PATTERN — ровно шесть знаков hex), var() там не
+// переживёт ни сохранения, ни печати.
 const TEXT_COLOR_SWATCHES = [
-    { value: '#000000', label: 'Чёрный' },
-    { value: '#d92b2b', label: 'Красный' },
-    { value: '#e07b0f', label: 'Оранжевый' },
-    { value: '#b8960c', label: 'Жёлтый' },
-    { value: '#1f8a3d', label: 'Зелёный' },
-    { value: '#1a56db', label: 'Синий' },
-    { value: '#7c3aed', label: 'Фиолетовый' }
+    { value: '#1a2433', label: 'Чернила' },
+    { value: '#0000ff', label: 'Синий' },
+    { value: '#146c43', label: 'Зелёный' },
+    { value: '#9a2f27', label: 'Красный' },
+    { value: '#c2740f', label: 'Оранжевый' },
+    { value: '#a08b12', label: 'Жёлтый' },
+    { value: '#6b46a8', label: 'Фиолетовый' }
 ];
+
+// «По умолчанию» — обычный цвет текста раздела (--ui-color-ink). Сброс не
+// может быть отсутствием свойства: покрашенный текст лежит внутри span'а, и
+// снять цвет значит либо вычистить его у всех вложенных span'ов, либо
+// назначить обычный цвет поверх. Делается и то и другое — см. resetTextColor.
+const DEFAULT_TEXT_COLOR = '#1a2433';
 
 // Текущее выделение внутри editorEl — null, если оно пустое/схлопнуто или вне редактора.
 function getEditorSelectionRange(editorEl) {
@@ -186,6 +209,38 @@ function applyPendingColor(editorEl, hexColor, collapsedRange) {
 // схлопнутое) выделение — красит его; иначе, если курсор просто стоит внутри
 // редактора — включает режим "печатать этим цветом"; иначе (редактор вообще
 // не в фокусе) — просьба сначала кликнуть в текст.
+// «По умолчанию»: вернуть выделенному тексту обычный цвет (К159). Двух шагов
+// не избежать — сначала снимаем color у вложенных span'ов внутри выделения
+// (иначе они выиграют у внешней обёртки как более глубокие), потом красим само
+// выделение цветом чернил (иначе выиграл бы цветной ПРЕДОК выделения).
+// Пустые span'ы после снятия стиля не вычищаем: санитайзер оставляет <span>
+// без атрибутов, и на вид он ничего не меняет.
+function resetTextColor(editorEl, toast) {
+    const range = getEditorSelectionRange(editorEl);
+    if (!range) {
+        // Схлопнутый курсор — тот же режим «печатать дальше», что у образцов:
+        // дальше набирается обычным цветом.
+        const collapsedRange = getEditorCollapsedRange(editorEl);
+        if (collapsedRange) {
+            applyPendingColor(editorEl, DEFAULT_TEXT_COLOR, collapsedRange);
+            return;
+        }
+        toast('Выделите текст', 'error');
+        return;
+    }
+    const fragment = range.extractContents();
+    fragment.querySelectorAll('span[style]').forEach((span) => { span.style.removeProperty('color'); });
+    const span = document.createElement('span');
+    span.setAttribute('style', `color: ${DEFAULT_TEXT_COLOR}`);
+    span.appendChild(fragment);
+    range.insertNode(span);
+    const newRange = document.createRange();
+    newRange.selectNodeContents(span);
+    const selection = window.getSelection();
+    selection.removeAllRanges();
+    selection.addRange(newRange);
+}
+
 function applySwatchColor(editorEl, hexColor, toast) {
     const selectedRange = getEditorSelectionRange(editorEl);
     if (selectedRange) {
@@ -323,8 +378,30 @@ function attachRichTextToolbar(container, editorEl, toast) {
             autoGrow(editorEl);
         });
     });
+
+    const resetBtn = container.querySelector('[data-rte-color-reset]');
+    if (resetBtn) {
+        resetBtn.addEventListener('mousedown', (e) => e.preventDefault());
+        resetBtn.addEventListener('click', () => {
+            resetTextColor(editorEl, toast);
+            autoGrow(editorEl);
+        });
+    }
 }
 
+// Одна полоса инструментов на все редакторы раздела: основной текст и форма
+// возражения пользуются одной и той же (К156 — возражение оператор читает
+// вслух так же, как основной текст, и выделить в нём ключевую фразу нужно ровно
+// так же).
+//
+// Три числа полосы стоят рядом и объясняются вместе:
+//   · высота у ВСЕХ элементов одна, 32 (--ui-control-h-sm). У списка шрифтов
+//     она приходит из слоя модификатором .ui-field__control--sm: раздел уже
+//     пробовал задать её у себя, и min-height слоя выигрывал у height — ряд
+//     оставался рваным (К158);
+//   · подсказка про два режима цвета — ВИДИМОЙ строкой, а не в title (К160);
+//   · «По умолчанию» — последняя в палитре: покрасив текст, вернуть его к
+//     обычному цвету раньше было нечем (К159).
 function renderRichTextToolbar() {
     const fontOptions = FONT_FAMILY_OPTIONS.map((o) => `<option value='${o.value}'>${escapeHtml(o.label)}</option>`).join('');
     const colorSwatches = TEXT_COLOR_SWATCHES.map((c) => `
@@ -335,49 +412,94 @@ function renderRichTextToolbar() {
             <button type="button" class="ui-btn ui-btn--secondary" data-rte-cmd="bold" title="Жирный"><b>Ж</b></button>
             <button type="button" class="ui-btn ui-btn--secondary" data-rte-cmd="italic" title="Курсив"><i>К</i></button>
             <button type="button" class="ui-btn ui-btn--secondary" data-rte-cmd="insertUnorderedList" title="Список">☰ Список</button>
-            <select class="ui-field__control scr-rte__font" data-rte-font-select title="Шрифт" aria-label="Шрифт">
+            <select class="ui-field__control ui-field__control--sm scr-rte__font" data-rte-font-select title="Шрифт" aria-label="Шрифт">
                 <option value="" disabled selected>Шрифт…</option>
                 ${fontOptions}
             </select>
             <button type="button" class="ui-btn ui-btn--secondary" data-rte-size-delta="-1" title="Уменьшить размер на 1px">A−</button>
             <button type="button" class="ui-btn ui-btn--secondary" data-rte-size-delta="1" title="Увеличить размер на 1px">A+</button>
-            <div class="scr-rte__swatches" title="Цвет текста: выделите текст и выберите цвет, либо выберите цвет и печатайте им дальше">${colorSwatches}</div>
+            <div class="scr-rte__swatches">${colorSwatches}</div>
+            <button type="button" class="ui-btn ui-btn--secondary" data-rte-color-reset>По умолчанию</button>
+            <span class="ui-field__hint">Выделите текст и выберите цвет — либо выберите цвет и печатайте им дальше</span>
         </div>
     `;
 }
 
-function renderRootBlock(root, editing) {
-    if (!root) {
+/**
+ * Готовит ОДИН редактор: находит поле внутри своей коробки .scr-rte и вешает
+ * на неё полосу инструментов.
+ *
+ * Коробка, а не весь контейнер панели: редакторов на экране бывает до трёх
+ * (основной текст и форма возражения), и полоса, найденная по всему
+ * контейнеру, писала бы в чужое поле. Пока редактор был один, разницы не было.
+ */
+function setupEditor(box, toast) {
+    const editorEl = box.querySelector('[data-role="rte-editor"]');
+    if (!editorEl) return null;
+    initRichTextEditor(editorEl);
+    attachRichTextToolbar(box, editorEl, toast);
+    return editorEl;
+}
+
+function renderEditorBox(content) {
+    return `
+        <div class="scr-rte">
+            ${renderRichTextToolbar()}
+            <div class="scr-rte__editor" contenteditable="true" data-role="rte-editor" data-placeholder="Текст, который видит оператор">${content || ''}</div>
+        </div>
+    `;
+}
+
+// Шапка блока наполнения: заголовок, рядом пояснение, справа действие (К162).
+// Пояснение — не декор: раздел открывает человек, который скрипты пишет
+// впервые, и разница между «основным текстом» и «возражением» для него
+// неочевидна — и то и другое текст в рамке.
+function renderCardHead(title, sub, action) {
+    return `
+        <div class="scr-card__head">
+            <h3 class="scr-card__title">${escapeHtml(title)}</h3>
+            <span class="scr-card__sub">${escapeHtml(sub)}</span>
+            ${action || ''}
+        </div>
+    `;
+}
+
+const ROOT_HEAD_SUB = 'то, что оператор читает с начала разговора';
+
+function renderRootBlock(root, uiState) {
+    // Пусто и редактор ЕЩЁ НЕ ОТКРЫТ — полное пустое состояние с причиной и
+    // следующим шагом. Пустой блок с уже развёрнутым редактором выглядит как
+    // сломанное поле, а строчка «текста пока нет» рядом с ним — как обрывок.
+    if (!root && !uiState.rootCreating) {
         return `
             <div class="scr-card">
-                <h3 class="scr-card__title">Основной текст</h3>
-                <div class="ui-empty ui-empty--inline">
-                    <span class="ui-empty__text">У скрипта пока нет основного текста.</span>
-                </div>
-                <div class="ui-field">
-                    <label class="ui-field__label">Текст</label>
-                    <div class="scr-rte">
-                        ${renderRichTextToolbar()}
-                        <div class="scr-rte__editor" contenteditable="true" data-role="root-editor" data-placeholder="Текст, который видит оператор"></div>
-                    </div>
-                </div>
-                <div class="ui-btn-row">
-                    <button type="button" class="ui-btn" data-role="root-create">Создать основной текст</button>
+                ${renderCardHead('Основной текст', ROOT_HEAD_SUB, '')}
+                <div class="ui-empty">
+                    <span class="ui-empty__icon"><svg class="ui-ic ui-ic--lg" aria-hidden="true"><use href="#ui-ic-scripts"></use></svg></span>
+                    <b class="ui-empty__title">Основного текста пока нет</b>
+                    <span class="ui-empty__text">С него начинается разговор: оператор видит его первым, до всех возражений.</span>
+                    <button type="button" class="ui-btn ui-btn--ghost ui-empty__action" data-role="root-create-start">Создать основной текст</button>
                 </div>
             </div>
         `;
     }
-    if (editing) {
+    if (!root) {
         return `
             <div class="scr-card">
-                <h3 class="scr-card__title">Основной текст</h3>
-                <div class="ui-field">
-                    <label class="ui-field__label">Текст</label>
-                    <div class="scr-rte">
-                        ${renderRichTextToolbar()}
-                        <div class="scr-rte__editor" contenteditable="true" data-role="root-editor" data-placeholder="Текст, который видит оператор">${root.content}</div>
-                    </div>
+                ${renderCardHead('Основной текст', ROOT_HEAD_SUB, '')}
+                ${renderEditorBox('')}
+                <div class="ui-btn-row">
+                    <button type="button" class="ui-btn" data-role="root-create">Создать основной текст</button>
+                    <button type="button" class="ui-btn ui-btn--ghost" data-role="root-create-cancel">Отмена</button>
                 </div>
+            </div>
+        `;
+    }
+    if (uiState.rootEditing) {
+        return `
+            <div class="scr-card">
+                ${renderCardHead('Основной текст', ROOT_HEAD_SUB, '')}
+                ${renderEditorBox(root.content)}
                 <div class="ui-btn-row">
                     <button type="button" class="ui-btn" data-role="root-save">Сохранить</button>
                     <button type="button" class="ui-btn ui-btn--ghost" data-role="root-cancel">Отмена</button>
@@ -387,10 +509,33 @@ function renderRootBlock(root, editing) {
     }
     return `
         <div class="scr-card">
-            <h3 class="scr-card__title">Основной текст</h3>
+            ${renderCardHead('Основной текст', ROOT_HEAD_SUB,
+                '<button type="button" class="ui-btn ui-btn--secondary" data-role="root-edit">Изменить</button>')}
             <div class="scr-node__content">${root.content}</div>
+        </div>
+    `;
+}
+
+// Форма возражения — одна на добавление и правку (К156). Текст правится тем же
+// редактором, что и основной: возражение оператор читает вслух так же, и
+// выделить в нём ключевую фразу нужно ровно так же. Сервер и раньше принимал
+// разметку возражения, вводить её было негде.
+function renderObjectionForm({ label, content, saveLabel, saveRole, cancelRole, id }) {
+    const idAttr = id === undefined ? '' : ` data-id="${id}"`;
+    return `
+        <div class="scr-objection scr-objection--form"${idAttr}${id === undefined ? ' data-role="objection-new"' : ''}>
+            <div class="ui-field">
+                <label class="ui-field__label">Метка</label>
+                <input type="text" class="ui-field__control" data-role="objection-label" value="${escapeHtml(label || '')}" placeholder="Например: Возражение: дорого" aria-label="Метка возражения">
+                <span class="ui-field__hint">Без метки возражение показывается как «(без метки)» — оператору его не найти.</span>
+            </div>
+            <div class="ui-field">
+                <label class="ui-field__label">Текст</label>
+                ${renderEditorBox(content)}
+            </div>
             <div class="ui-btn-row">
-                <button type="button" class="ui-btn ui-btn--secondary" data-role="root-edit">Изменить</button>
+                <button type="button" class="ui-btn" ${saveRole}>${escapeHtml(saveLabel)}</button>
+                <button type="button" class="ui-btn ui-btn--ghost" ${cancelRole}>Отмена</button>
             </div>
         </div>
     `;
@@ -398,28 +543,25 @@ function renderRootBlock(root, editing) {
 
 function renderObjectionCard(node, editing) {
     if (editing) {
-        return `
-            <div class="scr-objection" data-id="${node.id}">
-                <div class="ui-field">
-                    <label class="ui-field__label">Метка</label>
-                    <input type="text" class="ui-field__control" data-role="objection-label" value="${escapeHtml(node.label || '')}" aria-label="Метка возражения">
-                </div>
-                <div class="ui-field">
-                    <label class="ui-field__label">Текст</label>
-                    <textarea class="ui-field__control" data-role="objection-content" rows="3" aria-label="Текст возражения">${escapeHtml(node.content)}</textarea>
-                </div>
-                <div class="ui-btn-row">
-                    <button type="button" class="ui-btn" data-action="save-objection" data-id="${node.id}">Сохранить</button>
-                    <button type="button" class="ui-btn ui-btn--ghost" data-action="cancel-edit-objection" data-id="${node.id}">Отмена</button>
-                </div>
-            </div>
-        `;
+        return renderObjectionForm({
+            id: node.id,
+            label: node.label,
+            content: node.content,
+            saveLabel: 'Сохранить',
+            saveRole: `data-action="save-objection" data-id="${node.id}"`,
+            cancelRole: `data-action="cancel-edit-objection" data-id="${node.id}"`
+        });
     }
+    // Содержимое вставляется КАК РАЗМЕТКА, как и у основного текста: оно
+    // прошло тот же санитайзер на сервере (routes/scriptsAdmin.js). До К156
+    // здесь стоял escapeHtml — и правильно стоял: редактора у возражения не
+    // было, сервер разметку не чистил, и вставлять её как разметку было
+    // нельзя. Эти три вещи меняются вместе или не меняются вовсе.
     return `
         <div class="scr-objection" data-id="${node.id}">
             <div class="scr-node__label">${escapeHtml(node.label || '(без метки)')}</div>
-            <div class="scr-node__content">${escapeHtml(node.content)}</div>
-            <div class="ui-btn-row">
+            <div class="scr-node__content">${node.content}</div>
+            <div class="scr-objection__acts">
                 <button type="button" class="ui-btn ui-btn--secondary" data-action="edit-objection" data-id="${node.id}">Изменить</button>
                 <button type="button" class="ui-btn ui-btn--danger" data-action="delete-objection" data-id="${node.id}">Удалить</button>
             </div>
@@ -429,39 +571,38 @@ function renderObjectionCard(node, editing) {
 
 function renderObjectionsBlock(objections, uiState) {
     const cards = objections.map((o) => renderObjectionCard(o, uiState.editingObjectionId === o.id)).join('');
-    const addForm = uiState.addingObjection ? `
-        <div class="scr-objection" data-role="objection-new">
-            <div class="ui-field">
-                <label class="ui-field__label">Метка</label>
-                <input type="text" class="ui-field__control" data-role="objection-label" placeholder="Например: Возражение: дорого" aria-label="Метка возражения">
-            </div>
-            <div class="ui-field">
-                <label class="ui-field__label">Текст</label>
-                <textarea class="ui-field__control" data-role="objection-content" rows="3" aria-label="Текст возражения"></textarea>
-            </div>
-            <div class="ui-btn-row">
-                <button type="button" class="ui-btn" data-role="objection-create">Добавить</button>
-                <button type="button" class="ui-btn ui-btn--ghost" data-role="objection-create-cancel">Отмена</button>
-            </div>
-        </div>
-    ` : '';
+    const addForm = uiState.addingObjection ? renderObjectionForm({
+        label: '',
+        content: '',
+        saveLabel: 'Добавить',
+        saveRole: 'data-role="objection-create"',
+        cancelRole: 'data-role="objection-create-cancel"'
+    }) : '';
+
+    // Значок вместо текстового плюса (К166): текстовый не масштабируется вместе
+    // с лестницей значков и не совпадает по цвету и толщине с таким же плюсом в
+    // четырёх других разделах.
+    const addBtn = uiState.addingObjection ? '' :
+        '<button type="button" class="ui-btn ui-btn--secondary" data-role="objection-add">'
+        + '<svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-plus"></use></svg>Добавить возражение</button>';
 
     return `
         <div class="scr-card">
-            <div class="scr-card__head">
-                <h3 class="scr-card__title">Возражения</h3>
-                ${!uiState.addingObjection ? '<button type="button" class="ui-btn ui-btn--secondary" data-role="objection-add">+ Добавить возражение</button>' : ''}
-            </div>
+            ${renderCardHead('Возражения', 'оператор ищет их по метке во время разговора', addBtn)}
             ${objections.length
                 ? `<div class="scr-objections">${cards}</div>`
-                : '<div class="ui-empty ui-empty--inline"><span class="ui-empty__text">Пока нет возражений.</span></div>'}
+                : '<div class="ui-empty ui-empty--inline"><span class="ui-empty__text">Пока нет возражений</span></div>'}
             ${addForm}
+            <!-- Предупреждение про санитайзер (К163). Человек вставляет текст из
+                 Word, видит его отформатированным в поле, сохраняет — и половина
+                 оформления исчезает. Без строки это читается как потеря данных. -->
+            <p class="ui-table-note">Разметка, которую вырезает санитайзер на сервере, не сохранится: редактор ограничен тем, что переживает сохранение.</p>
         </div>
     `;
 }
 
-// uiState = { rootEditing, addingObjection, editingObjectionId }
-// handlers = { toast, busy, onEditRootStart, onCancelRootEdit, onCreateRoot(html), onSaveRoot(root, html),
+// uiState = { rootEditing, rootCreating, addingObjection, editingObjectionId }
+// handlers = { toast, busy, onCreateRootStart, onEditRootStart, onCancelRootEdit, onCreateRoot(html), onSaveRoot(root, html),
 //              onAddObjectionStart, onAddObjectionCancel, onCreateObjection({label, content}),
 //              onEditObjectionStart(id), onEditObjectionCancel, onSaveObjection(node, {label, content}),
 //              onDeleteObjection(id) }
@@ -469,32 +610,41 @@ export function renderNodesPanel(container, nodes, uiState, handlers) {
     const root = nodes.find((n) => n.parentId === null) || null;
     const objections = root ? nodes.filter((n) => n.parentId === root.id) : [];
 
-    container.innerHTML = renderRootBlock(root, uiState.rootEditing) + (root ? renderObjectionsBlock(objections, uiState) : '');
+    container.innerHTML = renderRootBlock(root, uiState) + (root ? renderObjectionsBlock(objections, uiState) : '');
 
     // Кнопки, которые шлют запрос, блокируются на время запроса (handlers.busy).
     // Без этого двойной клик уходит дважды: по «Добавить возражение» это два
     // одинаковых возражения в базе, по «Создать основной текст» — отказ сервера
     // «У скрипта уже есть корневой узел» в ответ на собственный двойной клик.
     if (!root) {
-        const editorEl = container.querySelector('[data-role="root-editor"]');
-        initRichTextEditor(editorEl);
-        attachRichTextToolbar(container, editorEl, handlers.toast);
+        const startBtn = container.querySelector('[data-role="root-create-start"]');
+        if (startBtn) {
+            startBtn.addEventListener('click', handlers.onCreateRootStart);
+            return;
+        }
+        const rootBox = container.querySelector('.scr-rte');
+        const editorEl = setupEditor(rootBox, handlers.toast);
         const createBtn = container.querySelector('[data-role="root-create"]');
         createBtn.addEventListener('click', () => {
             handlers.busy(createBtn, () => handlers.onCreateRoot(getEditorHtmlForSave(editorEl)));
         });
+        container.querySelector('[data-role="root-create-cancel"]').addEventListener('click', handlers.onCancelRootEdit);
+        // Фокус — в редактор, курсор там, где человек будет печатать (К165).
+        editorEl.focus();
         return;
     }
 
     if (uiState.rootEditing) {
-        const editorEl = container.querySelector('[data-role="root-editor"]');
-        initRichTextEditor(editorEl);
-        attachRichTextToolbar(container, editorEl, handlers.toast);
+        const rootBox = container.querySelector('.scr-rte');
+        const editorEl = setupEditor(rootBox, handlers.toast);
         const saveBtn = container.querySelector('[data-role="root-save"]');
         saveBtn.addEventListener('click', () => {
             handlers.busy(saveBtn, () => handlers.onSaveRoot(root, getEditorHtmlForSave(editorEl)));
         });
         container.querySelector('[data-role="root-cancel"]').addEventListener('click', handlers.onCancelRootEdit);
+        // «Изменить» ведёт В РЕДАКТОР, а не оставляет фокус на кнопке (К165):
+        // кнопку уже нажали, дальше человек печатает.
+        editorEl.focus();
     } else {
         container.querySelector('[data-role="root-edit"]').addEventListener('click', handlers.onEditRootStart);
     }
@@ -504,11 +654,14 @@ export function renderNodesPanel(container, nodes, uiState, handlers) {
 
     const newCard = container.querySelector('[data-role="objection-new"]');
     if (newCard) {
+        const editorEl = setupEditor(newCard.querySelector('.scr-rte'), handlers.toast);
         const createObjectionBtn = newCard.querySelector('[data-role="objection-create"]');
         createObjectionBtn.addEventListener('click', () => {
-            handlers.busy(createObjectionBtn, () => handlers.onCreateObjection(readObjectionFields(newCard)));
+            handlers.busy(createObjectionBtn, () => handlers.onCreateObjection(readObjectionFields(newCard, editorEl)));
         });
         newCard.querySelector('[data-role="objection-create-cancel"]').addEventListener('click', handlers.onAddObjectionCancel);
+        // «Добавить возражение» ведёт в поле «Метка» (К165).
+        newCard.querySelector('[data-role="objection-label"]').focus();
     }
 
     container.querySelectorAll('[data-action="edit-objection"]').forEach((btn) => {
@@ -517,6 +670,15 @@ export function renderNodesPanel(container, nodes, uiState, handlers) {
     container.querySelectorAll('[data-action="cancel-edit-objection"]').forEach((btn) => {
         btn.addEventListener('click', handlers.onEditObjectionCancel);
     });
+    // Открытая форма правки — свой редактор и свой фокус, как у добавления.
+    const editingCard = uiState.editingObjectionId === null ? null
+        : container.querySelector(`.scr-objection--form[data-id="${uiState.editingObjectionId}"]`);
+    let editingEditor = null;
+    if (editingCard) {
+        editingEditor = setupEditor(editingCard.querySelector('.scr-rte'), handlers.toast);
+        editingCard.querySelector('[data-role="objection-label"]').focus();
+    }
+
     container.querySelectorAll('[data-action="save-objection"]').forEach((btn) => {
         btn.addEventListener('click', () => {
             const id = Number(btn.dataset.id);
@@ -525,7 +687,7 @@ export function renderNodesPanel(container, nodes, uiState, handlers) {
             // панели тоже (образец куратора, п.4).
             const card = btn.closest('.scr-objection');
             const node = objections.find((o) => o.id === id);
-            handlers.busy(btn, () => handlers.onSaveObjection(node, readObjectionFields(card)));
+            handlers.busy(btn, () => handlers.onSaveObjection(node, readObjectionFields(card, editingEditor)));
         });
     });
     container.querySelectorAll('[data-action="delete-objection"]').forEach((btn) => {
@@ -533,9 +695,13 @@ export function renderNodesPanel(container, nodes, uiState, handlers) {
     });
 }
 
-function readObjectionFields(card) {
+// Текст берётся из редактора той же карточки: разметка живёт в innerHTML, а не
+// в .value, и читать её надо ровно тем же путём, что у основного текста —
+// вместе с чисткой брошенных пустых span'ов.
+function readObjectionFields(card, editorEl) {
+    const editor = editorEl || card.querySelector('[data-role="rte-editor"]');
     return {
         label: card.querySelector('[data-role="objection-label"]').value,
-        content: card.querySelector('[data-role="objection-content"]').value
+        content: editor ? getEditorHtmlForSave(editor) : ''
     };
 }

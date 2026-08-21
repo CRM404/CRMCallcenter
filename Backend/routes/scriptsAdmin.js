@@ -7,11 +7,16 @@ const { pool } = require('../db');
 
 const router = express.Router();
 
-// Белый список тегов для content корневого узла (rich-text тулбар в
-// scriptsAdminNodes.js). Для большинства тегов ВСЕ атрибуты отбрасываются —
-// неразрешённые теги вырезаются целиком (текст внутри остаётся), этим же путём
-// убираются <script> и любые on*-обработчики. Возражения (objection) через
-// этот путь не проходят — остаются как есть, plain text.
+// Белый список тегов для content ЛЮБОГО узла — и корневого, и возражения
+// (rich-text тулбар в scriptsAdminNodes.js). Для большинства тегов ВСЕ атрибуты
+// отбрасываются — неразрешённые теги вырезаются целиком (текст внутри
+// остаётся), этим же путём убираются <script> и любые on*-обработчики.
+//
+// Возражения ходили мимо санитайзера, пока у них не было редактора: текст
+// сохранялся как есть и на экран выводился экранированным. С К156 у них тот же
+// редактор, что у основного текста, — значит и тот же путь чистки. Записи,
+// сохранённые до этого, приведены разовой правкой данных в schema.sql
+// (2026-08-21-escape-objection-content).
 //
 // Исключение — span: единственный тег, которому разрешён атрибут style, и то
 // только с двумя свойствами (font-family/font-size) из жёстко заданного
@@ -333,7 +338,12 @@ router.post('/scripts/:id/nodes', async (req, res) => {
             }
         }
 
-        const normalizedContent = nodeType === 'statement' ? sanitizeRichText(content).trim() : content.trim();
+        // Санитайзер стоит на ЛЮБОМ узле, а не только на корневом (К156).
+        // Возражение правится тем же редактором и показывается разметкой — путь
+        // для пользовательской разметки в проекте один, и второго быть не
+        // должно: разметка, которую никто не чистит, доезжает до экрана
+        // оператора как есть.
+        const normalizedContent = sanitizeRichText(content).trim();
 
         const result = await pool.query(
             `INSERT INTO script_nodes (script_id, parent_id, node_type, label, content, sort_order)
@@ -401,7 +411,12 @@ router.put('/script-nodes/:id', async (req, res) => {
             }
         }
 
-        const normalizedContent = nodeType === 'statement' ? sanitizeRichText(content).trim() : content.trim();
+        // Санитайзер стоит на ЛЮБОМ узле, а не только на корневом (К156).
+        // Возражение правится тем же редактором и показывается разметкой — путь
+        // для пользовательской разметки в проекте один, и второго быть не
+        // должно: разметка, которую никто не чистит, доезжает до экрана
+        // оператора как есть.
+        const normalizedContent = sanitizeRichText(content).trim();
 
         const result = await pool.query(
             `UPDATE script_nodes SET parent_id = $1, node_type = $2, label = $3, content = $4, sort_order = $5

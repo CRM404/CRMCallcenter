@@ -278,13 +278,19 @@ export function confirm(opts = {}) {
         scope,
         screen,
         size: 'narrow',
+        // ФОКУС — НА ОТМЕНЯЮЩЕЙ КНОПКЕ, и у обоих видов подтверждения (К161).
+        // Раньше он стоял на подтверждающей, когда действие обратимо, — и
+        // <kbd>Enter</kbd>, нажатый вслепую сразу после открытия окна,
+        // срабатывал действием, а не отменой. У необратимого действия autofocus
+        // не стоял вовсе, и фокус доставался крестику: до «Отмены» всё равно
+        // надо было дойти. Правило одно на оба: окно, которое спрашивает,
+        // открывается на ответе «нет».
         actions: [
-            { label: cancelLabel, variant: 'ghost', value: false },
+            { label: cancelLabel, variant: 'ghost', value: false, autofocus: true },
             {
                 label: confirmLabel,
                 variant: danger ? 'danger' : '',
-                value: true,
-                autofocus: !danger
+                value: true
             }
         ]
     }).result;

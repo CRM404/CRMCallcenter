@@ -70,19 +70,46 @@
 }
 .scr-card__head {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--ui-space-4);
+    align-items: baseline;
+    gap: var(--ui-space-3);
     flex-wrap: wrap;
+}
+/* Карточка ОТКРЫТОГО скрипта — единственная, отмеченная цветом (К164). Тот же
+   тон, что у выделенной строки списка (.ui-table__row--selected), и та же
+   линия, что у активной панели: карточка и подсвеченная строка — одно и то же
+   место, показанное дважды.
+
+   В паспорте токены названы --ui-color-accent-wash и --ui-color-accent-line.
+   Второй существует, первого в слое нет; подсветка выбранного в слое одна и
+   называется --ui-color-wash-active — она здесь и стоит. Своего цвета раздел
+   не заводит: имя токена — вопрос к дизайн-сессии, а не повод написать rgba. */
+.scr-card--open {
+    background: var(--ui-color-wash-active);
+    border-color: var(--ui-color-accent-line);
 }
 .scr-card__title {
     margin: 0;
-    font-size: 11px;
+    /* Кегль токеном, а не голым числом: 11 против 11.5 — это правило 2
+       паспорта, а не полпикселя (К162). */
+    font-size: var(--ui-text-xs);
     font-weight: var(--ui-weight-bold);
     letter-spacing: .06em;
     text-transform: uppercase;
     color: var(--ui-color-ink-faint);
 }
+/* Пояснение рядом с заголовком блока (К162) — «то, что оператор читает с
+   начала разговора». Не декор: раздел показывают человеку, который скрипты
+   пишет впервые, и разница между «основным текстом» и «возражением» для него
+   неочевидна — и то и другое текст в рамке. */
+.scr-card__sub {
+    font-size: var(--ui-text-xs);
+    line-height: var(--ui-line-base);
+    color: var(--ui-color-ink-faint);
+}
+/* Заголовок и пояснение стоят рядом, действие уходит к правому краю. Своего
+   класса группе не заводим — это раскладка, а не вид: имён у раздела ровно
+   столько, сколько в карте паспорта. */
+.scr-card__head .ui-btn { margin-left: auto; }
 
 /* Наполнение открытого скрипта — стопка карточек с тем же шагом, что у секции. */
 [data-role="opened"] {
@@ -112,20 +139,37 @@
     padding-bottom: 2px;
 }
 
-/* ----- Редактор основного текста (разметка из scriptsAdminNodes.js) ----- */
+/* ----- Редактор (разметка из scriptsAdminNodes.js) -----
+   ПОЛОСА И ПОЛЕ — ОДНА КОРОБКА (К157). Отдельно висящая полоса кнопок над
+   отдельно висящим полем — это два элемента вместо одного: непонятно, к чему
+   относятся кнопки, если полей на экране несколько. А их здесь до трёх —
+   основной текст и две формы возражения. */
+.scr-rte {
+    border: 1px solid var(--ui-color-line-field);
+    border-radius: var(--ui-radius-sm);
+    overflow: hidden;
+}
 .scr-rte__toolbar {
     display: flex;
     align-items: center;
     flex-wrap: wrap;
     gap: var(--ui-space-2);
-    margin-bottom: var(--ui-space-2);
+    /* Отступы 7/8 — голые числа, и это записано в паспорте как принятое:
+       внутренняя механика одного элемента, за его пределы не выходит. */
+    padding: 7px 8px;
+    border-bottom: 1px solid var(--ui-color-line);
+    background: var(--ui-color-surface-sunken);
 }
-.scr-rte__font {
-    width: auto;
-    height: var(--ui-control-h-sm);
-    padding: 0 var(--ui-space-2);
-    font-size: var(--ui-text-xs);
+/* Подсказка про два режима цвета (К160) — видимой строкой во всю ширину
+   полосы, а не в атрибуте title: title появляется только под курсором и не
+   существует для клавиатуры, а два режима не угадываются. */
+.scr-rte__toolbar .ui-field__hint {
+    flex: 1 0 100%;
+    margin-top: 0;
 }
+/* Мелкая ступень поля объявлена в слое (.ui-field__control--sm) — здесь
+   остаётся только ширина по содержимому: высоту раздел себе не задаёт (К158). */
+.scr-rte__font { width: auto; }
 .scr-rte__swatches {
     display: flex;
     align-items: center;
@@ -136,12 +180,16 @@
     border-radius: var(--ui-radius-sm);
     background: var(--ui-color-glass);
 }
+/* Образец цвета — квадрат со ступенью радиуса из слоя, а не кружок (К159):
+   круглых элементов в проекте нет ни одного, и 16 px против 18 в макете
+   заметно рядом с кнопками 32. */
 .scr-rte__swatch {
-    width: 16px;
-    height: 16px;
+    width: 18px;
+    height: 18px;
     padding: 0;
-    border: 1px solid rgba(0, 0, 0, .15);
-    border-radius: 50%;
+    flex-shrink: 0;
+    border: 1px solid var(--ui-color-line-strong);
+    border-radius: var(--ui-radius-xs);
     cursor: pointer;
 }
 .scr-rte__swatch:hover { transform: scale(1.15); }
@@ -149,20 +197,21 @@
     outline: 2px solid var(--ui-color-focus-ring);
     outline-offset: 2px;
 }
+/* Своей рамки у поля нет — она у коробки целиком (К157). */
 .scr-rte__editor {
     min-height: 110px;
     max-height: 480px;
     overflow-y: auto;
     padding: var(--ui-space-3) var(--ui-space-4);
-    border: 1px solid var(--ui-color-line-field);
-    border-radius: var(--ui-radius-sm);
     background: var(--ui-color-glass);
     font-size: var(--ui-text-md);
     line-height: var(--ui-line-base);
     color: var(--ui-color-ink);
 }
-.scr-rte__editor:focus {
-    outline: none;
+/* Кольцо фокуса — у КОРОБКИ, потому что рамка теперь её: у поля своей больше
+   нет, и подсвечивать было бы нечего. */
+.scr-rte__editor:focus { outline: none; }
+.scr-rte:focus-within {
     border-color: var(--ui-color-accent-soft);
     box-shadow: 0 0 0 3px var(--ui-color-focus-ring);
 }
@@ -185,21 +234,32 @@
     white-space: pre-wrap;
 }
 .scr-node__label {
-    margin-bottom: var(--ui-space-2);
-    font-weight: var(--ui-weight-medium);
-    font-size: var(--ui-text-sm);
+    font-weight: var(--ui-weight-bold);
+    font-size: var(--ui-text-md);
     color: var(--ui-color-ink);
+    min-width: 0;
+    overflow-wrap: anywhere;
 }
 .scr-objections {
     display: flex;
     flex-direction: column;
     gap: var(--ui-space-3);
 }
+
+/* ВОЗРАЖЕНИЕ — СТРОКА В ТРИ КОЛОНКИ, а не стопка (К155): метка слева, ответ по
+   центру, действия справа, на одной базовой линии.
+
+   Считано, а не на вкус: у живого скрипта возражений двенадцать. Строка 54 px
+   даёт двенадцать штук на ≈740 px — их видно списком и нужное находится
+   взглядом. Стопка из метки, текста и двух кнопок даёт те же двенадцать на
+   ≈1460 px, то есть два экрана прокрутки, по которым во время разговора не
+   попасть. */
 .scr-objection {
-    display: flex;
-    flex-direction: column;
-    gap: var(--ui-space-3);
-    padding: var(--ui-space-4);
+    display: grid;
+    grid-template-columns: minmax(150px, 210px) minmax(0, 1fr) auto;
+    align-items: baseline;
+    gap: var(--ui-space-4);
+    padding: 10px 12px;
     border: 1px solid var(--ui-color-line);
     border-radius: var(--ui-radius-sm);
     background: var(--ui-color-surface);
@@ -207,6 +267,33 @@
 .scr-objection .scr-node__content {
     font-size: var(--ui-text-sm);
     color: var(--ui-color-ink-soft);
+    min-width: 0;
+}
+/* Действия проявляются по наведению и по фокусу внутри строки. Это ровно тот
+   случай, для которого правило проекта делает исключение, — вторичные действия
+   внутри карточек-списков: двадцать четыре кнопки, постоянно висящие справа от
+   текста, спорят с самим текстом, а читать нужно текст. Фокус обязателен: без
+   него до кнопок не дойти с клавиатуры вовсе. */
+.scr-objection__acts {
+    display: flex;
+    align-items: center;
+    gap: var(--ui-space-2);
+    opacity: 0;
+    transition: opacity var(--ui-dur-fast);
+}
+.scr-objection:hover .scr-objection__acts,
+.scr-objection:focus-within .scr-objection__acts { opacity: 1; }
+
+/* Форма возражения — та же строка списка, но в столбик и пунктиром:
+   незакрытая форма отличается от сохранённой строки с первого взгляда. */
+.scr-objection--form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--ui-space-3);
+    padding: var(--ui-space-4);
+    border-style: dashed;
+    border-color: var(--ui-color-line-strong);
+    background: var(--ui-color-surface-sunken);
 }
 
 /* В половинной панели шапка и строки «поле + действия» складываются в

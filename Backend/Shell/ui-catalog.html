@@ -218,12 +218,18 @@
                 <label class="ui-field__label" for="fTime">Время</label>
                 <input id="fTime" type="time" class="ui-field__control" value="21:00">
             </div>
+            <div class="ui-field">
+                <label class="ui-field__label" for="fSmall">Мелкая ступень</label>
+                <select id="fSmall" class="ui-field__control ui-field__control--sm"><option>По умолчанию</option><option>SF Serif</option></select>
+                <span class="ui-field__hint">32 px — под ряд с кнопками той же высоты.</span>
+            </div>
             <div class="ui-field ui-field--wide">
                 <label class="ui-field__label" for="fNote">Многострочное</label>
                 <textarea id="fNote" class="ui-field__control" rows="2">Комментарий к лиду</textarea>
             </div>
         </div>
         <div class="cat-rule"><b>Правило.</b> Ошибка живёт под полем, а не в тосте: тост исчезает, поле остаётся.</div>
+        <div class="cat-rule"><b>Ступени две.</b> Обычная — 38 px, мелкая (<code>--sm</code>) — 32 px, ровно как у кнопки тулбара, и нужна только там, где поле стоит с такими кнопками в одном ряду. Задать её у себя раздел не может: <code>min-height</code> слоя выигрывает у <code>height</code> раздела независимо от порядка правил.</div>
     </section>
 
     <!-- ============ СТАТУСЫ, СЧЁТЧИКИ, ВКЛАДКИ ============ -->
