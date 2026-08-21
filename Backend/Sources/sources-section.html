@@ -36,6 +36,12 @@
         <aside class="src-side">
             <div class="src-side__title">Площадки</div>
             <div class="src-side__list" data-role="platform-list"></div>
+            <!-- Второй, короткий путь к новой площадке (К142). Кнопка стоит там,
+                 где список площадок: до правки единственной дверью было
+                 «Управление площадками» в шапке раздела. -->
+            <button type="button" class="ui-btn ui-btn--ghost" data-role="add-platform">
+                <svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-plus"></use></svg>Площадка
+            </button>
             <p class="src-side__note" data-role="platform-note"></p>
         </aside>
 
@@ -45,7 +51,7 @@
             <div class="ui-toolbar">
                 <div class="ui-field src-search">
                     <input type="search" class="ui-field__control" data-role="search"
-                           placeholder="Поиск по корневому источнику, источнику лидов, площадке, CPA-сети, городу, статусу…"
+                           placeholder="Поиск: источник, площадка, сеть, город, статус"
                            aria-label="Поиск источников">
                 </div>
                 <!-- Два списка из макета. Составы собираются из самих данных:
@@ -85,7 +91,10 @@
             </div>
 
             <div class="ui-empty" data-role="empty" hidden>
-                <span class="ui-empty__icon"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-sources"></use></svg></span>
+                <!-- Ступень lg, а не sm (К136): у значка пустого состояния нет
+                     соседнего текста — он знак самого блока, а не подпись к
+                     строке, и ступень берёт не по соседу. -->
+                <span class="ui-empty__icon"><svg class="ui-ic ui-ic--lg" aria-hidden="true"><use href="#ui-ic-sources"></use></svg></span>
                 <b class="ui-empty__title" data-role="empty-title"></b>
                 <span class="ui-empty__text" data-role="empty-text"></span>
                 <button type="button" class="ui-btn ui-btn--ghost ui-empty__action" data-role="empty-action" hidden></button>

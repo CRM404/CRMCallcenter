@@ -37,7 +37,11 @@ function rowToPlatform(row) {
 
 function validateBody(body) {
     if (!body.name || String(body.name).trim() === '') {
-        return 'Заполните обязательное поле: Наименование';
+        // Текст совпадает с клиентским ДОСЛОВНО, вместе с точкой (К145):
+        // «Заполните обязательное поле: Наименование» на сервере против
+        // «Укажите название площадки.» под полем читалось как две разные
+        // ошибки — и поле в форме называется «Название», а не «Наименование».
+        return 'Укажите название площадки.';
     }
     const status = body.status === undefined || body.status === null || String(body.status).trim() === '' ? 'Активна' : body.status;
     if (!STATUS_VALUES.includes(status)) {

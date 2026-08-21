@@ -189,18 +189,31 @@ async function mountSection(panelId, key, container) {
     const section = find(key);
     if (!section) return;
 
-    // Полоса «данные не загрузились» — на любом отказавшем чтении этой
-    // панели, снимается на первом удачном. «Повторить» перемонтирует раздел:
-    // это ровно то же, что закрыть панель и открыть заново, только без
-    // потери места на экране.
+    // Полоса «данные не загрузились» — на любом отказавшем чтении этой панели.
+    // «Повторить» перемонтирует раздел: это ровно то же, что закрыть панель и
+    // открыть заново, только без потери места на экране.
+    //
+    // ПОЛОСА ОТВЕЧАЕТ ЗА КОНКРЕТНЫЙ ЗАПРОС, А НЕ ЗА ПАНЕЛЬ ВООБЩЕ (К140).
+    // Раньше здесь стояло `onReadOk: () => clearLoadError(container)` без
+    // разбора, какое чтение удалось. «Источники» делают при монтировании три
+    // чтения одним Promise.all: отказ одного показывал полосу, а два удачных
+    // тут же её снимали — и на экране оставались пустой список площадок,
+    // пустые вкладки и пустая таблица без единого объяснения. То есть раздел
+    // говорил «записей нет» там, где он их просто не получил.
+    //
+    // Отказавшие чтения помнятся по пути; полоса держится, пока не пройдёт
+    // повторное чтение КАЖДОГО из них.
+    const failedReads = new Set();
     const api = createApiScope({
-        onReadFail: (err) => {
+        onReadFail: (err, path) => {
             if (mounted.get(panelId) !== record) return;
+            failedReads.add(path);
             showLoadError(container, err && err.message, () => remountSection(panelId, key, container));
         },
-        onReadOk: () => {
+        onReadOk: (path) => {
             if (mounted.get(panelId) !== record) return;
-            clearLoadError(container);
+            failedReads.delete(path);
+            if (failedReads.size === 0) clearLoadError(container);
         }
     });
     const ctx = {

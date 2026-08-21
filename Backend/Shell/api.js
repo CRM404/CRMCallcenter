@@ -81,17 +81,23 @@ export function createApiScope(hooks = {}) {
     // есть (находка ревизора Р3).
     const isRead = (options) => !options.method || String(options.method).toUpperCase() === 'GET';
 
+    // Хукам передаётся ПУТЬ БЕЗ строки запроса — по нему оболочка различает
+    // запросы между собой (К140). Строка запроса в ключ не входит намеренно:
+    // отказавший `/sources?platformId=3` и удавшийся следом `/sources` — это
+    // одно и то же чтение, и второй обязан снимать полосу, поставленную первым.
+    const readKey = (path) => String(path).split('?')[0];
+
     const send = (path, options = {}) => {
         if (!alive) return Promise.reject(abortError());
         const read = isRead(options);
         return request(path, { ...options, signal: controller.signal }).then(
             (body) => {
-                if (read && alive && hooks.onReadOk) hooks.onReadOk();
+                if (read && alive && hooks.onReadOk) hooks.onReadOk(readKey(path));
                 return body;
             },
             (err) => {
                 // Отмена — не отказ: панель просто закрыли.
-                if (read && alive && !isAbort(err) && hooks.onReadFail) hooks.onReadFail(err);
+                if (read && alive && !isAbort(err) && hooks.onReadFail) hooks.onReadFail(err, readKey(path));
                 throw err;
             }
         );

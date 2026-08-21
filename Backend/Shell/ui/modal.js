@@ -29,6 +29,7 @@ const OPEN_STACK = [];
  * @param {string}      opts.title            заголовок
  * @param {string}      [opts.sub]            подпись под заголовком
  * @param {Node|string} [opts.body]           содержимое; строка вставляется текстом
+ * @param {Node}        [opts.toolbar]        полоса между шапкой и телом, НЕ прокручивается
  * @param {Array}       [opts.actions]        кнопки подвала, см. ниже
  * @param {boolean}     [opts.spread]         развести подвал: side:'start' слева, прочие справа
  * @param {HTMLElement} [opts.scope]          панель, которую надо накрыть
@@ -59,6 +60,7 @@ export function openModal(opts = {}) {
         title = '',
         sub = '',
         body = null,
+        toolbar = null,
         actions = [],
         spread = false,
         scope = null,
@@ -112,6 +114,16 @@ export function openModal(opts = {}) {
     head.appendChild(closeBtn);
 
     box.appendChild(head);
+
+    // --- полоса под шапкой ---
+    //
+    // Стоит МЕЖДУ шапкой и телом и прокрутке тела не подчиняется. Без неё
+    // карточку лида нельзя было собрать вызовом: её вкладки («Данные лида» /
+    // «Офферы N») обязаны оставаться на месте, пока тело едет под ними, — а
+    // тело у окна слоя прокручивается само. Пятое такое дополнение слоя после
+    // sub, role, spread и confirmClose, и по той же причине: окно раздела не
+    // переезжает, пока слой не умеет того, что окно обещает.
+    if (toolbar instanceof Node) box.appendChild(toolbar);
 
     // --- тело ---
     const bodyBox = document.createElement('div');

@@ -25,19 +25,32 @@ import { createStorage } from './leadsStorage.js';
 import { createPickList } from './leadsPickList.js';
 import { createOfferTabPicker } from './leadsOffers.js';
 import { createGeoAutocomplete } from './leadsGeo.js';
-import { createLeadModal, fillFunnelStatusSelect } from './leadsModal.js';
+import { createLeadModal, fillFunnelStatusSelect, DOWN_PAYMENT_OPTIONS } from './leadsModal.js';
 import { createUpload } from './leadsUpload.js';
 // Путь АБСОЛЮТНЫЙ: физическая структура папок не совпадает с адресами —
 // Backend/Shell/ монтируется в корень «/».
+import { openModal } from '/ui/modal.js';
 import { isAbort } from '/api.js';
 import { readHiddenColumns, writeHiddenColumns, hasHiddenColumns } from '/viewPrefs.js';
 import { icon } from '/ui/icons.js';
 
 const PAGE_SIZE = 30;
 
+// Кавычки экранируются ТОЖЕ. Общего escapeHtml в слое нет, копии живут по
+// разделам и расходятся — эта отставала. Значения попадают не только в текст,
+// но и в атрибуты (`value="…"`, `title="…"`): справочное значение с кавычкой
+// («ЖК "Северный"») обрывало бы атрибут, и остаток названия уезжал бы в
+// разметку. Проверять это надо там, где значение собирается СТРОКОЙ в атрибут,
+// а не там, где присваивается через .value: во втором случае проверка зелёная
+// при любом экранировании.
 function escapeHtml(value) {
     if (value === null || value === undefined) return '';
-    return String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
 }
 
 function formatDate(value) {
@@ -70,6 +83,11 @@ const COLUMN_GROUPS = [
         { key: 'propertyType', label: 'Тип объекта' },
         { key: 'propertyClass', label: 'Класс объекта' },
         { key: 'roomCount', label: 'Комнатность' },
+        // «Отделка» и «Вид клиента» ниже — К127. Правило раздела: ОТБИРАЕМОЕ
+        // ОБЯЗАНО БЫТЬ ПОКАЗЫВАЕМЫМ. Оба поля есть среди фильтров окна, и без
+        // колонок человек отбирал бы лидов по признаку, которого не видит в
+        // списке. Настраиваемых колонок стало 27, всего в таблице 32.
+        { key: 'finish', label: 'Отделка' },
         { key: 'priceFrom', label: 'Цена от' },
         { key: 'priceTo', label: 'Цена до' },
         { key: 'areaFrom', label: 'Площадь от' },
@@ -84,6 +102,7 @@ const COLUMN_GROUPS = [
     ] },
     { label: 'Покупка', columns: [
         { key: 'purchaseMethod', label: 'Способ покупки' },
+        { key: 'clientType', label: 'Вид клиента' },
         { key: 'mortgageType', label: 'Вид ипотеки' },
         { key: 'downPaymentPercent', label: 'ПВ %' },
         { key: 'purchaseTimeframe', label: 'Срок покупки' }
@@ -125,6 +144,56 @@ function initialVisibleColumns() {
 
 // Имя раздела в общем хранилище настроек вида.
 const COLUMNS_SECTION = 'leads';
+
+/**
+ * ДВАДЦАТЬ ПОЛЕЙ ОКНА «ФИЛЬТРЫ» (К122). Было пять: ФИО, номер, источник,
+ * сотрудник, статус — то есть раздел отвечал только на вопрос «найди вот этого
+ * человека». Лид — это набор критериев подбора, и «покажи всех, кто ищет
+ * двушку в Москве до 15 млн» — обычный вопрос перед раздачей партии под оффер.
+ *
+ * Отдельно про ЛИНИЮ: раздача идёт по линии, и массовое действие само
+ * отказывает, если в выделении лиды разных линий («Выбраны лиды разных линий —
+ * сузьте выбор»). Правило было, а способа его выполнить — нет: однородное
+ * выделение собиралось глазами по колонке.
+ *
+ * Порядок здесь — порядок полей в окне. Он же задаёт порядок чипов активных
+ * фильтров, и он же — список, по которому считается кружок на кнопке
+ * «Фильтры»: кружок обещает содержимое ОКНА, поэтому строка поиска (q) в этот
+ * список не входит.
+ *
+ * `list`/`field` — откуда взять человеческое имя для чипа: в фильтре лежит id,
+ * а на экране должно стоять «Источник: Яндекс.Директ».
+ * `param` — ключ справочника param_lists, из которого собирается список.
+ */
+const FILTER_FIELDS = [
+    { key: 'fio', sel: '#fltFio', label: 'ФИО' },
+    { key: 'phone', sel: '#fltPhone', label: 'Номер' },
+    { key: 'sourceId', sel: '#fltSource', label: 'Источник', list: () => sources, field: 'rootSource' },
+    { key: 'employeeId', sel: '#fltEmployee', label: 'Сотрудник', list: () => employees, field: 'fullName' },
+    { key: 'funnelStatusId', sel: '#fltStatus', label: 'Статус', list: () => statuses, field: 'statusName' },
+    { key: 'lineType', sel: '#fltLine', label: 'Линия' },
+    { key: 'propertyType', sel: '#fltPropertyType', label: 'Тип объекта', param: 'objType', all: 'Все типы' },
+    { key: 'propertyClass', sel: '#fltPropertyClass', label: 'Класс объекта', param: 'objClass', all: 'Все классы' },
+    { key: 'roomCount', sel: '#fltRoomCount', label: 'Комнатность', param: 'rooms', all: 'Все комнатности' },
+    { key: 'finish', sel: '#fltFinish', label: 'Отделка', param: 'finish', all: 'Все виды отделки' },
+    { key: 'deliveryDeadline', sel: '#fltDeliveryDeadline', label: 'Срок сдачи', param: 'deadline', all: 'Все сроки' },
+    { key: 'priceFrom', sel: '#fltPriceFrom', label: 'Цена от' },
+    { key: 'priceTo', sel: '#fltPriceTo', label: 'Цена до' },
+    { key: 'areaFrom', sel: '#fltAreaFrom', label: 'Площадь от' },
+    { key: 'areaTo', sel: '#fltAreaTo', label: 'Площадь до' },
+    { key: 'region', sel: '#fltRegion', label: 'Регион' },
+    { key: 'locality', sel: '#fltLocality', label: 'Населённый пункт' },
+    { key: 'clientType', sel: '#fltClientType', label: 'Вид клиента', param: 'clientType', all: 'Все виды клиентов' },
+    { key: 'mortgageType', sel: '#fltMortgageType', label: 'Вид ипотеки', param: 'mortgageType', all: 'Все виды ипотеки' },
+    { key: 'downPaymentPercent', sel: '#fltDownPaymentPercent', label: 'ПВ %', values: () => DOWN_PAYMENT_OPTIONS, all: 'Все значения' }
+];
+
+/** Пустой отбор. Собирается из списка полей, чтобы новое поле нельзя было
+ *  добавить в окно и забыть в сбросе — именно так фильтр и переживает
+ *  «Сбросить все», оставаясь действующим и невидимым. */
+function emptyFilters() {
+    return FILTER_FIELDS.reduce((acc, f) => { acc[f.key] = ''; return acc; }, { q: '' });
+}
 
 const REPEAT_STAGE_FROM = 5;
 
@@ -207,13 +276,22 @@ const MASS_PATCH_ACTIONS = {
 // ---------------------------------------------------------------- состояние
 
 let root = null;
+// Обёртка раздела (.leads-wrap). Окна открываются в её границах, а не в
+// границах контейнера панели: в leads-light.css КАЖДЫЙ селектор ограничен этой
+// обёрткой, и окно, вынесенное наружу, осталось бы без раскладки раздела —
+// без поля телефона, подсказок адреса, разделов формы и результатов поиска
+// офферов. Положение окна от этого не меняется: .ui-modal считается от
+// ближайшего позиционированного предка, а это .shell-panel.
+let wrap = null;
 let shell = null;
 let storage = null;
 let leadModal = null;
 let upload = null;
-// Слушатель на документе — снимается при закрытии панели, иначе они копятся
-// с каждым открытием раздела.
-let onDocKeydown = null;
+// Открытые окна раздела, собранные слоем. Нужны, чтобы закрыть их при
+// размонтировании: иначе слой остался бы со ссылкой на вырезанный узел и с
+// живым слушателем клавиатуры.
+let filterModal = null;
+let columnsModal = null;
 
 // Номер монтирования. Раздел закрывают и открывают заново, а ответ на запрос,
 // ушедший ДО закрытия, приходит после. Отмена запросов обычно срабатывает
@@ -229,7 +307,7 @@ let paramLists = {};
 let scripts = [];
 
 let leads = [];
-let filters = { q: '', fio: '', phone: '', sourceId: '', employeeId: '', funnelStatusId: '' };
+let filters = emptyFilters();
 // Сколько всего лидов подходит под текущий фильтр — число с сервера, для
 // подвала «Показано N из M».
 let total = 0;
@@ -450,19 +528,24 @@ function activeFilterLabels() {
         return found ? found[field] : id;
     };
     if (filters.q) out.push({ key: 'q', label: 'Поиск', value: filters.q });
-    if (filters.fio) out.push({ key: 'fio', label: 'ФИО', value: filters.fio });
-    if (filters.phone) out.push({ key: 'phone', label: 'Номер', value: filters.phone });
-    if (filters.sourceId) {
-        out.push({ key: 'sourceId', label: 'Источник', value: nameById(sources, filters.sourceId, 'rootSource') });
-    }
-    if (filters.employeeId === 'none') {
-        out.push({ key: 'employeeId', label: '', value: 'Без оператора' });
-    } else if (filters.employeeId) {
-        out.push({ key: 'employeeId', label: 'Сотрудник', value: nameById(employees, filters.employeeId, 'fullName') });
-    }
-    if (filters.funnelStatusId) {
-        out.push({ key: 'funnelStatusId', label: 'Статус', value: nameById(statuses, filters.funnelStatusId, 'statusName') });
-    }
+    // Чипы — по тому же списку, что и само окно: поле, добавленное в окно и
+    // забытое здесь, отбирал бы молча, и короткий список объяснить было бы
+    // нечем.
+    FILTER_FIELDS.forEach((f) => {
+        const value = filters[f.key];
+        if (!value) return;
+        // «Без оператора» — без приставки: «Сотрудник: Без оператора» читается
+        // как имя сотрудника.
+        if (f.key === 'employeeId' && value === 'none') {
+            out.push({ key: f.key, label: '', value: 'Без оператора' });
+            return;
+        }
+        out.push({
+            key: f.key,
+            label: f.label,
+            value: f.list ? nameById(f.list(), value, f.field) : value
+        });
+    });
     return out;
 }
 
@@ -489,20 +572,15 @@ function syncFilterControls() {
     set('[data-role="search"]', filters.q);
     set('[data-role="quick-status"]', filters.funnelStatusId);
     set('[data-role="quick-source"]', filters.sourceId);
-    set('#fltFio', filters.fio);
-    set('#fltPhone', filters.phone);
-    set('#fltSource', filters.sourceId);
-    set('#fltEmployee', filters.employeeId);
-    set('#fltStatus', filters.funnelStatusId);
+    FILTER_FIELDS.forEach((f) => set(f.sel, filters[f.key]));
     const badge = $('[data-role="filter-badge"]');
     if (badge) {
         // Считаются только поля ОКНА (К-Ф4). Поиск живёт в тулбаре, и кружок
         // над кнопкой «Фильтры» обещал бы его содержимым окна: набрал текст в
-        // поиске — загорелась единица, открыл окно — пять пустых полей.
+        // поиске — загорелась единица, открыл окно — пустые поля.
         // Поиск при этом не теряется: он виден в своём поле и назван чипом в
         // строке активных фильтров.
-        const modalFields = ['fio', 'phone', 'sourceId', 'employeeId', 'funnelStatusId'];
-        const activeCount = modalFields.filter((key) => filters[key]).length;
+        const activeCount = FILTER_FIELDS.filter((f) => filters[f.key]).length;
         badge.hidden = activeCount === 0;
         badge.textContent = activeCount;
     }
@@ -548,6 +626,15 @@ function hideMassWarn() {
 function updateMassActionsUI() {
     $('[data-role="selected-count"]').textContent = `Выбрано: ${selectedIds.size}`;
     $('[data-role="mass-bar"]').hidden = selectedIds.size === 0;
+    // ВЫДЕЛЕНИЯ НЕ ОСТАЛОСЬ — значит и действия не осталось (К126). Кнопка
+    // «Сбросить выделение» сбрасывала действие правильно, а снятие ПОСЛЕДНЕЙ
+    // ГАЛКИ — самый обычный способ передумать — нет: полоса пряталась, действие
+    // и открытый список операторов в ней оставались, и следующее выделение
+    // возвращало полосу в прежнем виде. Выделили входящую линию, выбрали
+    // «Сменить оператора», сняли галку, выделили исходящую — и оператор чужой
+    // линии назначается в два щелчка мимо проверки, потому что линия у нового
+    // выделения одна и она молчит.
+    if (selectedIds.size === 0) resetMassAction();
     // Выделение изменилось — прежняя причина могла перестать быть правдой.
     hideMassWarn();
     $('[data-role="head-checkbox"]').checked = leads.length > 0 && leads.every((l) => selectedIds.has(l.id));
@@ -749,6 +836,19 @@ function fillFilterSelects() {
         + sources.map((s) => `<option value="${s.id}">${escapeHtml(s.rootSource)}</option>`).join('');
     $('#fltEmployee').innerHTML = '<option value="">Все сотрудники</option><option value="none">— без оператора —</option>'
         + employees.map((e) => `<option value="${e.id}">${escapeHtml(e.lastName + ' ' + e.firstName)}</option>`).join('');
+
+    // Списки критериев подбора — из тех же справочников param_lists, что и
+    // одноимённые поля карточки: отбор обязан предлагать ровно те значения,
+    // которые в карточку можно поставить. Первым пунктом — «Все …».
+    FILTER_FIELDS.forEach((f) => {
+        if (!f.param && !f.values) return;
+        const node = $(f.sel);
+        if (!node) return;
+        const values = f.values ? f.values() : (paramLists[f.param] || []);
+        node.innerHTML = `<option value="">${escapeHtml(f.all)}</option>`
+            + values.map((v) => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
+    });
+
     fillFunnelStatusSelect($('#fltStatus'), statuses, false);
     $('#fltStatus').insertAdjacentHTML('afterbegin', '<option value="">Все статусы</option>');
     // insertAdjacentHTML не переизбирает select — без явного сброса он бы
@@ -769,16 +869,22 @@ function fillFilterSelects() {
 
 async function applyFilters() {
     const my = generation;
-    filters = {
-        q: filters.q,
-        fio: $('#fltFio').value.trim(),
-        phone: $('#fltPhone').value.trim(),
-        sourceId: $('#fltSource').value,
-        employeeId: $('#fltEmployee').value,
-        funnelStatusId: $('#fltStatus').value
-    };
-    $('[data-role="filter-modal"]').hidden = true;
+    // Строка поиска — НЕ поле этого окна и «Применить» её не трогает.
+    const next = { q: filters.q };
+    FILTER_FIELDS.forEach((f) => {
+        const node = $(f.sel);
+        next[f.key] = node ? String(node.value).trim() : '';
+    });
+    filters = next;
     await applyFilterState(my);
+}
+
+/** «Сбросить» очищает поля ОКНА, а не всё подряд: строка поиска остаётся. */
+function clearFilterFields() {
+    FILTER_FIELDS.forEach((f) => {
+        const node = $(f.sel);
+        if (node) node.value = '';
+    });
 }
 
 // ---------------------------------------------------------------- колонки
@@ -792,6 +898,112 @@ function renderColumnsModalBody() {
             </div>
         </div>
     `).join('');
+}
+
+// ---------------------------------------------------------------- окна раздела
+//
+// ОКНА СОБИРАЕТ СЛОЙ (К123, К124). Раньше все четыре были объявлены разметкой
+// и показывались снятием hidden: вид у них был правильный, а поведения окна не
+// было — фокус при открытии оставался на кнопке-открывашке, Tab на первом же
+// шаге уводил в панель под затемнением, а после закрытия фокус уходил в BODY.
+//
+// Поля при этом никуда не переезжают: блок полей живёт в разметке раздела и на
+// время открытия ПЕРЕСТАВЛЯЕТСЯ в коробку окна, а при закрытии возвращается на
+// место. Так модули раздела продолжают находить свои сорок с лишним полей по
+// id, как и до правки, и всё это время поля остаются внутри .leads-wrap — под
+// правилами раскладки раздела.
+
+/** Вернуть блок полей на место в разделе и снова спрятать. */
+function parkFields(node) {
+    if (!node || !wrap) return;
+    node.hidden = true;
+    wrap.appendChild(node);
+}
+
+function openFilterModal() {
+    if (filterModal) return;
+    const node = $('[data-role="filter-fields"]');
+    if (!node) return;
+    syncFilterControls();
+    node.hidden = false;
+
+    filterModal = openModal({
+        title: 'Фильтры',
+        // Подпись называет состав окна, а не «по тем же полям, что и колонки по
+        // умолчанию»: полей двадцать, и пять из них отбирают «кто», а пятнадцать
+        // — «что ищет».
+        sub: 'Пять групп полей: кто, что ищет, диапазоны, география, покупка',
+        body: node,
+        scope: wrap,
+        size: 'wide',
+        spread: true,
+        actions: [
+            {
+                label: 'Сбросить',
+                variant: 'secondary',
+                side: 'start',
+                // false — окно остаётся открытым: «Сбросить» чистит поля, а не
+                // прощается.
+                onClick: () => { clearFilterFields(); return false; }
+            },
+            // «Отмена» закрывает окно, ничего не применив, и возвращает поля к
+            // действующему отбору: набранное, но не применённое, не должно
+            // притворяться действующим фильтром при следующем открытии (К56).
+            { label: 'Отмена', variant: 'ghost', onClick: () => { syncFilterControls(); } },
+            { label: 'Применить', onClick: () => applyFilters() }
+        ]
+    });
+    filterModal.result.then(() => { parkFields(node); filterModal = null; });
+
+    // Фокус — в первое поле. Слой по умолчанию берёт первый фокусируемый
+    // элемент коробки, а это крестик закрытия: он выше по разметке.
+    const first = $('#fltFio');
+    if (first) first.focus();
+}
+
+function openColumnsModal() {
+    if (columnsModal) return;
+    const node = $('[data-role="columns-fields"]');
+    if (!node) return;
+    $$('[data-col-check]').forEach((cb) => { cb.checked = visibleColumns[cb.dataset.colCheck]; });
+    node.hidden = false;
+
+    columnsModal = openModal({
+        title: 'Настройка колонок',
+        sub: 'ID/ФИО/Номер/Действия — всегда видны',
+        body: node,
+        scope: wrap,
+        spread: true,
+        actions: [
+            {
+                label: 'Сбросить',
+                variant: 'secondary',
+                side: 'start',
+                // Возвращает НАБОР ПО УМОЛЧАНИЮ, а не снимает все галки: из
+                // списка о четырёх служебных колонках выбираться пришлось бы
+                // вручную.
+                onClick: () => {
+                    $$('[data-col-check]').forEach((cb) => { cb.checked = COLUMN_DEFAULT[cb.dataset.colCheck]; });
+                    return false;
+                }
+            },
+            { label: 'Отмена', variant: 'ghost' },
+            { label: 'Применить', onClick: applyColumns }
+        ]
+    });
+    columnsModal.result.then(() => { parkFields(node); columnsModal = null; });
+
+    const first = node.querySelector('[data-col-check]');
+    if (first) first.focus();
+}
+
+function applyColumns() {
+    $$('[data-col-check]').forEach((cb) => { visibleColumns[cb.dataset.colCheck] = cb.checked; });
+    // Настройка переживает и панель, и вкладку — общее хранилище вида (К53).
+    // Раньше «сохранено» означало «до закрытия панели», и тост об этом умалчивал.
+    writeHiddenColumns(COLUMNS_SECTION, COLUMN_ORDER.filter((key) => !visibleColumns[key]));
+    renderTable();
+    shell.toast('Настройки колонок сохранены', 'success');
 }
 
 // ---------------------------------------------------------------- монтирование
@@ -818,6 +1030,7 @@ function fillQueueDate(todayDate) {
 export async function mount(container, ctx) {
     const my = ++generation;
     root = container;
+    wrap = container.querySelector('.leads-wrap') || container;
     shell = ctx;
     storage = createStorage(ctx.api);
 
@@ -828,7 +1041,7 @@ export async function mount(container, ctx) {
     paramLists = {};
     scripts = [];
     leads = [];
-    filters = { q: '', fio: '', phone: '', sourceId: '', employeeId: '', funnelStatusId: '' };
+    filters = emptyFilters();
     total = 0;
     clearTimeout(searchTimer);
     visibleColumns = initialVisibleColumns();
@@ -841,6 +1054,8 @@ export async function mount(container, ctx) {
     const isAlive = () => alive(my);
 
     leadModal = createLeadModal(container, {
+        wrap,
+        confirm: ctx.confirm,
         storage,
         toast: ctx.toast,
         isAlive,
@@ -851,7 +1066,7 @@ export async function mount(container, ctx) {
         onSaved: reloadAll
     });
     upload = createUpload(container, {
-        storage, toast: ctx.toast, isAlive, isAbort, onImported: reloadAll
+        wrap, storage, toast: ctx.toast, isAlive, isAbort, onImported: reloadAll
     });
 
     try {
@@ -961,21 +1176,7 @@ function bindHandlers() {
     $('[data-role="mass-apply"]').addEventListener('click', handleMassApply);
 
     // --- фильтры ---
-    const filterModal = $('[data-role="filter-modal"]');
-    $('[data-role="filter-toggle"]').addEventListener('click', () => { filterModal.hidden = false; });
-    $('[data-role="filter-close"]').addEventListener('click', () => { filterModal.hidden = true; });
-    // «Отмена» возвращает поля к применённому отбору и закрывает окно (К56):
-    // набранное, но не применённое, не должно притворяться действующим
-    // фильтром при следующем открытии.
-    $('[data-role="filter-cancel"]').addEventListener('click', () => {
-        syncFilterControls();
-        filterModal.hidden = true;
-    });
-    filterModal.addEventListener('click', (e) => { if (e.target === filterModal) filterModal.hidden = true; });
-    $('[data-role="filter-clear"]').addEventListener('click', () => {
-        ['#fltFio', '#fltPhone', '#fltSource', '#fltEmployee', '#fltStatus'].forEach((sel) => { $(sel).value = ''; });
-    });
-    $('[data-role="filter-apply"]').addEventListener('click', applyFilters);
+    $('[data-role="filter-toggle"]').addEventListener('click', openFilterModal);
 
     // --- тулбар: поиск и два списка ---
     //
@@ -1011,49 +1212,19 @@ function bindHandlers() {
             return;
         }
         if (e.target.closest('[data-role="clear-filters"]')) {
-            filters = { q: '', fio: '', phone: '', sourceId: '', employeeId: '', funnelStatusId: '' };
+            filters = emptyFilters();
             applyFilterState(my);
         }
     });
 
     // --- настройка колонок ---
-    const columnsModal = $('[data-role="columns-modal"]');
-    $('[data-role="columns-btn"]').addEventListener('click', () => {
-        $$('[data-col-check]').forEach((cb) => { cb.checked = visibleColumns[cb.dataset.colCheck]; });
-        columnsModal.hidden = false;
-    });
-    $('[data-role="columns-close"]').addEventListener('click', () => { columnsModal.hidden = true; });
-    // «Отмена» закрывает окно, ничего не применив: галки при следующем
-    // открытии всё равно проставляются от действующего состава колонок (К56).
-    $('[data-role="columns-cancel"]').addEventListener('click', () => { columnsModal.hidden = true; });
-    columnsModal.addEventListener('click', (e) => { if (e.target === columnsModal) columnsModal.hidden = true; });
-    $('[data-role="columns-reset"]').addEventListener('click', () => {
-        $$('[data-col-check]').forEach((cb) => { cb.checked = COLUMN_DEFAULT[cb.dataset.colCheck]; });
-    });
-    $('[data-role="columns-apply"]').addEventListener('click', () => {
-        $$('[data-col-check]').forEach((cb) => { visibleColumns[cb.dataset.colCheck] = cb.checked; });
-        // Настройка переживает и панель, и вкладку — общее хранилище вида
-        // (К53). Раньше «сохранено» означало «до закрытия панели», и тост об
-        // этом умалчивал.
-        writeHiddenColumns(COLUMNS_SECTION, COLUMN_ORDER.filter((key) => !visibleColumns[key]));
-        columnsModal.hidden = true;
-        renderTable();
-        shell.toast('Настройки колонок сохранены', 'success');
-    });
+    $('[data-role="columns-btn"]').addEventListener('click', openColumnsModal);
 
-    // Esc закрывает верхнее открытое окно раздела — правило дизайн-сессии, в
-    // слое оно уже соблюдено, а эти четыре окна разметочные (сложные формы, не
-    // подтверждения), и Esc им нужно дать вручную. Окно подтверждения удаления
-    // приходит из слоя и свой Esc обрабатывает само, поэтому при открытом
-    // подтверждении мы не вмешиваемся.
-    onDocKeydown = (e) => {
-        if (e.key !== 'Escape' || !root) return;
-        if (document.querySelector('.ui-modal--screen')) return;
-        const open = $$('.leads-modal').filter((m) => !m.hidden);
-        if (open.length === 0) return;
-        open[open.length - 1].hidden = true;
-    };
-    document.addEventListener('keydown', onDocKeydown);
+    // СВОЕГО ОБРАБОТЧИКА Esc У РАЗДЕЛА БОЛЬШЕ НЕТ. Он ставил hidden напрямую,
+    // мимо всякой проверки, — и карточка с тремя десятками заполненных полей
+    // закрывалась молча именно той дверью, которую нажимают не глядя (К123).
+    // Esc, щелчок по затемнению и крестик теперь даёт слой, и все три идут
+    // через один и тот же вопрос.
 }
 
 export function unmount() {
@@ -1065,10 +1236,16 @@ export function unmount() {
     if (leadModal) leadModal.destroy();
     if (upload) upload.destroy();
 
-    if (onDocKeydown) document.removeEventListener('keydown', onDocKeydown);
-    onDocKeydown = null;
+    // Окна слоя закрываются явно: узлы уйдут вместе с контейнером, но слой
+    // остался бы со ссылкой на них в своей стопке и с живым слушателем
+    // клавиатуры на документе.
+    if (filterModal) filterModal.close(false);
+    if (columnsModal) columnsModal.close(false);
+    filterModal = null;
+    columnsModal = null;
 
     root = null;
+    wrap = null;
     shell = null;
     storage = null;
     leadModal = null;

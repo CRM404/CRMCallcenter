@@ -13,8 +13,27 @@ export function createStorage(api) {
 
         // Ответ — { items, total }: total нужен подвалу «Показано N из M» и
         // считается сервером по тем же фильтрам, что и выборка.
-        fetchLeads: ({ q, fio, phone, sourceId, employeeId, funnelStatusId, limit, offset } = {}) =>
-            api.get('/leads-admin', { q, fio, phone, sourceId, employeeId, funnelStatusId, limit, offset }),
+        // Поля перечислены поимённо, а не отдаются россыпью: строку запроса
+        // собирает buildQuery, и лишний ключ из состояния раздела уехал бы на
+        // сервер параметром, которого тот не знает.
+        fetchLeads: (filters = {}) => {
+            const {
+                q, fio, phone, sourceId, employeeId, funnelStatusId, lineType,
+                propertyType, propertyClass, roomCount, finish, deliveryDeadline,
+                priceFrom, priceTo, areaFrom, areaTo,
+                region, locality,
+                clientType, mortgageType, downPaymentPercent,
+                limit, offset
+            } = filters;
+            return api.get('/leads-admin', {
+                q, fio, phone, sourceId, employeeId, funnelStatusId, lineType,
+                propertyType, propertyClass, roomCount, finish, deliveryDeadline,
+                priceFrom, priceTo, areaFrom, areaTo,
+                region, locality,
+                clientType, mortgageType, downPaymentPercent,
+                limit, offset
+            });
+        },
 
         fetchLeadStats: () => api.get('/leads-admin/stats'),
 

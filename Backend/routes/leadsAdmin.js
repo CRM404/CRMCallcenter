@@ -375,6 +375,70 @@ router.get('/', async (req, res) => {
         const conditions = [];
         const params = [];
 
+        // --- отбор по критериям подбора (К122) ---
+        //
+        // До этой правки сервер знал пять условий: поиск, ФИО, номер, источник,
+        // сотрудник и статус. Раздача идёт ПО ЛИНИИ, и массовое действие само
+        // отказывает, если в выделении лиды разных линий, — а фильтра по линии
+        // не было вовсе: однородное выделение приходилось собирать глазами по
+        // колонке. Остальные признаки — то, ради чего лид и заводится.
+        //
+        // ВСЕ УСЛОВИЯ ССЫЛАЮТСЯ ТОЛЬКО НА АЛИАС `l.` — это не случайность, а
+        // граница: подсчёт total идёт по одной таблице, без шести джойнов
+        // основного запроса (см. комментарий у него ниже). Условие по полю из
+        // джойна обязано приехать и туда, иначе упадёт ТОЛЬКО подсчёт, и раздел
+        // ответит 500 там, где выборка отработала бы (К-Ф5 куратора).
+        const eq = (value, column) => {
+            const text = value === undefined || value === null ? '' : String(value).trim();
+            if (!text) return;
+            params.push(text);
+            conditions.push(`${column} = $${params.length}`);
+        };
+        // Совпадение без оглядки на регистр букв. Нужно там, где значение
+        // набирают руками: «московская область» и «Московская область» — одно и
+        // то же место, и отбор, который этого не знает, отвечает пустотой на
+        // верный запрос. ILIKE тут не годится: «_» и «%» в названии он примет
+        // за подстановочные знаки.
+        const eqCi = (value, column) => {
+            const text = value === undefined || value === null ? '' : String(value).trim();
+            if (!text) return;
+            params.push(text);
+            conditions.push(`lower(${column}) = lower($${params.length})`);
+        };
+        // Числовое равенство. Нечисловое значение отбрасывается целиком, а не
+        // уезжает в запрос: сравнение numeric с мусором — это 500 на ровном
+        // месте, притом на эндпоинте, доступном напрямую.
+        const eqNumber = (value, column) => {
+            const text = value === undefined || value === null ? '' : String(value).trim();
+            if (!text) return;
+            const number = Number(text);
+            if (!Number.isFinite(number)) return;
+            params.push(number);
+            conditions.push(`${column} = $${params.length}`);
+        };
+        const like = (value, column) => {
+            const text = value === undefined || value === null ? '' : String(value).trim();
+            if (!text) return;
+            params.push(`%${text}%`);
+            conditions.push(`${column} ILIKE $${params.length}`);
+        };
+        // Диапазон — ПЕРЕСЕЧЕНИЕ, а не вложение: «до 12 млн» обязано находить и
+        // лида, готового на 10–14, — он подходит. Пустая граница У ЛИДА
+        // означает «не ограничен с этой стороны», а не «не подходит»: молча
+        // выкидывать лида, у которого заполнена одна граница из двух, нельзя.
+        const overlap = (from, to, columnFrom, columnTo) => {
+            const min = from === undefined || from === null || String(from).trim() === '' ? null : Number(from);
+            const max = to === undefined || to === null || String(to).trim() === '' ? null : Number(to);
+            if (min !== null && Number.isFinite(min)) {
+                params.push(min);
+                conditions.push(`(${columnTo} IS NULL OR ${columnTo} >= $${params.length})`);
+            }
+            if (max !== null && Number.isFinite(max)) {
+                params.push(max);
+                conditions.push(`(${columnFrom} IS NULL OR ${columnFrom} <= $${params.length})`);
+            }
+        };
+
         if (q && q.trim()) {
             params.push(`%${q.trim()}%`);
             const idx = params.length;
@@ -404,6 +468,24 @@ router.get('/', async (req, res) => {
             params.push(funnelStatusId);
             conditions.push(`l.funnel_status_id = $${params.length}`);
         }
+
+        // Пятнадцать полей окна «Фильтры» сверх пяти прежних.
+        eq(req.query.lineType, 'l.line_type');
+        eq(req.query.propertyType, 'l.property_type');
+        eq(req.query.propertyClass, 'l.property_class');
+        eq(req.query.roomCount, 'l.room_count');
+        eq(req.query.finish, 'l.finish');
+        eq(req.query.deliveryDeadline, 'l.delivery_deadline');
+        overlap(req.query.priceFrom, req.query.priceTo, 'l.price_from', 'l.price_to');
+        overlap(req.query.areaFrom, req.query.areaTo, 'l.area_from', 'l.area_to');
+        // Гео объекта, а не клиента: отбирают под оффер, а оффер привязан к
+        // месту объекта. Регион — совпадение (значение приходит из подсказок
+        // адреса и пишется одинаково), населённый пункт — по вхождению.
+        eqCi(req.query.region, 'l.region');
+        like(req.query.locality, 'l.locality');
+        eq(req.query.clientType, 'l.client_type');
+        eq(req.query.mortgageType, 'l.mortgage_type');
+        eqNumber(req.query.downPaymentPercent, 'l.down_payment_percent');
 
         const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
         const filterParams = params.slice();

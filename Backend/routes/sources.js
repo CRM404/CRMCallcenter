@@ -15,15 +15,33 @@ const STATUS_VALUES = ['Активен', 'Неактивен', 'Архив', 'А
 // array_agg с FILTER — иначе LEFT JOIN на источник без единой CPA-сети (не
 // должно происходить при валидных данных, но на всякий случай) дал бы
 // массив [NULL] вместо пустого '{}'.
+// leads_count — сколько лидов ссылается на источник. Нужен подтверждению
+// удаления: правило проекта «подтверждение называет не только объект, но и
+// последствия», а последствие здесь — лиды, которые останутся в системе без
+// источника (leads.source_id объявлен ON DELETE SET NULL). Без числа правило
+// невыполнимо, и окно говорило только «Это необратимо» (К132).
+//
+// Счёт идёт ОДНИМ агрегатом в подзапросе, а не коррелированным подзапросом на
+// каждую строку: индекса на leads.source_id нет, и на списке из сотни
+// источников это была бы сотня проходов по таблице лидов.
 const BASE_SELECT = `
     SELECT s.*, p.name AS platform_name,
+           COALESCE(lc.c, 0) AS leads_count,
            COALESCE(array_agg(cn.id ORDER BY cn.name) FILTER (WHERE cn.id IS NOT NULL), '{}') AS cpa_network_ids,
            COALESCE(array_agg(cn.name ORDER BY cn.name) FILTER (WHERE cn.id IS NOT NULL), '{}') AS cpa_network_names
     FROM sources s
     JOIN ad_platforms p ON p.id = s.platform_id
+    LEFT JOIN (
+        SELECT source_id, count(*)::int AS c FROM leads WHERE source_id IS NOT NULL GROUP BY source_id
+    ) lc ON lc.source_id = s.id
     LEFT JOIN source_cpa_networks scn ON scn.source_id = s.id
     LEFT JOIN cpa_networks cn ON cn.id = scn.cpa_network_id
 `;
+
+// GROUP BY основного запроса. lc.c обязан быть здесь: функциональную
+// зависимость от первичного ключа Postgres применяет только к таблице, чей
+// ключ сгруппирован, а lc — подзапрос.
+const BASE_GROUP_BY = 'GROUP BY s.id, p.name, lc.c';
 
 function rowToSource(row) {
     return {
@@ -34,6 +52,7 @@ function rowToSource(row) {
         leadSource: row.lead_source,
         cityRegion: row.city_region,
         status: row.status,
+        leadsCount: row.leads_count === undefined || row.leads_count === null ? 0 : Number(row.leads_count),
         cpaNetworkIds: row.cpa_network_ids,
         cpaNetworkNames: row.cpa_network_names,
         createdAt: row.created_at,
@@ -58,13 +77,16 @@ function validateBody(body) {
         return `Статус должен быть одним из: ${STATUS_VALUES.join(', ')}`;
     }
     if (!Array.isArray(body.cpaNetworkIds) || body.cpaNetworkIds.length === 0) {
-        return 'Укажите хотя бы одну CPA-сеть';
+        // Текст совпадает с клиентским ДОСЛОВНО (К145): расхождение
+        // («Укажите» на сервере против «Выберите» на клиенте) читается как две
+        // разные ошибки.
+        return 'Выберите хотя бы одну CPA-сеть.';
     }
     return null;
 }
 
 async function fetchSourceById(id) {
-    const result = await pool.query(`${BASE_SELECT} WHERE s.id = $1 GROUP BY s.id, p.name`, [id]);
+    const result = await pool.query(`${BASE_SELECT} WHERE s.id = $1 ${BASE_GROUP_BY}`, [id]);
     return result.rows[0] || null;
 }
 
@@ -120,7 +142,7 @@ router.get('/', async (req, res) => {
             params = [];
             where = '';
         }
-        const result = await pool.query(`${BASE_SELECT} ${where} GROUP BY s.id, p.name ORDER BY s.id`, params);
+        const result = await pool.query(`${BASE_SELECT} ${where} ${BASE_GROUP_BY} ORDER BY s.id`, params);
         res.json(result.rows.map(rowToSource));
     } catch (err) {
         console.error(err);

@@ -12,7 +12,12 @@
 // две — нет. Теперь это фабрика на монтирование: createLeadModal(root, deps)
 // возвращает объект окна, и всё его состояние живёт внутри замыкания.
 
-const DOWN_PAYMENT_OPTIONS = ['10', '15', '20', '25', '30', '50'];
+import { openModal } from '/ui/modal.js';
+
+// Экспортируется: тот же список нужен одноимённому полю окна «Фильтры».
+// Второй копией он однажды разошёлся бы с этой, и отбор предлагал бы значение,
+// которого в карточку поставить нельзя.
+export const DOWN_PAYMENT_OPTIONS = ['10', '15', '20', '25', '30', '50'];
 
 // «Повторные» — этапы воронки 5 и 6 (решение владельца п.2).
 const REPEAT_STAGE_FROM = 5;
@@ -36,9 +41,17 @@ const PLAIN_FIELDS = [
 const DOWN_PAYMENT_WORDS = ['ипотек', 'материнск', 'рассрочк'];
 const RETIREE_VALUE = 'Пенсионер';
 
+// Кавычки экранируются тоже: значения справочников подставляются в
+// `value="…"`, и значение с кавычкой обрывало бы атрибут (см. тот же разбор в
+// leadsApp.js — общего escapeHtml в слое по-прежнему нет).
 function escapeHtml(value) {
     if (value === null || value === undefined) return '';
-    return String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
 }
 
 function fieldId(key) {
@@ -122,11 +135,23 @@ function employeeName(employee) {
  *                               createOfferTabPicker, createGeo, onSaved }
  */
 export function createLeadModal(root, deps) {
-    const { storage, toast, isAlive, isAbort, createPickList, createOfferTabPicker, createGeo, onSaved } = deps;
+    const {
+        wrap, confirm, storage, toast, isAlive, isAbort,
+        createPickList, createOfferTabPicker, createGeo, onSaved
+    } = deps;
 
     const $ = (sel) => root.querySelector(sel);
-    const modal = $('[data-role="lead-modal"]');
-    const saveBtn = $('[data-role="lead-save"]');
+    // Блоки полей карточки: вкладки уходят в полосу под шапкой окна, форма —
+    // в его тело. Пока окно закрыто, оба висят в разметке раздела с hidden.
+    const tabsNode = $('[data-role="lead-tabs"]');
+    const fieldsNode = $('[data-role="lead-fields"]');
+
+    // Открытое окно слоя или null. Кнопки подвала строит слой, своей ссылки на
+    // «Сохранить» у модуля больше нет: до открытия окна её не существует.
+    let modal = null;
+    // Снимок формы на момент открытия — по нему и только по нему решается,
+    // спрашивать ли про несохранённое.
+    let openedSnapshot = null;
 
     let editingLeadId = null;
     let funnelStatuses = [];
@@ -278,37 +303,37 @@ export function createLeadModal(root, deps) {
         return data;
     }
 
+    /**
+     * Сохранение. ВОЗВРАТ FALSE ОСТАВЛЯЕТ ОКНО ОТКРЫТЫМ — это договор слоя, и
+     * промахнуться здесь дорого: любой выход без явного false закроет карточку
+     * с тремя десятками заполненных полей на первой же непройденной проверке.
+     */
     async function handleSave() {
-        // Двойной клик по «Сохранить» до переноса создавал ДВА лида: запрос
-        // идёт секунду, а кнопка всё это время активна. Слой блокирует кнопку
-        // на время обработчика в своих окнах (ui/modal.js), это окно —
-        // разметочное, поэтому блокировка здесь своя.
-        if (saving) return;
+        // Двойной щелчок по «Сохранить» до переноса создавал ДВА лида. Кнопку
+        // на время обработчика блокирует уже слой; свой замок оставлен как
+        // второй заслон — обработчик зовут не только из подвала.
+        if (saving) return false;
 
         const data = gatherLeadData();
 
         // Клиентская проверка — ровно та же, что на сервере, чтобы пользователь
-        // не ловил 400 на каждое пропущенное поле по очереди.
-        if (!data.phone) { toast('Укажите номер телефона', 'error'); switchTab('main'); return; }
-        if (!data.lineType) { toast('Выберите линию', 'error'); switchTab('main'); return; }
-        if (!data.sourceId) { toast('Выберите источник', 'error'); switchTab('main'); return; }
-        if (!data.scriptId) { toast('Выберите скрипт', 'error'); switchTab('main'); return; }
-        if (data.scriptStatusIds.length === 0) { toast('Выберите хотя бы один статус показа скрипта', 'error'); switchTab('main'); return; }
+        // не ловил 400 на каждое пропущенное поле по очереди. Сообщение всегда
+        // переключает на вкладку, где стоит виновное поле: иначе тост говорит
+        // про поле, которого в этот момент не видно.
+        const problem = (message, tab) => { toast(message, 'error'); switchTab(tab); return false; };
+        if (!data.phone) return problem('Укажите номер телефона', 'main');
+        if (!data.lineType) return problem('Выберите линию', 'main');
+        if (!data.sourceId) return problem('Выберите источник', 'main');
+        if (!data.scriptId) return problem('Выберите скрипт', 'main');
+        if (data.scriptStatusIds.length === 0) return problem('Выберите хотя бы один статус показа скрипта', 'main');
         if (syncRepeatVisibility() && !data.repeatScriptId) {
-            toast('Среди статусов показа есть этапы 5–6 — укажите скрипт для повторных', 'error');
-            switchTab('main');
-            return;
+            return problem('Среди статусов показа есть этапы 5–6 — укажите скрипт для повторных', 'main');
         }
         // Сохранение без офферов само переключает на вкладку «Офферы» — там же
         // и подсказка «обязателен минимум один» (решение дизайн-сессии).
-        if (data.offerIds.length === 0) {
-            toast('Выберите хотя бы один оффер', 'error');
-            switchTab('offers');
-            return;
-        }
+        if (data.offerIds.length === 0) return problem('Выберите хотя бы один оффер', 'offers');
 
         saving = true;
-        saveBtn.disabled = true;
         const savedId = editingLeadId;
         try {
             if (savedId) {
@@ -317,24 +342,64 @@ export function createLeadModal(root, deps) {
                 await storage.createLead(data);
             }
         } catch (e) {
-            if (!isAlive()) return;
+            if (!isAlive()) return false;
             if (!isAbort(e)) toast(e.message, 'error');
-            return;
+            // Ошибка сервера оставляет окно открытым: набранное не должно
+            // пропадать.
+            return false;
         } finally {
             saving = false;
-            // Панель могли закрыть — кнопки уже нет ни в документе, ни в
-            // разметке, но ссылка на узел жива, и снимать блокировку безвредно.
-            saveBtn.disabled = false;
         }
-        if (!isAlive()) return;
+        if (!isAlive()) return false;
         toast(savedId ? 'Лид сохранён' : 'Лид добавлен', 'success');
-        close();
+        // Сохранённое больше не «несохранённое»: иначе закрытие после успеха
+        // спросило бы про потерю того, что уже в базе.
+        openedSnapshot = snapshot();
         if (onSaved) await onSaved();
+        return true;
     }
 
+    /**
+     * Состояние формы одной строкой. Сравнением с этим снимком и решается,
+     * спрашивать ли про несохранённое: если с момента открытия ничего не
+     * менялось, спрашивать не о чем и окно закрывается молча.
+     */
+    function snapshot() {
+        try {
+            return JSON.stringify(gatherLeadData());
+        } catch (e) {
+            // Мультивыборы могли ещё не собраться — тогда считаем, что
+            // сравнивать не с чем, и вопрос задаём (ошибаемся в сторону
+            // сохранности данных).
+            return null;
+        }
+    }
+
+    /**
+     * Вопрос перед уходом — ОДИН НА ВСЕ ЧЕТЫРЕ ВЫХОДА (К123). «Отмена» идёт
+     * сюда своим onClick, Esc, крестик и щелчок по затемнению — через
+     * confirmClose слоя. Достаточно одного выхода в обход, чтобы проверки не
+     * стало вовсе; до правки в обход шли все четыре.
+     */
+    async function confirmDiscard() {
+        if (openedSnapshot !== null && snapshot() === openedSnapshot) return true;
+        const ok = await confirm({
+            title: 'Закрыть без сохранения?',
+            message: 'Введённые данные лида не сохранятся.',
+            confirmLabel: 'Закрыть без сохранения',
+            // НА ВЕСЬ ЭКРАН, а не поверх панели: так это записано в паспорте
+            // раздела, и так оно обязано быть по устройству — вопрос задаётся
+            // ПОВЕРХ уже открытой карточки, а карточка сама теперь окно панели.
+            // Два окна одного слоя разошлись бы только порядком в разметке;
+            // экранное окно живёт слоем выше (1100) и спорить не с чем.
+            screen: true
+        });
+        return Boolean(ok) && isAlive();
+    }
+
+    /** Программное закрытие — после сохранения, вопрос там неуместен. */
     function close() {
-        modal.hidden = true;
-        editingLeadId = null;
+        if (modal) modal.close(true);
     }
 
     // ---------------------------------------------------------------- запуск
@@ -398,17 +463,16 @@ export function createLeadModal(root, deps) {
         });
         $('#ldPhone').addEventListener('blur', handlePhoneBlur);
 
-        $('[data-role="lead-close"]').addEventListener('click', close);
-        $('[data-role="lead-cancel"]').addEventListener('click', close);
-        modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
-        saveBtn.addEventListener('click', handleSave);
+        // Кнопок подвала и крестика здесь больше нет: их строит слой при
+        // открытии окна, и обработчики висят на них там же.
     }
 
     async function open(lead) {
+        if (modal) return;
         editingLeadId = lead ? lead.id : null;
+        openedSnapshot = null;
         geo.reset();
         switchTab('main');
-        $('[data-role="lead-modal-title"]').textContent = lead ? `Лид #${lead.id}` : 'Новый лид';
         $('[data-role="dup-warning"]').hidden = true;
 
         $('#ldPhone').value = lead ? (lead.phone || '') : '';
@@ -445,16 +509,54 @@ export function createLeadModal(root, deps) {
         }
         syncRepeatVisibility();
 
-        modal.hidden = false;
+        tabsNode.hidden = false;
+        fieldsNode.hidden = false;
+        modal = openModal({
+            title: lead ? `Лид #${lead.id}` : 'Новый лид',
+            sub: 'Обязательные поля: номер, линия, источник, офферы, скрипт и статусы показа — остальное можно заполнить позже',
+            toolbar: tabsNode,
+            body: fieldsNode,
+            scope: wrap,
+            size: 'wide',
+            confirmClose: confirmDiscard,
+            actions: [
+                // Уход тихий, как всякий уход в проекте. Возврат false
+                // оставляет окно открытым: человек передумал уходить.
+                { label: 'Отмена', variant: 'ghost', onClick: () => confirmDiscard() },
+                { label: 'Сохранить', onClick: () => handleSave() }
+            ]
+        });
+        modal.result.then(() => {
+            tabsNode.hidden = true;
+            fieldsNode.hidden = true;
+            // Блоки возвращаются в раздел: они остаются в границах .leads-wrap,
+            // и модуль продолжает находить свои поля по id.
+            wrap.appendChild(tabsNode);
+            wrap.appendChild(fieldsNode);
+            modal = null;
+            editingLeadId = null;
+            openedSnapshot = null;
+        });
+
+        // Фокус — в поле телефона: это первое поле карточки и единственное,
+        // без которого лида не существует. Слой по умолчанию взял бы крестик.
+        const phone = $('#ldPhone');
+        if (phone) phone.focus();
+
         await offerPicker.open(lead ? lead.offers : []);
+        // Снимок берётся ПОСЛЕ офферов: они часть формы, и до их загрузки
+        // сравнивать было бы не с чем — карточка считалась бы изменённой сразу
+        // после открытия и спрашивала бы всегда.
+        if (modal) openedSnapshot = snapshot();
     }
 
     return {
         init,
         open,
         close,
-        isOpen: () => !modal.hidden,
+        isOpen: () => modal !== null,
         destroy() {
+            if (modal) modal.close(false);
             if (offerPicker) offerPicker.destroy();
             if (geo) geo.destroy();
         }

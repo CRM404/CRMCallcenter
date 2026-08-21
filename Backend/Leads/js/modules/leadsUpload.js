@@ -12,6 +12,7 @@
 
 import { createPickList } from './leadsPickList.js';
 import { createOfferInlinePicker } from './leadsOffers.js';
+import { openModal } from '/ui/modal.js';
 
 const REPEAT_STAGE_FROM = 5;
 
@@ -98,12 +99,18 @@ async function parseFile(file) {
  * @param {Object}      deps  { storage, toast, isAlive, isAbort, onImported }
  */
 export function createUpload(root, deps) {
-    const { storage, toast, isAlive, isAbort, onImported } = deps;
+    const { wrap, storage, toast, isAlive, isAbort, onImported } = deps;
 
     const $ = (sel) => root.querySelector(sel);
-    const modal = $('[data-role="upload-modal"]');
-    const goBtn = $('[data-role="upload-go"]');
+    // Блок полей окна. Пока окно закрыто, висит в разметке раздела с hidden;
+    // открытие переставляет его в коробку окна, закрытие возвращает обратно.
+    const fieldsNode = $('[data-role="upload-fields"]');
     const fileInput = $('[data-role="up-file-input"]');
+
+    // Открытое окно слоя или null. Кнопки подвала строит слой — они ищутся по
+    // роли каждый раз, а не запоминаются: до открытия их не существует.
+    let modal = null;
+    const leaveBtn = () => $('[data-role="upload-cancel"]');
 
     let selectedFile = null;
     let statusPick = null;
@@ -120,8 +127,10 @@ export function createUpload(root, deps) {
 
     function resetSummary() {
         $('[data-role="upload-summary"]').hidden = true;
-        // Партии ещё нет — уход из окна отменяет начатое (К55).
-        $('[data-role="upload-cancel"]').textContent = 'Отмена';
+        // Партии ещё нет — уход из окна отменяет начатое (К55). Кнопки подвала
+        // может ещё не быть: сброс зовут и до открытия окна.
+        const leave = leaveBtn();
+        if (leave) leave.textContent = 'Отмена';
         $('[data-role="up-total"]').textContent = '0';
         $('[data-role="up-assigned"]').textContent = '0';
         $('[data-role="up-queued"]').textContent = '0';
@@ -158,7 +167,10 @@ export function createUpload(root, deps) {
         statusPick.setValues(newStatus ? [newStatus.id] : []);
     }
 
-    function openModal() {
+    // Окно открывается пустым: файл, параметры и сводка сбрасываются при
+    // каждом открытии.
+    function openUploadModal() {
+        if (modal) return;
         selectedFile = null;
         $('[data-role="up-file-name"]').textContent = '';
         fileInput.value = '';
@@ -171,15 +183,42 @@ export function createUpload(root, deps) {
         syncPoolByLine();
         offerPick.clear();
         resetSummary();
-        modal.hidden = false;
+
+        fieldsNode.hidden = false;
+        modal = openModal({
+            title: 'Загрузить базу',
+            sub: 'Excel или CSV — каждая строка станет лидом. Один набор параметров на всю партию',
+            body: fieldsNode,
+            scope: wrap,
+            actions: [
+                // Кнопка ухода называется по тому, что произойдёт (К55):
+                // «Отмена», пока партия не загружена, и «Закрыть» — после того,
+                // как показана сводка. Отменять уже загруженное нечего.
+                // Роль нужна, чтобы модуль мог до неё дотянуться: кнопку строит
+                // слой.
+                { label: 'Отмена', variant: 'ghost', role: 'upload-cancel' },
+                // Возврат false всегда: сводку показывает само окно, и закрывать
+                // его после удачной загрузки нельзя — человек не увидел бы ни
+                // одного из четырёх чисел.
+                { label: 'Загрузить', role: 'upload-go', onClick: () => handleGo() }
+            ]
+        });
+        modal.result.then(() => {
+            fieldsNode.hidden = true;
+            wrap.appendChild(fieldsNode);
+            modal = null;
+        });
+        // Кнопку подвала слой построил только что — теперь подпись можно
+        // привести к состоянию окна.
+        resetSummary();
+
+        const first = $('#upSource');
+        if (first) first.focus();
+
         // Библиотеку разбора начинаем тянуть сразу: пока человек заполняет
         // параметры партии, она успевает приехать. Отказ здесь не показываем —
         // о нём скажет сам разбор, если до него дойдёт.
         loadXlsx().catch(() => {});
-    }
-
-    function closeModal() {
-        modal.hidden = true;
     }
 
     async function handleGo() {
@@ -193,29 +232,27 @@ export function createUpload(root, deps) {
             offerIds: offerPick.getValues()
         };
 
-        if (!params.sourceId) { toast('Выберите источник для партии', 'error'); return; }
-        if (!params.lineType) { toast('Выберите линию', 'error'); return; }
-        if (!params.scriptId) { toast('Выберите скрипт', 'error'); return; }
-        if (params.scriptStatusIds.length === 0) { toast('Выберите хотя бы один статус показа скрипта', 'error'); return; }
+        const problem = (message) => { toast(message, 'error'); return false; };
+        if (!params.sourceId) return problem('Выберите источник для партии');
+        if (!params.lineType) return problem('Выберите линию');
+        if (!params.scriptId) return problem('Выберите скрипт');
+        if (params.scriptStatusIds.length === 0) return problem('Выберите хотя бы один статус показа скрипта');
         if (syncRepeatVisibility() && !params.repeatScriptId) {
-            toast('Среди статусов показа есть этапы 5–6 — укажите скрипт для повторных', 'error');
-            return;
+            return problem('Среди статусов показа есть этапы 5–6 — укажите скрипт для повторных');
         }
-        if (params.offerIds.length === 0) { toast('Выберите хотя бы один оффер', 'error'); return; }
-        if (!selectedFile) { toast('Выберите файл', 'error'); return; }
+        if (params.offerIds.length === 0) return problem('Выберите хотя бы один оффер');
+        if (!selectedFile) return problem('Выберите файл');
 
-        goBtn.disabled = true;
         try {
             const rows = await parseFile(selectedFile);
-            if (!isAlive()) return;
+            if (!isAlive()) return false;
             if (rows.length === 0) {
-                toast('В файле не найдено ни одной строки с номером телефона', 'error');
-                return;
+                return problem('В файле не найдено ни одной строки с номером телефона');
             }
             const result = await storage.bulkImportLeads({ ...params, rows });
             // Партия уже загружена — но панели, в которую надо нарисовать
             // сводку, может уже не быть.
-            if (!isAlive()) return;
+            if (!isAlive()) return false;
             $('[data-role="up-total"]').textContent = result.imported;
             $('[data-role="up-assigned"]').textContent = result.distributed;
             $('[data-role="up-queued"]').textContent = result.queued;
@@ -225,15 +262,17 @@ export function createUpload(root, deps) {
             $('[data-role="up-dupes"]').textContent = (result.duplicates || []).length;
             $('[data-role="upload-summary"]').hidden = false;
             // Партия уже в базе: отменять нечего, окно теперь просто закрывают.
-            $('[data-role="upload-cancel"]').textContent = 'Закрыть';
+            const leave = leaveBtn();
+            if (leave) leave.textContent = 'Закрыть';
             toast(`Загружено лидов: ${result.imported}`, 'success');
             if (onImported) await onImported();
         } catch (e) {
-            if (!isAlive() || isAbort(e)) return;
+            if (!isAlive() || isAbort(e)) return false;
             toast(e.message, 'error');
-        } finally {
-            goBtn.disabled = false;
         }
+        // Окно остаётся открытым в любом исходе: до загрузки — чтобы не терять
+        // набранные параметры, после — чтобы человек увидел сводку.
+        return false;
     }
 
     function init({ sources, employees, statuses, scripts }) {
@@ -263,10 +302,9 @@ export function createUpload(root, deps) {
 
         $('#upLine').addEventListener('change', syncPoolByLine);
 
-        $('[data-role="upload-btn"]').addEventListener('click', openModal);
-        $('[data-role="upload-close"]').addEventListener('click', closeModal);
-        $('[data-role="upload-cancel"]').addEventListener('click', closeModal);
-        modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
+        $('[data-role="upload-btn"]').addEventListener('click', openUploadModal);
+        // Крестик, Esc, щелчок по затемнению и кнопка ухода — всё это теперь
+        // даёт слой; своих обработчиков закрытия у модуля нет.
 
         $('[data-role="up-file-trigger"]').addEventListener('click', () => fileInput.click());
         fileInput.addEventListener('change', () => {
@@ -299,14 +337,13 @@ export function createUpload(root, deps) {
             }
             takeFile(file);
         });
-
-        goBtn.addEventListener('click', handleGo);
     }
 
     return {
         init,
-        isOpen: () => !modal.hidden,
+        isOpen: () => modal !== null,
         destroy() {
+            if (modal) modal.close(false);
             if (offerPick) offerPick.destroy();
         }
     };

@@ -602,7 +602,7 @@
         openModal({ title: 'Изменение сотрудника', body: employeeForm(), actions: modalActions, scope: panel });
     });
 
-    // ОКНО-ФОРМА: четыре возможности окна, которых у него не было, пока окна
+    // ОКНО-ФОРМА: пять возможностей окна, которых у него не было, пока окна
     // разделов объявлялись разметкой.
     //   sub          — подпись под заголовком («Шаг 1 из 2», «подставляется
     //                  в документы»);
@@ -610,13 +610,23 @@
     //   role         — data-role на кнопке подвала: раздел прячет её,
     //                  блокирует и переименовывает;
     //   confirmClose — вопрос перед уходом, общий для Esc, затемнения и
-    //                  крестика.
+    //                  крестика;
+    //   toolbar      — полоса МЕЖДУ шапкой и телом, которая не прокручивается
+    //                  вместе с ним. Ради неё карточка лида и смогла переехать
+    //                  на слой: её вкладки обязаны стоять на месте, пока тело
+    //                  едет под ними.
     document.querySelector('[data-role="panel-form-modal"]').addEventListener('click', () => {
         const body = employeeForm();
+        const tabs = document.createElement('div');
+        tabs.className = 'ui-tabs';
+        tabs.setAttribute('role', 'tablist');
+        tabs.innerHTML = '<button type="button" class="ui-tabs__tab ui-tabs__tab--active" role="tab" aria-selected="true">Данные</button>'
+            + '<button type="button" class="ui-tabs__tab" role="tab" aria-selected="false">Документы <span class="ui-tabs__count ui-tabs__count--badge">2</span></button>';
         const form = openModal({
             title: 'Изменение сотрудника',
             sub: 'Шаг 1 из 2',
             body,
+            toolbar: tabs,
             scope: panel,
             spread: true,
             confirmClose: () => confirm('Закрыть без сохранения?'),

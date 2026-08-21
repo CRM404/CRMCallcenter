@@ -209,9 +209,21 @@ function fillToolbarSelects(state) {
     regionSelect.value = regions.includes(state.region) ? state.region : '';
     state.region = regionSelect.value;
 
+    // Сети — ИЗ ПОКАЗАННОГО, а не из справочника (К137). Вариант, которого нет
+    // ни у одной видимой строки, — заведомо пустой результат: он обещает отбор
+    // и приводит в пустое состояние. У площадки на две сети из двадцати в
+    // списке должно быть две. Соседний «Регион» так и устроен, и два соседних
+    // поля не должны вести себя по-разному.
+    const usedIds = new Set();
+    state.sources.forEach((s) => (s.cpaNetworkIds || []).forEach((id) => usedIds.add(String(id))));
+    const networks = state.cpaNetworks
+        .filter((n) => usedIds.has(String(n.id)))
+        .sort((a, b) => String(a.name).localeCompare(String(b.name), 'ru'));
     networkSelect.innerHTML = '<option value="">Все CPA-сети</option>'
-        + state.cpaNetworks.map((n) => `<option value="${n.id}">${escapeHtml(n.name)}</option>`).join('');
-    networkSelect.value = state.cpaNetworks.some((n) => String(n.id) === String(state.networkId))
+        + networks.map((n) => `<option value="${n.id}">${escapeHtml(n.name)}</option>`).join('');
+    // Выбранная сеть могла исчезнуть вместе со сменой площадки — снимается
+    // сама, ровно как регион.
+    networkSelect.value = networks.some((n) => String(n.id) === String(state.networkId))
         ? state.networkId : '';
     state.networkId = networkSelect.value;
 }
@@ -243,13 +255,20 @@ function renderPlatforms(state) {
         }))
     );
 
-    list.innerHTML = rows.map((row) => `
-        <button type="button" class="src-platform${row.id === state.platformId ? ' src-platform--active' : ''}${row.off ? ' src-platform--off' : ''}"
-                data-platform="${row.id === null ? '' : row.id}">
-            <span class="src-platform__name">${escapeHtml(row.name)}</span>
+    // aria-current и title — не украшение (К141). Список площадок это ОТБОР:
+    // без aria-current программе чтения с экрана он виден тремя одинаковыми
+    // кнопками, потому что состояние несут только цвет и вес. А имя площадки
+    // обрезается многоточием (overflow: hidden + text-overflow), и без title
+    // длинное имя прочесть нечем вовсе — ни глазами, ни программой.
+    list.innerHTML = rows.map((row) => {
+        const active = row.id === state.platformId;
+        return `
+        <button type="button" class="src-platform${active ? ' src-platform--active' : ''}${row.off ? ' src-platform--off' : ''}"
+                data-platform="${row.id === null ? '' : row.id}"${active ? ' aria-current="true"' : ''}>
+            <span class="src-platform__name" title="${escapeHtml(row.name)}">${escapeHtml(row.name)}</span>
             <span class="src-platform__count">${row.count}</span>
-        </button>
-    `).join('');
+        </button>`;
+    }).join('');
 
     const active = state.platforms.find((p) => p.id === state.platformId);
     $(state, 'platform-note').textContent = state.platforms.length
@@ -314,6 +333,23 @@ function renderChips(state) {
         : '';
 }
 
+/**
+ * Пустое значение — прочерком, а не пустым местом (К143). Пустой оказывается
+ * одна колонка: lead_source заведена 11.08.2026 без NOT NULL, и у записей,
+ * созданных раньше, она пуста. Пустая ячейка неотличима от ошибки отрисовки.
+ *
+ * Приглушение стоит на СОДЕРЖИМОМ ячейки, а не на самом <td>: `.ui-table td`
+ * объявляет цвет и по специфичности (0,1,1 против 0,1,0) отменяет
+ * `.ui-table__muted` молча. До правки три колонки несли этот класс на <td> и
+ * выглядели правильно случайно — первая же правка table.css перекрасила бы их
+ * в серый. Приглушение в проекте — признак ОТСУТСТВУЮЩЕГО значения, а не
+ * колонки.
+ */
+function dashIfEmpty(value) {
+    const text = value === null || value === undefined ? '' : String(value).trim();
+    return text ? escapeHtml(text) : '<span class="ui-table__muted">—</span>';
+}
+
 function renderRows(state) {
     const rows = visibleSources(state);
     const cross = isCrossPlatform(state);
@@ -344,12 +380,12 @@ function renderRows(state) {
         return `
             <tr data-id="${source.id}"${selected ? ' class="ui-table__row--selected"' : ''}>
                 <td class="ui-table__sel"><input type="checkbox" data-check="${source.id}"${selected ? ' checked' : ''} aria-label="Выделить источник"></td>
-                ${cross ? `<td class="ui-table__muted">${escapeHtml(source.platformName)}</td>` : ''}
+                ${cross ? `<td>${escapeHtml(source.platformName)}</td>` : ''}
                 <td><span class="ui-table__main">${escapeHtml(source.rootSource)}</span></td>
-                <td class="ui-table__muted">${escapeHtml(source.cityRegion)}</td>
+                <td>${escapeHtml(source.cityRegion)}</td>
                 <td><span class="src-nets">${nets}</span></td>
                 <td><span class="ui-pill ${pill}">${escapeHtml(source.status)}</span></td>
-                <td class="ui-table__muted">${escapeHtml(source.leadSource)}</td>
+                <td>${dashIfEmpty(source.leadSource)}</td>
                 <td class="ui-table__acts">
                     <span class="src-cell-actions">
                         <button type="button" class="ui-btn ui-btn--icon ui-btn--row" data-edit="${source.id}" aria-label="Изменить" title="Изменить"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-edit"></use></svg></button>
@@ -373,6 +409,18 @@ function renderRows(state) {
     $(state, 'foot-shown').textContent = `Показано ${rows.length} из ${matched}`;
 }
 
+/**
+ * Есть ли хоть один активный отбор поверх площадки и поиска.
+ *
+ * Признаком должно быть именно ЭТО, а не перечисление отборов поимённо (К134):
+ * перечисление ломается на первом же добавленном фильтре — раздел под ним
+ * скажет, что записей нет вовсе, и позовёт завести то, что уже заведено. Для
+ * справочника это самая дорогая ошибка: дубль записи.
+ */
+function hasActiveFilter(state) {
+    return state.status !== 'all' || !!state.region || !!state.networkId;
+}
+
 /** Пустое состояние: причина и следующий шаг, а не просто «ничего нет». */
 function showEmpty(state) {
     const empty = $(state, 'empty');
@@ -383,6 +431,9 @@ function showEmpty(state) {
     action.hidden = true;
     action.dataset.act = '';
 
+    // Порядок проверки: нет площадок → идёт поиск → активен отбор → пусто
+    // по-настоящему. Поиск проверяется раньше прочих отборов, потому что он
+    // кросс-площадочный и объясняет пустоту иначе, чем они.
     if (!state.platforms.length) {
         title.textContent = 'Пока нет ни одной площадки';
         text.textContent = 'Сначала добавьте площадку в «Управление площадками».';
@@ -399,12 +450,28 @@ function showEmpty(state) {
         action.dataset.act = 'clear-search';
         return;
     }
-    if (state.status !== 'all') {
-        title.textContent = 'Нет источников с таким статусом';
-        text.textContent = 'У этой площадки пока нет источников, подходящих под фильтр.';
+    // `state.sources.length` в условии не лишний: у площадки без единого
+    // источника отбор по статусу формально активен, но винить его нельзя —
+    // отбирать не из чего, и правдивый ответ ниже, «Источников пока нет».
+    if (hasActiveFilter(state) && state.sources.length > 0) {
+        // Один текст на три отбора — статус, регион и сеть. Прежний говорил
+        // только про статус, а кнопка снимала только его: чипы «Площадка» и
+        // «Регион» оставались на месте, и нажатие не возвращало ни строки.
+        title.textContent = 'Ничего не найдено по текущим фильтрам';
+        text.textContent = 'Источники есть, просто не подходят под отбор. Активные фильтры перечислены строкой выше.';
         action.hidden = false;
-        action.textContent = 'Показать все статусы';
-        action.dataset.act = 'clear-status';
+        action.textContent = 'Сбросить фильтры';
+        action.dataset.act = 'clear-filters';
+        return;
+    }
+    // Пятый случай (К135): в режиме «Все площадки» выбранной площадки нет, и
+    // обещание «он появится в списке этой площадки» — неправда.
+    if (state.platformId === null) {
+        title.textContent = 'Источников пока нет ни на одной площадке';
+        text.textContent = 'Добавьте первый — площадку выберете в окне.';
+        action.hidden = false;
+        action.textContent = 'Добавить источник';
+        action.dataset.act = 'add';
         return;
     }
     title.textContent = 'Источников пока нет';
@@ -444,10 +511,25 @@ function renderSelection(state) {
     checkAll.indeterminate = count > 0 && !checkAll.checked;
 }
 
-function pluralRows(n) {
+/**
+ * Общий разборщик окончаний (К145). Был частным случаем для строк — стал
+ * общим: числительные обязаны быть согласованы во ВСЕХ текстах, где есть
+ * число. «Статус обновлён для 1 источников» выдаёт, что текст собран
+ * склейкой, и подрывает доверие к самому числу.
+ */
+function plural(n, one, few, many) {
     const tens = n % 100;
-    if (tens >= 11 && tens <= 14) return 'строк';
-    return n % 10 === 1 ? 'строки' : 'строк';
+    if (tens >= 11 && tens <= 14) return many;
+    const ones = n % 10;
+    if (ones === 1) return one;
+    if (ones >= 2 && ones <= 4) return few;
+    return many;
+}
+
+// «снято с 1 строки / с 2 строк / с 5 строк» — родительный после предлога «с»,
+// поэтому 2–4 берут ту же форму, что и 5+.
+function pluralRows(n) {
+    return plural(n, 'строки', 'строк', 'строк');
 }
 
 // ---------------------------------------------------------------- события
@@ -513,6 +595,12 @@ function bindEvents(state) {
             openPlatformsModal(state);
             return;
         }
+        // Кнопка «Площадка» под списком (К142): то же окно, но сразу с
+        // развёрнутой формой — она заводит площадку, а не управляет списком.
+        if (target.closest('[data-role="add-platform"]')) {
+            openPlatformsModal(state, { openForm: true });
+            return;
+        }
         if (target.closest('[data-role="mass-apply"]')) {
             await applyMassAction(state);
             return;
@@ -530,7 +618,7 @@ function bindEvents(state) {
             if (act === 'platforms') openPlatformsModal(state);
             else if (act === 'add') openSourceModal(state, null);
             else if (act === 'clear-search') await applyClear(state, 'search');
-            else if (act === 'clear-status') await applyClear(state, 'status');
+            else if (act === 'clear-filters') await applyClear(state, 'filters');
         }
     });
 
@@ -560,6 +648,13 @@ function bindEvents(state) {
         state.searchTimer = setTimeout(async () => {
             if (state.destroyed) return;
             state.search = value;
+            // Поиск КРОСС-ПЛОЩАДОЧНЫЙ: он игнорирует выбранную площадку и
+            // отдаёт строки всех сразу. Значит и выбор в боку обязан быть
+            // снят (К138) — иначе в списке площадок горит одна, а в таблице
+            // лежат девять строк двух площадок, и счётчик рядом с подсвеченной
+            // строкой говорит «5». Обратное направление (выбор площадки
+            // снимает поиск) работало и раньше; правило одно на оба.
+            if (value) state.platformId = null;
             state.selected.clear();
             await refresh(state);
         }, SEARCH_DEBOUNCE_MS);
@@ -590,10 +685,13 @@ async function applyClear(state, what) {
     // вернуться из отложенного таймера через треть секунды.
     clearTimeout(state.searchTimer);
     // Регион, сеть и статус считаются на клиенте — перерисовываем без запроса.
-    if (what === 'status' || what === 'region' || what === 'network') {
-        if (what === 'status') state.status = 'all';
-        if (what === 'region') state.region = '';
-        if (what === 'network') state.networkId = '';
+    // 'filters' — все три разом, кнопка пустого состояния «Сбросить фильтры»
+    // (К134): снимать один статус и оставлять чипы региона и сети значило бы
+    // нажать кнопку и не получить ни строки.
+    if (what === 'status' || what === 'region' || what === 'network' || what === 'filters') {
+        if (what === 'status' || what === 'filters') state.status = 'all';
+        if (what === 'region' || what === 'filters') state.region = '';
+        if (what === 'network' || what === 'filters') state.networkId = '';
         renderAll(state);
         return;
     }
@@ -623,25 +721,60 @@ async function refresh(state) {
 
 // ---------------------------------------------------------------- источник
 
-function openSourceModal(state, source) {
-    const platformId = source ? source.platformId : state.platformId;
-    const platform = state.platforms.find((p) => p.id === platformId);
+// Обязательные текстовые поля окна — в порядке формы. Отсюда берутся и
+// подписи для тоста, и порядок, в котором ищется первое незаполненное.
+const REQUIRED_SOURCE_FIELDS = [
+    ['platform', 'Площадка'],
+    ['rootSource', 'Корневой источник'],
+    ['cityRegion', 'Город/Регион'],
+    ['leadSource', 'Источник лидов']
+];
 
-    // Площадка обязательна: без неё источник не создать. Если открыт режим
-    // «Все площадки», выбор площадки становится полем формы.
-    const needPlatformChoice = !source && platformId === null;
+function openSourceModal(state, source) {
+    // Площадка — ПОЛЕ, а не заметка о контексте (К130). До правки поле
+    // появлялось только при создании из режима «Все площадки», а при правке на
+    // его месте стояла заметка `.src-context-note` — и источник, заведённый не
+    // на ту площадку, переносился только удалением и перезаводом. Удаление
+    // отвязывает от источника лидов безвозвратно, то есть цена опечатки была
+    // «откуда эти лиды пришли, узнать больше нельзя».
+    const platformId = source ? source.platformId : state.platformId;
 
     const body = document.createElement('div');
+    // ПОРЯДОК ПОЛЕЙ — от опознания к связям (К129): где размещаемся → как
+    // называется → где работает → как приходит → в каком состоянии → кому
+    // отдаём. Множественный выбор сетей стоит ПОСЛЕДНИМ намеренно: он самый
+    // высокий (каждая лишняя строка чипов добавляет окну 41 px) и самый
+    // необязательный к перечитыванию. Вторым он разрывал форму пополам.
     body.innerHTML = `
-        ${needPlatformChoice ? '' : `<div class="src-context-note">Площадка: <b>${escapeHtml(source ? source.platformName : (platform ? platform.name : '—'))}</b></div>`}
         <div class="ui-form-grid">
-            ${needPlatformChoice ? `
             <div class="ui-field ui-field--wide">
                 <label class="ui-field__label ui-field__label--required">Площадка</label>
                 <select class="ui-field__control" data-field="platform">
-                    ${state.platforms.map((p) => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join('')}
+                    ${state.platforms.map((p) => `<option value="${p.id}"${String(p.id) === String(platformId) ? ' selected' : ''}>${escapeHtml(p.name)}</option>`).join('')}
                 </select>
-            </div>` : ''}
+                <span class="ui-field__error"></span>
+            </div>
+            <div class="ui-field">
+                <label class="ui-field__label ui-field__label--required">Корневой источник</label>
+                <input class="ui-field__control" data-field="rootSource" placeholder="Название, телефон или ссылка" value="${escapeHtml(source ? source.rootSource : '')}">
+                <span class="ui-field__error"></span>
+            </div>
+            <div class="ui-field">
+                <label class="ui-field__label ui-field__label--required">Город/Регион</label>
+                <input class="ui-field__control" data-field="cityRegion" placeholder="Например, «Москва»" value="${escapeHtml(source ? source.cityRegion : '')}">
+                <span class="ui-field__error"></span>
+            </div>
+            <div class="ui-field ui-field--wide">
+                <label class="ui-field__label ui-field__label--required">Источник лидов</label>
+                <input class="ui-field__control" data-field="leadSource" placeholder="Например, «Форма на сайте»" value="${escapeHtml(source ? source.leadSource : '')}">
+                <span class="ui-field__error"></span>
+            </div>
+            <div class="ui-field ui-field--wide">
+                <label class="ui-field__label ui-field__label--required">Статус</label>
+                <select class="ui-field__control" data-field="status">
+                    ${STATUSES.map((s) => `<option value="${s}"${source && source.status === s ? ' selected' : ''}>${s}</option>`).join('')}
+                </select>
+            </div>
             <div class="ui-field ui-field--wide">
                 <label class="ui-field__label ui-field__label--required">CPA-сети (минимум одна)</label>
                 <div class="src-networks" data-field="networks">
@@ -654,35 +787,68 @@ function openSourceModal(state, source) {
                 </div>
                 <span class="ui-field__error" data-error="networks">Выберите хотя бы одну CPA-сеть.</span>
             </div>
-            <div class="ui-field">
-                <label class="ui-field__label ui-field__label--required">Корневой источник</label>
-                <input class="ui-field__control" data-field="rootSource" placeholder="Название, телефон или ссылка" value="${escapeHtml(source ? source.rootSource : '')}">
-            </div>
-            <div class="ui-field">
-                <label class="ui-field__label ui-field__label--required">Город/Регион</label>
-                <input class="ui-field__control" data-field="cityRegion" placeholder="Например, «Москва»" value="${escapeHtml(source ? source.cityRegion : '')}">
-            </div>
-            <div class="ui-field ui-field--wide">
-                <label class="ui-field__label ui-field__label--required">Статус</label>
-                <select class="ui-field__control" data-field="status">
-                    ${STATUSES.map((s) => `<option value="${s}"${source && source.status === s ? ' selected' : ''}>${s}</option>`).join('')}
-                </select>
-            </div>
-            <div class="ui-field ui-field--wide">
-                <label class="ui-field__label ui-field__label--required">Источник лидов</label>
-                <input class="ui-field__control" data-field="leadSource" placeholder="Например, «Форма на сайте»" value="${escapeHtml(source ? source.leadSource : '')}">
-            </div>
         </div>`;
+
+    const field = (name) => body.querySelector(`[data-field="${name}"]`);
+    const fieldBox = (name) => field(name).closest('.ui-field');
 
     body.querySelectorAll('.ui-choice input').forEach((checkbox) => {
         checkbox.addEventListener('change', () => {
             checkbox.closest('.ui-choice').classList.toggle('ui-choice--on', checkbox.checked);
+            // Исправленное поле не должно оставаться красным до следующего
+            // нажатия «Сохранить».
+            if (body.querySelector('.ui-choice input:checked')) {
+                fieldBox('networks').classList.remove('ui-field--error');
+            }
+        });
+    });
+    REQUIRED_SOURCE_FIELDS.forEach(([name]) => {
+        field(name).addEventListener('input', () => {
+            if (field(name).value.trim()) fieldBox(name).classList.remove('ui-field--error');
         });
     });
 
-    const field = (name) => body.querySelector(`[data-field="${name}"]`);
+    function markError(name, message) {
+        const box = fieldBox(name);
+        box.classList.add('ui-field--error');
+        const note = box.querySelector('.ui-field__error');
+        if (note && message) note.textContent = message;
+    }
 
-    openModal({
+    /**
+     * Проверка ДО отправки, и незаполненные называются ВСЕ СРАЗУ (К131).
+     * Раньше клиент смотрел только на сети, а остальные четыре обязательных
+     * поля отдавал серверу — тот возвращает ПЕРВУЮ ошибку и останавливается,
+     * и чтобы узнать про три пустых поля, приходилось трижды сходить на сервер.
+     * Ни одно поле при этом не краснело и фокус оставался в BODY.
+     */
+    function validate() {
+        body.querySelectorAll('.ui-field--error').forEach((box) => box.classList.remove('ui-field--error'));
+
+        const empty = REQUIRED_SOURCE_FIELDS.filter(([name]) => !field(name).value.trim());
+        const noNetworks = body.querySelectorAll('.ui-choice input:checked').length === 0;
+        if (!empty.length && !noNetworks) return true;
+
+        empty.forEach(([name]) => markError(name, 'Поле обязательно'));
+        // У сетей свой текст: «поле обязательно» не объясняет, чего именно не
+        // хватает при двадцати доступных чипах.
+        if (noNetworks) markError('networks');
+
+        if (empty.length) {
+            const labels = empty.map(([, label]) => label).join(', ');
+            state.ctx.toast(empty.length === 1
+                ? `Заполните обязательное поле: ${labels}`
+                : `Заполните обязательные поля: ${labels}`, 'error');
+            field(empty[0][0]).focus();
+        } else {
+            // Только сети: тоста нет и не было — поле краснеет прямо под
+            // курсором, и второе объяснение тут лишнее.
+            field('networks').querySelector('input').focus();
+        }
+        return false;
+    }
+
+    const modal = openModal({
         title: source ? 'Изменить источник' : 'Новый источник',
         body,
         scope: state.panel,
@@ -691,20 +857,16 @@ function openSourceModal(state, source) {
             { label: 'Отмена', variant: 'ghost', value: false },
             {
                 label: 'Сохранить',
-                autofocus: true,
                 onClick: async () => {
-                    const networks = Array.from(body.querySelectorAll('.ui-choice input:checked')).map((c) => Number(c.value));
-                    const netsField = field('networks').closest('.ui-field');
-                    netsField.classList.toggle('ui-field--error', networks.length === 0);
-                    if (networks.length === 0) return false;
+                    if (!validate()) return false;
 
                     const payload = {
-                        platformId: needPlatformChoice ? Number(field('platform').value) : platformId,
+                        platformId: Number(field('platform').value),
                         rootSource: field('rootSource').value.trim(),
                         leadSource: field('leadSource').value.trim(),
                         cityRegion: field('cityRegion').value.trim(),
                         status: field('status').value,
-                        cpaNetworkIds: networks
+                        cpaNetworkIds: Array.from(body.querySelectorAll('.ui-choice input:checked')).map((c) => Number(c.value))
                     };
 
                     try {
@@ -727,18 +889,39 @@ function openSourceModal(state, source) {
             }
         ]
     });
+
+    // Фокус — в ПЕРВОЕ ПОЛЕ, а не на «Сохранить» (К128). Прежний autofocus на
+    // подтверждающей кнопке превращал Enter в случайную отправку формы, которую
+    // ещё не заполнили. Слой сам по себе ставит фокус на крестик закрытия — он
+    // выше по разметке, — поэтому поле назначается здесь, руками.
+    field('platform').focus();
+    return modal;
 }
 
+/**
+ * Последствие удаления источника — лиды, которые останутся без него (К132).
+ * `leads.source_id` объявлен ON DELETE SET NULL: лид никуда не денется, но
+ * узнать, откуда он пришёл, будет уже нечем.
+ *
+ * При НУЛЕ лидов фраза не показывается: «На нём 0 лидов» — шум, а не
+ * предупреждение.
+ */
 async function removeSource(state, source) {
+    const count = source.leadsCount || 0;
+    const tail = count
+        ? ` На нём ${count} ${plural(count, 'лид', 'лида', 'лидов')} — они останутся в системе, но без источника: откуда они пришли, восстановить будет нельзя.`
+        : ' Это необратимо.';
     const ok = await state.ctx.confirmDanger({
         title: 'Удалить источник?',
-        message: `Источник «${source.rootSource}» будет удалён. Это необратимо.`,
+        message: `Источник «${source.rootSource}» будет удалён.${tail}`,
         confirmLabel: 'Удалить'
     });
     if (!ok) return;
     try {
         await deleteSource(state.ctx.api, source.id);
-        state.ctx.toast('Источник удалён', 'success');
+        state.ctx.toast(count
+            ? `Источник удалён, ${count} ${plural(count, 'лид', 'лида', 'лидов')} ${plural(count, 'остался', 'остались', 'остались')} без источника`
+            : 'Источник удалён', 'success');
         await reloadAll(state);
     } catch (err) {
         fail(state, err);
@@ -780,9 +963,19 @@ async function applyMassAction(state) {
     const ids = Array.from(state.selected);
 
     if (action === 'delete') {
+        // Последствие называется и здесь (К132): на двенадцати выделенных
+        // источниках лидов может оказаться больше, чем на любом одном, и
+        // молчать о них тем более нельзя.
+        const leadsTotal = ids.reduce((sum, id) => {
+            const found = state.sources.find((s) => s.id === id);
+            return sum + (found ? (found.leadsCount || 0) : 0);
+        }, 0);
+        const tail = leadsTotal
+            ? ` На них ${leadsTotal} ${plural(leadsTotal, 'лид', 'лида', 'лидов')} — они останутся в системе, но без источника.`
+            : ' Это необратимо.';
         const ok = await state.ctx.confirmDanger({
             title: 'Удалить источники?',
-            message: `Будет удалено источников: ${ids.length}. Это необратимо.`,
+            message: `Будет удалено источников: ${ids.length}.${tail}`,
             confirmLabel: 'Удалить'
         });
         if (!ok) return;
@@ -830,14 +1023,22 @@ async function applyMassAction(state) {
     }
     state.selected.clear();
     await reloadAll(state);
-    if (changed > 0) state.ctx.toast(`Статус обновлён для ${changed} источников`, 'success');
-    else if (failed === 0) state.ctx.toast('Нет источников для изменения (уже нужный статус)');
-    if (failed > 0) state.ctx.toast(`Не удалось обновить ${failed} источников`, 'error');
+    // Числительные согласованы, и предлог — «у», как в паспорте (К145):
+    // «Статус обновлён у 1 источника», «у 3 источников». После «у» идёт
+    // родительный, поэтому 2–4 берут ту же форму, что и 5+.
+    if (changed > 0) {
+        state.ctx.toast(`Статус обновлён у ${changed} ${plural(changed, 'источника', 'источников', 'источников')}`, 'success');
+    } else if (failed === 0) {
+        state.ctx.toast('Нет источников для изменения (уже нужный статус)');
+    }
+    if (failed > 0) {
+        state.ctx.toast(`Не удалось обновить ${failed} ${plural(failed, 'источник', 'источника', 'источников')}`, 'error');
+    }
 }
 
 // ---------------------------------------------------------------- площадки
 
-function openPlatformsModal(state) {
+function openPlatformsModal(state, { openForm: startWithForm = false } = {}) {
     const body = document.createElement('div');
     const list = document.createElement('div');
     list.className = 'src-platforms-list';
@@ -941,7 +1142,9 @@ function openPlatformsModal(state) {
         const name = nameField.value.trim();
         nameField.closest('.ui-field').classList.toggle('ui-field--error', !name);
         if (!name) {
-            state.ctx.toast('Укажите название площадки', 'error');
+            // Дословно то же, что под полем и на сервере, вместе с точкой (К145).
+            state.ctx.toast('Укажите название площадки.', 'error');
+            nameField.focus();
             return;
         }
         const payload = { name, status: form.querySelector('[data-field="status"]').value };
@@ -962,10 +1165,19 @@ function openPlatformsModal(state) {
         }
     });
 
+    // «Готово» основной, а не тихая «Закрыть» (К133). Это третье окно
+    // управления справочником в проекте: «Управление отделами» и «Управление
+    // сетями» прощаются именно так. Три одинаковых окна не должны прощаться
+    // тремя разными словами.
     openModal({
         title: 'Управление площадками',
         body,
         scope: state.panel,
-        actions: [{ label: 'Закрыть', variant: 'ghost', value: false }]
+        actions: [{ label: 'Готово', value: false }]
     });
+
+    // Открытие по кнопке «Площадка» из бока (К142): форма развёрнута сразу, и
+    // фокус — в «Название». Открытие по «Управление площадками» из шапки
+    // оставляет фокус так, как его ставит слой: формы в этот момент ещё нет.
+    if (startWithForm) openForm(null);
 }

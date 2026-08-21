@@ -45,11 +45,6 @@
     gap: var(--ui-space-5);
     align-items: start;
 }
-@container (max-width: 720px) {
-    .src-master { grid-template-columns: minmax(0, 1fr); }
-    .src-side__list { flex-direction: row; flex-wrap: wrap; }
-    .src-side__note { display: none; }
-}
 
 .src-side {
     display: flex;
@@ -119,6 +114,30 @@
     margin-left: auto;
     font-size: 11.5px;
     color: var(--ui-color-ink-faint);
+}
+
+/* Кнопка «Площадка» под списком — во всю ширину колонки: это второй, короткий
+   путь к новой площадке, и живёт он там, где список площадок, а не в шапке.
+   Своего класса кнопке не заводим — это раскладка, а не вид: собственных
+   классов у раздела ровно 23, и двадцать четвёртый ради ширины не нужен. */
+.src-side .ui-btn { width: 100%; }
+
+/* ----- Узкая панель: точка перелома по ширине КОНТЕЙНЕРА, а не окна ---------
+   Панель может быть узкой на широком экране, и медиазапрос этого не видит.
+
+   БЛОК СТОИТ ПОСЛЕ БАЗОВЫХ ОБЪЯВЛЕНИЙ, и это часть правила, а не оформление.
+   @container не добавляет веса селектору: вес `.src-side__list` внутри запроса
+   и снаружи одинаковый (0,1,0), и выигрывает то, что ниже по файлу. Пока блок
+   стоял выше, `flex-direction: row` отменялся молча базовым `column` — перенос
+   был включён, а переносить было нечего, и список площадок оставался колонкой
+   во всю ширину (К139). */
+@container (max-width: 720px) {
+    .src-master { grid-template-columns: minmax(0, 1fr); }
+    .src-side__list { flex-direction: row; flex-wrap: wrap; }
+    /* Строка площадки объявляет width: 100% — в ряду это растянуло бы каждую
+       на всю ширину и вернуло бы ту же колонку, только через flex. */
+    .src-side__list .src-platform { width: auto; }
+    .src-side__note { display: none; }
 }
 
 .src-main { min-width: 0; }
@@ -193,12 +212,8 @@
 /* Чип выбора сети — элемент слоя .ui-choice (К15). Свой .src-network раздел
    больше не объявляет: тот же вид нужен ещё трём местам проекта. */
 
-.src-context-note {
-    padding: var(--ui-space-3) var(--ui-space-4);
-    margin-bottom: var(--ui-space-4);
-    border: 1px solid var(--ui-color-line);
-    border-radius: var(--ui-radius-sm);
-    background: var(--ui-color-surface-sunken);
-    font-size: var(--ui-text-sm);
-    color: var(--ui-color-ink-soft);
-}
+/* .src-context-note УДАЛЁН вместе с заметкой «Площадка: имя» (К130). Площадка
+   стала полем формы и при создании, и при изменении: источник, заведённый не на
+   ту площадку, обязан переноситься правкой, а не удалением и перезаводом —
+   удаление отвязало бы от него лидов безвозвратно. Собственных классов раздела
+   снова 23, как в паспорте. */
