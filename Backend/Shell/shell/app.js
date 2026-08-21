@@ -16,6 +16,7 @@ import { showToast } from '../ui/toast.js';
 import { createSkeleton } from '../ui/skeleton.js';
 import { showLoadError, clearLoadError } from '../ui/load-error.js';
 import { confirm, confirmDanger } from '../ui/modal.js';
+import { iconNode } from '../ui/icons.js';
 import { startRouter, setRoute } from './router.js';
 import {
     initPanels, openSection as openPanelFor, closePanel, minimizePanel,
@@ -278,6 +279,7 @@ async function mountSection(panelId, key, container) {
         // накладку и снимаем: раньше показали бы пустую таблицу, позже
         // держали бы скелет поверх готового раздела.
         await module.mount(container, ctx);
+        focusPanelHead(container);
     } catch (err) {
         renderFailure(container, section, err);
     } finally {
@@ -353,15 +355,58 @@ function loadStyles(href) {
     return promise;
 }
 
+/**
+ * Фокус уходит в шапку открывшейся панели (К106).
+ *
+ * Почему он там вообще теряется: щелчок оставляет фокус на плитке, следом стол
+ * получает `inert` — и браузеру некуда деть фокус, он падает в начало
+ * документа. То есть чем аккуратнее сделана инертность, тем вернее теряется
+ * фокус. Для мыши это незаметно, для клавиатуры значит, что следующий Tab
+ * начинается не от того, что человек только что открыл.
+ *
+ * Фокус ставится на ПЕРВУЮ КНОПКУ шапки, а не на саму панель: `tabindex="-1"`
+ * на контейнере дал бы фокус без видимого места, и человек снова не понял бы,
+ * где он.
+ *
+ * Чужой фокус не отбирается. Если человек в этот момент работает в соседней
+ * панели или внутри этой же (перемонтирование кнопкой «Попробовать снова»),
+ * курсор остаётся там, где был.
+ */
+function focusPanelHead(container) {
+    const panel = container.closest('.shell-panel');
+    if (!panel) return;
+    const active = document.activeElement;
+    if (active && active !== document.body) {
+        const activePanel = active.closest ? active.closest('.shell-panel') : null;
+        if (activePanel) return;
+    }
+    const first = panel.querySelector('.shell-panel__head [data-act]');
+    if (first) first.focus();
+}
+
 function renderFailure(container, section, err) {
+    // Техническое сообщение уходит в консоль, где ему и место: «Failed to
+    // fetch» на экране — это ответ браузера самому себе, а не человеку (К109).
     console.error(`Раздел «${section.key}» не открылся:`, err);
     container.innerHTML = '';
     const box = document.createElement('div');
     box.className = 'ui-empty';
-    const title = document.createElement('h3');
+
+    // Части — из слоя, а не голые h3 и p: у голого заголовка своя браузерная
+    // типографика и ~15 px отступов сверху и снизу, которых здесь быть не
+    // должно. Значок ступени lg — как у любого пустого состояния раздела.
+    const icon = document.createElement('span');
+    icon.className = 'ui-empty__icon';
+    icon.appendChild(iconNode('warn', 'lg'));
+
+    const title = document.createElement('b');
+    title.className = 'ui-empty__title';
+    // Имя раздела в заголовке — решение приёмки: «„Источники" не открылся»
+    // говорит больше, чем безличное «Раздел не открылся».
     title.textContent = `«${section.title}» не открылся`;
-    const text = document.createElement('p');
-    text.textContent = err && err.message ? err.message : 'Неизвестная ошибка.';
+    const text = document.createElement('span');
+    text.className = 'ui-empty__text';
+    text.textContent = 'Не удалось загрузить раздел. Проверьте связь и попробуйте снова.';
     // Кнопка ПОВТОРЯЕТ ПОПЫТКУ на месте, а не уводит по старому адресу (К18).
     // Старые адреса живы, но с переездом в оболочку каждый из них отвечает 302
     // обратно в неё: «Открыть по старому адресу» открывало новую вкладку с тем
@@ -375,7 +420,8 @@ function renderFailure(container, section, err) {
         if (!panel) return;
         remountSection(panel.dataset.panelId, section.key, container);
     });
-    box.append(title, text, again);
+    again.classList.add('ui-empty__action');
+    box.append(icon, title, text, again);
     container.appendChild(box);
 }
 

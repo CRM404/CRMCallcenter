@@ -135,7 +135,12 @@ function sectionTile(section) {
 
 function serviceTile(item) {
     const tile = document.createElement('a');
-    tile.className = 'shell-tile';
+    // --legacy читается как «уводит из оболочки», а не «устаревший раздел»:
+    // у каталога элементов нет своего модуля, и отдельной страницей он
+    // останется навсегда. Модификатор ставился только плиткам разделов, и
+    // единственная плитка, которая и правда уводит в другую вкладку, при
+    // наведении обещала то же, что «Лиды», — сейчас откроется панель (К107).
+    tile.className = 'shell-tile shell-tile--legacy';
     tile.href = item.href;
     tile.target = '_blank';
     tile.rel = 'noopener';
