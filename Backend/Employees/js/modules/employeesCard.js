@@ -236,9 +236,12 @@ export function createCard(root, deps) {
             const data = currentFormData();
             const changed = Object.keys(originalFormData).some((key) => originalFormData[key] !== data[key]);
             if (changed) {
+                // Вопрос стоит в ЗАГОЛОВКЕ, последствие — в тексте (К92).
+                // Было наоборот: заголовок существительным, вопрос уехал в
+                // сообщение, — и окно спрашивало дважды в разных местах.
                 const ok = await confirm({
-                    title: 'Подтверждение закрытия',
-                    message: 'Есть несохранённые изменения. Закрыть без сохранения?',
+                    title: 'Закрыть без сохранения?',
+                    message: 'Введённые данные сотрудника не сохранятся.',
                     confirmLabel: 'Закрыть без сохранения'
                 });
                 if (!ok || !isAlive()) return;

@@ -146,6 +146,9 @@
             </select>
             <button type="button" class="ui-btn" data-role="mass-apply">Применить</button>
             <button type="button" class="ui-btn ui-btn--ghost ui-btn--icon ui-btn--row" data-role="mass-clear" aria-label="Сбросить выделение" title="Сбросить выделение"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-close"></use></svg></button>
+            <!-- Причина, по которой действие не пойдёт: живёт в полосе и
+                 исчезает вместе с причиной (К46, К95). -->
+            <span class="ui-mass-bar__warn" data-role="mass-warn" hidden></span>
         </div>
     </section>
 
@@ -201,7 +204,7 @@
             <div class="ui-modal__head">
                 <div>
                     <h2 class="ui-modal__title" data-role="employee-modal-title">Новый сотрудник</h2>
-                    <p class="modal-sub" data-role="step-indicator">Шаг 1 из 2</p>
+                    <p class="ui-modal__sub" data-role="step-indicator">Шаг 1 из 2</p>
                 </div>
                 <button type="button" class="ui-modal__close" data-role="employee-close" aria-label="Закрыть"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-close"></use></svg></button>
             </div>

@@ -107,6 +107,9 @@
                 </select>
                 <button type="button" class="ui-btn" data-role="mass-apply">Применить</button>
                 <button type="button" class="ui-btn ui-btn--ghost" data-role="mass-clear">Снять выделение</button>
+                <!-- Причина, по которой действие не пойдёт: живёт в полосе и
+                     исчезает вместе с причиной (К46, К95). -->
+                <span class="ui-mass-bar__warn" data-role="mass-warn" hidden></span>
             </div>
         </div>
     </div>

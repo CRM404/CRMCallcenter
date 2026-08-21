@@ -444,7 +444,8 @@ async function changeStatus(state, script, status) {
         ? CONFIRM_TEXTS.activate(script.title)
         : CONFIRM_TEXTS.deactivate(script.title);
     const ok = await state.ctx.confirm({
-        title: status === 'active' ? 'Активировать скрипт' : 'Вернуть в черновик',
+        // Окно то же и правило то же, что у удалений: заголовок спрашивает (К92).
+        title: status === 'active' ? 'Активировать скрипт?' : 'Вернуть скрипт в черновик?',
         message,
         confirmLabel: status === 'active' ? 'Активировать' : 'В черновик'
     });

@@ -487,9 +487,29 @@ export function createTable(root, deps) {
 
     // ------------------------------------------------------------ выделение
 
+    /**
+     * Причина отказа — строкой в полосе, а не тостом (К95): полоса одна на три
+     * раздела, и объясняться она обязана одинаково.
+     */
+    function showMassWarn(text) {
+        const node = $('[data-role="mass-warn"]');
+        if (!node) return;
+        node.textContent = text;
+        node.hidden = false;
+    }
+
+    function hideMassWarn() {
+        const node = $('[data-role="mass-warn"]');
+        if (!node) return;
+        node.textContent = '';
+        node.hidden = true;
+    }
+
     function updateMassBar() {
         $('[data-role="selected-count"]').textContent = `Выбрано: ${selectedIds.size}`;
         $('[data-role="mass-bar"]').hidden = selectedIds.size === 0;
+        // Выделение изменилось — прежняя причина могла перестать быть правдой.
+        hideMassWarn();
         const boxes = $$('[data-check-id]');
         $('[data-role="select-all"]').checked = boxes.length > 0 && boxes.every((cb) => cb.checked);
     }
@@ -583,8 +603,9 @@ export function createTable(root, deps) {
         // отвечает «не найден».
         if (massApplying) return;
         const action = $('[data-role="mass-action"]').value;
-        if (!action) { toast('Выберите действие', 'error'); return; }
-        if (selectedIds.size === 0) { toast('Выберите хотя бы одного сотрудника', 'error'); return; }
+        if (!action) { showMassWarn('Выберите действие'); return; }
+        if (selectedIds.size === 0) { showMassWarn('Выберите хотя бы одного сотрудника'); return; }
+        hideMassWarn();
         const ids = Array.from(selectedIds);
 
         massApplying = true;

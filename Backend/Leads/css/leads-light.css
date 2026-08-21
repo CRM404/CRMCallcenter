@@ -112,7 +112,6 @@
 /* Приписка в метке поля — не путать с .ui-field__hint, который живёт ПОД
    полем: здесь это уточнение к самому названию («Срок сдачи — не позже»). */
 .leads-wrap .hint { font-weight: 500; color: var(--ink-faint); }
-.leads-wrap .modal-sub { font-size: 12.5px; color: var(--ink-faint); margin-top: 3px; }
 /* Поля с мультивыбором выше соседних: без выравнивания по верху соседний
    однострочный select уезжает в середину чужой высоты. */
 .leads-wrap .form-grid--top { align-items: start; }

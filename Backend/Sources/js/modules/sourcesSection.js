@@ -434,6 +434,8 @@ function renderSelection(state) {
 
     const count = state.selected.size;
     $(state, 'mass-bar').hidden = count === 0;
+    // Выделение изменилось — прежняя причина могла перестать быть правдой.
+    hideMassWarn(state);
     $(state, 'selected-count').textContent = `Выбрано: ${count}`;
     $(state, 'foot-selected').textContent = count ? `Выделено: ${count}` : '';
 
@@ -745,16 +747,36 @@ async function removeSource(state, source) {
 
 // ---------------------------------------------------------------- массовые действия
 
+/**
+ * Причина отказа — строкой в полосе, а не тостом (К95): полоса одна на три
+ * раздела, и объясняться она обязана одинаково. Тост уходит через несколько
+ * секунд, а выделение и полоса остаются без единого слова.
+ */
+function showMassWarn(state, text) {
+    const node = $(state, 'mass-warn');
+    if (!node) return;
+    node.textContent = text;
+    node.hidden = false;
+}
+
+function hideMassWarn(state) {
+    const node = $(state, 'mass-warn');
+    if (!node) return;
+    node.textContent = '';
+    node.hidden = true;
+}
+
 async function applyMassAction(state) {
     const action = $(state, 'mass-action').value;
     if (!action) {
-        state.ctx.toast('Выберите действие', 'error');
+        showMassWarn(state, 'Выберите действие');
         return;
     }
     if (state.selected.size === 0) {
-        state.ctx.toast('Выберите хотя бы один источник', 'error');
+        showMassWarn(state, 'Выберите хотя бы один источник');
         return;
     }
+    hideMassWarn(state);
     const ids = Array.from(state.selected);
 
     if (action === 'delete') {

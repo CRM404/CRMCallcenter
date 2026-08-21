@@ -129,7 +129,6 @@
    припиской в двух десятках мест («пусто = бессрочно», «можно несколько»), и
    без правила она читалась как продолжение самой метки. */
 .cpa-wrap .hint { font-size: 11px; font-weight: 400; color: var(--ink-faint); text-transform: none; letter-spacing: 0; margin-left: 4px; }
-.cpa-wrap .modal-sub { font-size: 12.5px; color: var(--ink-faint); margin-top: 3px; }
 /* Ползунок «Настройка списков» и крестик стоят в шапке модалки рядом. */
 .cpa-wrap .modal-head-actions { display: flex; align-items: center; gap: 14px; flex-shrink: 0; }
 
