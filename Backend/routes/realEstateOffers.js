@@ -10,7 +10,11 @@ const { MAX_OFFERS_PER_LEAD, TOO_MANY_OFFERS_HINT } = require('../services/leadO
 
 const router = express.Router();
 
+// Ключ живёт в базе, ПОДПИСЬ — на экране. Сообщение об ошибке называет
+// подписи (К86): внутренних active/paused/disabled/draft человек не видел
+// нигде и сопоставить их с тем, что выбрал, не может.
 const STATUS_VALUES = ['active', 'paused', 'disabled', 'draft'];
+const STATUS_LABELS = ['Активен', 'На паузе', 'Отключён', 'Черновик'];
 
 const FIELD_COLUMNS = [
     ['networkId', 'network_id'],
@@ -61,6 +65,32 @@ function normalizeArray(value) {
     return Array.isArray(value) ? value : [];
 }
 
+// ЧИСЛОВЫЕ ПРОВЕРКИ НАРАВНЕ С ОБЯЗАТЕЛЬНЫМИ (К85). Ставка, hold, взнос,
+// приоритет и лимит — то, по чему считаются деньги и очередь передачи лида, и
+// неправильное значение здесь дороже пустого названия. Раньше сервер смотрел
+// только name, networkId и status, а клиент — только name и networkId: ни одной
+// числовой проверки не было ни с одной стороны.
+//
+// Тексты совпадают с клиентскими ДОСЛОВНО (К87): два разных сообщения об одной
+// ошибке читаются как две разные ошибки.
+const NUMBER_RULES = [
+    ['rate', 'Ставка должна быть числом не меньше нуля', (n) => n >= 0],
+    ['holdDays', 'Hold должен быть целым числом дней', (n) => Number.isInteger(n) && n >= 0],
+    ['downPaymentPercent', 'Первоначальный взнос должен быть числом от 0 до 100', (n) => n >= 0 && n <= 100],
+    ['priority', 'Приоритет — число от 1 до 5', (n) => Number.isInteger(n) && n >= 1 && n <= 5],
+    ['leadLimit', 'Лимит лидов должен быть целым числом больше нуля', (n) => Number.isInteger(n) && n > 0]
+];
+
+function validateNumbers(body) {
+    for (const [key, message, ok] of NUMBER_RULES) {
+        const raw = body[key];
+        if (raw === undefined || raw === null || String(raw).trim() === '') continue;
+        const number = Number(raw);
+        if (!Number.isFinite(number) || !ok(number)) return message;
+    }
+    return null;
+}
+
 function validateBody(body) {
     if (!body.name || String(body.name).trim() === '') {
         return 'Заполните обязательное поле: Название';
@@ -70,7 +100,16 @@ function validateBody(body) {
     }
     const status = normalizeValue('status', body.status);
     if (!STATUS_VALUES.includes(status)) {
-        return `Статус должен быть одним из: ${STATUS_VALUES.join(', ')}`;
+        return `Статус должен быть одним из: ${STATUS_LABELS.join(', ')}`;
+    }
+    const numberError = validateNumbers(body);
+    if (numberError) return numberError;
+    // Пустой конец периода значит «бессрочно», поэтому проверяется только пара
+    // заполненных дат.
+    const start = normalizeValue('dateStart', body.dateStart);
+    const end = normalizeValue('dateEnd', body.dateEnd);
+    if (start && end && String(end) < String(start)) {
+        return 'Конец периода не может быть раньше начала';
     }
     return null;
 }
@@ -109,6 +148,13 @@ function rowToOffer(row, segments, objGeo, clientGeo, paymentMethods, mortgageTy
     return {
         id: row.id,
         networkId: row.network_id,
+        // Сколько лидов привязано к офферу (К84). Колонка «Лидов» отвечает на
+        // вопрос «работает ли оффер»: «Активен» при нуле лидов и «Активен» при
+        // сорока одном — разные вещи, и увидеть разницу надо из списка, а не из
+        // отчёта. Считается одной агрегатной подвыборкой на весь список; в
+        // ответе одиночной записи поля нет, и ноль там — не число из базы, а
+        // «не спрашивали».
+        leadsCount: row.leads_count === undefined ? 0 : Number(row.leads_count),
         name: row.name,
         category: row.category,
         status: row.status,
@@ -215,9 +261,16 @@ async function replaceMortgageTypes(client, offerId, values) {
 router.get('/', async (req, res) => {
     try {
         const { networkId } = req.query;
+        const listSelect = `
+            SELECT o.*, COALESCE(lc.c, 0) AS leads_count
+            FROM real_estate_offers o
+            LEFT JOIN (
+                SELECT offer_id, count(*)::int AS c FROM lead_offers GROUP BY offer_id
+            ) lc ON lc.offer_id = o.id
+        `;
         const offersResult = networkId
-            ? await pool.query('SELECT * FROM real_estate_offers WHERE network_id = $1 ORDER BY id', [networkId])
-            : await pool.query('SELECT * FROM real_estate_offers ORDER BY id');
+            ? await pool.query(`${listSelect} WHERE o.network_id = $1 ORDER BY o.id`, [networkId])
+            : await pool.query(`${listSelect} ORDER BY o.id`);
         const offers = offersResult.rows;
         if (offers.length === 0) return res.json([]);
 

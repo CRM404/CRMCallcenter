@@ -36,6 +36,7 @@ const OPEN_STACK = [];
  * @param {boolean}     [opts.screen]         накрыть весь экран (необратимое действие)
  * @param {string}      [opts.size]           'narrow' | 'wide'
  * @param {boolean}     [opts.dismissable]    закрытие по Esc и клику вне (по умолчанию да)
+ * @param {boolean}     [opts.scrimClose]     закрытие ЩЕЛЧКОМ ПО ЗАТЕМНЕНИЮ (по умолчанию да)
  * @param {Function}    [opts.confirmClose]   спросить перед закрытием; см. ниже
  * @returns {{ el, box, body, close, requestClose, result }}
  *
@@ -54,6 +55,11 @@ const OPEN_STACK = [];
  * выпускало молча именно через ту, которую нажимают не глядя (К112).
  * confirmClose возвращает true (закрыть) или false (остаться); пока висит
  * его вопрос, повторное Esc второго вопроса не задаёт.
+ *
+ * Дверь можно закрыть на ключ поодиночке: scrimClose: false оставляет Esc и
+ * крестик, но делает щелчок по затемнению безответным. Это не отмена правила
+ * про три двери, а его продолжение — вопрос «точно уйти?» имеет смысл там, где
+ * уход намеренный, а промах мимо окна намеренным не бывает.
  */
 export function openModal(opts = {}) {
     const {
@@ -67,6 +73,13 @@ export function openModal(opts = {}) {
         screen = false,
         size = '',
         dismissable = true,
+        // ТРЕТЬЯ ДВЕРЬ ОТДЕЛЬНО ОТ ДВУХ ОСТАЛЬНЫХ. Esc и крестик — движения
+        // намеренные, щелчок мимо окна — чаще промах. У длинной формы (окно
+        // оффера «CPA-сетей» — тридцать полей) цена промаха равна всему вводу,
+        // поэтому её затемнение не закрывает вовсе; Esc при этом остаётся и
+        // спрашивает. Одним флагом dismissable это не выражается: он гасит и
+        // клавиатуру тоже.
+        scrimClose = true,
         confirmClose = null
     } = opts;
 
@@ -208,7 +221,7 @@ export function openModal(opts = {}) {
     }
 
     function onOverlayClick(event) {
-        if (event.target === overlay && dismissable) requestClose(false);
+        if (event.target === overlay && dismissable && scrimClose) requestClose(false);
     }
 
     // Закрытие ПО ПРОСЬБЕ ЧЕЛОВЕКА — через вопрос, если он задан. Программное

@@ -1,247 +1,126 @@
-<!-- Фрагмент раздела «CPA-сети». Грузится оболочкой при первом открытии
-     панели и кэшируется.
+<!-- Фрагмент раздела «CPA-сети». Грузится оболочкой при первом монтировании
+     панели и кэшируется в памяти (shell/app.js).
 
-     ЧЕГО ЗДЕСЬ НЕТ по сравнению со старым cpa-networks.html:
-       - каркаса страницы и каркаса хаба (навигации-рейки в проекте нет);
-       - #toastContainer — тост один на приложение, создаётся вызовом;
-       - модалки подтверждения — удаление необратимо и подтверждается окном
-         на весь экран через ctx.confirmDanger.
+     РАЗДЕЛ ПЕРЕПИСАН НА МАСТЕР-ДЕТАЛЬ (К73 и восемнадцать пунктов, которые
+     закрываются вместе с ней): сети — списком слева, их офферы — таблицей
+     справа. Полосы вкладок сетей поверх таблицы в целевом состоянии нет:
+     вкладка означает «режим», а сеть — это отбор, у которого есть свои
+     подписи, счётчики и статус, и в полосу они не помещались.
 
-     Пять id переименованы в data-role, потому что совпадали с другими
-     разделами: search, status-filter, empty-state и три счётчика. Остальные
-     уникальны между разделами, а поиск всё равно идёт в границах панели.
+     ЗДЕСЬ НЕТ ГЛОБАЛЬНЫХ id (К83). Их было 62, и пять из них совпадали с
+     «Источниками»: при двух открытых панелях getElementById вернул бы узел
+     чужой панели, и раздел управлял бы чужим элементом — молча, без единой
+     ошибки в консоли. Поиск идёт только по data-role в границах контейнера.
 
-     Две модалки раздела — «Оффер» и «Управление сетями» — перенесены
-     разметкой: это сложные формы на сотни полей, а не подтверждения. Вид у
-     них теперь из слоя (.ui-modal / .ui-modal__box), логика открытия не
-     тронута. Модалка накрывает свою панель, как требует правило.
--->
+     ОКОН В РАЗМЕТКЕ НЕТ. Оба прежних (оффер и «Управление сетями») собираются
+     вызовом openModal из слоя: разметочное окно выглядит как окно, но не ведёт
+     себя как окно — ни Esc, ни ловушки фокуса, ни вопроса о несохранённом
+     (К74, К78). Третье окно, «Настройка списков», раньше было режимом внутри
+     окна оффера и стало отдельным (К146).
+
+     Своих кнопок, полей, таблиц, чипов и пустых состояний раздел не объявляет —
+     всё из слоя. В cpa-networks-light.css остаётся только раскладка. -->
 
 <div class="cpa-wrap">
-<div class="ui-page-head">
+
+    <div class="ui-page-head">
         <h2 class="ui-page-head__title">CPA-сети</h2>
         <span class="ui-page-head__sub">ставки, условия и требования к лиду</span>
         <span class="ui-page-head__acts">
-            <button type="button" class="ui-btn ui-btn--ghost" id="cpa-manage-networks"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-gear"></use></svg>Управление сетями</button>
-            <button type="button" class="ui-btn" id="cpa-add-offer"><svg class="ui-ic ui-ic--sm ui-ic--quiet" aria-hidden="true"><use href="#ui-ic-plus"></use></svg>Добавить оффер</button>
+            <button type="button" class="ui-btn ui-btn--ghost" data-role="manage-networks">
+                <svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-gear"></use></svg>Управление сетями
+            </button>
+            <!-- Значок БЕЗ --quiet (К153): на графитовой заливке основной кнопки
+                 приглушённый светло-серый значок не читался вовсе, а такая же
+                 кнопка «Добавить источник» в «Источниках» наследует белый цвет
+                 текста. Одинаковые по смыслу кнопки не могут выглядеть
+                 по-разному в двух разделах. -->
+            <button type="button" class="ui-btn" data-role="add-offer">
+                <svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-plus"></use></svg>Добавить оффер
+            </button>
         </span>
     </div>
 
-    <dl class="ui-chips ui-page-chips">
-        <div class="ui-chip"><dd class="ui-chip__value" data-role="stat-total">0</dd><dt class="ui-chip__label">Офферов всего</dt></div>
-        <div class="ui-chip ui-chip--ok"><dd class="ui-chip__value" data-role="stat-active">0</dd><dt class="ui-chip__label">Активны</dt></div>
-        <div class="ui-chip ui-chip--muted"><dd class="ui-chip__value" data-role="stat-draft">0</dd><dt class="ui-chip__label">Черновики</dt></div>
-    </dl>
+    <!-- Строки чипов-счётчиков у раздела НЕТ (К76). Прежняя показывала «Офферов
+         всего 1» при трёх офферах в разделе: считала она выбранную сеть, а
+         подписана была разделом. Числа живут там, где они правдивы: у каждой
+         сети в списке слева своё, под заголовком детали — сводка по выбранной. -->
 
-    <!-- ================= ВКЛАДКА «ОФФЕРЫ» ================= -->
-    <div data-view="offers" class="active">
+    <div class="cpa-master">
+        <aside class="cpa-side">
+            <div class="cpa-side__title">Сети</div>
+            <div class="cpa-side__list" data-role="network-list"></div>
+            <button type="button" class="ui-btn ui-btn--ghost" data-role="add-network">
+                <svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-plus"></use></svg>Сеть
+            </button>
+            <!-- «Настройка списков» стоит здесь, а не в шапке окна оффера
+                 (К146): справочники — это не режим карточки, а свой экран. -->
+            <button type="button" class="ui-btn ui-btn--ghost" data-role="params-lists">Настройка списков</button>
+            <p class="cpa-side__note" data-role="network-note"></p>
+        </aside>
 
-        <div class="network-bar">
-            <div class="ui-tabs ui-tabs--inline network-tabs" id="networkTabs"></div>
-            <div class="network-meta" id="networkMeta"></div>
-        </div>
-
-        <!-- Поиск сверху, вкладки статусов ПОД ним — как в макете (М31). В одной
-             строке вкладки читались как продолжение поиска, хотя отбирают
-             другое и другим способом. -->
-        <div class="ui-toolbar">
-            <div class="ui-field cpa-search">
-                <input type="search" class="ui-field__control" data-role="search"
-                       placeholder="Найти оффер по названию…" aria-label="Поиск офферов">
+        <div class="cpa-main">
+            <!-- Шапка детали отвечает на вопрос «где я нахожусь» без возврата к
+                 списку. В узкой панели, где список сетей свернулся в строку, она
+                 остаётся единственным местом с полным именем сети. -->
+            <div class="cpa-detail-head" data-role="detail-head" hidden>
+                <div>
+                    <div class="cpa-detail-head__title" data-role="detail-title"></div>
+                    <div class="cpa-detail-head__sub" data-role="detail-sub"></div>
+                </div>
+                <button type="button" class="ui-btn ui-btn--icon ui-btn--row" data-role="edit-network"
+                        title="Настройки сети" aria-label="Настройки сети">
+                    <svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-edit"></use></svg>
+                </button>
             </div>
-        </div>
 
-        <div class="ui-tabs ui-tabs--inline cpa-status-tabs" data-role="status-filter">
-            <button type="button" class="ui-tabs__tab ui-tabs__tab--active" data-status="all">Все</button>
-            <button type="button" class="ui-tabs__tab" data-status="active">Активные</button>
-            <button type="button" class="ui-tabs__tab" data-status="paused">На паузе</button>
-            <button type="button" class="ui-tabs__tab" data-status="disabled">Отключённые</button>
-            <button type="button" class="ui-tabs__tab" data-status="draft">Черновики</button>
-        </div>
+            <!-- Поиск своей строкой, вкладки статусов — под ним (М31). В одной
+                 строке вкладки читались как продолжение поиска, хотя отбирают
+                 другое и другим способом. -->
+            <div class="ui-toolbar">
+                <div class="ui-field cpa-search">
+                    <input type="search" class="ui-field__control" data-role="search"
+                           placeholder="Найти оффер по названию…" aria-label="Поиск офферов">
+                </div>
+            </div>
 
-        <div class="table-card">
-            <div class="ui-table-wrap">
+            <div class="ui-tabs" data-role="status-tabs"></div>
+
+            <div class="ui-table-wrap" data-role="table-wrap">
                 <table class="ui-table ui-table--freeze-acts">
                     <thead>
                         <tr>
                             <th>Оффер</th>
                             <th>Тип действия</th>
-                            <th>Ставка</th>
+                            <th class="ui-table__num">Ставка</th>
                             <th>Период</th>
+                            <th class="ui-table__num">Лидов</th>
                             <th>Статус</th>
                             <th class="ui-table__acts"></th>
                         </tr>
                     </thead>
-                    <tbody id="offersBody"></tbody>
+                    <tbody data-role="rows"></tbody>
                 </table>
             </div>
-            <div class="ui-empty ui-empty--inline cpa-empty" data-role="empty-state" hidden>
-                <b class="ui-empty__title" data-role="empty-title">Офферов пока нет</b>
-                <span class="ui-empty__text" data-role="empty-text">В этой сети ещё не заведено ни одного оффера.</span>
-            </div>
-        </div>
 
-    </div>
+            <!-- Полный .ui-empty, а не --inline (К89): вариант для формы,
+                 прижатый влево и без рамки, посреди пустой панели не читается
+                 как ответ на вопрос «почему тут ничего нет». Значок ступени lg
+                 (К88): у него нет соседнего текста, он знак самого блока. -->
+            <div class="ui-empty" data-role="empty" hidden>
+                <span class="ui-empty__icon"><svg class="ui-ic ui-ic--lg" aria-hidden="true"><use href="#ui-ic-cpa"></use></svg></span>
+                <b class="ui-empty__title" data-role="empty-title"></b>
+                <span class="ui-empty__text" data-role="empty-text"></span>
+                <button type="button" class="ui-btn ui-btn--ghost ui-empty__action" data-role="empty-action" hidden></button>
+            </div>
 
-
-<!-- Модалка оффера: основное + 4 блока настроек одним прокручиваемым телом -->
-    <div class="ui-modal ui-modal--in-panel cpa-modal" id="offerModal" hidden>
-        <div class="ui-modal__box ui-modal__box--wide">
-<div class="ui-modal__head">
-    <div>
-        <h2 class="ui-modal__title" id="offerModalTitle">Оффер</h2>
-        <p class="ui-modal__sub" id="offerModalSub"></p>
-    </div>
-    <div class="modal-head-actions">
-        <label class="mode-toggle">
-            Настройка списков
-            <span class="switch"><input type="checkbox" id="paramsModeToggle"><span class="switch-track"></span></span>
-        </label>
-        <button type="button" class="ui-modal__close" id="offerModalClose"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-close"></use></svg></button>
-    </div>
-</div>
-<div class="ui-modal__body">
-    <!-- Панель управления значениями выпадающих списков — открывается
-         ползунком в шапке вместо формы оффера, изменения сразу
-         отражаются в самих полях формы (report_2026-08-01.md, Фаза 2). -->
-    <div class="params-panel" id="paramsPanel" hidden>
-        <p class="params-intro">Значения списков ниже используются в полях формы оффера и в карточке клиента на странице оператора. Добавляйте/удаляйте варианты — изменения применяются сразу.</p>
-        <div id="paramsList"></div>
-    </div>
-    <form id="offerForm">
-        <div class="ui-form-grid">
-            <div class="ui-field ui-field--wide"><label class="ui-field__label" for="fName">Название *</label><input class="ui-field__control" type="text" id="fName" placeholder="Название оффера"></div>
-            <div class="ui-field"><label class="ui-field__label" for="fCategory">Категория</label>
-                <select class="ui-field__control" id="fCategory"></select>
+            <!-- Подвал списка (К148): «Показано N из M» — та же формулировка,
+                 что в «Лидах», «Сотрудниках» и «Источниках». Из четырёх списков
+                 проекта подвала не было только здесь. -->
+            <div class="ui-table-foot" data-role="foot" hidden>
+                <span data-role="foot-shown"></span>
             </div>
-            <div class="ui-field"><label class="ui-field__label" for="fStatus">Статус</label>
-                <select class="ui-field__control" id="fStatus"><option value="active">Активен</option><option value="paused">На паузе</option><option value="disabled">Отключён</option><option value="draft">Черновик</option></select>
-            </div>
-            <div class="ui-field"><label class="ui-field__label">Период действия <span class="hint">пусто = бессрочно</span></label>
-                <div class="range-pair"><input class="ui-field__control" type="date" id="fDateStart"><span>—</span><input class="ui-field__control" type="date" id="fDateEnd"></div>
-            </div>
-        </div>
-
-        <div class="section-divider">
-            <div class="s-icon"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-target"></use></svg></div>
-            <div><h3>Настройки оффера</h3><span>условия выплаты и критерии лида</span></div>
-        </div>
-        <div class="ui-form-grid">
-            <div class="ui-field ui-field--wide">
-                <div class="compact-row">
-                    <div class="compact-field"><label for="fActionType">Тип действия</label>
-                        <select id="fActionType"></select>
-                    </div>
-                    <div class="compact-field"><label for="fRate">Ставка, ₽</label><input type="number" id="fRate" placeholder="1200"></div>
-                    <div class="compact-field"><label for="fHold">Hold, дней</label><input type="number" id="fHold" placeholder="14"></div>
-                    <div class="compact-field"><label for="fLeadCheck">Наличие проверки лидов</label>
-                        <select id="fLeadCheck"></select>
-                    </div>
-                </div>
-            </div>
-            <div class="ui-field ui-field--wide"><label class="ui-field__label" for="fTargetCriteria">Критерии целевого лида</label><textarea class="ui-field__control" id="fTargetCriteria" placeholder="Например: подтверждённый номер, бюджет от…"></textarea></div>
-            <div class="ui-field ui-field--wide"><label class="ui-field__label" for="fNonTargetCriteria">Критерии нецелевого лида</label><textarea class="ui-field__control" id="fNonTargetCriteria" placeholder="Например: дубликат, невалидный номер…"></textarea></div>
-        </div>
-
-        <div class="section-divider">
-            <div class="s-icon"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-layers"></use></svg></div>
-            <div><h3>Фильтр объектов</h3><span>какие объекты подходят под оффер</span></div>
-        </div>
-        <div class="ui-form-grid">
-            <div class="ui-field ui-field--wide"><label class="ui-field__label">Тип объекта <span class="hint">можно выбрать несколько</span></label>
-                <div class="chip-select" id="fObjType"></div>
-            </div>
-            <div class="ui-field ui-field--wide"><label class="ui-field__label">Отделка <span class="hint">можно несколько, ничего не выбрано = любая</span></label>
-                <div class="chip-select" id="fFinish"></div>
-            </div>
-            <div class="ui-field"><label class="ui-field__label" for="fDeveloper">Застройщик</label><input class="ui-field__control" type="text" id="fDeveloper" placeholder="Например: ПИК, Самолет"></div>
-            <div class="ui-field"><label class="ui-field__label" for="fDeadline">Срок сдачи</label><input class="ui-field__control" type="text" id="fDeadline" placeholder="до 4 кв. 2027 / сдан"></div>
-            <div class="ui-field ui-field--wide"><label class="ui-field__label">Цена и площадь по сегментам <span class="hint">зависят от типа/класса — можно задать несколько диапазонов</span></label>
-                <div class="repeat-rows" id="fSegments"></div>
-                <button type="button" class="dashed-row" id="addSegmentBtn"><svg class="ui-ic ui-ic--sm ui-ic--quiet" aria-hidden="true"><use href="#ui-ic-plus"></use></svg>Добавить сегмент</button>
-            </div>
-            <div class="ui-field ui-field--wide"><label class="ui-field__label">География объекта <span class="hint">регион / город / район / нас. пункт (посёлки, деревни, сёла — если это не город) — пустой уровень значит «любой», можно несколько строк; начните печатать в любом из полей — подскажет адрес именно для этого уровня, а Город/Район/Нас. пункт сузятся до уже выбранного региона</span></label>
-                <div class="repeat-rows" id="fObjGeo"></div>
-                <button type="button" class="dashed-row" id="addObjGeoBtn"><svg class="ui-ic ui-ic--sm ui-ic--quiet" aria-hidden="true"><use href="#ui-ic-plus"></use></svg>Добавить географию</button>
-            </div>
-        </div>
-
-        <div class="section-divider">
-            <div class="s-icon"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-user"></use></svg></div>
-            <div><h3>Требования к клиенту</h3><span>какой покупатель подходит под оффер</span></div>
-        </div>
-        <div class="ui-form-grid">
-            <div class="ui-field ui-field--wide"><label class="ui-field__label">Тип клиента <span class="hint">можно выбрать несколько</span></label>
-                <div class="chip-select" id="fClientType"></div>
-            </div>
-            <div class="ui-field" id="fOtherBorrowerGroup"><label class="ui-field__label">Иной заёмщик <span class="hint">если среди типов клиента есть «Пенсионер»</span></label>
-                <label class="checkbox-row"><input type="checkbox" id="fOtherBorrower"><span>Заёмщик может быть другим человеком</span></label>
-            </div>
-            <div class="ui-field"><label class="ui-field__label" for="fPurchaseTerm">Срок покупки</label>
-                <select class="ui-field__control" id="fPurchaseTerm"></select>
-            </div>
-            <div class="ui-field"><label class="ui-field__label" for="fDownPayment">Первоначальный взнос, %</label><input class="ui-field__control" type="number" id="fDownPayment" placeholder="20"></div>
-            <div class="ui-field ui-field--wide"><label class="ui-field__label">Способ покупки <span class="hint">можно несколько; вид ипотеки — если среди них есть «Ипотека»</span></label>
-                <div class="chip-select" id="fPaymentMethod"></div>
-            </div>
-            <div class="ui-field ui-field--wide" id="fMortgageTypeGroup"><label class="ui-field__label">Виды ипотеки <span class="hint">можно выбрать несколько</span></label>
-                <div class="chip-select" id="fMortgageType"></div>
-            </div>
-            <div class="ui-field ui-field--wide"><label class="ui-field__label">География клиента <span class="hint">регион / город / район / нас. пункт (посёлки, деревни, сёла — если это не город) — тот же принцип, что у объекта, но про самого покупателя; подсказки адреса по каждому полю — так же</span></label>
-                <div class="repeat-rows" id="fClientGeo"></div>
-                <button type="button" class="dashed-row" id="addClientGeoBtn"><svg class="ui-ic ui-ic--sm ui-ic--quiet" aria-hidden="true"><use href="#ui-ic-plus"></use></svg>Добавить географию</button>
-            </div>
-        </div>
-
-        <div class="section-divider">
-            <div class="s-icon"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-shield"></use></svg></div>
-            <div><h3>Настройки обработки</h3><span>приоритет и лимиты передачи лида</span></div>
-        </div>
-        <div class="ui-form-grid">
-            <div class="ui-field"><label class="ui-field__label" for="fPriority">Приоритет (1 — высший)</label><input class="ui-field__control" type="number" id="fPriority" min="1" max="5" placeholder="1"></div>
-            <div class="ui-field"><label class="ui-field__label" for="fTransferTime">Время для перевода</label><input class="ui-field__control" type="text" id="fTransferTime" placeholder="до 15 минут"></div>
-            <div class="ui-field"><label class="ui-field__label" for="fLeadLimit">Лимит лидов <span class="hint">на весь срок оффера</span></label><input class="ui-field__control" type="number" id="fLeadLimit" placeholder="300"></div>
-        </div>
-    </form>
-</div>
-<div class="ui-modal__actions">
-    <button type="button" class="ui-btn ui-btn--ghost" id="offerModalCancel">Отмена</button>
-    <button type="button" class="ui-btn" id="offerModalSave">Сохранить</button>
-</div>
         </div>
     </div>
 
-<!-- Модалка «Управление сетями»: список + инлайн-форма (тот же паттерн, что «Отделы») -->
-    <div class="ui-modal ui-modal--in-panel cpa-modal" id="networksModal" hidden>
-        <div class="ui-modal__box">
-<div class="ui-modal__head">
-    <div><h2 class="ui-modal__title">Управление сетями</h2><p class="ui-modal__sub">Название, юрлицо, условия подключения</p></div>
-    <button type="button" class="ui-modal__close" id="networksModalClose"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-close"></use></svg></button>
-</div>
-<div class="ui-modal__body">
-    <div class="empty-state" id="networksLockedNote" hidden>Сначала заполните организацию в разделе <a href="#/requisites">Реквизиты</a> — CPA-сеть привязывается к юрлицу.</div>
-    <div class="net-list" id="netList"></div>
-    <button type="button" class="dashed-row" id="addNetworkBtn" style="margin-top:10px"><svg class="ui-ic ui-ic--sm ui-ic--quiet" aria-hidden="true"><use href="#ui-ic-plus"></use></svg>Добавить сеть</button>
-    <div class="inline-form" id="netInlineForm" hidden>
-        <div class="ui-form-grid">
-            <div class="ui-field ui-field--wide"><label class="ui-field__label" for="nfName">Название *</label><input class="ui-field__control" type="text" id="nfName" placeholder="AdCombo"></div>
-            <div class="ui-field ui-field--wide"><label class="ui-field__label" for="nfOrg">Юрлицо *</label><select class="ui-field__control" id="nfOrg"></select></div>
-            <div class="ui-field"><label class="ui-field__label" for="nfStatus">Статус</label><select class="ui-field__control" id="nfStatus"><option>Активна</option><option>Приостановлена</option><option>Отключена</option></select></div>
-            <div class="ui-field"><label class="ui-field__label" for="nfDate">Дата подключения</label><input class="ui-field__control" type="date" id="nfDate"></div>
-            <div class="ui-field"><label class="ui-field__label" for="nfCurrency">Валюта выплаты</label><input class="ui-field__control" type="text" id="nfCurrency" placeholder="RUB"></div>
-            <div class="ui-field"><label class="ui-field__label" for="nfCommission">Комиссия %</label><input class="ui-field__control" type="number" step="any" id="nfCommission" placeholder="15"></div>
-        </div>
-        <div class="form-actions">
-            <button type="button" class="ui-btn ui-btn--ghost" id="netFormCancel">Отмена</button>
-            <button type="button" class="ui-btn" id="netFormSave">Сохранить</button>
-        </div>
-    </div>
-</div>
-<!-- Подвал у окна-списка (Н3). Сети правятся прямо в списке, каждое действие
-     уходит на сервер сразу, поэтому «Готово» — выход, а не «применить». -->
-<div class="ui-modal__actions">
-    <button type="button" class="ui-btn" id="networksModalDone">Готово</button>
-</div>
-        </div>
-    </div>
 </div>

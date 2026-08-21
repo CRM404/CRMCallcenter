@@ -82,6 +82,45 @@
     white-space: nowrap;
 }
 
+/* Метка СО СНЯТИЕМ — значение справочника в окне «Настройка списков».
+   Крестик здесь не «сбросить фильтр», а «удалить значение», поэтому это метка,
+   а не чип фильтра: тот обещает вернуть скрытые строки, этот удаляет запись.
+
+   Отдельным модификатором, а не правкой базовой .ui-tag: базовую носят ещё
+   «Источники» и «Лиды» простым значением без кнопки, и менять ей раскладку
+   ради одного места — способ разъехаться там, где ничего не просили. */
+.ui-tag--removable {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--ui-space-2);
+    padding: var(--ui-space-1) var(--ui-space-1) var(--ui-space-1) var(--ui-space-3);
+    font-size: var(--ui-text-sm);
+    font-weight: var(--ui-weight-regular);
+    color: var(--ui-color-ink);
+}
+.ui-tag__remove {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    padding: 0;
+    border: none;
+    border-radius: var(--ui-radius-xs);
+    background: transparent;
+    color: var(--ui-color-ink-faint);
+    cursor: pointer;
+    transition: color var(--ui-dur-fast), background-color var(--ui-dur-fast);
+}
+.ui-tag__remove:hover {
+    background: var(--ui-color-danger-wash);
+    color: var(--ui-color-danger);
+}
+.ui-tag__remove:focus-visible {
+    outline: 2px solid var(--ui-color-accent);
+    outline-offset: 1px;
+}
+
 /* ----- Чип активного фильтра -----
    Показывает, что именно сейчас отфильтровано: крестик снимает один фильтр,
    «Очистить всё» — сразу все. Без этого человек видит короткий список и не

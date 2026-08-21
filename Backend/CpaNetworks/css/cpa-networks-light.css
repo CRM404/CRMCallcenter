@@ -1,198 +1,391 @@
-/* ============================================================
-   cpa-networks-light.css — БЛОК 5: раскладка раздела «CPA-сети».
+/* --- cpa-networks-light.css: БЛОК 5 — раскладка раздела «CPA-сети» --------
+   От прежних 198 строк осталась только раскладка. Кнопки, поля, таблица,
+   пилюли, теги, множественный выбор, окна, тосты и пустые состояния переехали
+   в слой и здесь НЕ объявляются.
 
-   Только то, что есть у этого раздела и больше нигде: полоса вкладок сетей,
-   карточка таблицы офферов, чипы-мультивыбор, повторяющиеся строки сегментов
-   и географии, подсказки адреса, панель настройки списков.
+   Что ушло и куда (К82, К83, К146):
+     .chip-opt, .chip-select        → ui/chip.css (.ui-choice)
+     .param-tag                     → ui/chip.css (.ui-tag)
+     .switch, .mode-toggle          → удалены вместе с режимом «Настройка
+                                      списков» внутри окна оффера: тумблера в
+                                      слое нет, и раздел не имеет права его
+                                      заводить
+     .table-card, .network-bar      → удалены вместе с полосой вкладок сетей
+     .hint (приписка к метке)       → ui/field.css (.ui-field__hint под полем)
+     [data-view] { display: none }  → удалён: селектор по атрибуту БЕЗ префикса
+                                      раздела красил бы чужие узлы в одном
+                                      документе
 
-   ЧТО УШЛО В ОБЩИЙ СЛОЙ: кнопки, поля и сетка формы, модалка, тост, каркас
-   хаба, сброс полей и стилизация body.
+   ВСЕ СЕЛЕКТОРЫ ОГРАНИЧЕНЫ ОБЁРТКОЙ .cpa-wrap и несут префикс cpa-. Голых имён
+   (.hint, .count, .active, .empty-state, .form-actions, .range-pair) в разделе
+   не осталось: их было 28, и в одном документе живут шесть разделов.
+   ------------------------------------------------------------------------ */
 
-   ВСЕ СЕЛЕКТОРЫ ОГРАНИЧЕНЫ .cpa-wrap. Голые table/thead th/tbody td работали,
-   пока раздел был отдельной страницей; в одном документе они перекрасили бы
-   таблицы ВСЕХ разделов — «Лидов», «Сотрудников», графика смен. Молча, без
-   единой ошибки.
-   ============================================================ */
-
-/* Токены раздела — алиасы на общий слой, объявлены НА ОБЁРТКЕ, а не в :root.
-   Раньше это был :root с безпрефиксными именами: --ink, --line, --accent.
-   Пока раздел был отдельной страницей, так было можно. В одном документе
-   любой другой раздел с такими же именами перекрасил бы оба — побеждал бы
-   тот, чей файл загрузился последним, то есть порядок открытия панелей.
-   Отладить такое почти невозможно: цвет «прыгает» в зависимости от того, что
-   человек открыл первым.
-
-   Имена оставлены прежними, чтобы не переписывать 200 строк раскладки: они
-   теперь указывают на слой, а не задают свой цвет. */
 .cpa-wrap {
-    --surface: var(--ui-color-glass);
-    --surface-modal: var(--ui-color-glass-strong);
-    --line: var(--ui-color-line);
-    --line-strong: var(--ui-color-line-strong);
-
-    --ink: var(--ui-color-ink);
-    --ink-soft: var(--ui-color-ink-soft);
-    --ink-faint: var(--ui-color-ink-faint);
-
-    --graphite: var(--ui-color-graphite);
-    --graphite-deep: var(--ui-color-graphite-deep);
-    --slate: var(--ui-color-slate);
-    --slate-deep: var(--ui-color-slate-deep);
-    --accent: var(--ui-color-accent);
-    --accent-soft: var(--ui-color-accent-soft);
-    --danger: var(--ui-color-danger);
-    --danger-deep: var(--ui-color-danger-deep);
-
-    --ok-ink: var(--ui-color-ok-ink); --ok-bg: var(--ui-color-ok-bg);
-    --off-ink: var(--ui-color-off-ink); --off-bg: var(--ui-color-off-bg);
-    --draft-ink: var(--ui-color-warn-ink); --draft-bg: var(--ui-color-warn-bg);
-    --disabled-ink: var(--ui-color-neutral-ink); --disabled-bg: var(--ui-color-neutral-bg);
-
-    --radius-lg: var(--ui-radius-lg); --radius-md: var(--ui-radius-md); --radius-sm: var(--ui-radius-sm);
-    --shadow-card: var(--ui-shadow-card);
-    --shadow-pop: var(--ui-shadow-pop);
+    /* Контейнер для запросов по ширине объявлен НА КОРНЕ РАЗДЕЛА, а не на
+       сетке мастер-детали: элемент не может отвечать на собственный размер,
+       @container всегда спрашивает ближайшего предка-контейнер. Прежний
+       перелом был @media (max-width: 760px) — запрос по ОКНУ, который в узкой
+       панели на широком экране не срабатывает никогда (К75). */
+    container-type: inline-size;
+    display: flex;
+    flex-direction: column;
+    gap: var(--ui-space-5);
+    min-width: 0;
 }
 
-/* ----- Каркас хаба: иконочная навигация слева + контент справа (общий
-   паттерн проекта, продублирован в employees-light.css/main-light.css) ----- */
-.cpa-wrap .canvas { max-width: 1360px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+/* ----- Мастер-деталь: сети слева, их офферы справа -----
+   Те же числа, что в «Источниках»: два раздела одного устройства не должны
+   расходиться на пиксели. */
+.cpa-master {
+    display: grid;
+    grid-template-columns: minmax(190px, 230px) minmax(0, 1fr);
+    gap: var(--ui-space-5);
+    align-items: start;
+}
 
-/* ----- Идентити-шапка ----- */
+.cpa-side {
+    display: flex;
+    flex-direction: column;
+    gap: var(--ui-space-2);
+    padding: var(--ui-space-4);
+    border: 1px solid var(--ui-color-line);
+    border-radius: var(--ui-radius-md);
+    background: var(--ui-color-surface-sunken);
+}
+.cpa-side__title {
+    padding: 2px var(--ui-space-2) var(--ui-space-2);
+    font-size: 10.5px;
+    font-weight: var(--ui-weight-bold);
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--ui-color-ink-faint);
+}
+.cpa-side__list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+.cpa-side__note {
+    margin: var(--ui-space-2) 0 0;
+    padding: 0 var(--ui-space-2);
+    font-size: 11px;
+    line-height: var(--ui-line-base);
+    color: var(--ui-color-ink-faint);
+}
+/* Кнопки под списком — во всю ширину колонки. Своего класса им не заводим:
+   это раскладка, а не вид (тот же приём, что в «Источниках»). */
+.cpa-side .ui-btn { width: 100%; }
 
-/* ----- Переключатель сетей (замена отдельной страницы списка) ----- */
-.cpa-wrap .network-bar { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; background: var(--surface); border: 1px solid #fff6; border-radius: var(--radius-lg); padding: 10px 14px; box-shadow: var(--shadow-card); }
-.cpa-wrap .network-meta { display: flex; flex-direction: column; gap: 1px; font-size: 12px; color: var(--ink-faint); margin-right: auto; }
-.cpa-wrap .network-meta b { color: var(--ink-soft); font-weight: 600; }
+/* Строка сети. Это НЕ вкладка и не кнопка из слоя: у мастер-детали свой вид
+   строки, и он живёт здесь — вида «строка списка» в слое нет. */
+.cpa-network {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    width: 100%;
+    padding: var(--ui-space-3) var(--ui-space-4);
+    border: 1px solid transparent;
+    border-radius: var(--ui-radius-sm);
+    background: transparent;
+    font-family: var(--ui-font-ui);
+    font-size: var(--ui-text-sm);
+    color: var(--ui-color-ink);
+    text-align: left;
+    cursor: pointer;
+}
+.cpa-network:hover { background: var(--ui-color-wash-hover); }
+.cpa-network:focus-visible { outline: 2px solid var(--ui-color-accent); outline-offset: -2px; }
+.cpa-network--active {
+    background: var(--ui-color-surface);
+    border-color: var(--ui-color-accent-line);
+}
+.cpa-network__name {
+    display: flex;
+    align-items: center;
+    gap: var(--ui-space-2);
+    min-width: 0;
+}
+.cpa-network--active .cpa-network__name { font-weight: var(--ui-weight-bold); }
+.cpa-network__name > span:first-child {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+/* Пилюля статуса прижата вправо и не сжимается: статус — то, ради чего в
+   список и смотрят, приостановленной сети лиды не передаются. */
+.cpa-network__name .ui-pill { margin-left: auto; flex-shrink: 0; }
+.cpa-network__sub {
+    font-size: 11px;
+    line-height: var(--ui-line-base);
+    color: var(--ui-color-ink-faint);
+}
 
-/* ----- Кнопки ----- */
+/* ----- Шапка детали ----- */
+.cpa-detail-head {
+    display: flex;
+    align-items: center;
+    gap: var(--ui-space-4);
+    min-width: 0;
+}
+.cpa-detail-head__title {
+    font-size: var(--ui-text-xl);
+    font-weight: var(--ui-weight-bold);
+    color: var(--ui-color-ink);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.cpa-detail-head__sub {
+    margin-top: 1px;
+    font-size: var(--ui-text-xs);
+    color: var(--ui-color-ink-faint);
+}
+.cpa-detail-head .ui-btn { margin-left: auto; flex-shrink: 0; }
 
-/* ----- Тулбар -----
-   Поле поиска и фильтр статусов теперь из слоя (.ui-field, .ui-tabs) — здесь
-   осталось только их место в строке, то есть раскладка раздела. */
-.cpa-wrap .cpa-search { flex: 1 1 240px; min-width: 0; }
-/* Вкладки статусов стоят своей строкой под поиском (М31); тулбар слоя уже
-   отступил снизу, поэтому здесь нужен только отступ до таблицы. */
-.cpa-wrap .cpa-status-tabs { margin-bottom: var(--ui-space-4); }
-/* Вкладки статусов не растягиваются на всю строку тулбара. Правило вернулось
-   после переезда раздела на .ui-toolbar: вместе со своим тулбаром раздел
-   потерял и его. */
-.cpa-wrap .ui-toolbar .ui-tabs { flex: 0 1 auto; }
+/* ----- Узкая панель: перелом по ширине КОНТЕЙНЕРА -------------------------
+   БЛОК СТОИТ ПОСЛЕ БАЗОВЫХ ОБЪЯВЛЕНИЙ, и это часть правила, а не оформление:
+   @container не добавляет веса селектору, и при равном весе выигрывает то, что
+   ниже по файлу. В «Источниках» перевёрнутый порядок уже стоил находки (К139):
+   список молча оставался колонкой. */
+@container (max-width: 720px) {
+    .cpa-master { grid-template-columns: minmax(0, 1fr); }
+    .cpa-side__list { flex-direction: row; flex-wrap: wrap; }
+    /* Строка сети объявляет width: 100% — в ряду это растянуло бы каждую на всю
+       ширину и вернуло бы ту же колонку, только через flex. */
+    .cpa-side__list .cpa-network { width: auto; }
+    .cpa-side__note { display: none; }
+    .cpa-compact-row { flex-direction: column; }
+    .cpa-geo-row, .cpa-segment-row { grid-template-columns: minmax(0, 1fr); }
+}
 
+.cpa-main {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--ui-space-4);
+}
 
-/* ----- Таблица -----
-   Вид таблицы теперь из слоя (.ui-table): голые table/thead th/tbody td сняты
-   вместе с ними (Д13). Здесь остаётся только то, что про этот раздел, —
-   минимальная ширина, чтобы шесть колонок не сжимались в кашу. */
+/* Таблица шести колонок ниже 760 не сжимается, а прокручивается внутри своей
+   обёртки: сжатые до 660 колонки читаются хуже прокрутки. */
 .cpa-wrap .ui-table { min-width: 760px; }
-.cpa-wrap .cpa-empty { padding: var(--ui-space-6) var(--ui-space-5); }
-.cpa-wrap .table-card { background: var(--surface); border: 1px solid #fff6; border-radius: var(--radius-lg); box-shadow: var(--shadow-card); overflow: hidden; }
-.cpa-wrap .offer-name { font-weight: 600; }
-.cpa-wrap .offer-cat { font-size: 12px; color: var(--ink-faint); margin-top: 2px; }
-.cpa-wrap .rate-value { font-weight: 700; }
-.cpa-wrap .period { font-size: 12.5px; color: var(--ink-soft); }
-.cpa-wrap .row-actions { display: flex; justify-content: flex-end; gap: 4px; }
+.cpa-search { flex: 1 1 260px; min-width: 0; }
 
-/* ----- Модалки ----- */
-.cpa-wrap .modal-body { padding: 20px 26px; overflow-y: auto; }
+/* ----- Ячейки таблицы ----- */
+.cpa-offer-name { font-weight: var(--ui-weight-bold); }
+.cpa-offer-cat {
+    margin-top: 2px;
+    font-size: var(--ui-text-xs);
+    color: var(--ui-color-ink-faint);
+}
+.cpa-cell-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--ui-space-2);
+}
 
-/* ----- Переключатель "Настройка списков" в шапке модалки оффера ----- */
-.cpa-wrap .mode-toggle { display: flex; align-items: center; gap: 9px; font-size: 12.5px; font-weight: 600; color: var(--ink-soft); cursor: pointer; user-select: none; flex-shrink: 0; white-space: nowrap; }
-.cpa-wrap .switch { position: relative; display: inline-block; width: 38px; height: 22px; flex-shrink: 0; }
-.cpa-wrap .switch input { opacity: 0; width: 0; height: 0; position: absolute; }
-.cpa-wrap .switch-track { position: absolute; inset: 0; background: rgba(96, 112, 148, .32); border-radius: 20px; transition: .2s; }
-.cpa-wrap .switch-track::before { content: ''; position: absolute; width: 16px; height: 16px; left: 3px; top: 3px; background: #fff; border-radius: 50%; transition: .2s; box-shadow: 0 1px 3px rgba(0, 0, 0, .3); }
-.cpa-wrap .switch input:checked ~ .switch-track { background: var(--accent); }
-.cpa-wrap .switch input:checked ~ .switch-track::before { transform: translateX(16px); }
+/* ----- Форма оффера: разделы, компактные ряды, повторяющиеся строки ----- */
+.cpa-form-sec {
+    display: flex;
+    align-items: center;
+    gap: var(--ui-space-4);
+    margin: var(--ui-space-6) 0 var(--ui-space-4);
+}
+.cpa-form-sec:first-child { margin-top: 0; }
+.cpa-form-sec__icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 28px;
+    height: 28px;
+    border-radius: var(--ui-radius-xs);
+    background: var(--ui-color-wash-strong);
+    color: var(--ui-color-accent);
+}
+.cpa-form-sec h3 {
+    font-size: var(--ui-text-xl);
+    font-weight: var(--ui-weight-bold);
+    color: var(--ui-color-ink);
+}
+.cpa-form-sec span {
+    font-size: var(--ui-text-xs);
+    color: var(--ui-color-ink-faint);
+}
 
-/* ----- Панель "Настройка списков" (report_2026-08-01.md, Фаза 2) ----- */
-.cpa-wrap .params-panel { display: none; flex-direction: column; gap: 14px; }
-.cpa-wrap .params-panel:not([hidden]) { display: flex; }
-.cpa-wrap .params-intro { font-size: 13px; color: var(--ink-faint); }
-.cpa-wrap .param-card { border: 1px solid var(--line); border-radius: var(--radius-md); background: rgba(255, 255, 255, .5); overflow: hidden; }
-.cpa-wrap .param-card-head { width: 100%; display: flex; align-items: center; gap: 10px; padding: 12px 14px; background: none; border: none; cursor: pointer; font-size: 14px; font-weight: 600; color: var(--ink); text-align: left; }
-.cpa-wrap .param-card-head .count { font-size: 11.5px; font-weight: 700; padding: 1px 8px; border-radius: 20px; background: rgba(96, 112, 148, .14); color: var(--ink-faint); }
-.cpa-wrap .param-card-head .chevron { margin-left: auto; color: var(--ink-faint); transition: transform .2s; }
-.cpa-wrap .param-card-head.open .chevron { transform: rotate(180deg); }
-.cpa-wrap .param-card-body { padding: 0 14px 14px; display: flex; flex-direction: column; gap: 10px; }
-.cpa-wrap .param-tags { display: flex; flex-wrap: wrap; gap: 7px; }
-.cpa-wrap .param-tag { display: inline-flex; align-items: center; gap: 6px; padding: 5px 8px 5px 12px; border-radius: 20px; background: rgba(0, 0, 255, .07); color: var(--ink); font-size: 12.5px; font-weight: 500; }
-.cpa-wrap .param-tag button { width: 16px; height: 16px; border-radius: 50%; border: none; background: rgba(96, 112, 148, .18); color: var(--ink-soft); font-size: 12px; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center; }
-.cpa-wrap .param-tag button:hover { background: var(--danger); color: #fff; }
-.cpa-wrap .param-add-row { display: flex; gap: 8px; }
-.cpa-wrap .param-add-row input { flex: 1; padding: 8px 12px; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); font-size: 13px; background: rgba(255, 255, 255, .8); font-family: inherit; }
-.cpa-wrap .param-add-row input:focus { outline: none; border-color: var(--accent-soft); box-shadow: 0 0 0 3px rgba(0, 0, 255, .12); }
+/* Пара «от — до»: две даты периода, цена и площадь сегмента. */
+.cpa-range {
+    display: flex;
+    align-items: center;
+    gap: var(--ui-space-3);
+}
+.cpa-range .ui-field__control { flex: 1; min-width: 0; }
+.cpa-range span {
+    flex-shrink: 0;
+    font-size: var(--ui-text-xs);
+    color: var(--ui-color-ink-faint);
+}
 
-/* Подсказка внутри метки поля и подзаголовок модалки. Оба класса приехали из
-   старого файла вместе с разметкой, а правила под них при переносе ушли как
-   «отданные общему слою» — но в слое их нет: там подсказка это отдельный
-   .ui-field__hint ПОД полем, а не приписка к метке. Форма оффера пользуется
-   припиской в двух десятках мест («пусто = бессрочно», «можно несколько»), и
-   без правила она читалась как продолжение самой метки. */
-.cpa-wrap .hint { font-size: 11px; font-weight: 400; color: var(--ink-faint); text-transform: none; letter-spacing: 0; margin-left: 4px; }
-/* Ползунок «Настройка списков» и крестик стоят в шапке модалки рядом. */
-.cpa-wrap .modal-head-actions { display: flex; align-items: center; gap: 14px; flex-shrink: 0; }
+/* Несколько узких полей в одну строку. Поля — из слоя, здесь только их место
+   в ряду и мелкая ступень высоты. */
+.cpa-compact-row {
+    display: flex;
+    gap: var(--ui-space-4);
+    flex-wrap: wrap;
+}
+.cpa-compact-field {
+    flex: 1;
+    min-width: 130px;
+}
 
-.cpa-wrap .section-divider { display: flex; align-items: center; gap: 10px; margin: 18px 0 12px; }
-.cpa-wrap .section-divider:first-child { margin-top: 0; }
-.cpa-wrap .section-divider .s-icon { width: 28px; height: 28px; border-radius: 9px; background: rgba(0, 0, 255, .08); color: var(--accent); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-.cpa-wrap .section-divider h3 { font-size: 14px; font-weight: 700; color: var(--ink); }
-.cpa-wrap .section-divider span { font-size: 12px; color: var(--ink-faint); }
-.cpa-wrap .range-pair { display: flex; align-items: center; gap: 8px; }
-.cpa-wrap .range-pair input { flex: 1; min-width: 0; }
-.cpa-wrap .range-pair span { font-size: 12px; color: var(--ink-faint); flex-shrink: 0; }
+/* Множественный выбор: чипы .ui-choice из слоя стоят рядами. Своего вида у
+   раздела нет — здесь только их раскладка. */
+.cpa-choices {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--ui-space-3);
+}
 
-.cpa-wrap .checkbox-row { display: flex; align-items: center; gap: 9px; padding: 9px 0; cursor: pointer; }
-.cpa-wrap .checkbox-row input[type="checkbox"] { width: 17px; height: 17px; accent-color: var(--accent); cursor: pointer; flex-shrink: 0; }
-.cpa-wrap .checkbox-row span { font-size: 13px; color: var(--ink); }
+.cpa-repeat-rows {
+    display: flex;
+    flex-direction: column;
+    gap: var(--ui-space-3);
+    margin-bottom: var(--ui-space-3);
+}
+/* Добавление строки — пунктиром во всю ширину: это не обычное действие, а
+   продолжение списка. Кнопка при этом обычная, из слоя. */
+.cpa-add-row {
+    width: 100%;
+    border-style: dashed;
+    border-color: var(--ui-color-line-strong);
+}
+.cpa-repeat-row {
+    display: grid;
+    gap: var(--ui-space-3);
+    align-items: center;
+    padding: var(--ui-space-3) var(--ui-space-4);
+    border: 1px solid var(--ui-color-line);
+    border-radius: var(--ui-radius-sm);
+    background: var(--ui-color-surface-sunken);
+}
+.cpa-geo-row { grid-template-columns: 1fr 1fr 1fr 1fr auto; }
+.cpa-segment-row { grid-template-columns: 1fr .85fr 1fr 1fr auto; }
 
-.cpa-wrap .chip-select { display: flex; flex-wrap: wrap; gap: 7px; }
-.cpa-wrap .chip-opt { padding: 7px 14px; border-radius: 20px; border: 1px solid var(--line-strong); background: rgba(255, 255, 255, .6); font-size: 13px; color: var(--ink-soft); cursor: pointer; transition: .15s; }
-.cpa-wrap .chip-opt:hover { border-color: var(--accent-soft); }
-.cpa-wrap .chip-opt.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+/* ----- Подсказки адреса ----- */
+.cpa-geo-field { position: relative; min-width: 0; }
+.cpa-geo-suggest {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    z-index: 60;
+    max-height: 230px;
+    overflow-y: auto;
+    border: 1px solid var(--ui-color-line-strong);
+    border-radius: var(--ui-radius-sm);
+    background: var(--ui-color-glass-strong);
+    backdrop-filter: blur(14px);
+    box-shadow: var(--ui-shadow-pop);
+}
+.cpa-geo-suggest__item {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--ui-space-2);
+    padding: var(--ui-space-3) var(--ui-space-4);
+    font-size: var(--ui-text-sm);
+    line-height: var(--ui-line-base);
+    color: var(--ui-color-ink);
+    cursor: pointer;
+}
+.cpa-geo-suggest__item:hover { background: var(--ui-color-wash-hover); }
+.cpa-geo-suggest__item .ui-ic { margin-top: 2px; }
+.cpa-geo-suggest__item b { font-weight: var(--ui-weight-bold); }
 
-/* ----- Компактный ряд: несколько узких полей в одну строку ----- */
-.cpa-wrap .compact-row { display: flex; gap: 10px; flex-wrap: wrap; }
-.cpa-wrap .compact-field { flex: 1; min-width: 130px; display: flex; flex-direction: column; gap: 4px; }
-.cpa-wrap .compact-field label { font-size: 11px; font-weight: 600; color: var(--ink-soft); line-height: 1.25; }
-.cpa-wrap .compact-field input, .cpa-wrap .compact-field select { padding: 7px 9px; font-size: 12.5px; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); color: var(--ink); background: rgba(255, 255, 255, .75); width: 100%; min-width: 0; font-family: inherit; }
-.cpa-wrap .compact-field input:focus, .cpa-wrap .compact-field select:focus { outline: none; border-color: var(--accent-soft); box-shadow: 0 0 0 3px rgba(0, 0, 255, .12); }
+/* ----- Окно «Настройка списков» ----- */
+.cpa-param-card {
+    border: 1px solid var(--ui-color-line);
+    border-radius: var(--ui-radius-md);
+    background: var(--ui-color-surface-sunken);
+    overflow: hidden;
+}
+.cpa-param-card + .cpa-param-card { margin-top: var(--ui-space-3); }
+.cpa-param-card__head {
+    display: flex;
+    align-items: center;
+    gap: var(--ui-space-4);
+    width: 100%;
+    padding: var(--ui-space-4) var(--ui-space-5);
+    border: none;
+    background: none;
+    font-family: var(--ui-font-ui);
+    font-size: var(--ui-text-lg);
+    font-weight: var(--ui-weight-bold);
+    color: var(--ui-color-ink);
+    text-align: left;
+    cursor: pointer;
+}
+.cpa-param-card__head .ui-ic { margin-left: auto; color: var(--ui-color-ink-faint); transition: transform var(--ui-dur-fast); }
+.cpa-param-card__head[aria-expanded="true"] .ui-ic { transform: rotate(180deg); }
+.cpa-param-card__body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--ui-space-4);
+    padding: 0 var(--ui-space-5) var(--ui-space-5);
+}
+.cpa-param-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--ui-space-2);
+}
+.cpa-param-add {
+    display: flex;
+    gap: var(--ui-space-3);
+}
+.cpa-param-add .ui-field { flex: 1; min-width: 0; }
 
-/* ----- Повторяющиеся строки: сегменты «цена/площадь» и география ----- */
-.cpa-wrap .repeat-rows { display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; }
-.cpa-wrap .repeat-row { display: grid; gap: 8px; align-items: center; padding: 9px 10px; border-radius: var(--radius-sm); border: 1px solid var(--line); background: rgba(255, 255, 255, .5); }
-.cpa-wrap .repeat-row input, .cpa-wrap .repeat-row select { padding: 7px 10px; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); font-size: 12.5px; color: var(--ink); background: rgba(255, 255, 255, .85); width: 100%; min-width: 0; font-family: inherit; }
-.cpa-wrap .repeat-row input:focus, .cpa-wrap .repeat-row select:focus { outline: none; border-color: var(--accent-soft); box-shadow: 0 0 0 3px rgba(0, 0, 255, .12); }
-.cpa-wrap .geo-row { grid-template-columns: 1fr 1fr 1fr 1fr auto; }
-.cpa-wrap .segment-row { grid-template-columns: 1fr .85fr 1fr 1fr auto; }
-.cpa-wrap .segment-row .range-pair { gap: 6px; }
-.cpa-wrap .segment-row .range-pair span { font-size: 11px; }
-
-/* ----- Подсказки адреса (DaData) — report_2026-08-01.md, 09.08.2026 ----- */
-.cpa-wrap .geo-field { position: relative; min-width: 0; }
-.cpa-wrap .geo-suggest { position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 60; background: var(--surface-modal); backdrop-filter: blur(14px); border: 1px solid var(--line-strong); border-radius: var(--radius-sm); box-shadow: var(--shadow-pop); max-height: 230px; overflow-y: auto; }
-.cpa-wrap .geo-suggest-item { display: flex; align-items: flex-start; gap: 7px; padding: 8px 10px; font-size: 12.5px; line-height: 1.35; color: var(--ink); cursor: pointer; }
-.cpa-wrap .geo-suggest-item:hover { background: rgba(0, 0, 255, .07); }
-.cpa-wrap .geo-suggest-item .ui-ic { margin-top: 2px; }
-.cpa-wrap .geo-suggest-item b { font-weight: 700; }
-.cpa-wrap .geo-suggest-empty { padding: 9px 10px; font-size: 12px; color: var(--ink-faint); }
-
-/* ----- Модалка «Управление сетями» (тот же паттерн, что «Управление отделами») ----- */
-.cpa-wrap .net-list { display: flex; flex-direction: column; gap: 8px; }
-.cpa-wrap .net-row { display: flex; align-items: center; gap: 12px; padding: 11px 14px; border-radius: var(--radius-md); border: 1px solid var(--line); background: rgba(255, 255, 255, .5); }
-.cpa-wrap .net-row .n-name { font-weight: 600; font-size: 14px; flex: 1; }
-.cpa-wrap .net-row .n-meta { font-size: 12px; color: var(--ink-faint); }
-.cpa-wrap .dashed-row { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 12px; border-radius: var(--radius-md); border: 1.5px dashed var(--line-strong); color: var(--ink-faint); font-size: 13.5px; font-weight: 600; cursor: pointer; background: transparent; width: 100%; transition: .15s; }
-.cpa-wrap .dashed-row:hover { border-color: var(--accent-soft); color: var(--accent); background: rgba(0, 0, 255, .04); }
-.cpa-wrap .inline-form { margin-top: 10px; padding: 14px; border-radius: var(--radius-md); background: rgba(0, 0, 255, .03); border: 1px solid rgba(0, 0, 255, .14); }
-.cpa-wrap .inline-form .form-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
-
-/* ----- Вкладки (переключение "Офферы"/"Рекламные площадки" одной кнопкой) ----- */
-[data-view] { display: none; flex-direction: column; gap: 14px; }
-[data-view].active { display: flex; }
-
-/* ----- Тосты ----- */
-
-@media (max-width: 760px) {
-    .cpa-wrap .compact-row { flex-direction: column; }
-    .cpa-wrap .geo-row, .cpa-wrap .segment-row { grid-template-columns: 1fr; }
+/* ----- Окно «Управление сетями»: список + инлайн-форма -----
+   Тот же вид, что у «Управления отделами» и «Управления площадками»: четыре
+   однотипных окна проекта устроены одинаково. */
+.cpa-net-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--ui-space-3);
+}
+.cpa-net-row {
+    display: flex;
+    align-items: center;
+    gap: var(--ui-space-4);
+    padding: var(--ui-space-4);
+    border: 1px solid var(--ui-color-line);
+    border-radius: var(--ui-radius-md);
+    background: var(--ui-color-surface-sunken);
+}
+.cpa-net-row__name {
+    flex: 1;
+    min-width: 0;
+    font-size: var(--ui-text-sm);
+    font-weight: var(--ui-weight-bold);
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.cpa-net-row__meta {
+    font-size: var(--ui-text-xs);
+    color: var(--ui-color-ink-faint);
+    white-space: nowrap;
+}
+.cpa-inline-form {
+    display: grid;
+    gap: var(--ui-space-4);
+    margin-top: var(--ui-space-4);
+    padding: var(--ui-space-4);
+    border: 1px solid var(--ui-color-accent-line);
+    border-radius: var(--ui-radius-md);
+    background: var(--ui-color-wash-hover);
+}
+.cpa-inline-form__actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--ui-space-3);
 }

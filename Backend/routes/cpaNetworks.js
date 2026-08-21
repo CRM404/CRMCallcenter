@@ -27,6 +27,12 @@ function normalizeValue(key, value) {
     return value;
 }
 
+// offersCount и sourcesCount приходят вместе с сетью, а не отдельными
+// запросами: оба числа нужны разделу на КАЖДОЙ строке списка — первое стоит в
+// подписи сети и в подтверждении удаления («вместе с ней удалятся её офферы»),
+// второе гасит саму кнопку удаления заранее, пока на сеть ссылаются источники
+// (К77). Без них раздел либо предлагал бы действие, которое сервер обязан
+// отбить, либо ходил бы на сервер по разу на сеть.
 function rowToCpaNetwork(row) {
     return {
         id: row.id,
@@ -36,18 +42,30 @@ function rowToCpaNetwork(row) {
         status: row.status,
         connectedAt: row.connected_at,
         payoutCurrency: row.payout_currency,
-        commissionPercent: row.commission_percent
+        commissionPercent: row.commission_percent,
+        offersCount: row.offers_count === undefined ? 0 : Number(row.offers_count),
+        sourcesCount: row.sources_count === undefined ? 0 : Number(row.sources_count)
     };
 }
 
+// Одна выборка на список и на одиночную запись: разошедшиеся SELECT'ы — это
+// поле, которое есть в списке и пропадает после сохранения.
+const BASE_SELECT = `
+    SELECT c.*, o.name AS organization_name,
+           COALESCE(off.c, 0) AS offers_count,
+           COALESCE(src.c, 0) AS sources_count
+    FROM cpa_networks c
+    LEFT JOIN organizations o ON o.id = c.organization_id
+    LEFT JOIN (
+        SELECT network_id, count(*)::int AS c FROM real_estate_offers GROUP BY network_id
+    ) off ON off.network_id = c.id
+    LEFT JOIN (
+        SELECT cpa_network_id, count(*)::int AS c FROM source_cpa_networks GROUP BY cpa_network_id
+    ) src ON src.cpa_network_id = c.id
+`;
+
 async function fetchCpaNetworkWithOrganization(id) {
-    const result = await pool.query(
-        `SELECT c.*, o.name AS organization_name
-         FROM cpa_networks c
-         LEFT JOIN organizations o ON o.id = c.organization_id
-         WHERE c.id = $1`,
-        [id]
-    );
+    const result = await pool.query(`${BASE_SELECT} WHERE c.id = $1`, [id]);
     return result.rows[0] || null;
 }
 
@@ -85,12 +103,7 @@ function validateBody(body) {
 // GET /api/cpa-networks — список, отсортирован по id
 router.get('/', async (req, res) => {
     try {
-        const result = await pool.query(
-            `SELECT c.*, o.name AS organization_name
-             FROM cpa_networks c
-             LEFT JOIN organizations o ON o.id = c.organization_id
-             ORDER BY c.id`
-        );
+        const result = await pool.query(`${BASE_SELECT} ORDER BY c.id`);
         res.json(result.rows.map(rowToCpaNetwork));
     } catch (err) {
         console.error(err);
