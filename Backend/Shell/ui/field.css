@@ -154,6 +154,93 @@ input[type="time"].ui-field__control { min-width: 110px; }
 .ui-field__control[readonly] { cursor: default; }
 .ui-field--disabled .ui-field__label { opacity: .6; }
 
+/* ----- Строка «поле и приставка» ------------------------------------------
+   Поле, рядом с которым стоит кнопка: «показать пароль» внутри рамки поля,
+   «Сгенерировать» — снаружи. Обе формы держит одна строка, и разница между
+   ними читается с экрана (паспорт Р4).
+
+   ПОЧЕМУ В СЛОЕ. «Сотрудники» уже объявили ту же строку у себя под именем
+   .password-row, следом та же форма нужна пункту «Пароль АТС», а за ним —
+   экрану настроек, где так же прячутся ключи. Третья копия одного вида — это
+   ровно К36, поэтому строка поднята сюда, а объявление раздела снято.
+
+   position: relative нужен, чтобы кнопка внутри поля считала края ОТ ПОЛЯ, а
+   не от .ui-field, где сверху ещё метка: иначе её пришлось бы центрировать
+   магическим числом от высоты метки.
+
+   flex: 1 1 auto у поля обязателен: width:100% из .ui-field__control иначе
+   выдавливает соседнюю кнопку за край строки. */
+.ui-field__row {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: var(--ui-space-3);
+}
+.ui-field__row .ui-field__control {
+    flex: 1 1 auto;
+    width: auto;
+}
+
+/* ----- Модификатор: поле со скрытым значением -----------------------------
+   Освобождает справа место под кнопку показа: 2 отступ + 34 кнопка + 4
+   просвета. Объявлен ОТДЕЛЬНО от .ui-field__row намеренно: строка может нести
+   кнопку снаружи поля («Сгенерировать»), и тогда правый отступ не нужен. */
+.ui-field--reveal .ui-field__control {
+    padding-right: 40px;
+}
+/* Открытое значение — моноширинным: в пропорциональном шрифте l, I и 1 не
+   различаются, а пароль переписывают по знакам. */
+.ui-field--reveal .ui-field__control[type="text"] {
+    font-family: var(--ui-font-mono);
+    letter-spacing: .02em;
+}
+
+/* ----- Кнопка «показать / скрыть» -----------------------------------------
+   34 x 34 = 38 - 2 - 2, поэтому центрировать её не нужно. Не .ui-btn: у кнопки
+   слоя своя высота, рамка и фон — внутри поля вышла бы рамка в рамке.
+
+   Кольцо фокуса ВНУТРЬ (outline-offset: -2px): снаружи оно легло бы на рамку
+   поля и дало две линии разного цвета вплотную — та же причина, по которой у
+   поля при фокусе рамка становится прозрачной. */
+.ui-field__reveal {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    width: 34px;
+    height: 34px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: 0;
+    border-radius: var(--ui-radius-xs);
+    background: transparent;
+    color: var(--ui-color-ink-faint);
+    cursor: pointer;
+    transition: color var(--ui-dur-fast), background-color var(--ui-dur-fast);
+}
+.ui-field__reveal:hover:not(:disabled) {
+    color: var(--ui-color-ink-soft);
+    background: var(--ui-color-wash-hover);
+}
+.ui-field__reveal:active:not(:disabled) {
+    background: var(--ui-color-wash-active);
+}
+.ui-field__reveal:focus-visible {
+    outline: 2px solid var(--ui-color-accent);
+    outline-offset: -2px;
+}
+/* Открыто: значок сменился на eye-off, цвет акцентный — состояние видно и без
+   значка, одним цветом. */
+.ui-field__reveal[aria-pressed="true"] {
+    color: var(--ui-color-accent);
+}
+/* Неактивна вместе с полем: она часть поля, а не соседнее действие. */
+.ui-field__reveal:disabled {
+    opacity: .5;
+    cursor: not-allowed;
+}
+
 /* ----- Раскладка форм ------------------------------------------------------
    Сетка полей — это ещё базовый уровень: раскладку конкретной формы задаёт
    раздел, но сама сетка одна на проект. */

@@ -227,8 +227,36 @@
                 <label class="ui-field__label" for="fNote">Многострочное</label>
                 <textarea id="fNote" class="ui-field__control" rows="2">Комментарий к лиду</textarea>
             </div>
+
+            <div class="ui-field ui-field--wide">
+                <label class="ui-field__label" for="fPass">Строка «поле и приставка»</label>
+                <div class="ui-field__row">
+                    <input id="fPass" class="ui-field__control" value="Kq7#mZp2vR" readonly>
+                    <button type="button" class="ui-btn ui-btn--secondary"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-shuffle"></use></svg>Сгенерировать</button>
+                </div>
+                <span class="ui-field__hint">Кнопка снаружи поля: она меняет значение.</span>
+            </div>
+
+            <div class="ui-field">
+                <label class="ui-field__label" for="fPbxEmpty">Скрытое значение: не задано</label>
+                <div class="ui-field__row ui-field--reveal">
+                    <input id="fPbxEmpty" class="ui-field__control" type="password" placeholder="Не задан">
+                    <button type="button" class="ui-field__reveal" aria-label="Показать пароль" aria-pressed="false" disabled><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-eye"></use></svg></button>
+                </div>
+                <span class="ui-field__hint">Показывать нечего — кнопка неактивна.</span>
+            </div>
+
+            <div class="ui-field">
+                <label class="ui-field__label" for="fPbxHidden">Скрытое значение: задано</label>
+                <div class="ui-field__row ui-field--reveal">
+                    <input id="fPbxHidden" class="ui-field__control" type="password" value="ueDq25UK9" data-role="cat-reveal-input">
+                    <button type="button" class="ui-field__reveal" aria-label="Показать пароль" aria-pressed="false" data-role="cat-reveal"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-eye"></use></svg></button>
+                </div>
+                <span class="ui-field__hint">Кнопка работает: нажмите, значок сменится на <code>eye-off</code>.</span>
+            </div>
         </div>
         <div class="cat-rule"><b>Правило.</b> Ошибка живёт под полем, а не в тосте: тост исчезает, поле остаётся.</div>
+        <div class="cat-rule"><b>Кнопка внутри поля — не <code>.ui-btn</code>.</b> У кнопки слоя своя высота, рамка и фон: внутри поля вышла бы рамка в рамке. <code>.ui-field__reveal</code> — 34&nbsp;×&nbsp;34 (38&nbsp;−&nbsp;2&nbsp;−&nbsp;2), кольцо фокуса внутрь, открытое значение моноширинным. Свою строку «поле и кнопка» раздел не заводит: она здесь.</div>
         <div class="cat-rule"><b>Ступени две.</b> Обычная — 38 px, мелкая (<code>--sm</code>) — 32 px, ровно как у кнопки тулбара, и нужна только там, где поле стоит с такими кнопками в одном ряду. Задать её у себя раздел не может: <code>min-height</code> слоя выигрывает у <code>height</code> раздела независимо от порядка правил.</div>
     </section>
 
@@ -543,6 +571,18 @@
     import { mountIconSprite } from '/ui/icons.js';
 
     mountIconSprite();
+
+    // Кнопка показа пароля — живая, чтобы оба состояния значка были видны.
+    document.querySelectorAll('[data-role="cat-reveal"]').forEach((button) => {
+        const input = button.closest('.ui-field__row').querySelector('[data-role="cat-reveal-input"]');
+        button.addEventListener('click', () => {
+            const open = button.getAttribute('aria-pressed') === 'true';
+            button.setAttribute('aria-pressed', String(!open));
+            button.setAttribute('aria-label', open ? 'Показать пароль' : 'Скрыть пароль');
+            button.querySelector('use').setAttribute('href', open ? '#ui-ic-eye' : '#ui-ic-eye-off');
+            input.type = open ? 'password' : 'text';
+        });
+    });
 
     const panel = document.querySelector('[data-role="panel"]');
 
