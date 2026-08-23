@@ -44,6 +44,8 @@ const FIELD_COLUMNS = [
     ['shiftStart', 'shift_start'],
     ['shiftEnd', 'shift_end'],
     ['password', 'password'],
+    ['pbxExtension', 'pbx_extension'],
+    ['pbxExtensionId', 'pbx_extension_id'],
     ['country', 'country'],
     ['registration', 'registration'],
     ['passportSeries', 'passport_series'],
@@ -54,6 +56,31 @@ const FIELD_COLUMNS = [
     ['bank', 'bank'],
     ['account', 'account']
 ];
+
+// ПАРОЛЬ АТС В ЭТОТ СПИСОК НЕ ВХОДИТ, И ЭТО ГЛАВНОЕ В ЧАСТИ 2.
+//
+// PUT собирает SET по всем FIELD_COLUMNS, а normalizeValue на отсутствующий
+// ключ возвращает null (см. ниже). Значит колонка из списка, которой нет в
+// теле запроса, ОБНУЛЯЕТСЯ. Для пароля АТС это смертельно: наружу он не
+// уходит (rowToEmployee), массовые действия шлют обратно весь объект оттуда —
+// и первое же «сменить статус» стёрло бы пароли всем операторам разом, молча.
+//
+// Поэтому колонка обновляется отдельно и только тогда, когда ключ РЕАЛЬНО
+// пришёл: COALESCE($n, pbx_password), где $n = null, если ключа нет. Различаем
+// «не прислали» и «прислали пустое» по наличию ключа, а не по значению —
+// очистить пароль руками должно быть можно.
+const PBX_PASSWORD_KEY = 'pbxPassword';
+
+function pbxPasswordArg(body) {
+    if (!body || !Object.prototype.hasOwnProperty.call(body, PBX_PASSWORD_KEY)) {
+        return { sent: false, value: null };
+    }
+    const raw = body[PBX_PASSWORD_KEY];
+    if (raw === null || raw === undefined || String(raw).trim() === '') {
+        return { sent: true, value: null };
+    }
+    return { sent: true, value: String(raw) };
+}
 
 function rowToEmployee(row) {
     return {
@@ -82,6 +109,14 @@ function rowToEmployee(row) {
         onLineSince: row.on_line_since,
         workState: row.work_state,
         password: row.password,
+        pbxExtension: row.pbx_extension,
+        pbxExtensionId: row.pbx_extension_id,
+        // ЗНАЧЕНИЯ ПАРОЛЯ АТС ЗДЕСЬ НЕТ И НЕ БУДЕТ — только признак «задан».
+        // Прятать пароль интерфейсом нельзя: он остался бы в исходном коде
+        // страницы, и «скрытое» открыл бы любой, кто нажал F12 (паспорт Р4,
+        // состояние «скрыт навсегда»). Значение приходит единственной точкой
+        // GET /api/employees/:id/pbx-password.
+        pbxPasswordSet: Boolean(row.pbx_password),
         country: row.country,
         registration: row.registration,
         passportSeries: row.passport_series,
@@ -109,6 +144,13 @@ function normalizeValue(key, value) {
     }
     if (key === 'shiftStart' || key === 'shiftEnd') {
         return parseTimeOfDay(value);
+    }
+    // Добавочный приводим к каноническому виду: пробел по краям сделал бы «102»
+    // и «102 » разными номерами, и частичный уникальный индекс пропустил бы оба.
+    if (key === 'pbxExtension' || key === 'pbxExtensionId') {
+        if (value === undefined || value === null) return null;
+        const trimmed = String(value).trim();
+        return trimmed === '' ? null : trimmed;
     }
     if (value === undefined) return null;
     if (typeof value === 'string' && value.trim() === '') return null;
@@ -153,16 +195,60 @@ function validateRequiredFields(body) {
     if (shiftTimes.error) {
         return shiftTimes.error;
     }
+    // Добавочный: только цифры, длина не ограничивается (у разных станций она
+    // разная). Пустое значение допустимо — звонит не каждый сотрудник.
+    if (!isBlank(body.pbxExtension) && !/^\d+$/.test(String(body.pbxExtension).trim())) {
+        return 'Внутренний номер состоит только из цифр';
+    }
     return null;
 }
 
-function handleUniqueViolation(err, res) {
+// Фамилия и инициалы: «Иванов И. И.». Нужны в одном месте — в тексте про
+// занятый добавочный, поэтому живут здесь, а не в общем помощнике.
+function shortName(row) {
+    const initials = [row.first_name, row.middle_name]
+        .filter(Boolean)
+        .map((part) => `${String(part).trim().charAt(0).toUpperCase()}.`)
+        .join(' ');
+    return [row.last_name, initials].filter(Boolean).join(' ');
+}
+
+// АСИНХРОННАЯ намеренно: ошибка занятого добавочного обязана называть, У КОГО
+// номер («Номер 102 уже у Иванова И. И.»), а это второй запрос. «Номер занят»
+// заставило бы искать руками по всем карточкам (паспорт Р4).
+//
+// Проверять занятость заранее нельзя: между SELECT и INSERT успевает вклиниться
+// чужая вставка. Полагаемся на индекс, а имя ищем уже после отказа.
+async function handleUniqueViolation(err, res, body) {
     if (err.code === '23505') {
         if (err.constraint === 'employees_email_key') {
             return res.status(409).json({ error: 'Сотрудник с таким email уже существует' });
         }
         if (err.constraint === 'employees_phone_key') {
             return res.status(409).json({ error: 'Сотрудник с таким номером телефона уже существует' });
+        }
+        if (err.constraint === 'idx_employees_pbx_extension') {
+            const extension = String((body && body.pbxExtension) || '').trim();
+            let owner = null;
+            try {
+                const found = await pool.query(
+                    `SELECT id, last_name, first_name, middle_name FROM employees
+                     WHERE pbx_extension = $1 AND status <> 'inactive' LIMIT 1`,
+                    [extension]
+                );
+                owner = found.rows[0] || null;
+            } catch (lookupErr) {
+                // Само по себе отсутствие имени отказ не отменяет: сохранять
+                // всё равно нельзя, просто текст будет беднее.
+                console.error(lookupErr);
+            }
+            return res.status(409).json({
+                error: owner
+                    ? `Номер ${extension} уже у ${shortName(owner)}`
+                    : `Номер ${extension} уже занят`,
+                code: 'extension_taken',
+                employee: owner ? { id: owner.id, fio: shortName(owner) } : null
+            });
         }
         return res.status(409).json({ error: 'Такая запись уже существует' });
     }
@@ -285,6 +371,13 @@ router.post('/', async (req, res) => {
     try {
         const values = FIELD_COLUMNS.map(([key]) => normalizeValue(key, req.body[key]));
         const columns = FIELD_COLUMNS.map(([, col]) => col);
+        // Пароль АТС — только если прислали. При создании разница невелика, но
+        // правило одно на оба маршрута: колонка трогается лишь по запросу.
+        const pbxPassword = pbxPasswordArg(req.body);
+        if (pbxPassword.sent) {
+            columns.push('pbx_password');
+            values.push(pbxPassword.value);
+        }
         const placeholders = columns.map((_, i) => `$${i + 1}`);
         const result = await pool.query(
             `INSERT INTO employees (${columns.join(', ')}) VALUES (${placeholders.join(', ')}) RETURNING id`,
@@ -293,7 +386,7 @@ router.post('/', async (req, res) => {
         const row = await fetchEmployeeWithManager(result.rows[0].id);
         res.status(201).json(rowToEmployee(row));
     } catch (err) {
-        if (handleUniqueViolation(err, res)) return;
+        if (await handleUniqueViolation(err, res, req.body)) return;
         console.error(err);
         res.status(500).json({ error: 'Не удалось создать сотрудника' });
     }
@@ -308,6 +401,14 @@ router.put('/:id', async (req, res) => {
     try {
         const values = FIELD_COLUMNS.map(([key]) => normalizeValue(key, req.body[key]));
         const setClauses = FIELD_COLUMNS.map(([, col], i) => `${col} = $${i + 1}`);
+        // Ключа нет — приходит null, и COALESCE оставляет прежнее значение.
+        // Ключ есть с пустым значением — приходит null, но ветка другая:
+        // колонка выставляется в NULL напрямую, то есть пароль очищен руками.
+        const pbxPassword = pbxPasswordArg(req.body);
+        values.push(pbxPassword.value);
+        setClauses.push(pbxPassword.sent
+            ? `pbx_password = $${values.length}`
+            : `pbx_password = COALESCE($${values.length}, pbx_password)`);
         values.push(req.params.id);
         const result = await pool.query(
             `UPDATE employees SET ${setClauses.join(', ')} WHERE id = $${values.length} RETURNING id`,
@@ -319,9 +420,37 @@ router.put('/:id', async (req, res) => {
         const row = await fetchEmployeeWithManager(result.rows[0].id);
         res.json(rowToEmployee(row));
     } catch (err) {
-        if (handleUniqueViolation(err, res)) return;
+        if (await handleUniqueViolation(err, res, req.body)) return;
         console.error(err);
         res.status(500).json({ error: 'Не удалось сохранить изменения' });
+    }
+});
+
+// GET /api/employees/:id/pbx-password — ЕДИНСТВЕННОЕ место, где пароль АТС
+// покидает сервер. Карточка запрашивает его только по нажатию «показать».
+//
+// ПОЧЕМУ ОТДЕЛЬНОЙ ТОЧКОЙ, А НЕ ПОЛЕМ В ОТВЕТЕ. Пароль АТС — это деньги: кто
+// его знает, тот регистрирует телефон и звонит за счёт компании. В списке
+// сотрудников он ехал бы наружу пачкой, при каждом открытии раздела и вообще
+// без спроса. Здесь же он уходит по одному, по явному запросу, и в тот день,
+// когда в проекте появится вход, права навешиваются ОДНОЙ проверкой в ОДНОМ
+// месте, а не ревизией всех ответов.
+//
+// ЧАСТЬ 3 (аудит): эта точка обязана писать запись «пароль АТС показан» — с
+// автором и временем. Аудит вообще про изменения, но здесь единственное место
+// во всей системе, где секрет покидает сервер, и молчать об этом нельзя
+// (требование куратора, dialog.md И15). Пометка оставлена здесь, чтобы в
+// части 3 это место не искать.
+router.get('/:id/pbx-password', async (req, res) => {
+    try {
+        const result = await pool.query('SELECT pbx_password FROM employees WHERE id = $1', [req.params.id]);
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Сотрудник не найден' });
+        }
+        res.json({ pbxPassword: result.rows[0].pbx_password || '' });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Не удалось получить пароль АТС' });
     }
 });
 
