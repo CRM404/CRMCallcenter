@@ -32,9 +32,11 @@ const MAX_FILE_SIZE = 5 * 1024 * 1024;
 const FIELDS = [
     'lastName', 'firstName', 'middleName', 'email', 'phone', 'whatsapp', 'telegram',
     'position', 'department', 'hireDate', 'status', 'terminationDate', 'lineType',
-    'workSchedule', 'password', 'country', 'registration', 'passportSeries',
+    'workSchedule', 'pbxExtension', 'password', 'country', 'registration', 'passportSeries',
     'passportNumber', 'issuedBy', 'issueDate', 'inn', 'bank', 'account'
 ];
+// Пароль АТС в общий список не входит: его значение с сервера не приходит
+// вовсе, приходит только признак «задан». Всё про него — ниже, отдельно.
 // Два поля не совпадают с ключом данных: список руководителей и время смены,
 // которое в базе лежит двумя колонками.
 const MANAGER_FIELD = 'managerId';
@@ -47,6 +49,14 @@ const DOC_FIELDS = ['passportFront', 'passportBack', 'patent', 'contract', 'addi
 const WORK_SCHEDULE_HINT = 'Рабочих дней подряд и выходных подряд: 5/2, 3/3, 2/2, 4/2. Справочная запись: выходные при заполнении месяца отмечает администратор, из этого поля они не считаются.';
 const SHIFT_TIME_HINT = 'С минутами, 24 часа. Смена через полночь — 22:00-06:00.';
 const SHIFT_TIME_EMPTY_HINT = 'Без времени смены месяц по этому сотруднику заполнить нельзя, а в меню дня пункт «Смена» неактивен. Поле «Дни» на заполнение не влияет — пустым оно ничего не ломает.';
+
+// Пароль АТС. Подсказка объясняет не «что ввести», а чем грозит утечка: формат
+// пароля задаёт оператор связи, и проверять его нам нечем.
+const PBX_PASSWORD_HINT = 'Кто знает — звонит за счёт компании.';
+// Восемь точек — ТЕКСТ приглашения, а не замаскированное значение: значения в
+// поле нет, пока человек не нажал «показать» (паспорт Р4, «скрыт навсегда»).
+const PBX_PASSWORD_MASK = '••••••••';
+const PBX_PASSWORD_EMPTY = 'Не задан';
 
 function fieldId(key) {
     return '#emp' + key.charAt(0).toUpperCase() + key.slice(1);
@@ -82,6 +92,58 @@ export function createCard(root, deps) {
     let originalFormData = {};
     let saving = false;
 
+    // ПАРОЛЬ АТС — ТРИ ПРИЗНАКА ВМЕСТО ЗНАЧЕНИЯ.
+    //   pbxPasswordSet   — задан ли пароль на сервере (пришло с карточкой).
+    //   pbxPasswordDirty — трогал ли его человек. Только при true ключ уходит
+    //                      в запрос: не отправлен — не меняется.
+    //   pbxPasswordShown — открыт ли он сейчас на экране.
+    // Значение живёт только в самом поле и только пока окно открыто.
+    let pbxPasswordSet = false;
+    let pbxPasswordDirty = false;
+    let pbxPasswordShown = false;
+
+    const pbxInput = () => $('#empPbxPassword');
+    const pbxButton = () => $('[data-role="pbx-reveal"]');
+
+    /** Кнопка мертва, когда показывать нечего: пусто и на сервере ничего нет. */
+    function syncPbxButton() {
+        const button = pbxButton();
+        if (!button) return;
+        button.disabled = !pbxPasswordSet && !pbxInput().value;
+    }
+
+    /** Открыть/закрыть показ. Значок и подпись меняются парой с типом поля. */
+    function setPbxShown(shown) {
+        const input = pbxInput();
+        const button = pbxButton();
+        if (!input || !button) return;
+        pbxPasswordShown = shown;
+        input.type = shown ? 'text' : 'password';
+        button.setAttribute('aria-pressed', String(shown));
+        button.setAttribute('aria-label', shown ? 'Скрыть пароль' : 'Показать пароль');
+        const use = button.querySelector('use');
+        if (use) use.setAttribute('href', shown ? '#ui-ic-eye-off' : '#ui-ic-eye');
+    }
+
+    /**
+     * Приводит поле к состоянию «пароль задан / не задан».
+     * Точки в приглашении — это ТЕКСТ: значения в поле нет, пока не нажали
+     * «показать». Открытым поле не остаётся ни между вкладками, ни между
+     * сеансами — карточка каждый раз собирается заново.
+     */
+    function resetPbxPasswordField(isSet) {
+        pbxPasswordSet = Boolean(isSet);
+        pbxPasswordDirty = false;
+        const input = pbxInput();
+        if (!input) return;
+        input.value = '';
+        input.placeholder = pbxPasswordSet ? PBX_PASSWORD_MASK : PBX_PASSWORD_EMPTY;
+        setPbxShown(false);
+        syncPbxButton();
+        const hint = $('[data-role="pbx-password-hint"]');
+        if (hint) hint.textContent = PBX_PASSWORD_HINT;
+    }
+
     function docInput(key) {
         return $(`[data-doc="${key}"]`);
     }
@@ -111,6 +173,7 @@ export function createCard(root, deps) {
         FIELDS.forEach((key) => { $(fieldId(key)).value = emp[key] || ''; });
         $('#empManager').value = emp[MANAGER_FIELD] || '';
         $('#empShiftTime').value = formatShiftInput(emp.shiftStart, emp.shiftEnd) || '';
+        resetPbxPasswordField(emp.pbxPasswordSet);
         DOC_FIELDS.forEach((key) => {
             const input = docInput(key);
             const area = input.closest('.file-upload-area');
@@ -126,6 +189,7 @@ export function createCard(root, deps) {
         FIELDS.forEach((key) => { $(fieldId(key)).value = ''; });
         $('#empManager').value = '';
         $('#empShiftTime').value = '';
+        resetPbxPasswordField(false);
         $('#empStatus').value = 'active';
         $('#empCountry').value = 'Российская Федерация';
     }
@@ -135,6 +199,11 @@ export function createCard(root, deps) {
         FIELDS.forEach((key) => { data[key] = $(fieldId(key)).value; });
         data[MANAGER_FIELD] = $('#empManager').value;
         data[SHIFT_FIELD] = $('#empShiftTime').value;
+        // У пароля АТС сравнивается НЕ значение, а факт правки. Иначе показ
+        // пароля кнопкой (значение подставляется программно) выглядел бы как
+        // изменение, и закрытие окна спрашивало бы про несохранённое там, где
+        // человек ничего не менял. Очистка поля, наоборот, правка и есть.
+        data.pbxPasswordTouched = pbxPasswordDirty ? '1' : '';
         DOC_FIELDS.forEach((key) => {
             const input = docInput(key);
             data[key] = input.files.length ? input.files[0].name : '';
@@ -460,6 +529,7 @@ export function createCard(root, deps) {
             shiftStart: shiftTimes.start,
             shiftEnd: shiftTimes.end,
             password: $('#empPassword').value.trim(),
+            pbxExtension: $('#empPbxExtension').value.trim(),
             country: $('#empCountry').value,
             registration: $('#empRegistration').value.trim(),
             passportSeries: $('#empPassportSeries').value.trim(),
@@ -471,6 +541,15 @@ export function createCard(root, deps) {
             account: $('#empAccount').value.trim()
         };
 
+        // Ключ пароля АТС уходит ТОЛЬКО когда его трогали. Сервер отличает
+        // «не прислали» от «прислали пустое» по наличию ключа: первое оставляет
+        // пароль как есть, второе очищает его сознательно.
+        // Значение не тримится: пробел может быть частью пароля, а формат
+        // задаёт оператор связи — проверять его нам нечем.
+        if (pbxPasswordDirty) {
+            empData.pbxPassword = pbxInput().value;
+        }
+
         saving = true;
         const wasEditing = editingId !== null;
         let saved;
@@ -480,7 +559,16 @@ export function createCard(root, deps) {
                 : await storage.createEmployee(empData);
         } catch (err) {
             if (!isAlive()) return false;
-            if (!isAbort(err)) toast(err.message, 'error');
+            if (isAbort(err)) return false;
+            // «Номер 102 уже у Иванова И. И.» — ответ сервера, а не догадка
+            // формы: занятость проверяет база, и только она знает, кто занял.
+            // Текст идёт под поле, потому что исправлять надо именно его.
+            if (err.code === 'extension_taken') {
+                goToStep(1);
+                markFieldError('#empPbxExtension', err.message);
+                $('#empPbxExtension').focus();
+            }
+            toast(err.message, 'error');
             return false;
         } finally {
             saving = false;
@@ -537,6 +625,35 @@ export function createCard(root, deps) {
         form.addEventListener('input', (e) => {
             const field = e.target.closest && e.target.closest('.ui-field--error');
             if (field) field.classList.remove('ui-field--error');
+        });
+
+        // Кнопка «показать / скрыть». Значение приезжает ПО НАЖАТИЮ и только
+        // при редактировании: у нового сотрудника показывать нечего, кроме
+        // того, что человек сам набрал.
+        form.querySelector('[data-role="pbx-reveal"]').addEventListener('click', async () => {
+            const input = form.querySelector('#empPbxPassword');
+            if (pbxPasswordShown) {
+                setPbxShown(false);
+                return;
+            }
+            if (!input.value && pbxPasswordSet && editingId !== null) {
+                try {
+                    const answer = await storage.fetchPbxPassword(editingId);
+                    if (!isAlive() || !modal) return;
+                    input.value = (answer && answer.pbxPassword) || '';
+                } catch (err) {
+                    if (!isAbort(err)) toast(err.message, 'error');
+                    return;
+                }
+            }
+            setPbxShown(true);
+            syncPbxButton();
+        });
+
+        // Правка поля — единственный повод отправить пароль на сервер.
+        form.querySelector('#empPbxPassword').addEventListener('input', () => {
+            pbxPasswordDirty = true;
+            syncPbxButton();
         });
 
         form.querySelector('[data-role="generate-password"]').addEventListener('click', () => {

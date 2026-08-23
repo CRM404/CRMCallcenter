@@ -27,6 +27,11 @@ export function createStorage(api) {
 
         fetchEmployeeById: (id) => api.get(`/employees/${id}`),
 
+        // Пароль АТС не приходит вместе с карточкой — только отсюда и только по
+        // нажатию «показать». Точка одна на весь проект: когда появится вход,
+        // права навесятся на неё, а не на все ответы разом.
+        fetchPbxPassword: (id) => api.get(`/employees/${id}/pbx-password`),
+
         fetchManagerList: (excludeId) => api.get('/employees/list-for-manager', { excludeId }),
 
         createEmployee: (data) => api.post('/employees', data),

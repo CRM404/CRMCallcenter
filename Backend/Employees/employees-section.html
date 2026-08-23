@@ -247,9 +247,30 @@
                             <span class="ui-field__hint field-hint">С минутами, 24 часа. Смена через полночь — 22:00-06:00.</span>
                         </div>
 
+                        <!-- Телефония: пара в один ряд, после «Графика работы»
+                             и перед «Паролем» (паспорт Р4). Оба поля короткие и
+                             оба про телефон: в одном ряду они читаются как одна
+                             тема, а пустая пара выглядит как «этот человек не
+                             звонит», а не как две забытые строки. Пароль АТС
+                             стоит ПЕРЕД обычным паролем: два секрета по разным
+                             концам формы разводить незачем. -->
+                        <div class="ui-field">
+                            <label class="ui-field__label" for="empPbxExtension">Внутренний номер</label>
+                            <input class="ui-field__control" type="text" inputmode="numeric" id="empPbxExtension" placeholder="101">
+                            <span class="ui-field__hint">Добавочный на станции. Есть не у всех.</span>
+                        </div>
+                        <div class="ui-field ui-field--reveal">
+                            <label class="ui-field__label" for="empPbxPassword">Пароль АТС</label>
+                            <div class="ui-field__row">
+                                <input class="ui-field__control" type="password" id="empPbxPassword" placeholder="Не задан" autocomplete="new-password">
+                                <button type="button" class="ui-field__reveal" data-role="pbx-reveal" aria-label="Показать пароль" aria-pressed="false" disabled><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-eye"></use></svg></button>
+                            </div>
+                            <span class="ui-field__hint" data-role="pbx-password-hint">Кто знает — звонит за счёт компании.</span>
+                        </div>
+
                         <div class="ui-field ui-field--wide">
                             <label class="ui-field__label" for="empPassword">Пароль</label>
-                            <div class="password-row">
+                            <div class="ui-field__row">
                                 <input class="ui-field__control" type="text" id="empPassword" placeholder="Сгенерируйте пароль" readonly>
                                 <button type="button" class="ui-btn ui-btn--secondary" data-role="generate-password"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-shuffle"></use></svg>Сгенерировать</button>
                             </div>

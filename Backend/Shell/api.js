@@ -48,7 +48,14 @@ export async function request(path, options = {}) {
     }
 
     if (!response.ok) {
-        throw new Error((body && body.error) || 'Произошла ошибка на сервере');
+        // Текст ошибки остаётся тем же — его показывают тостом. Рядом едут код
+        // и статус: разделу иногда нужно не «что написать», а «куда показать».
+        // Первый случай — занятый добавочный: текст уходит ПОД ПОЛЕ, а не в
+        // тост, и отличить этот отказ от прочих можно только по коду.
+        const error = new Error((body && body.error) || 'Произошла ошибка на сервере');
+        if (body && body.code) error.code = body.code;
+        error.status = response.status;
+        throw error;
     }
     return body;
 }

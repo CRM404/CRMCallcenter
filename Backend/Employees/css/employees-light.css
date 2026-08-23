@@ -196,9 +196,10 @@
 .emp-wrap .page-btn.active { background: var(--e-accent); border-color: var(--e-accent); color: #fff; }
 .emp-wrap .page-btn:focus-visible { outline: 2px solid var(--e-accent); outline-offset: 1px; }
 
-/* ----- Карточка сотрудника: пароль и документы ----- */
-.emp-wrap .password-row { display: flex; gap: 8px; align-items: center; }
-.emp-wrap .password-row .ui-field__control { flex: 1; }
+/* ----- Карточка сотрудника: документы -----
+   Строка «поле и кнопка» (.password-row) отсюда убрана: тот же вид понадобился
+   паролю АТС, а следом понадобится «Настройкам», и третья копия одного вида —
+   это К36. Строка живёт в слое как .ui-field__row (часть 2 задачи «Звонки»). */
 
 .emp-wrap .docs-list { display: flex; flex-direction: column; gap: 10px; }
 .emp-wrap .file-upload-wrapper { display: flex; flex-direction: column; gap: 5px; }
