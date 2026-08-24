@@ -45,7 +45,6 @@ const FIELD_COLUMNS = [
     ['shiftEnd', 'shift_end'],
     ['password', 'password'],
     ['pbxExtension', 'pbx_extension'],
-    ['pbxExtensionId', 'pbx_extension_id'],
     ['country', 'country'],
     ['registration', 'registration'],
     ['passportSeries', 'passport_series'],
@@ -57,29 +56,48 @@ const FIELD_COLUMNS = [
     ['account', 'account']
 ];
 
-// ПАРОЛЬ АТС В ЭТОТ СПИСОК НЕ ВХОДИТ, И ЭТО ГЛАВНОЕ В ЧАСТИ 2.
+// КОЛОНКИ, КОТОРЫХ В СПИСКЕ ВЫШЕ БЫТЬ НЕ МОЖЕТ, И ЭТО ГЛАВНОЕ В ЧАСТИ 2.
 //
-// PUT собирает SET по всем FIELD_COLUMNS, а normalizeValue на отсутствующий
-// ключ возвращает null (см. ниже). Значит колонка из списка, которой нет в
-// теле запроса, ОБНУЛЯЕТСЯ. Для пароля АТС это смертельно: наружу он не
-// уходит (rowToEmployee), массовые действия шлют обратно весь объект оттуда —
-// и первое же «сменить статус» стёрло бы пароли всем операторам разом, молча.
+// ПРАВИЛО: колонка, для которой нет поля в форме, не имеет права стоять в
+// FIELD_COLUMNS. PUT собирает SET по всему списку, а normalizeValue на
+// отсутствующий ключ возвращает null (см. ниже) — то есть колонка, которую
+// форма не шлёт, ОБНУЛЯЕТСЯ при каждом сохранении карточки.
 //
-// Поэтому колонка обновляется отдельно и только тогда, когда ключ РЕАЛЬНО
-// пришёл: COALESCE($n, pbx_password), где $n = null, если ключа нет. Различаем
-// «не прислали» и «прислали пустое» по наличию ключа, а не по значению —
-// очистить пароль руками должно быть можно.
-const PBX_PASSWORD_KEY = 'pbxPassword';
+// Таких колонки две, и обе — телефония:
+//
+//   pbx_password     — наружу не уходит вовсе (rowToEmployee), значит форма и
+//       не может его вернуть. Первое же массовое «сменить статус» стёрло бы
+//       пароли всем операторам разом, молча.
+//   pbx_extension_id — поля в карточке нет и не будет: паспорт Р4 говорит
+//       «человеку не показывается». Сегодня колонка пуста и вреда нет, но
+//       заполнится она на этапе Е, и это идентификатор, которым делаются
+//       обращения вида /extension/{id}/record/{uuid}/storage_url/. Первое же
+//       сохранение карточки стёрло бы его, записи разговоров перестали бы
+//       доставаться, а искать стали бы в телефонии (находка куратора, 24.08).
+//
+// Обе обновляются отдельно и только когда ключ РЕАЛЬНО пришёл:
+// COALESCE($n, колонка), где $n = null, если ключа нет. Различаем «не
+// прислали» и «прислали пустое» по наличию ключа, а не по значению — очистить
+// значение руками должно быть можно.
+// Третьим стоит признак «обрезать пробелы по краям». У служебного
+// идентификатора они мусор, у ПАРОЛЯ — часть значения: формат пароля задаёт
+// оператор связи, и срезать у него крайний пробел значит молча испортить вход.
+const GUARDED_COLUMNS = [
+    ['pbxPassword', 'pbx_password', false],
+    ['pbxExtensionId', 'pbx_extension_id', true]
+];
 
-function pbxPasswordArg(body) {
-    if (!body || !Object.prototype.hasOwnProperty.call(body, PBX_PASSWORD_KEY)) {
+function guardedArg(body, key, trim) {
+    if (!body || !Object.prototype.hasOwnProperty.call(body, key)) {
         return { sent: false, value: null };
     }
-    const raw = body[PBX_PASSWORD_KEY];
+    const raw = body[key];
+    // Пустое значение — это очистка руками, а не «не прислали». Пробельная
+    // строка считается пустой в обоих случаях: как пароль она бессмысленна.
     if (raw === null || raw === undefined || String(raw).trim() === '') {
         return { sent: true, value: null };
     }
-    return { sent: true, value: String(raw) };
+    return { sent: true, value: trim ? String(raw).trim() : String(raw) };
 }
 
 function rowToEmployee(row) {
@@ -371,13 +389,15 @@ router.post('/', async (req, res) => {
     try {
         const values = FIELD_COLUMNS.map(([key]) => normalizeValue(key, req.body[key]));
         const columns = FIELD_COLUMNS.map(([, col]) => col);
-        // Пароль АТС — только если прислали. При создании разница невелика, но
-        // правило одно на оба маршрута: колонка трогается лишь по запросу.
-        const pbxPassword = pbxPasswordArg(req.body);
-        if (pbxPassword.sent) {
-            columns.push('pbx_password');
-            values.push(pbxPassword.value);
-        }
+        // Охраняемые колонки — только если прислали. При создании разница
+        // невелика, но правило одно на оба маршрута: колонка трогается лишь по
+        // запросу.
+        GUARDED_COLUMNS.forEach(([key, col, trim]) => {
+            const arg = guardedArg(req.body, key, trim);
+            if (!arg.sent) return;
+            columns.push(col);
+            values.push(arg.value);
+        });
         const placeholders = columns.map((_, i) => `$${i + 1}`);
         const result = await pool.query(
             `INSERT INTO employees (${columns.join(', ')}) VALUES (${placeholders.join(', ')}) RETURNING id`,
@@ -403,12 +423,14 @@ router.put('/:id', async (req, res) => {
         const setClauses = FIELD_COLUMNS.map(([, col], i) => `${col} = $${i + 1}`);
         // Ключа нет — приходит null, и COALESCE оставляет прежнее значение.
         // Ключ есть с пустым значением — приходит null, но ветка другая:
-        // колонка выставляется в NULL напрямую, то есть пароль очищен руками.
-        const pbxPassword = pbxPasswordArg(req.body);
-        values.push(pbxPassword.value);
-        setClauses.push(pbxPassword.sent
-            ? `pbx_password = $${values.length}`
-            : `pbx_password = COALESCE($${values.length}, pbx_password)`);
+        // колонка выставляется в NULL напрямую, то есть значение стёрто руками.
+        GUARDED_COLUMNS.forEach(([key, col, trim]) => {
+            const arg = guardedArg(req.body, key, trim);
+            values.push(arg.value);
+            setClauses.push(arg.sent
+                ? `${col} = $${values.length}`
+                : `${col} = COALESCE($${values.length}, ${col})`);
+        });
         values.push(req.params.id);
         const result = await pool.query(
             `UPDATE employees SET ${setClauses.join(', ')} WHERE id = $${values.length} RETURNING id`,

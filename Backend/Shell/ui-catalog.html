@@ -255,6 +255,24 @@
                 <span class="ui-field__hint">Кнопка работает: нажмите, значок сменится на <code>eye-off</code>.</span>
             </div>
 
+            <div class="ui-field ui-field--reveal ui-field--disabled">
+                <label class="ui-field__label" for="fPbxOff">Скрытое значение: неактивно</label>
+                <div class="ui-field__row">
+                    <input id="fPbxOff" class="ui-field__control" type="password" value="ueDq25UK9" disabled>
+                    <button type="button" class="ui-field__reveal" aria-label="Показать пароль" aria-pressed="false" disabled><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-eye"></use></svg></button>
+                </div>
+                <span class="ui-field__hint">Кнопка гаснет вместе с полем: она его часть, а не соседнее действие.</span>
+            </div>
+
+            <div class="ui-field ui-field--reveal">
+                <label class="ui-field__label" for="fPbxRo">Скрытое значение: только чтение</label>
+                <div class="ui-field__row">
+                    <input id="fPbxRo" class="ui-field__control" type="password" value="ueDq25UK9" readonly data-role="cat-reveal-input">
+                    <button type="button" class="ui-field__reveal" aria-label="Показать пароль" aria-pressed="false" data-role="cat-reveal"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-eye"></use></svg></button>
+                </div>
+                <span class="ui-field__hint">Менять нельзя, смотреть можно — это разные права, поэтому кнопка работает.</span>
+            </div>
+
             <div class="ui-field">
                 <label class="ui-field__label" for="fPbxNever">Скрытое значение: скрыто навсегда</label>
                 <div class="ui-field__row">

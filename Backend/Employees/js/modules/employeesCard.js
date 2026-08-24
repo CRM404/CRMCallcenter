@@ -252,6 +252,15 @@ export function createCard(root, deps) {
             field.appendChild(note);
         }
         note.textContent = message;
+        // К170: красная рамка — признак для глаза, а озвучке нужен атрибут.
+        // Подпись получает id и привязывается к полю, иначе экранный диктор
+        // прочитает метку и умолчит о причине. id от id поля: полей в окне
+        // двадцать девять, и общий id столкнул бы их между собой.
+        if (control.id) {
+            note.id = `${control.id}Error`;
+            control.setAttribute('aria-describedby', note.id);
+        }
+        control.setAttribute('aria-invalid', 'true');
     }
 
     /** Исправленное поле не должно оставаться красным. */
@@ -259,6 +268,13 @@ export function createCard(root, deps) {
         if (!modal) return;
         modal.box.querySelectorAll('.ui-field--error').forEach((field) => {
             field.classList.remove('ui-field--error');
+            // Атрибуты снимаются вместе с классом: поле, которое больше не
+            // ошибочно, не должно оставаться помеченным для озвучки.
+            const control = field.querySelector('.ui-field__control');
+            if (control) {
+                control.removeAttribute('aria-invalid');
+                control.removeAttribute('aria-describedby');
+            }
         });
     }
 
@@ -563,10 +579,14 @@ export function createCard(root, deps) {
             // «Номер 102 уже у Иванова И. И.» — ответ сервера, а не догадка
             // формы: занятость проверяет база, и только она знает, кто занял.
             // Текст идёт под поле, потому что исправлять надо именно его.
+            // К169: показанное под полем тостом не повторяется — правило слоя
+            // «ошибка живёт под полем, а не в тосте». Остальные отказы тостом
+            // показывать по-прежнему нужно: своего поля у них нет.
             if (err.code === 'extension_taken') {
                 goToStep(1);
                 markFieldError('#empPbxExtension', err.message);
                 $('#empPbxExtension').focus();
+                return false;
             }
             toast(err.message, 'error');
             return false;
@@ -666,8 +686,14 @@ export function createCard(root, deps) {
         // Enter в поле нажимает главную кнопку шага: на первом «Далее», на
         // втором «Сохранить». Это давала разметочная <form>, и терять привычку
         // из-за переезда незачем.
+        // К167: Enter с КНОПКИ принадлежит кнопке, а не шагу. Иначе нажатие
+        // Enter на кнопке показа пароля перехватывалось здесь и нажимало
+        // «Далее»: показ не переключался, а на заполненной карточке уезжал
+        // шаг 2, и пароль исчезал с экрана вместе с шагом 1. Пропускается по
+        // той же причине, что и TEXTAREA.
         form.addEventListener('keydown', (event) => {
-            if (event.key !== 'Enter' || event.target.tagName === 'TEXTAREA') return;
+            if (event.key !== 'Enter' || event.target.tagName === 'TEXTAREA'
+                || event.target.tagName === 'BUTTON') return;
             event.preventDefault();
             const btn = currentStep === 1 ? $('[data-role="next-step"]') : saveBtn();
             if (btn && !btn.disabled) btn.click();
