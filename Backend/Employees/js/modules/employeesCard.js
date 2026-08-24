@@ -334,7 +334,9 @@ export function createCard(root, deps) {
         body.className = 'ui-note__body';
         const title = document.createElement('div');
         title.className = 'ui-note__title';
-        title.textContent = 'Ключ не выдан';
+        // Заголовок один на все причины отказа, текст приходит с сервера —
+        // оба дословно из ответа куратора (zakaz_maketov.md, ответ 5 по Р1Б).
+        title.textContent = 'Не удалось выдать ключ';
         const text = document.createElement('div');
         text.className = 'ui-note__text';
         text.textContent = message;
