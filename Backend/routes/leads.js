@@ -10,6 +10,7 @@ const { pool } = require('../db');
 const { assignNextLeadForEmployee } = require('../services/leadDistribution');
 const { fetchStatusFlags, resolveCallStatusEffects } = require('../services/leadCallRules');
 const { withTransaction } = require('../services/dbTx');
+const { phoneColumnsFor, findLeadByPhone } = require('../services/phoneFix');
 
 const router = express.Router();
 
@@ -155,8 +156,11 @@ router.get('/', async (req, res) => {
         if (!employeeId) {
             return res.status(400).json({ error: 'Не передан employeeId' });
         }
+        // Слитые лиды оператору не показываются (часть 4): такой лид влит в
+        // другого, работать с ним нечего, а рядом со старшим он читался бы как
+        // тот же дубль, ради устранения которого слияние и делалось.
         const result = await pool.query(
-            'SELECT * FROM leads WHERE employee_id = $1 ORDER BY created_at DESC',
+            'SELECT * FROM leads WHERE employee_id = $1 AND merged_into_id IS NULL ORDER BY created_at DESC',
             [employeeId]
         );
         res.json(result.rows.map(rowToLead));
@@ -349,7 +353,9 @@ router.put('/:id', async (req, res) => {
             return res.status(400).json({ error: 'Не передан employeeId' });
         }
 
-        const existing = await pool.query('SELECT employee_id FROM leads WHERE id = $1', [req.params.id]);
+        const existing = await pool.query(
+            'SELECT employee_id, phone, phone_raw, phone_fix_verdict FROM leads WHERE id = $1',
+            [req.params.id]);
         if (existing.rows.length === 0) {
             return res.status(404).json({ error: 'Лид не найден' });
         }
@@ -359,6 +365,31 @@ router.put('/:id', async (req, res) => {
 
         const values = EDITABLE_FIELD_COLUMNS.map(([key]) => normalizeValue(key, req.body[key]));
         const setClauses = EDITABLE_FIELD_COLUMNS.map(([, col], i) => `${col} = $${i + 1}`);
+
+        // Приведение номера — то же самое, что в админской карточке (Б1.6):
+        // оператор правит телефон прямо в карточке клиента, и его правка обязана
+        // подчиняться тем же правилам. Иначе единый формат держался бы ровно до
+        // первого исправления «на слух».
+        const phoneIdx = EDITABLE_FIELD_COLUMNS.findIndex(([, col]) => col === 'phone');
+        if (phoneIdx !== -1) {
+            const phoneFix = await phoneColumnsFor(pool, req.body.phone, existing.rows[0]);
+            const twin = await findLeadByPhone(pool, phoneFix.phone, Number(req.params.id));
+            if (twin) {
+                return res.status(409).json({
+                    error: `Номер ${phoneFix.phone} уже у другого лида (№${twin.id}). ` +
+                        'Сохранить нельзя — скажите руководителю, лидов объединят',
+                    duplicateId: twin.id
+                });
+            }
+            values[phoneIdx] = phoneFix.phone;
+            values.push(phoneFix.phone_raw, phoneFix.phone_normalized, phoneFix.phone_fix_reason_id, phoneFix.phone_fix_verdict);
+            setClauses.push(
+                `phone_raw = $${values.length - 3}`,
+                `phone_normalized = $${values.length - 2}`,
+                `phone_fix_reason_id = $${values.length - 1}`,
+                `phone_fix_verdict = $${values.length}`
+            );
+        }
         values.push(req.params.id);
         await pool.query(
             `UPDATE leads SET ${setClauses.join(', ')}, updated_at = NOW() WHERE id = $${values.length}`,

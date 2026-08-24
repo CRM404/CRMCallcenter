@@ -14,6 +14,8 @@ const { pool } = require('../db');
 const auditContext = require('../services/auditContext');
 const { startOfDay, startOfNextDay, zonedParts } = require('../services/appTime');
 const { distributePendingLeads, findNewFunnelStatusId } = require('../services/leadDistribution');
+const { normalizePhone, normalizeForSearch } = require('../services/phoneFormat');
+const { phoneColumnsFor, findLeadByPhone, leadTitle } = require('../services/phoneFix');
 
 const router = express.Router();
 
@@ -440,11 +442,35 @@ router.get('/', async (req, res) => {
             }
         };
 
+        // СЛИТЫЕ ЛИДЫ В СПИСКАХ НЕ ПОЯВЛЯЮТСЯ (часть 4, решение куратора И58).
+        // Лид, влитый в другого, существует и находится по идентификатору, но в
+        // работе его нет: показывать его рядом со старшим значило бы вернуть тот
+        // самый дубль, ради устранения которого слияние и делалось.
+        conditions.push('l.merged_into_id IS NULL');
+
+        // ПОИСК ПО ЦИФРАМ, А НЕ ПО СТРОКЕ. Человек набирает «916 123», в базе
+        // лежит «+79161234567», а у неразобранного лида — сырая строка
+        // «8 (916) 123-45-67». Сравнивая строки, мы не находили ни одного из
+        // них. Сравниваем цифры с обеих сторон и смотрим ещё и в исходную
+        // строку: лид, чей номер не привёлся, обязан находиться по номеру.
+        // Параметр добавляется только когда цифры в запросе есть — иначе в
+        // запрос уехал бы лишний, а Postgres на это отвечает ошибкой.
+        const byDigits = (rawValue) => {
+            const digits = normalizeForSearch(rawValue).digits;
+            if (!digits) return null;
+            params.push(`%${digits}%`);
+            const i = params.length;
+            return `regexp_replace(l.phone, '\\D', '', 'g') LIKE $${i}
+                    OR regexp_replace(COALESCE(l.phone_raw, ''), '\\D', '', 'g') LIKE $${i}`;
+        };
+
         if (q && q.trim()) {
             params.push(`%${q.trim()}%`);
             const idx = params.length;
+            const digitsCondition = byDigits(q);
             conditions.push(`(l.last_name ILIKE $${idx} OR l.first_name ILIKE $${idx}
-                              OR l.middle_name ILIKE $${idx} OR l.phone ILIKE $${idx})`);
+                              OR l.middle_name ILIKE $${idx} OR l.phone ILIKE $${idx}
+                              ${digitsCondition ? 'OR ' + digitsCondition : ''})`);
         }
         if (fio && fio.trim()) {
             params.push(`%${fio.trim()}%`);
@@ -453,7 +479,9 @@ router.get('/', async (req, res) => {
         }
         if (phone && phone.trim()) {
             params.push(`%${phone.trim()}%`);
-            conditions.push(`l.phone ILIKE $${params.length}`);
+            const idx = params.length;
+            const digitsCondition = byDigits(phone);
+            conditions.push(`(l.phone ILIKE $${idx} ${digitsCondition ? 'OR ' + digitsCondition : ''})`);
         }
         if (sourceId) {
             params.push(sourceId);
@@ -551,16 +579,21 @@ router.get('/stats', async (req, res) => {
     }
 });
 
-// GET /api/leads-admin/check-phone?phone= — не блокирует ничего сама по
-// себе, фронт вызывает по blur поля телефона и показывает предупреждение.
+// GET /api/leads-admin/check-phone?phone= — фронт вызывает по blur поля
+// телефона и показывает предупреждение.
+//
+// СРАВНИВАЕТСЯ ПРИВЕДЁННЫЙ НОМЕР, а не то, что человек набрал (Б1.6). Иначе
+// «8 916 1234567» в форме и «+79161234567» в базе оставались бы для проверки
+// разными людьми — ровно та беда, ради которой затевалась часть.
 router.get('/check-phone', async (req, res) => {
     try {
-        const phone = (req.query.phone || '').trim();
-        if (!phone) {
+        const raw = (req.query.phone || '').trim();
+        if (!raw) {
             return res.json({ duplicateId: null });
         }
-        const result = await pool.query('SELECT id FROM leads WHERE phone = $1 LIMIT 1', [phone]);
-        res.json({ duplicateId: result.rows[0] ? result.rows[0].id : null });
+        const { phone } = normalizePhone(raw);
+        const twin = await findLeadByPhone(pool, phone);
+        res.json({ duplicateId: twin ? twin.id : null, phone, name: twin ? leadTitle(twin) : null });
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: 'Не удалось проверить номер' });
@@ -582,8 +615,13 @@ router.get('/:id', async (req, res) => {
 });
 
 // POST /api/leads-admin — создание вручную. Обязательны телефон, линия,
-// источник, минимум один оффер, скрипт и минимум один статус показа; дубль
-// по телефону не блокирует (фронт заранее предупреждает через check-phone).
+// источник, минимум один оффер, скрипт и минимум один статус показа.
+//
+// ДУБЛЬ ТЕПЕРЬ БЛОКИРУЕТ, и это часть 4 (Б1.5). Раньше здесь не было ни одной
+// сверки: дубль ловил фронт по blur через check-phone, а эндпоинт вставлял
+// строку молча. С уникальностью номера на уровне базы такое создание падало бы
+// голым 23505 — поэтому номер приводится, существующий ищется, и вместо ошибки
+// базы приходит 409 с идентификатором найденного (решение куратора И33).
 router.post('/', async (req, res) => {
     const client = await pool.connect();
     try {
@@ -600,10 +638,24 @@ router.post('/', async (req, res) => {
             return res.status(400).json({ error: lineError });
         }
 
+        const phoneFix = await phoneColumnsFor(client, req.body.phone, null);
+        const twin = await findLeadByPhone(client, phoneFix.phone);
+        if (twin) {
+            return res.status(409).json({
+                error: `Лид с номером ${phoneFix.phone} уже есть: ${leadTitle(twin)} (№${twin.id})`,
+                duplicateId: twin.id
+            });
+        }
+
         await client.query('BEGIN');
         const body = { ...req.body, repeatScriptId: validation.data.repeatScriptId };
         const values = FIELD_COLUMNS.map(([key]) => normalizeValue(key, body[key]));
         const columns = FIELD_COLUMNS.map(([, col]) => col);
+        // Номер кладётся приведённым, а рядом — что с ним стало: разобрался ли,
+        // по какой причине нет и как выглядела исходная строка.
+        values[columns.indexOf('phone')] = phoneFix.phone;
+        columns.push('phone_raw', 'phone_normalized', 'phone_fix_reason_id', 'phone_fix_verdict');
+        values.push(phoneFix.phone_raw, phoneFix.phone_normalized, phoneFix.phone_fix_reason_id, phoneFix.phone_fix_verdict);
         const placeholders = columns.map((_, i) => `$${i + 1}`);
         const result = await client.query(
             `INSERT INTO leads (${columns.join(', ')}) VALUES (${placeholders.join(', ')}) RETURNING id`,
@@ -635,7 +687,11 @@ router.put('/:id', async (req, res) => {
         }
         // Текущее назначение нужно, чтобы отличить «пользователь назначил
         // нового оператора» от «легаси-назначение просто приехало обратно».
-        const current = await client.query('SELECT employee_id FROM leads WHERE id = $1', [req.params.id]);
+        // Номер и его разбор — оттуда же: вердикт, вынесенный человеком, не
+        // должен стираться сохранением карточки по другому поводу.
+        const current = await client.query(
+            'SELECT employee_id, phone, phone_raw, phone_fix_verdict FROM leads WHERE id = $1',
+            [req.params.id]);
         if (current.rows.length === 0) {
             return res.status(404).json({ error: 'Лид не найден' });
         }
@@ -648,10 +704,28 @@ router.put('/:id', async (req, res) => {
             return res.status(400).json({ error: lineError });
         }
 
+        const phoneFix = await phoneColumnsFor(client, req.body.phone, current.rows[0]);
+        const twin = await findLeadByPhone(client, phoneFix.phone, Number(req.params.id));
+        if (twin) {
+            return res.status(409).json({
+                error: `Номер ${phoneFix.phone} уже у другого лида: ${leadTitle(twin)} (№${twin.id}). ` +
+                    'Сохранить нельзя — лидов можно объединить',
+                duplicateId: twin.id
+            });
+        }
+
         await client.query('BEGIN');
         const body = { ...req.body, repeatScriptId: validation.data.repeatScriptId };
         const values = FIELD_COLUMNS.map(([key]) => normalizeValue(key, body[key]));
         const setClauses = FIELD_COLUMNS.map(([, col], i) => `${col} = $${i + 1}`);
+        values[FIELD_COLUMNS.findIndex(([, col]) => col === 'phone')] = phoneFix.phone;
+        values.push(phoneFix.phone_raw, phoneFix.phone_normalized, phoneFix.phone_fix_reason_id, phoneFix.phone_fix_verdict);
+        setClauses.push(
+            `phone_raw = $${values.length - 3}`,
+            `phone_normalized = $${values.length - 2}`,
+            `phone_fix_reason_id = $${values.length - 1}`,
+            `phone_fix_verdict = $${values.length}`
+        );
         values.push(req.params.id);
         const result = await client.query(
             `UPDATE leads SET ${setClauses.join(', ')}, updated_at = NOW() WHERE id = $${values.length} RETURNING id`,
@@ -677,8 +751,19 @@ router.put('/:id', async (req, res) => {
 });
 
 // DELETE /api/leads-admin/:id — связки уходят каскадом.
+//
+// Кроме одного случая: в лида могли влить дубли (часть 4). Тогда удаление
+// отбивается связью, и вместо голого 23503 человек обязан получить объяснение —
+// сколько лидов в него влито и что они на него ссылаются.
 router.delete('/:id', async (req, res) => {
     try {
+        const merged = await pool.query(
+            'SELECT count(*)::int AS n FROM leads WHERE merged_into_id = $1', [req.params.id]);
+        if (merged.rows[0].n > 0) {
+            return res.status(400).json({
+                error: `Нельзя удалить: в этого лида влито ${merged.rows[0].n} дублей, они на него ссылаются`
+            });
+        }
         const result = await pool.query('DELETE FROM leads WHERE id = $1 RETURNING id', [req.params.id]);
         if (result.rows.length === 0) {
             return res.status(404).json({ error: 'Лид не найден' });
@@ -758,9 +843,9 @@ router.post('/bulk-update', async (req, res) => {
 // repeatScriptId?, offerIds, scriptStatusIds, poolEmployeeIds?, rows }.
 // Один набор параметров на всю партию. Каждая строка становится лидом со
 // статусом "Новый" и без оператора; сразу после вставки запускается
-// автораспределение. Дубли по телефону (внутри файла и против существующих
-// лидов) не блокируют вставку — только помечаются в ответе. Вся вставка +
-// связки + распределение — одной транзакцией.
+// автораспределение. Дубли по телефону — внутри файла и против существующих
+// лидов — с части 4 ПРОПУСКАЮТСЯ и называются в ответе двумя разными
+// причинами. Вся вставка + связки + распределение — одной транзакцией.
 router.post('/bulk-import', async (req, res) => {
     // fileName пришёл вместе с частью 3: в журнале партия разворачивается в
     // сводку, и «какой файл залили» — первый вопрос при разборе неудачной
@@ -811,31 +896,62 @@ router.post('/bulk-import', async (req, res) => {
 
         const insertedIds = [];
         const duplicates = [];
+        // Номера этой партии: дубль внутри файла ловится здесь, а не запросом к
+        // базе — вставленных строк в базе ещё нет до конца транзакции только для
+        // чужих соединений, но идти к ней за тем, что мы сами только что
+        // положили, незачем.
+        const seenInFile = new Map();
 
         for (let i = 0; i < rows.length; i++) {
             const row = rows[i];
-            const phone = row.phone ? String(row.phone).trim() : '';
-            if (!phone) continue; // без телефона строку вставить нельзя (leads.phone NOT NULL)
+            const raw = row.phone ? String(row.phone).trim() : '';
+            if (!raw) continue; // без телефона строку вставить нельзя (leads.phone NOT NULL)
 
-            const existing = await client.query('SELECT id FROM leads WHERE phone = $1 LIMIT 1', [phone]);
-            if (existing.rows.length > 0) {
-                duplicates.push({ row: i + 1, phone, existingLeadId: existing.rows[0].id });
+            // Приведение — то же самое, что в карточке и в миграции (Б1.6).
+            const phoneFix = await phoneColumnsFor(client, raw, null);
+
+            // ДУБЛЬ ПРОПУСКАЕТСЯ, А НЕ ВСТАВЛЯЕТСЯ (решение куратора И54).
+            // Раньше найденный дубль клался в отчёт, после чего INSERT шёл
+            // безусловно — с уникальностью номера (Б1.5) это уронило бы всю
+            // загрузку посреди тысячи строк. Сливать здесь тоже нельзя: правило
+            // «свежие побеждают» писалось про слияние, где решает человек, а не
+            // про файл, где не решает никто. Молча переписать карточку, которую
+            // ведёт оператор, — это потеря работы без следа.
+            //
+            // ПРИЧИНЫ ДВЕ, И НАЗЫВАТЬ ИХ ОДНИМ СЛОВОМ НЕЛЬЗЯ (И56): «дубль
+            // внутри файла» значит, что файл грязный, «дубль в базе» — что
+            // человек уже заведён. По отчёту должно быть понятно, что чинить.
+            const twinInFile = seenInFile.get(phoneFix.phone);
+            if (twinInFile !== undefined) {
+                duplicates.push({ row: i + 1, raw, phone: phoneFix.phone, kind: 'in-file', firstRow: twinInFile });
+                continue;
             }
+            const existing = await findLeadByPhone(client, phoneFix.phone);
+            if (existing) {
+                duplicates.push({ row: i + 1, raw, phone: phoneFix.phone, kind: 'in-base', existingLeadId: existing.id });
+                continue;
+            }
+            seenInFile.set(phoneFix.phone, i + 1);
 
             const inserted = await client.query(
                 `INSERT INTO leads (last_name, first_name, middle_name, phone, source_id, funnel_status_id,
-                                    line_type, script_id, repeat_script_id)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
+                                    line_type, script_id, repeat_script_id,
+                                    phone_raw, phone_normalized, phone_fix_reason_id, phone_fix_verdict)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING id`,
                 [
                     row.lastName ? String(row.lastName).trim() || null : null,
                     row.firstName ? String(row.firstName).trim() || null : null,
                     row.middleName ? String(row.middleName).trim() || null : null,
-                    phone,
+                    phoneFix.phone,
                     sourceId,
                     newStatusId,
                     req.body.lineType,
                     req.body.scriptId,
-                    repeatScriptId
+                    repeatScriptId,
+                    phoneFix.phone_raw,
+                    phoneFix.phone_normalized,
+                    phoneFix.phone_fix_reason_id,
+                    phoneFix.phone_fix_verdict
                 ]
             );
             insertedIds.push(inserted.rows[0].id);
@@ -857,11 +973,19 @@ router.post('/bulk-import', async (req, res) => {
         );
         const { assigned, queued } = batchStatus.rows[0];
 
+        // Сколько строк партии ушло в разбор — число этой части. Без него
+        // загрузка выглядела бы удачной целиком, а часть номеров молча лежала
+        // бы неприведённой: ровно то, чего требует не допускать план 5.3.
+        const unresolvedRows = await client.query(
+            'SELECT count(*)::int AS n FROM leads WHERE id = ANY($1::int[]) AND phone_normalized = false',
+            [insertedIds]);
+
         await client.query('COMMIT');
         res.status(201).json({
             imported: insertedIds.length,
             distributed: assigned,
             queued,
+            unresolved: unresolvedRows.rows[0].n,
             duplicates
         });
     } catch (err) {

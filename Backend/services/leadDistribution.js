@@ -25,6 +25,12 @@
 //    одновременно попросивших следующего, получили бы одну карточку и позвонили
 //    бы клиенту дважды подряд (dialog.md D1).
 // 4. opened_at ставит ТОЛЬКО выдача карточки в браузер, раздача её не трогает.
+//
+// Что изменила часть 4 «единый формат телефона»: у лида появился указатель
+// слияния, и СЛИТЫЙ ЛИД В РАЗДАЧЕ НЕ УЧАСТВУЕТ НИГДЕ. Он влит в старшего, номер
+// у него тот же самый — выдать его оператору значило бы позвонить человеку
+// второй раз по той же карточке. Условие добавлено в queueCondition (общее для
+// трёх запросов), в разбор осиротевших карточек и в выдачу уже открытой.
 
 const { withTransaction } = require('./dbTx');
 const { HELD_LEAD_RELEASE_HOURS } = require('./appTime');
@@ -40,8 +46,12 @@ async function findNewFunnelStatusId(db) {
 // расхождение между ними означало бы лида, который виден очереди, но не виден
 // проверке занятости оператора (или наоборот).
 function queueCondition(alias, statusParam) {
-    return `(${alias}.funnel_status_id = ${statusParam}
-             OR (${alias}.next_call_at IS NOT NULL AND ${alias}.next_call_at <= NOW()))`;
+    // Внешние скобки обязательны: условие подставляется в том числе внутрь OR
+    // (проверка занятости оператора), а AND связывает сильнее — без них «лид не
+    // слит» относилось бы только ко второй половине выражения.
+    return `((${alias}.funnel_status_id = ${statusParam}
+              OR (${alias}.next_call_at IS NOT NULL AND ${alias}.next_call_at <= NOW()))
+             AND ${alias}.merged_into_id IS NULL)`;
 }
 
 // Дольше всех свободен — первый в очереди (ORDER BY on_line_since ASC).
@@ -88,7 +98,7 @@ async function releaseHeldLeads(db, newStatusId) {
     // джойнится с employees, которых уже нет. До этой задачи лид просто вернулся
     // бы в общую раздачу, теперь пропадал бы навсегда — тот же класс потери, что
     // и лид с пустым статусом. Снимаем метку и возвращаем его в очередь.
-    await db.query('UPDATE leads SET opened_at = NULL, updated_at = NOW() WHERE employee_id IS NULL AND opened_at IS NOT NULL');
+    await db.query('UPDATE leads SET opened_at = NULL, updated_at = NOW() WHERE employee_id IS NULL AND opened_at IS NOT NULL AND merged_into_id IS NULL');
 
     const result = await db.query(
         `UPDATE leads l
@@ -184,7 +194,8 @@ async function assignNextLeadForEmployee(db, employeeId) {
         if (!employee) return { leadId: null, reason: 'no-employee' };
 
         const opened = await client.query(
-            'SELECT id FROM leads WHERE employee_id = $1 AND opened_at IS NOT NULL ORDER BY opened_at ASC LIMIT 1',
+            `SELECT id FROM leads WHERE employee_id = $1 AND opened_at IS NOT NULL
+               AND merged_into_id IS NULL ORDER BY opened_at ASC LIMIT 1`,
             [employeeId]
         );
         if (opened.rows.length > 0) {

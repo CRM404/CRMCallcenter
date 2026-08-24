@@ -263,6 +263,12 @@ export function createUpload(root, deps) {
             // из-за одного отсутствующего поля в ответе нельзя — человек
             // увидел бы красную ошибку сразу после успешной загрузки.
             $('[data-role="up-dupes"]').textContent = (result.duplicates || []).length;
+            // Строки, чей номер не привёлся к единому виду (часть 4). Лид
+            // заведён и работает, но номер лежит как пришёл и ждёт разбора —
+            // сказать об этом надо там же, где показаны остальные числа
+            // загрузки, иначе о них никто не узнает.
+            const unresolvedCell = $('[data-role="up-unresolved"]');
+            if (unresolvedCell) unresolvedCell.textContent = result.unresolved || 0;
             $('[data-role="upload-summary"]').hidden = false;
             // Партия уже в базе: отменять нечего, окно теперь просто закрывают.
             const leave = leaveBtn();
