@@ -1157,3 +1157,542 @@ CREATE TABLE IF NOT EXISTS tunnel_key_tokens (
 -- при перевыпуске, когда прежние ссылки надо погасить разом.
 CREATE INDEX IF NOT EXISTS idx_tunnel_key_tokens_employee
     ON tunnel_key_tokens (employee_id);
+
+-- ===========================================================================
+-- АУДИТ ИЗМЕНЕНИЙ (задача «Звонки», часть 3; план раздел 10, пункты Б2.1–Б2.12)
+--
+-- ПОЧЕМУ ТРИГГЕРЫ, А НЕ ЗАПИСЬ ИЗ КОДА. Мест, где проект меняет данные, около
+-- девяноста в восемнадцати файлах; только у лидов их десять. Часть неизбежно
+-- забудут — и получится журнал с дырами, которому при этом верят. Это хуже,
+-- чем никакого. Триггер обойти нельзя: правка прямым запросом в базу мимо CRM
+-- тоже попадёт в журнал, а новая таблица подключается сама (см. конец файла).
+--
+-- ЧЕГО ЭТОТ ЖУРНАЛ НЕ ДЕЛАЕТ. Он не доказывает, КТО изменил. Входа в систему в
+-- проекте нет: админка никого не спрашивает, оператор прикладывает свой номер
+-- к запросу, и сервер верит на слово. Поэтому автор записывается как «кем
+-- назвался браузер», и в интерфейсе так и пишется. Обвинять человека на
+-- основании этого журнала нельзя, пока не появится настоящий вход
+-- (решение владельца, план 10.3).
+--
+-- ЖУРНАЛ — ХРАНИЛИЩЕ ПЕРСОНАЛЬНЫХ ДАННЫХ НАРАВНЕ С САМОЙ БАЗОЙ. Урезать лиды
+-- бессмысленно: ради них аудит и затевается. Обращаться с ним надо так же, как
+-- с базой (Б2.12).
+-- ===========================================================================
+
+-- ----- Настройки приложения ------------------------------------------------
+-- Таблицу планировала часть 6, но части 3 она нужна раньше: журналу нужна дата
+-- включения, и она обязана лежать в настройке. Минимальная дата в самом журнале
+-- не годится — чистили журнал, и она соврёт (решение куратора, ответ 2 по Р5).
+-- Временный дом для одной строки — лишний переезд, поэтому таблица заводится
+-- здесь, а часть 6 наполняет её тумблерами и порогами.
+CREATE TABLE IF NOT EXISTS app_settings (
+    key VARCHAR PRIMARY KEY,
+    value TEXT,
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+-- Дата включения журнала. Ставится ОДИН РАЗ, при первом старте с аудитом, и
+-- дальше не трогается: по ней пустая вкладка в карточке говорит «до такого-то
+-- числа мы не записывали», а не «эту запись никто не менял». Без неё журнал
+-- врёт в самом чувствительном месте — там, где по нему судят о человеке.
+INSERT INTO app_settings (key, value)
+VALUES ('audit_started_at', to_char(NOW(), 'YYYY-MM-DD"T"HH24:MI:SS'))
+ON CONFLICT (key) DO NOTHING;
+
+-- ----- Правила: что писать, а что только отмечать --------------------------
+-- ОТДЕЛЬНОЙ ТАБЛИЦЕЙ, А НЕ КОНСТАНТОЙ В ТРИГГЕРЕ (Б2.4): уточнение списка не
+-- должно быть переделкой кода и миграцией. Правила нет — значит «пишем всё»:
+-- умолчание выбрано в сторону полноты, потому что забытое правило должно
+-- давать лишнюю запись, а не молчаливую дыру.
+--
+-- Строка с column_name = '*' говорит не про колонку, а про саму таблицу: как
+-- назвать запись и чью карточку открывать, если своей у неё нет.
+CREATE TABLE IF NOT EXISTS audit_rules (
+    id SERIAL PRIMARY KEY,
+    table_name VARCHAR NOT NULL,
+    column_name VARCHAR NOT NULL,
+    -- full — пишем значения; masked — «…4417 → …8802»; fact — только факт
+    -- изменения, значения нет. Для строки '*' не заполняется.
+    level VARCHAR,
+    -- Чем назвать запись в журнале. Список колонок через пробел: они берутся из
+    -- самой строки, без единого лишнего запроса. Только для строки '*'.
+    title_columns VARCHAR,
+    -- Колонка первичного ключа. У шести связочных таблиц своего id нет вовсе
+    -- (lead_offers, source_cpa_networks и другие), и угадывать его нельзя.
+    key_column VARCHAR,
+    -- Своей карточки у таблицы нет — открывать чужую. card_column указывает,
+    -- через какую колонку до неё добираться. Только для строки '*'.
+    card_table VARCHAR,
+    card_column VARCHAR,
+    UNIQUE (table_name, column_name)
+);
+
+-- ----- Карта расшифровки ссылок --------------------------------------------
+-- «Статус: 3 → 7» человеку не говорит ничего; нужно «Новый → Перезвон» (Б2.9).
+-- Таблицей по той же причине, что и правила: добавить справочник не должно
+-- означать правку кода (решение куратора, ответ 3 по Р5).
+CREATE TABLE IF NOT EXISTS audit_ref_map (
+    id SERIAL PRIMARY KEY,
+    table_name VARCHAR NOT NULL,
+    column_name VARCHAR NOT NULL,
+    ref_table VARCHAR NOT NULL,
+    -- Колонки имени через пробел — так же, как title_columns выше.
+    ref_title_columns VARCHAR NOT NULL,
+    UNIQUE (table_name, column_name)
+);
+
+-- ----- Партии массовых операций --------------------------------------------
+-- Одно действие человека обязано читаться как ОДНО, а не как пять тысяч (Б2.10).
+-- Импорт, раздача и разовые миграции заводят здесь строку и кладут её
+-- идентификатор в настройку соединения; триггер проставляет его каждой записи.
+--
+-- Имя файла живёт здесь, а не в пяти тысячах строк журнала: «какой файл залили»
+-- — первый вопрос при разборе неудачной загрузки (ответ 5 по Р5).
+CREATE TABLE IF NOT EXISTS audit_batches (
+    id UUID PRIMARY KEY,
+    kind VARCHAR NOT NULL,
+    title VARCHAR,
+    file_name VARCHAR,
+    started_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    actor_employee_id INTEGER REFERENCES employees(id) ON DELETE SET NULL,
+    actor_kind VARCHAR,
+    actor_name VARCHAR,
+    page VARCHAR
+);
+
+-- ----- Сам журнал ----------------------------------------------------------
+-- ОДНА СТРОКА НА ИЗМЕНЁННУЮ ЗАПИСЬ, внутри — только изменившиеся поля (Б2.2).
+-- Импорт пяти тысяч лидов по двадцать полей даёт пять тысяч строк, а не сто
+-- тысяч.
+--
+-- ПОМЕСЯЧНЫЕ ПОЛКИ ЗАЛОЖЕНЫ СРАЗУ, хотя удалять мы ничего не собираемся
+-- (хранение бессрочное, решение владельца п. 37). Причина не в удалении:
+-- аудит станет самой большой таблицей базы, крупнее лидов и звонков вместе, и
+-- без полок через год любая работа с ней — проверка, перенос, разбор — станет
+-- неподъёмной, а переделывать будет поздно (Б2.11).
+--
+-- Ключ составной (id, changed_at) — иначе нельзя: у секционированной таблицы
+-- ключ обязан содержать колонку секционирования.
+CREATE TABLE IF NOT EXISTS audit_log (
+    id BIGSERIAL,
+    changed_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    -- insert · update · delete. Седьмое поле, добавленное по замечанию
+    -- дизайн-сессии: без него создание неотличимо от правки, а удаление
+    -- выглядит как обнуление всех полей разом. Триггеру оно известно даром.
+    op VARCHAR NOT NULL,
+    table_name VARCHAR NOT NULL,
+    record_id VARCHAR,
+    -- Снимок имени записи на момент изменения. Именно снимок: запись могут
+    -- удалить, и тогда назвать её будет нечем — а журнал обязан оставаться
+    -- читаемым сам по себе.
+    record_title VARCHAR,
+    -- «Кем назвался браузер». actor_kind: browser — назвался и мы записали его
+    -- слова; none — назваться было некому (админка без входа); service —
+    -- импорт, раздача, миграция. Путать первое со вторым нельзя: написать
+    -- «указан браузером» там, где никто не назывался, значит придать журналу
+    -- достоверность, которой у него нет.
+    actor_employee_id INTEGER,
+    actor_kind VARCHAR NOT NULL DEFAULT 'none',
+    actor_name VARCHAR,
+    -- Ключ раздела оболочки, страница оператора или имя служебной операции.
+    page VARCHAR,
+    batch_id UUID,
+    -- МАССИВ, А НЕ ОБЪЕКТ, и это не вкусовщина: порядок полей внутри записи
+    -- обязан совпадать с порядком в её карточке — человек ищет поле по
+    -- знакомому месту. jsonb сортирует ключи объекта и порядок теряет, а
+    -- порядок элементов массива сохраняет. Массив собирается обходом to_json
+    -- строки, который идёт по колонкам таблицы.
+    --
+    -- Элемент: { field, level, before, after, beforeTitle, afterTitle }.
+    -- У уровня fact значений нет вовсе, у masked они обрезаны до хвоста.
+    changes JSONB NOT NULL,
+    PRIMARY KEY (id, changed_at)
+) PARTITION BY RANGE (changed_at);
+
+-- Отбор в журнале идёт по времени (единственная сортировка раздела), по записи
+-- (вкладка в карточке лида и сотрудника) и по партии (кнопка «Показать записи
+-- партии»).
+CREATE INDEX IF NOT EXISTS idx_audit_log_changed_at ON audit_log (changed_at DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_log_record ON audit_log (table_name, record_id, changed_at DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_log_batch ON audit_log (batch_id) WHERE batch_id IS NOT NULL;
+
+-- Полки на год вперёд и на месяц назад, идемпотентно. Прогоняется при каждом
+-- старте сервера — значит горизонт отодвигается сам.
+--
+-- ПОЧЕМУ НЕТ ПОЛКИ «ПО УМОЛЧАНИЮ». Она приняла бы запись за пределами
+-- горизонта и тем самым запретила бы завести полку на этот месяц потом: старт
+-- сервера падал бы, и чинить пришлось бы руками на бою. Без неё запись за
+-- горизонтом отобьётся ошибкой — а горизонт в год при том, что деплой
+-- перезапускает сервер, недостижим на практике.
+DO $$
+DECLARE
+    v_start date;
+    v_month date;
+    v_name text;
+BEGIN
+    v_start := date_trunc('month', NOW())::date - INTERVAL '1 month';
+    FOR i IN 0..13 LOOP
+        v_month := (v_start + (i || ' month')::interval)::date;
+        v_name := 'audit_log_' || to_char(v_month, 'YYYY_MM');
+        IF NOT EXISTS (SELECT 1 FROM pg_class WHERE relname = v_name) THEN
+            EXECUTE format(
+                'CREATE TABLE %I PARTITION OF audit_log FOR VALUES FROM (%L) TO (%L)',
+                v_name, v_month, (v_month + INTERVAL '1 month')::date);
+        END IF;
+    END LOOP;
+END $$;
+
+-- ----- Две вспомогательные функции ------------------------------------------
+
+-- Маскировка: «…4417». Видно, что менялось и на другое ли, самого реквизита в
+-- журнале нет. Короткое значение отдаётся одним многоточием — обрезать нечего,
+-- а показать четыре знака из четырёх значит не замаскировать ничего.
+CREATE OR REPLACE FUNCTION audit_mask(v text) RETURNS text AS $$
+    SELECT CASE
+        WHEN v IS NULL THEN NULL
+        WHEN length(v) <= 4 THEN '…'
+        ELSE '…' || right(v, 4)
+    END;
+$$ LANGUAGE sql IMMUTABLE;
+
+-- Имя записи справочника по её идентификатору: «3» превращается в «Новый».
+-- Имена колонок приходят из audit_ref_map и прогоняются через quote_ident — в
+-- выражение попадает только то, что является именем колонки.
+CREATE OR REPLACE FUNCTION audit_ref_title(p_table text, p_columns text, p_id text)
+RETURNS text AS $$
+DECLARE
+    v_cols text;
+    v_title text;
+BEGIN
+    IF p_id IS NULL OR p_id !~ '^\d+$' THEN RETURN NULL; END IF;
+    SELECT string_agg(quote_ident(c), ', ') INTO v_cols
+      FROM unnest(string_to_array(p_columns, ' ')) AS c;
+    EXECUTE format('SELECT concat_ws('' '', %s) FROM %I WHERE id = $1', v_cols, p_table)
+       INTO v_title USING p_id::int;
+    RETURN NULLIF(v_title, '');
+EXCEPTION WHEN OTHERS THEN
+    -- Справочник могли переименовать или колонка исчезла. Журнал от этого
+    -- ломаться не должен: запись уйдёт без расшифровки, но уйдёт.
+    RETURN NULL;
+END;
+$$ LANGUAGE plpgsql STABLE;
+
+-- ----- Сам триггер ---------------------------------------------------------
+-- Пишет ОДНУ строку на изменённую запись. Внутри — только те поля, что реально
+-- изменились: у обновления сравниваются старое и новое значение, совпавшие в
+-- журнал не попадают вовсе.
+--
+-- ЧИТАЕТ НАСТРОЙКИ СОЕДИНЕНИЯ, а не выдумывает автора. Приложение кладёт в них
+-- то, чем назвался браузер (services/auditContext.js); правка прямым запросом в
+-- базу настроек не ставит — и запись честно получает «назваться было некому».
+--
+-- ПАДЕНИЕ ЭТОГО ТРИГГЕРА РОНЯЕТ ДЕЙСТВИЕ ЧЕЛОВЕКА, и это выбрано сознательно:
+-- журнал с молчаливыми дырами хуже, чем отказ, который видно сразу.
+CREATE OR REPLACE FUNCTION audit_row_change() RETURNS trigger AS $audit$
+DECLARE
+    v_row json;
+    v_new json;
+    v_old json;
+    v_levels jsonb;
+    v_refs jsonb;
+    v_meta record;
+    v_field record;
+    v_before text;
+    v_after text;
+    v_level text;
+    v_changes jsonb := '[]'::jsonb;
+    v_item jsonb;
+    v_ref jsonb;
+    v_title text;
+    v_key_column text;
+    v_record_id text;
+    v_record_title text;
+    v_actor_id text;
+    v_batch text;
+BEGIN
+    IF TG_OP = 'DELETE' THEN
+        v_old := to_json(OLD);
+        v_row := v_old;
+    ELSIF TG_OP = 'INSERT' THEN
+        v_new := to_json(NEW);
+        v_row := v_new;
+    ELSE
+        v_new := to_json(NEW);
+        v_old := to_json(OLD);
+        v_row := v_new;
+    END IF;
+
+    -- Правила и карта расшифровки берутся ОДНИМ запросом на строку, а не одним
+    -- на колонку: у лида два десятка полей, и разница вышла бы двадцатикратной
+    -- на каждой вставке.
+    SELECT jsonb_object_agg(column_name, level)
+      INTO v_levels
+      FROM audit_rules
+     WHERE table_name = TG_TABLE_NAME AND column_name <> '*' AND level IS NOT NULL;
+
+    SELECT jsonb_object_agg(column_name, jsonb_build_object('t', ref_table, 'c', ref_title_columns))
+      INTO v_refs
+      FROM audit_ref_map
+     WHERE table_name = TG_TABLE_NAME;
+
+    SELECT title_columns, key_column
+      INTO v_meta
+      FROM audit_rules
+     WHERE table_name = TG_TABLE_NAME AND column_name = '*';
+
+    -- Чем назвать запись. Колонки берутся из самой строки — ни одного лишнего
+    -- запроса, и имя остаётся верным даже после удаления записи.
+    IF v_meta.title_columns IS NOT NULL THEN
+        SELECT string_agg(NULLIF(v_row ->> c, ''), ' ')
+          INTO v_record_title
+          FROM unnest(string_to_array(v_meta.title_columns, ' ')) AS c;
+    END IF;
+
+    -- Ключ записи. У связочных таблиц своего id нет вовсе, поэтому колонка
+    -- ключа задаётся правилом, а не угадывается.
+    v_key_column := COALESCE(v_meta.key_column, 'id');
+    v_record_id := v_row ->> v_key_column;
+
+    FOR v_field IN SELECT key, value FROM json_each_text(v_row) LOOP
+        IF TG_OP = 'UPDATE' THEN
+            v_before := v_old ->> v_field.key;
+            v_after := v_new ->> v_field.key;
+            CONTINUE WHEN v_before IS NOT DISTINCT FROM v_after;
+        ELSIF TG_OP = 'INSERT' THEN
+            v_before := NULL;
+            v_after := v_field.value;
+            -- Пустое поле новой записи в журнал не идёт: строка «поле: пусто →
+            -- пусто» не сообщает ничего, а полей у лида два десятка.
+            CONTINUE WHEN v_after IS NULL;
+        ELSE
+            v_before := v_field.value;
+            v_after := NULL;
+            CONTINUE WHEN v_before IS NULL;
+        END IF;
+
+        v_level := COALESCE(v_levels ->> v_field.key, 'full');
+        v_item := jsonb_build_object('field', v_field.key, 'level', v_level);
+
+        IF v_level = 'fact' THEN
+            -- Значения нет вовсе: пароль, пароль АТС, скан документа, шапка
+            -- бланка. Факт изменения при этом записан — иначе появится дыра.
+            NULL;
+        ELSIF v_level = 'masked' THEN
+            v_item := v_item
+                || jsonb_build_object('before', audit_mask(v_before), 'after', audit_mask(v_after));
+        ELSE
+            v_item := v_item || jsonb_build_object('before', v_before, 'after', v_after);
+            -- Расшифровка ссылки: «3 → 7» превращается в «Новый → Перезвон».
+            -- Имя кладётся РЯДОМ со значением, а не вместо него: справочник
+            -- могут переименовать, и журнал обязан помнить и то, и другое.
+            IF v_refs IS NOT NULL AND v_refs ? v_field.key THEN
+                v_ref := v_refs -> v_field.key;
+                v_title := audit_ref_title(v_ref ->> 't', v_ref ->> 'c', v_before);
+                IF v_title IS NOT NULL THEN
+                    v_item := v_item || jsonb_build_object('beforeTitle', v_title);
+                END IF;
+                v_title := audit_ref_title(v_ref ->> 't', v_ref ->> 'c', v_after);
+                IF v_title IS NOT NULL THEN
+                    v_item := v_item || jsonb_build_object('afterTitle', v_title);
+                END IF;
+            END IF;
+        END IF;
+
+        v_changes := v_changes || v_item;
+    END LOOP;
+
+    -- Обновление, которое ничего не изменило, записи не даёт: массовое
+    -- «перевести в неактивные» по уже неактивным иначе засыпало бы журнал
+    -- строками без единого отличия.
+    IF jsonb_array_length(v_changes) = 0 THEN
+        RETURN NULL;
+    END IF;
+
+    v_actor_id := NULLIF(current_setting('crm.audit_actor_id', true), '');
+    v_batch := NULLIF(current_setting('crm.audit_batch', true), '');
+
+    INSERT INTO audit_log (
+        op, table_name, record_id, record_title,
+        actor_employee_id, actor_kind, actor_name, page, batch_id, changes
+    ) VALUES (
+        lower(TG_OP), TG_TABLE_NAME, v_record_id, v_record_title,
+        CASE WHEN v_actor_id ~ '^\d+$' THEN v_actor_id::int ELSE NULL END,
+        COALESCE(NULLIF(current_setting('crm.audit_actor_kind', true), ''), 'none'),
+        NULLIF(current_setting('crm.audit_actor_name', true), ''),
+        NULLIF(current_setting('crm.audit_page', true), ''),
+        CASE WHEN v_batch ~ '^[0-9a-fA-F-]{36}$' THEN v_batch::uuid ELSE NULL END,
+        v_changes
+    );
+
+    RETURN NULL;
+END;
+$audit$ LANGUAGE plpgsql;
+
+-- ----- Наполнение правил и карты --------------------------------------------
+-- ПОД ЗАМКОМ applied_migrations, а не «вставить, если нет». Обе таблицы —
+-- рабочий инструмент: список исключений будут уточнять, и снятое человеком
+-- правило не должно воскресать при каждом старте сервера. Изнутри таблицы
+-- «правила ещё не заводили» и «правило сняли осознанно» неразличимы, поэтому
+-- замок внешний — ровно тот же приём, что у экранирования возражений выше.
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM applied_migrations WHERE id = '2026-08-24-audit-rules-seed') THEN
+
+    -- Правила о самих таблицах: чем назвать запись, где её ключ и чью карточку
+    -- открывать, если своей у таблицы нет. Список составлен по всем 37 внешним
+    -- ключам базы (тот же перечень нужен части 5).
+    INSERT INTO audit_rules (table_name, column_name, title_columns, key_column, card_table, card_column) VALUES
+        ('employees',                        '*', 'last_name first_name middle_name', 'id',          NULL,                 NULL),
+        ('leads',                            '*', 'last_name first_name phone',       'id',          NULL,                 NULL),
+        ('organizations',                    '*', 'name',                             'id',          NULL,                 NULL),
+        ('organization_bank_accounts',       '*', 'bank_name',                        'id',          'organizations',      'organization_id'),
+        ('organization_taxes',               '*', 'tax_type',                         'id',          'organizations',      'organization_id'),
+        ('departments',                      '*', 'name',                             'id',          'organizations',      'organization_id'),
+        ('cpa_networks',                     '*', 'name',                             'id',          NULL,                 NULL),
+        ('sources',                          '*', 'root_source city_region',          'id',          NULL,                 NULL),
+        ('ad_platforms',                     '*', 'name',                             'id',          NULL,                 NULL),
+        ('source_cpa_networks',              '*', NULL,                               'source_id',   'sources',            'source_id'),
+        ('real_estate_offers',               '*', 'name',                             'id',          NULL,                 NULL),
+        ('real_estate_offer_geo',            '*', 'city',                             'id',          'real_estate_offers', 'offer_id'),
+        ('real_estate_offer_segments',       '*', 'label',                            'id',          'real_estate_offers', 'offer_id'),
+        ('real_estate_offer_payment_methods','*', 'value',                            'id',          'real_estate_offers', 'offer_id'),
+        ('real_estate_offer_mortgage_types', '*', 'value',                            'id',          'real_estate_offers', 'offer_id'),
+        ('offers',                           '*', 'name',                             'id',          NULL,                 NULL),
+        ('lead_offers',                      '*', NULL,                               'lead_id',     'leads',              'lead_id'),
+        ('lead_script_statuses',             '*', NULL,                               'lead_id',     'leads',              'lead_id'),
+        ('lead_distribution_pool',           '*', NULL,                               'lead_id',     'leads',              'lead_id'),
+        ('lead_funnel_statuses',             '*', 'stage_name status_name',           'id',          NULL,                 NULL),
+        ('scripts',                          '*', 'title',                            'id',          NULL,                 NULL),
+        ('script_nodes',                     '*', 'label',                            'id',          'scripts',            'script_id'),
+        ('knowledge_articles',               '*', 'title',                            'id',          NULL,                 NULL),
+        ('knowledge_article_attachments',    '*', 'file_name',                        'id',          'knowledge_articles', 'article_id'),
+        ('knowledge_article_visibility',     '*', NULL,                               'article_id',  'knowledge_articles', 'article_id'),
+        ('employee_documents',               '*', 'file_name',                        'id',          'employees',          'employee_id'),
+        ('employee_schedule_days',           '*', 'day',                              'id',          'employees',          'employee_id'),
+        ('employee_state_intervals',         '*', 'state',                            'id',          'employees',          'employee_id'),
+        ('employee_column_settings',         '*', NULL,                               'employee_id', 'employees',          'employee_id'),
+        ('tunnel_key_tokens',                '*', NULL,                               'id',          'employees',          'employee_id'),
+        ('param_lists',                      '*', 'list_key value',                   'id',          NULL,                 NULL),
+        ('app_settings',                     '*', 'key',                              'key',         NULL,                 NULL),
+        ('audit_rules',                      '*', 'table_name column_name',           'id',          NULL,                 NULL),
+        ('audit_ref_map',                    '*', 'table_name column_name',           'id',          NULL,                 NULL);
+
+    -- УРОВЕНЬ «ТОЛЬКО ФАКТ» — здесь не приватность, а работоспособность.
+    -- Скан документа на 2 МБ превращается в ~2,7 МБ текста и записался бы
+    -- ДВАЖДЫ, до и после. Без этих шести строк журнал за месяц стал бы больше
+    -- самой базы: файлы в этом проекте лежат в базе целиком.
+    INSERT INTO audit_rules (table_name, column_name, level) VALUES
+        ('employees',                     'password',             'fact'),
+        ('employees',                     'pbx_password',         'fact'),
+        ('employee_documents',            'file_data',            'fact'),
+        ('knowledge_article_attachments', 'file_data',            'fact'),
+        ('organizations',                 'letterhead_header',    'fact'),
+        ('organizations',                 'letterhead_signature', 'fact'),
+
+    -- «Только факт» для текстовых персональных: маскировать бессмысленно,
+    -- значение не пишем.
+        ('employees',                     'issued_by',            'fact'),
+        ('employees',                     'issue_date',           'fact'),
+        ('employees',                     'registration',         'fact'),
+        ('organizations',                 'legal_address',        'fact'),
+        ('organizations',                 'actual_address',       'fact'),
+
+    -- УРОВЕНЬ «МАСКИРОВАННО» — решение владельца. Пишется как «…4417 → …8802»:
+    -- видно, что менялось и на другое ли, самих реквизитов в журнале нет.
+        ('employees',                     'passport_series',      'masked'),
+        ('employees',                     'passport_number',      'masked'),
+        ('employees',                     'inn',                  'masked'),
+        ('employees',                     'bank',                 'masked'),
+        ('employees',                     'account',              'masked'),
+        ('organization_bank_accounts',    'checking_account',     'masked'),
+        ('organization_bank_accounts',    'correspondent_account','masked'),
+        ('organization_bank_accounts',    'bik',                  'masked'),
+        ('organizations',                 'inn',                  'masked'),
+        ('organizations',                 'kpp',                  'masked'),
+        ('organizations',                 'ogrn',                 'masked');
+
+    -- ЧЕГО ЗДЕСЬ НЕТ И ПОЧЕМУ. Контакты сотрудника (phone, email, whatsapp,
+    -- telegram) пишутся ПОЛНОСТЬЮ: их подмена — как раз то, что аудит должен
+    -- ловить. Лиды тоже целиком, включая имя, телефон и комментарий: ради них
+    -- аудит и затевается. Оговорка при этом остаётся в силе — журнал становится
+    -- хранилищем персональных данных наравне с базой.
+
+    -- Карта расшифровки ссылок. «Статус: 3 → 7» человеку не говорит ничего.
+    INSERT INTO audit_ref_map (table_name, column_name, ref_table, ref_title_columns) VALUES
+        ('leads',                        'funnel_status_id',   'lead_funnel_statuses', 'status_name'),
+        ('leads',                        'employee_id',        'employees',            'last_name first_name'),
+        ('leads',                        'source_id',          'sources',              'root_source city_region'),
+        ('leads',                        'script_id',          'scripts',              'title'),
+        ('leads',                        'repeat_script_id',   'scripts',              'title'),
+        ('employees',                    'manager_id',         'employees',            'last_name first_name'),
+        ('employees',                    'tunnel_issued_by',   'employees',            'last_name first_name'),
+        ('sources',                      'platform_id',        'ad_platforms',         'name'),
+        ('real_estate_offers',           'network_id',         'cpa_networks',         'name'),
+        ('cpa_networks',                 'organization_id',    'organizations',        'name'),
+        ('departments',                  'organization_id',    'organizations',        'name'),
+        ('organization_bank_accounts',   'organization_id',    'organizations',        'name'),
+        ('organization_taxes',           'organization_id',    'organizations',        'name'),
+        ('source_cpa_networks',          'source_id',          'sources',              'root_source city_region'),
+        ('source_cpa_networks',          'cpa_network_id',     'cpa_networks',         'name'),
+        ('lead_offers',                  'lead_id',            'leads',                'last_name first_name'),
+        ('lead_offers',                  'offer_id',           'real_estate_offers',   'name'),
+        ('lead_script_statuses',         'lead_id',            'leads',                'last_name first_name'),
+        ('lead_script_statuses',         'funnel_status_id',   'lead_funnel_statuses', 'status_name'),
+        ('lead_distribution_pool',       'lead_id',            'leads',                'last_name first_name'),
+        ('lead_distribution_pool',       'employee_id',        'employees',            'last_name first_name'),
+        ('knowledge_articles',           'author_employee_id', 'employees',            'last_name first_name'),
+        ('knowledge_article_attachments','article_id',         'knowledge_articles',   'title'),
+        ('knowledge_article_visibility', 'article_id',         'knowledge_articles',   'title'),
+        ('knowledge_article_visibility', 'employee_id',        'employees',            'last_name first_name'),
+        ('script_nodes',                 'script_id',          'scripts',              'title'),
+        ('script_nodes',                 'parent_id',          'script_nodes',         'label'),
+        ('employee_documents',           'employee_id',        'employees',            'last_name first_name'),
+        ('employee_schedule_days',       'employee_id',        'employees',            'last_name first_name'),
+        ('employee_state_intervals',     'employee_id',        'employees',            'last_name first_name'),
+        ('employee_column_settings',     'employee_id',        'employees',            'last_name first_name'),
+        ('real_estate_offer_geo',        'offer_id',           'real_estate_offers',   'name'),
+        ('real_estate_offer_segments',   'offer_id',           'real_estate_offers',   'name'),
+        ('real_estate_offer_payment_methods','offer_id',       'real_estate_offers',   'name'),
+        ('real_estate_offer_mortgage_types', 'offer_id',       'real_estate_offers',   'name'),
+        ('tunnel_key_tokens',            'employee_id',        'employees',            'last_name first_name'),
+        ('tunnel_key_tokens',            'created_by',         'employees',            'last_name first_name');
+
+        INSERT INTO applied_migrations (id) VALUES ('2026-08-24-audit-rules-seed');
+    END IF;
+END $$;
+
+-- ----- Подключение триггера ко всем таблицам --------------------------------
+-- Перебором, а не списком: новая таблица подключается САМА, при первом же
+-- старте сервера после её появления. Иначе про аудит пришлось бы помнить при
+-- каждой новой функции — а помнят не всегда, и дыру в журнале потом не видно.
+--
+-- Не подключаются три:
+--   audit_log и его полки — иначе триггер писал бы сам о себе без конца;
+--   audit_batches         — служебная бухгалтерия партии, её содержимое видно
+--                           в самих записях партии;
+--   applied_migrations    — машинный учёт накатанных миграций, к человеку
+--                           отношения не имеет, строк даст много, смысла ноль
+--                           (решение куратора, ответ 9 по Р5).
+--
+-- Таблицы настроек и правил аудита В ЖУРНАЛ ПИШУТСЯ, и это отдельное решение:
+-- изменение настройки объясняет поведение системы, а «кто и когда решил
+-- что-то не записывать» обязано остаться записанным.
+DO $$
+DECLARE
+    v_table record;
+BEGIN
+    FOR v_table IN
+        SELECT c.relname AS name
+          FROM pg_class c
+          JOIN pg_namespace n ON n.oid = c.relnamespace
+         WHERE n.nspname = 'public'
+           AND c.relkind = 'r'
+           AND c.relname NOT IN ('audit_log', 'audit_batches', 'applied_migrations')
+           AND c.relname NOT LIKE 'audit_log_%'
+    LOOP
+        EXECUTE format('DROP TRIGGER IF EXISTS audit_trg ON %I', v_table.name);
+        EXECUTE format(
+            'CREATE TRIGGER audit_trg AFTER INSERT OR UPDATE OR DELETE ON %I'
+            || ' FOR EACH ROW EXECUTE FUNCTION audit_row_change()', v_table.name);
+    END LOOP;
+END $$;
