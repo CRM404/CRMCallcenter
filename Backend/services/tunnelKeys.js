@@ -186,7 +186,12 @@ function transliterate(value) {
  */
 function configFileName(employee) {
     const name = transliterate(employee.last_name);
-    const extension = String(employee.pbx_extension || '').trim();
+    // Добавочный прогоняется через тот же чистильщик, что и фамилия. Форма
+    // пропускает только цифры, но колонка VARCHAR, и значение может прийти
+    // прямой правкой базы или будущей загрузкой: на «1/2» имя файла вышло бы
+    // «…-1/2.conf». Браузер такое имя починит сам, а вот ИМЯ ТУННЕЛЯ у
+    // оператора останется сломанным навсегда (находка куратора, 24.08.2026).
+    const extension = transliterate(employee.pbx_extension);
     const parts = [name, extension].filter(Boolean);
     const base = parts.length ? parts.join('-') : `tunnel-${employee.id}`;
     return `${base}.conf`;

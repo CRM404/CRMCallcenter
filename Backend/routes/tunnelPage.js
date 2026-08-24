@@ -84,13 +84,22 @@ ${script}
 
 // --------------------------------------------------------------- состояния
 
-/** Лист «ссылка жива»: тексты дословно из паспорта Р1Б. */
+/**
+ * Лист «ссылка жива»: тексты дословно из паспорта Р1Б.
+ *
+ * ЗАГОЛОВОК — ПРОСТО ИМЯ, БЕЗ ПРЕДЛОГА (К172). «Настройка для Ахмедов Рустам»
+ * ломается о падеж: предлог требует родительного, а имя лежит в базе в
+ * именительном. Склонять фамилии система не умеет, и учить её этому ради
+ * одного заголовка не нужно — надстрочник над ним и так говорит, что это
+ * настройка связи. А фраза эта — первое, что оператор читает на единственной
+ * странице, которую видит за всю жизнь ключа.
+ */
 function aliveCard({ fullName, fileName, config, expiresLabel }) {
     const rows = config.split('\n').length;
     return `<div class="ui-solo">
     <div class="ui-solo__card">
         <div class="ui-solo__brand">CRM · настройка связи</div>
-        <h1 class="ui-solo__title">Настройка для ${esc(fullName)}</h1>
+        <h1 class="ui-solo__title">${esc(fullName)}</h1>
         <p class="ui-solo__text">Скачайте файл и внесите его в WireGuard — он поднимет защищённое соединение, без которого звонки из-за границы не проходят.</p>
         <button type="button" class="ui-btn ui-btn--lg ui-btn--block" data-role="download"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-download"></use></svg>Скачать настройку</button>
         <div class="ui-note">
@@ -341,7 +350,13 @@ router.get('/:token', async (req, res) => {
         // больше нигде не появляется: ни в базе, ни в файле, ни в журнале.
         // Сохраняем только открытую — её вносят в список допущенных руками.
         const pair = tunnelKeys.generateKeyPair();
-        await pool.query('UPDATE employees SET tunnel_public_key = $1 WHERE id = $2', [pair.publicKey, employee.id]);
+        // Вместе с ключом записывается ДАТА ЕГО ПОЯВЛЕНИЯ: карточка до этого
+        // момента говорит «Ссылка выдана», после — «Ключ получен», и это разные
+        // события, разнесённые часами (паспорт Р1Б редакции 3, состояния 4 и 5).
+        await pool.query(
+            'UPDATE employees SET tunnel_public_key = $1, tunnel_key_at = NOW() WHERE id = $2',
+            [pair.publicKey, employee.id]
+        );
 
         const config = tunnelKeys.buildConfig({
             privateKey: pair.privateKey,

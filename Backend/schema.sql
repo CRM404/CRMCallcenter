@@ -1103,6 +1103,12 @@ ALTER TABLE employees ADD COLUMN IF NOT EXISTS tunnel_address VARCHAR;
 ALTER TABLE employees ADD COLUMN IF NOT EXISTS tunnel_issued_at TIMESTAMP;
 ALTER TABLE employees ADD COLUMN IF NOT EXISTS tunnel_issued_by INTEGER REFERENCES employees(id) ON DELETE SET NULL;
 ALTER TABLE employees ADD COLUMN IF NOT EXISTS tunnel_revoked_at TIMESTAMP;
+-- Дата, когда пара РОДИЛАСЬ, то есть когда сотрудник открыл ссылку. Отдельно от
+-- tunnel_issued_at, потому что это разные события и между ними проходят часы:
+-- карточка показывает «Ссылка выдана ДД.ММ.ГГГГ» до открытия и «Ключ получен
+-- ДД.ММ.ГГГГ» после (паспорт Р1Б, редакция 3, состояния 4 и 5). Одной датой
+-- обойтись нельзя — она отвечала бы на два разных вопроса сразу.
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS tunnel_key_at TIMESTAMP;
 
 -- tunnel_public_key заполняется НЕ в момент выдачи ссылки, а в момент её
 -- открытия: пара рождается там же, где показывается. Пока ссылку не открыли,

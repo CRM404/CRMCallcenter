@@ -159,6 +159,13 @@ export function createCard(root, deps) {
     // СОСТОЯНИЕ ЖИВЁТ В ОТВЕТЕ СЕРВЕРА, а не в форме: выдача идёт отдельной
     // точкой и к сохранению карточки отношения не имеет. «Сохранить» ключа не
     // выдаёт и не отзывает.
+    //
+    // СОБЫТИЙ ДВА, И МЕЖДУ НИМИ ЧАСЫ. Сначала руководитель выдаёт ссылку —
+    // ключа ещё нет, потому что пара рождается в момент, когда сотрудник
+    // ссылку откроет. Потом ключ появляется, и только тогда его есть чем
+    // впустить на сервере. Карточка про эти два состояния говорит разное
+    // (паспорт Р1Б редакции 3, состояния 4 и 5), и вторая строка — открытый
+    // ключ — приезжает вместе со вторым из них.
     let tunnel = null;      // данные ключа с сервера
     let tunnelBusy = false; // идёт выдача
 
@@ -166,12 +173,15 @@ export function createCard(root, deps) {
     const TUNNEL_HINT_NONE = 'Настройка туннеля для звонков из-за рубежа. Нужна не всем: только тем, кто работает из другой страны.';
     const TUNNEL_HINT_ARCHIVED = 'Ключ отозван при отправке в архив. Вернёте сотрудника — выдадите заново.';
 
-    function tunnelHintIssued(byName) {
-        // «Выдал —» с прочерком, когда выдававший неизвестен: входа в проекте
-        // нет, и сегодня это единственный возможный случай. Пустое место
-        // читалось бы как недоделанная строка (паспорт Р1Б).
-        const who = byName || '—';
-        return `Настройка туннеля для звонков из-за рубежа. Выдал ${who} · заработает после того, как ключ впустят на сервере.`;
+    // «Не указан», а не прочерк, и не случайно: тем же словом об отсутствующем
+    // авторе говорит экран «История изменений» (паспорт Р5). Прочерк в середине
+    // фразы читается как обрыв, а два экрана про одно и то же обязаны говорить
+    // одинаково. Сегодня это единственный возможный случай: входа в проекте
+    // нет, автора не существует, и колонка `tunnel_issued_by` ждёт часть 3.
+    const TUNNEL_AUTHOR_UNKNOWN = 'не указан';
+
+    function tunnelHint(byName, tail) {
+        return `Настройка туннеля для звонков из-за рубежа. Выдал: ${byName || TUNNEL_AUTHOR_UNKNOWN} · ${tail}`;
     }
 
     /** Пилюля показывается только когда ей есть что сказать. */
@@ -184,9 +194,23 @@ export function createCard(root, deps) {
     }
 
     /**
-     * Пять состояний строки (паспорт Р1Б). Считаются из ОДНОГО источника —
-     * ответа сервера, — поэтому и живут в одном месте, а не разбегаются по
-     * обработчикам.
+     * Строка открытого ключа. Есть ровно в одном состоянии — «ключ получен».
+     * До открытия ссылки строки НЕТ ВОВСЕ, а не пустое поле и не прочерк:
+     * показывать место под значение, которого физически не существует, значит
+     * обещать его. В архиве её тоже нет — впускать нечего.
+     */
+    function renderTunnelKeyRow(show, value) {
+        const field = $('[data-role="tunnel-key-field"]');
+        const input = $('[data-role="tunnel-key-value"]');
+        if (!field || !input) return;
+        field.hidden = !show;
+        input.value = show ? (value || '') : '';
+    }
+
+    /**
+     * Шесть состояний строки (паспорт Р1Б редакции 3). Считаются из ОДНОГО
+     * источника — ответа сервера, — поэтому и живут в одном месте, а не
+     * разбегаются по обработчикам.
      */
     function renderTunnelRow() {
         const field = $('[data-role="tunnel-field"]');
@@ -196,7 +220,8 @@ export function createCard(root, deps) {
         if (!field || !button) return;
 
         const isNew = editingId === null;
-        const issued = Boolean(tunnel && tunnel.tunnelKeyIssued);
+        const linkIssued = Boolean(tunnel && tunnel.tunnelKeyIssued);
+        const keyBorn = linkIssued && Boolean(tunnel && tunnel.tunnelPublicKey);
         const wasRevoked = Boolean(tunnel && tunnel.tunnelRevokedAt);
         // Архив — состояние СОХРАНЁННОЕ. Выбранный, но не сохранённый статус
         // пилюлю не меняет: «Отозван» до отзыва было бы неправдой. Но кнопку
@@ -205,11 +230,12 @@ export function createCard(root, deps) {
         const goingToArchive = $('#empStatus') && $('#empStatus').value === 'inactive';
 
         field.classList.toggle('ui-field--disabled', archived);
+        label.textContent = tunnelBusy ? 'Выдаём…' : (linkIssued ? 'Выдать заново' : 'Выдать ключ');
 
         if (isNew) {
             setPill('tunnel-pill', '', 'mute');
             setPill('tunnel-address', '', 'mute');
-            label.textContent = 'Выдать ключ';
+            renderTunnelKeyRow(false);
             button.disabled = true;
             hint.textContent = TUNNEL_HINT_NEW;
             return;
@@ -217,22 +243,33 @@ export function createCard(root, deps) {
         if (archived) {
             setPill('tunnel-pill', wasRevoked ? `Отозван ${tunnel.tunnelRevokedAtLabel}` : 'Не выдан', 'mute');
             setPill('tunnel-address', '', 'mute');
+            renderTunnelKeyRow(false);
             label.textContent = 'Выдать ключ';
             button.disabled = true;
             hint.textContent = wasRevoked ? TUNNEL_HINT_ARCHIVED : TUNNEL_HINT_NONE;
             return;
         }
-        if (issued) {
-            setPill('tunnel-pill', `Выдан ${tunnel.tunnelIssuedAtLabel}`, 'ok');
+        if (keyBorn) {
+            setPill('tunnel-pill', `Ключ получен ${tunnel.tunnelKeyAtLabel}`, 'ok');
             setPill('tunnel-address', tunnel.tunnelAddress, 'mute');
-            label.textContent = tunnelBusy ? 'Выдаём…' : 'Выдать заново';
+            renderTunnelKeyRow(true, tunnel.tunnelPublicKey);
             button.disabled = tunnelBusy || goingToArchive;
-            hint.textContent = tunnelHintIssued(tunnel.tunnelIssuedByName);
+            hint.textContent = tunnelHint(tunnel.tunnelIssuedByName,
+                'заработает после того, как ключ впустят на сервере.');
+            return;
+        }
+        if (linkIssued) {
+            setPill('tunnel-pill', `Ссылка выдана ${tunnel.tunnelIssuedAtLabel}`, 'mute');
+            setPill('tunnel-address', tunnel.tunnelAddress, 'mute');
+            renderTunnelKeyRow(false);
+            button.disabled = tunnelBusy || goingToArchive;
+            hint.textContent = tunnelHint(tunnel.tunnelIssuedByName,
+                'ключ появится, когда сотрудник откроет ссылку.');
             return;
         }
         setPill('tunnel-pill', 'Не выдан', 'mute');
         setPill('tunnel-address', '', 'mute');
-        label.textContent = tunnelBusy ? 'Выдаём…' : 'Выдать ключ';
+        renderTunnelKeyRow(false);
         button.disabled = tunnelBusy || goingToArchive;
         hint.textContent = TUNNEL_HINT_NONE;
     }
@@ -241,8 +278,10 @@ export function createCard(root, deps) {
         tunnel = employee ? {
             status: employee.status,
             tunnelKeyIssued: employee.tunnelKeyIssued,
+            tunnelPublicKey: employee.tunnelPublicKey,
             tunnelAddress: employee.tunnelAddress,
             tunnelIssuedAtLabel: employee.tunnelIssuedAtLabel,
+            tunnelKeyAtLabel: employee.tunnelKeyAtLabel,
             tunnelIssuedByName: employee.tunnelIssuedByName,
             tunnelRevokedAt: employee.tunnelRevokedAt,
             tunnelRevokedAtLabel: employee.tunnelRevokedAtLabel
@@ -251,6 +290,19 @@ export function createCard(root, deps) {
         const block = $('[data-role="tunnel-link-block"]');
         if (block) { block.hidden = true; block.replaceChildren(); }
         renderTunnelRow();
+    }
+
+    /** Копирование машинного текста — приём один на ссылку и на ключ. */
+    async function copyMachineText(input, okMessage, failMessage) {
+        try {
+            await navigator.clipboard.writeText(input.value);
+            toast(okMessage, 'success');
+        } catch (e) {
+            // Буфер обмена недоступен без защищённого соединения и без
+            // разрешения. Молчать нельзя: человек нажал и ждёт результата.
+            input.select();
+            toast(failMessage, 'error');
+        }
     }
 
     /**
@@ -282,9 +334,10 @@ export function createCard(root, deps) {
         body.append(title, text);
         note.appendChild(body);
 
+        // Отступ строки задан в css раздела, а не атрибутом разметки: значение,
+        // живущее в style=, при следующей правке раскладки никто не найдёт (К174).
         const row = document.createElement('div');
         row.className = 'ui-field__row';
-        row.style.marginTop = 'var(--ui-space-3)';
         const input = document.createElement('input');
         input.type = 'text';
         input.className = 'ui-field__control';
@@ -298,17 +351,8 @@ export function createCard(root, deps) {
         // Подпись кнопки после нажатия НЕ меняется: подменённая подпись
         // читается как смена смысла кнопки. О результате говорит тост.
         copy.append('Скопировать');
-        copy.addEventListener('click', async () => {
-            try {
-                await navigator.clipboard.writeText(link);
-                toast('Ссылка скопирована', 'success');
-            } catch (e) {
-                // Буфер обмена недоступен без защищённого соединения и без
-                // разрешения. Молчать нельзя: человек нажал и ждёт результата.
-                input.select();
-                toast('Браузер не дал доступ к буферу обмена — ссылка выделена, скопируйте её сами', 'error');
-            }
-        });
+        copy.addEventListener('click', () => copyMachineText(input, 'Ссылка скопирована',
+            'Браузер не дал доступ к буферу обмена — ссылка выделена, скопируйте её сами'));
         row.append(input, copy);
 
         const hint = document.createElement('span');
@@ -356,13 +400,24 @@ export function createCard(root, deps) {
             const extension = $('#empPbxExtension').value.trim();
             const who = [`${$('#empLastName').value.trim()} ${$('#empFirstName').value.trim()}`.trim(),
                 extension ? `доб. ${extension}` : null].filter(Boolean).join(', ');
+            // Тело — ДВА абзаца, а не один (К173): последствие и оговорка про
+            // новую ссылку — разные мысли, и слитые в один абзац они читаются
+            // как одна длинная. confirm() отдаёт message в openModal, а тот
+            // принимает узел, поэтому собираем фрагмент.
+            const message = document.createDocumentFragment();
+            const first = document.createElement('p');
+            first.textContent = 'Прежний ключ перестанет работать сразу. Пока сотрудник не поставит новый, звонить из-за границы он не сможет.';
+            const second = document.createElement('p');
+            second.textContent = 'Новая ссылка будет показана один раз и сгорит при первом открытии.';
+            message.append(first, second);
+
             const ok = await confirmDanger({
                 title: 'Выдать новый ключ?',
                 // Подпись называет, КОМУ выдаём. Вопрос в заголовке,
                 // последствие в тексте, объект в подписи — иначе окно
                 // подтверждения читается как «вы уверены?».
                 sub: who,
-                message: 'Прежний ключ перестанет работать сразу. Пока сотрудник не поставит новый, звонить из-за границы он не сможет. Новая ссылка будет показана один раз и сгорит при первом открытии.',
+                message,
                 confirmLabel: 'Выдать новый',
                 cancelLabel: 'Отмена'
             });
@@ -384,10 +439,15 @@ export function createCard(root, deps) {
             if (isAlive() && modal) renderTunnelRow();
         }
 
+        // Ссылка отдана — но ключа ещё нет и не будет, пока сотрудник её не
+        // откроет. Прежний открытый ключ при перевыпуске обнулён на сервере,
+        // и карточка обязана показать то же самое.
         tunnel = {
             ...(tunnel || {}),
             status: 'active',
             tunnelKeyIssued: true,
+            tunnelPublicKey: null,
+            tunnelKeyAtLabel: null,
             tunnelAddress: issued.address,
             tunnelIssuedAtLabel: issued.issuedAtLabel,
             tunnelRevokedAt: null,
@@ -396,6 +456,7 @@ export function createCard(root, deps) {
         renderTunnelRow();
         showTunnelLink(issued);
     }
+
 
     // ------------------------------------------------------------ форма
 
@@ -930,6 +991,14 @@ export function createCard(root, deps) {
         // Ключ туннеля: выдача и перевыпуск. Кнопка одна на оба случая —
         // заведение и редактирование в проекте одно и то же окно.
         form.querySelector('[data-role="tunnel-issue"]').addEventListener('click', issueTunnelKey);
+
+        // Открытый ключ копируют, а не читают глазами: он нужен целиком и
+        // без опечаток тому, кто впускает его на сервере.
+        form.querySelector('[data-role="tunnel-key-copy"]').addEventListener('click', () => {
+            copyMachineText(form.querySelector('[data-role="tunnel-key-value"]'),
+                'Открытый ключ скопирован',
+                'Браузер не дал доступ к буферу обмена — ключ выделен, скопируйте его сами');
+        });
 
         // Статус влияет на кнопку выдачи: тому, кого сейчас отправят в архив,
         // ключ выдавать незачем. Пилюлю выбранный статус не трогает — она про

@@ -301,6 +301,30 @@
                             <span class="ui-field__hint" data-role="tunnel-hint"></span>
                             <div data-role="tunnel-link-block" hidden></div>
                         </div>
+
+                        <!-- Открытый ключ — ВТОРАЯ строка, появляется только
+                             после того, как сотрудник открыл ссылку и пара
+                             родилась. До этого строки нет вовсе: показывать
+                             место под значение, которого физически не
+                             существует, значит обещать его (паспорт Р1Б).
+
+                             Ключ на экране — не оплошность. Секрет это закрытая
+                             половина; открытая и так лежит в настройке у
+                             оператора и в конфиге сервера, а нужна она тому,
+                             кто впускает ключ руками: без неё круг не
+                             замыкается без похода в базу запросом.
+
+                             Поле, а не пилюля: пилюлю не выделить и не
+                             скопировать, а ключ существует ровно для того,
+                             чтобы его скопировали. -->
+                        <div class="ui-field ui-field--wide ui-field--mono" data-role="tunnel-key-field" hidden>
+                            <span class="ui-field__label">Открытый ключ</span>
+                            <div class="ui-field__row">
+                                <input class="ui-field__control" type="text" data-role="tunnel-key-value" readonly aria-label="Открытый ключ туннеля">
+                                <button type="button" class="ui-btn ui-btn--secondary" data-role="tunnel-key-copy"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-copy"></use></svg>Скопировать</button>
+                            </div>
+                            <span class="ui-field__hint">Впустите этот ключ на сервере — до этого туннель не поднимется.</span>
+                        </div>
                     </div>
                 </div>
 

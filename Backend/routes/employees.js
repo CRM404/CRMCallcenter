@@ -144,14 +144,26 @@ function rowToEmployee(row) {
         // tunnelKeyIssued — «ключ выдан и не отозван». Отдельным признаком, а
         // не сравнением дат на клиенте: правило одно, и живёт оно здесь.
         tunnelAddress: row.tunnel_address,
+        // ОТКРЫТЫЙ КЛЮЧ УХОДИТ НАРУЖУ, и это не оплошность. Секрет — закрытая
+        // половина, а открытая лежит и в настройке у оператора, и в конфиге
+        // сервера. Показывать её надо: впуск в [Peer] делается руками, и тому,
+        // кто его делает, нужны ровно две вещи — адрес и открытый ключ. Без
+        // ключа выданный ключ некому довести до рабочего состояния, не заходя
+        // в базу запросом (находка куратора, паспорт Р1Б редакции 3).
+        tunnelPublicKey: row.tunnel_public_key,
         tunnelIssuedAt: row.tunnel_issued_at,
         // Подписи дат считает СЕРВЕР и сразу по Москве. На клиенте это
         // означало бы разбор строки без пояса и показ в поясе браузера:
         // руководитель в Ташкенте увидел бы у пилюли соседний день.
         tunnelIssuedAtLabel: row.tunnel_issued_at ? tunnelKeys.formatDate(row.tunnel_issued_at) : null,
-        tunnelIssuedByName: row.tunnel_issued_by_name || null,
+        // Даты две, потому что событий два: ссылку выдали и ключ родился. Между
+        // ними проходят часы, и карточка про них говорит разное.
+        tunnelKeyAt: row.tunnel_key_at,
+        tunnelKeyAtLabel: row.tunnel_key_at ? tunnelKeys.formatDate(row.tunnel_key_at) : null,
         tunnelRevokedAt: row.tunnel_revoked_at,
         tunnelRevokedAtLabel: row.tunnel_revoked_at ? tunnelKeys.formatDate(row.tunnel_revoked_at) : null,
+        // «Ссылка выдана и не отозвана». Есть ли уже сама пара — отдельный
+        // вопрос, на него отвечает tunnelPublicKey.
         tunnelKeyIssued: Boolean(row.tunnel_address) && !row.tunnel_revoked_at,
         country: row.country,
         registration: row.registration,
@@ -197,12 +209,9 @@ function normalizeValue(key, value) {
 // ответа для POST/PUT (INSERT/UPDATE ... RETURNING * не знает про manager_name).
 async function fetchEmployeeWithManager(id) {
     const result = await pool.query(
-        `SELECT e.*,
-                CASE WHEN m.id IS NOT NULL THEN m.last_name || ' ' || m.first_name ELSE NULL END AS manager_name,
-                CASE WHEN ib.id IS NOT NULL THEN ib.last_name || ' ' || LEFT(ib.first_name, 1) || '.' ELSE NULL END AS tunnel_issued_by_name
+        `SELECT e.*, CASE WHEN m.id IS NOT NULL THEN m.last_name || ' ' || m.first_name ELSE NULL END AS manager_name
          FROM employees e
          LEFT JOIN employees m ON e.manager_id = m.id
-         LEFT JOIN employees ib ON e.tunnel_issued_by = ib.id
          WHERE e.id = $1`,
         [id]
     );
@@ -352,12 +361,9 @@ router.get('/', async (req, res) => {
 
         const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
         const result = await pool.query(
-            `SELECT e.*,
-                    CASE WHEN m.id IS NOT NULL THEN m.last_name || ' ' || m.first_name ELSE NULL END AS manager_name,
-                    CASE WHEN ib.id IS NOT NULL THEN ib.last_name || ' ' || LEFT(ib.first_name, 1) || '.' ELSE NULL END AS tunnel_issued_by_name
+            `SELECT e.*, CASE WHEN m.id IS NOT NULL THEN m.last_name || ' ' || m.first_name ELSE NULL END AS manager_name
              FROM employees e
              LEFT JOIN employees m ON e.manager_id = m.id
-             LEFT JOIN employees ib ON e.tunnel_issued_by = ib.id
              ${whereClause}
              ORDER BY e.id`,
             params
@@ -620,6 +626,13 @@ router.post('/:id/tunnel-key', async (req, res) => {
             [employee.id]
         );
 
+        // employees.tunnel_issued_by и tunnel_key_tokens.created_by ЗАВЕДЕНЫ, НО НЕ
+        // ЗАПОЛНЯЮТСЯ, и это надо знать вслух. Входа в проекте нет, автора не
+        // существует, а имя, которое никто не проверял, хуже честного «не
+        // указан». Колонки оставлены готовым местом: их займёт часть 3, когда
+        // появится, кому писать. Соединение с ними наружу не выведено намеренно
+        // — запрос, способный вернуть только NULL, стоит в договоре API как
+        // обещание (находка куратора, 24.08.2026).
         const token = tunnelKeys.generateToken();
         const expiresAt = new Date(Date.now() + settings.ttlHours * 3600 * 1000);
         await client.query(
@@ -633,7 +646,7 @@ router.post('/:id/tunnel-key', async (req, res) => {
         const saved = await client.query(
             `UPDATE employees
                 SET tunnel_address = $1, tunnel_issued_at = NOW(), tunnel_revoked_at = NULL,
-                    tunnel_public_key = NULL
+                    tunnel_public_key = NULL, tunnel_key_at = NULL
               WHERE id = $2
               RETURNING tunnel_issued_at`,
             [address, employee.id]
