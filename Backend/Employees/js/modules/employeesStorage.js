@@ -32,6 +32,10 @@ export function createStorage(api) {
         // права навесятся на неё, а не на все ответы разом.
         fetchPbxPassword: (id) => api.get(`/employees/${id}/pbx-password`),
 
+        // Выдать ключ туннеля. Ответ приходит ОДИН РАЗ и содержит ссылку;
+        // больше её взять неоткуда — ни в карточке, ни в списке её нет.
+        issueTunnelKey: (id) => api.post(`/employees/${id}/tunnel-key`),
+
         fetchManagerList: (excludeId) => api.get('/employees/list-for-manager', { excludeId }),
 
         createEmployee: (data) => api.post('/employees', data),

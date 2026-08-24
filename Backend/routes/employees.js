@@ -145,8 +145,13 @@ function rowToEmployee(row) {
         // не сравнением дат на клиенте: правило одно, и живёт оно здесь.
         tunnelAddress: row.tunnel_address,
         tunnelIssuedAt: row.tunnel_issued_at,
+        // Подписи дат считает СЕРВЕР и сразу по Москве. На клиенте это
+        // означало бы разбор строки без пояса и показ в поясе браузера:
+        // руководитель в Ташкенте увидел бы у пилюли соседний день.
+        tunnelIssuedAtLabel: row.tunnel_issued_at ? tunnelKeys.formatDate(row.tunnel_issued_at) : null,
         tunnelIssuedByName: row.tunnel_issued_by_name || null,
         tunnelRevokedAt: row.tunnel_revoked_at,
+        tunnelRevokedAtLabel: row.tunnel_revoked_at ? tunnelKeys.formatDate(row.tunnel_revoked_at) : null,
         tunnelKeyIssued: Boolean(row.tunnel_address) && !row.tunnel_revoked_at,
         country: row.country,
         registration: row.registration,

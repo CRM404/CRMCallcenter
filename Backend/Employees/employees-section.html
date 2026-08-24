@@ -275,6 +275,32 @@
                                 <button type="button" class="ui-btn ui-btn--secondary" data-role="generate-password"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-shuffle"></use></svg>Сгенерировать</button>
                             </div>
                         </div>
+
+                        <!-- Ключ туннеля — ПОСЛЕДНЯЯ строка шага 1, сразу после
+                             «Пароля», во всю ширину (паспорт Р1Б). Не между
+                             «Внутренним номером» и «Паролем АТС»: пару свёл
+                             паспорт Р4 намеренно, а ключ — это ДЕЙСТВИЕ, а не
+                             поле. Шаг читается «кто это» → «как связаться» →
+                             «как входит», и ключ туннеля про вход.
+
+                             Метка тегом span, а не label: подписывать нечего,
+                             поля ввода в строке нет. Это единственное отличие
+                             разметки от обычного поля.
+
+                             Пилюли и подсказку рисует карточка по состоянию:
+                             их пять, и разметкой они не задаются. Блок со
+                             ссылкой раскрывается здесь же, на месте строки, и
+                             живёт, пока открыто окно. -->
+                        <div class="ui-field ui-field--wide" data-role="tunnel-field">
+                            <span class="ui-field__label">Ключ туннеля</span>
+                            <div class="ui-field__row" data-role="tunnel-row">
+                                <span class="ui-pill ui-pill--mute" data-role="tunnel-pill" hidden></span>
+                                <span class="ui-pill ui-pill--mute" data-role="tunnel-address" hidden></span>
+                                <button type="button" class="ui-btn ui-btn--secondary" data-role="tunnel-issue" disabled><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-shield"></use></svg><span data-role="tunnel-issue-label">Выдать ключ</span></button>
+                            </div>
+                            <span class="ui-field__hint" data-role="tunnel-hint"></span>
+                            <div data-role="tunnel-link-block" hidden></div>
+                        </div>
                     </div>
                 </div>
 

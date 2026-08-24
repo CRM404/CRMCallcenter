@@ -277,6 +277,12 @@ export function openModal(opts = {}) {
 export function confirm(opts = {}) {
     const {
         title = 'Подтвердите действие',
+        // Подпись под заголовком: ОБЪЕКТ действия. Вопрос стоит в заголовке,
+        // последствие в тексте, а кого именно это касается — здесь. У
+        // openModal она была с самого начала, а до confirm() не доходила: окно
+        // подтверждения могло назвать объект только внутри текста, где он
+        // теряется (паспорт Р1Б, окно перевыпуска ключа).
+        sub = '',
         message = '',
         confirmLabel = 'Да',
         cancelLabel = 'Отмена',
@@ -287,6 +293,7 @@ export function confirm(opts = {}) {
 
     return openModal({
         title,
+        sub,
         body: message,
         scope,
         screen,

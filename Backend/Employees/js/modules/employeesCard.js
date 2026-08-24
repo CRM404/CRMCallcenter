@@ -21,6 +21,7 @@
 // фамилией закрывалось молча — именно той дверью, которую нажимают не глядя.
 
 import { openModal } from '/ui/modal.js';
+import { iconNode } from '/ui/icons.js';
 import { DOCUMENT_TYPE_MAP } from './employeesStorage.js';
 import { validatePhone, validateEmail, formatPhone } from './employeesValidation.js';
 import { parseShiftInput, parseWorkDaysInput, formatShiftInput } from './employeesScheduleTime.js';
@@ -76,7 +77,7 @@ function readFileAsDataUrl(file) {
  * @param {Object}      deps  { storage, toast, confirm, isAlive, isAbort, onSaved }
  */
 export function createCard(root, deps) {
-    const { storage, toast, confirm, isAlive, isAbort, onSaved } = deps;
+    const { storage, toast, confirm, confirmDanger, isAlive, isAbort, onSaved } = deps;
 
     const $ = (sel) => root.querySelector(sel);
     const tpl = $('[data-role="employee-tpl"]');
@@ -148,6 +149,252 @@ export function createCard(root, deps) {
         return $(`[data-doc="${key}"]`);
     }
 
+    // ------------------------------------------------------- ключ туннеля
+    //
+    // КЛЮЧ — ЭТО ДЕЙСТВИЕ, А НЕ ПОЛЕ. Значения, которое вводят, у него нет:
+    // строка собрана из пилюль и кнопки, метка — span. Поэтому здесь нет ни
+    // разбора значения, ни отправки его на сервер: карточка только показывает
+    // состояние и нажимает кнопку.
+    //
+    // СОСТОЯНИЕ ЖИВЁТ В ОТВЕТЕ СЕРВЕРА, а не в форме: выдача идёт отдельной
+    // точкой и к сохранению карточки отношения не имеет. «Сохранить» ключа не
+    // выдаёт и не отзывает.
+    let tunnel = null;      // данные ключа с сервера
+    let tunnelBusy = false; // идёт выдача
+
+    const TUNNEL_HINT_NEW = 'Сначала сохраните карточку: ключ привязывается к сотруднику, а записи ещё нет.';
+    const TUNNEL_HINT_NONE = 'Настройка туннеля для звонков из-за рубежа. Нужна не всем: только тем, кто работает из другой страны.';
+    const TUNNEL_HINT_ARCHIVED = 'Ключ отозван при отправке в архив. Вернёте сотрудника — выдадите заново.';
+
+    function tunnelHintIssued(byName) {
+        // «Выдал —» с прочерком, когда выдававший неизвестен: входа в проекте
+        // нет, и сегодня это единственный возможный случай. Пустое место
+        // читалось бы как недоделанная строка (паспорт Р1Б).
+        const who = byName || '—';
+        return `Настройка туннеля для звонков из-за рубежа. Выдал ${who} · заработает после того, как ключ впустят на сервере.`;
+    }
+
+    /** Пилюля показывается только когда ей есть что сказать. */
+    function setPill(role, text, kind) {
+        const pill = $(`[data-role="${role}"]`);
+        if (!pill) return;
+        pill.hidden = !text;
+        pill.textContent = text || '';
+        pill.className = `ui-pill ui-pill--${kind || 'mute'}`;
+    }
+
+    /**
+     * Пять состояний строки (паспорт Р1Б). Считаются из ОДНОГО источника —
+     * ответа сервера, — поэтому и живут в одном месте, а не разбегаются по
+     * обработчикам.
+     */
+    function renderTunnelRow() {
+        const field = $('[data-role="tunnel-field"]');
+        const button = $('[data-role="tunnel-issue"]');
+        const label = $('[data-role="tunnel-issue-label"]');
+        const hint = $('[data-role="tunnel-hint"]');
+        if (!field || !button) return;
+
+        const isNew = editingId === null;
+        const issued = Boolean(tunnel && tunnel.tunnelKeyIssued);
+        const wasRevoked = Boolean(tunnel && tunnel.tunnelRevokedAt);
+        // Архив — состояние СОХРАНЁННОЕ. Выбранный, но не сохранённый статус
+        // пилюлю не меняет: «Отозван» до отзыва было бы неправдой. Но кнопку
+        // он гасит — выдавать ключ тому, кого сейчас отправят в архив, незачем.
+        const archived = Boolean(tunnel && tunnel.status === 'inactive');
+        const goingToArchive = $('#empStatus') && $('#empStatus').value === 'inactive';
+
+        field.classList.toggle('ui-field--disabled', archived);
+
+        if (isNew) {
+            setPill('tunnel-pill', '', 'mute');
+            setPill('tunnel-address', '', 'mute');
+            label.textContent = 'Выдать ключ';
+            button.disabled = true;
+            hint.textContent = TUNNEL_HINT_NEW;
+            return;
+        }
+        if (archived) {
+            setPill('tunnel-pill', wasRevoked ? `Отозван ${tunnel.tunnelRevokedAtLabel}` : 'Не выдан', 'mute');
+            setPill('tunnel-address', '', 'mute');
+            label.textContent = 'Выдать ключ';
+            button.disabled = true;
+            hint.textContent = wasRevoked ? TUNNEL_HINT_ARCHIVED : TUNNEL_HINT_NONE;
+            return;
+        }
+        if (issued) {
+            setPill('tunnel-pill', `Выдан ${tunnel.tunnelIssuedAtLabel}`, 'ok');
+            setPill('tunnel-address', tunnel.tunnelAddress, 'mute');
+            label.textContent = tunnelBusy ? 'Выдаём…' : 'Выдать заново';
+            button.disabled = tunnelBusy || goingToArchive;
+            hint.textContent = tunnelHintIssued(tunnel.tunnelIssuedByName);
+            return;
+        }
+        setPill('tunnel-pill', 'Не выдан', 'mute');
+        setPill('tunnel-address', '', 'mute');
+        label.textContent = tunnelBusy ? 'Выдаём…' : 'Выдать ключ';
+        button.disabled = tunnelBusy || goingToArchive;
+        hint.textContent = TUNNEL_HINT_NONE;
+    }
+
+    function resetTunnel(employee) {
+        tunnel = employee ? {
+            status: employee.status,
+            tunnelKeyIssued: employee.tunnelKeyIssued,
+            tunnelAddress: employee.tunnelAddress,
+            tunnelIssuedAtLabel: employee.tunnelIssuedAtLabel,
+            tunnelIssuedByName: employee.tunnelIssuedByName,
+            tunnelRevokedAt: employee.tunnelRevokedAt,
+            tunnelRevokedAtLabel: employee.tunnelRevokedAtLabel
+        } : null;
+        tunnelBusy = false;
+        const block = $('[data-role="tunnel-link-block"]');
+        if (block) { block.hidden = true; block.replaceChildren(); }
+        renderTunnelRow();
+    }
+
+    /**
+     * Блок со ссылкой. Показывается ОДИН РАЗ, на месте строки, и живёт, пока
+     * открыто окно: закрыли — не вернётся. Кнопки «показать ещё раз» здесь нет
+     * и не будет — именно она возвращает схему в «настройка лежит на странице».
+     *
+     * Предупреждение стоит НАД ссылкой: человек, увидевший ссылку, тянется её
+     * копировать и уходит, а текст под ней прочитает уже после закрытия окна.
+     */
+    function showTunnelLink(issued) {
+        const block = $('[data-role="tunnel-link-block"]');
+        if (!block) return;
+        const link = `${location.origin}${issued.linkPath}`;
+        block.replaceChildren();
+        block.hidden = false;
+
+        const note = document.createElement('div');
+        note.className = 'ui-note ui-note--warn';
+        note.appendChild(iconNode('warn', 'sm', 'ui-note__icon'));
+        const body = document.createElement('div');
+        body.className = 'ui-note__body';
+        const title = document.createElement('div');
+        title.className = 'ui-note__title';
+        title.textContent = 'Ссылка показывается один раз';
+        const text = document.createElement('div');
+        text.className = 'ui-note__text';
+        text.textContent = `Отдайте её сотруднику сейчас. Она сгорит при первом открытии, а если не откроют — ${issued.expiresLabel} по Москве. Показать её повторно нельзя: потеряется — выдайте ключ заново.`;
+        body.append(title, text);
+        note.appendChild(body);
+
+        const row = document.createElement('div');
+        row.className = 'ui-field__row';
+        row.style.marginTop = 'var(--ui-space-3)';
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'ui-field__control';
+        input.readOnly = true;
+        input.value = link;
+        input.setAttribute('aria-label', 'Ссылка на настройку туннеля');
+        const copy = document.createElement('button');
+        copy.type = 'button';
+        copy.className = 'ui-btn ui-btn--secondary';
+        copy.appendChild(iconNode('copy', 'sm'));
+        // Подпись кнопки после нажатия НЕ меняется: подменённая подпись
+        // читается как смена смысла кнопки. О результате говорит тост.
+        copy.append('Скопировать');
+        copy.addEventListener('click', async () => {
+            try {
+                await navigator.clipboard.writeText(link);
+                toast('Ссылка скопирована', 'success');
+            } catch (e) {
+                // Буфер обмена недоступен без защищённого соединения и без
+                // разрешения. Молчать нельзя: человек нажал и ждёт результата.
+                input.select();
+                toast('Браузер не дал доступ к буферу обмена — ссылка выделена, скопируйте её сами', 'error');
+            }
+        });
+        row.append(input, copy);
+
+        const hint = document.createElement('span');
+        hint.className = 'ui-field__hint';
+        hint.textContent = `По ссылке сотрудник скачает файл ${issued.fileName}. Ключ выдан на ${issued.address} и заработает после того, как его впустят на сервере.`;
+
+        block.append(note, row, hint);
+        input.focus();
+        input.select();
+    }
+
+    /** Отказ выдачи — плашкой НА МЕСТЕ блока, а не тостом: тост исчезнет, а
+     *  разбираться надо здесь (паспорт Р1Б). */
+    function showTunnelError(message) {
+        const block = $('[data-role="tunnel-link-block"]');
+        if (!block) return;
+        block.replaceChildren();
+        block.hidden = false;
+        const note = document.createElement('div');
+        note.className = 'ui-note ui-note--danger';
+        note.appendChild(iconNode('warn', 'sm', 'ui-note__icon'));
+        const body = document.createElement('div');
+        body.className = 'ui-note__body';
+        const title = document.createElement('div');
+        title.className = 'ui-note__title';
+        title.textContent = 'Ключ не выдан';
+        const text = document.createElement('div');
+        text.className = 'ui-note__text';
+        text.textContent = message;
+        body.append(title, text);
+        note.appendChild(body);
+        block.appendChild(note);
+    }
+
+    async function issueTunnelKey() {
+        if (tunnelBusy || editingId === null) return;
+
+        // ПЕРЕВЫПУСК СПРАШИВАЕТ, И СПРАШИВАЕТ ПРО ПОСЛЕДСТВИЕ. Прежний ключ
+        // перестаёт работать сразу: оператор с ним теряет связь и не поймёт
+        // почему. Окно на весь экран, кнопка названа глаголом с объектом —
+        // «Да» в списке недавних действий ничего не значит.
+        if (tunnel && tunnel.tunnelKeyIssued) {
+            const extension = $('#empPbxExtension').value.trim();
+            const who = [`${$('#empLastName').value.trim()} ${$('#empFirstName').value.trim()}`.trim(),
+                extension ? `доб. ${extension}` : null].filter(Boolean).join(', ');
+            const ok = await confirmDanger({
+                title: 'Выдать новый ключ?',
+                // Подпись называет, КОМУ выдаём. Вопрос в заголовке,
+                // последствие в тексте, объект в подписи — иначе окно
+                // подтверждения читается как «вы уверены?».
+                sub: who,
+                message: 'Прежний ключ перестанет работать сразу. Пока сотрудник не поставит новый, звонить из-за границы он не сможет. Новая ссылка будет показана один раз и сгорит при первом открытии.',
+                confirmLabel: 'Выдать новый',
+                cancelLabel: 'Отмена'
+            });
+            if (!ok || !isAlive() || !modal) return;
+        }
+
+        tunnelBusy = true;
+        renderTunnelRow();
+        let issued;
+        try {
+            issued = await storage.issueTunnelKey(editingId);
+            if (!isAlive() || !modal) return;
+        } catch (err) {
+            if (isAbort(err)) return;
+            showTunnelError(err.message);
+            return;
+        } finally {
+            tunnelBusy = false;
+            if (isAlive() && modal) renderTunnelRow();
+        }
+
+        tunnel = {
+            ...(tunnel || {}),
+            status: 'active',
+            tunnelKeyIssued: true,
+            tunnelAddress: issued.address,
+            tunnelIssuedAtLabel: issued.issuedAtLabel,
+            tunnelRevokedAt: null,
+            tunnelRevokedAtLabel: null
+        };
+        renderTunnelRow();
+        showTunnelLink(issued);
+    }
+
     // ------------------------------------------------------------ форма
 
     async function populateManagerSelect(excludeId) {
@@ -174,6 +421,7 @@ export function createCard(root, deps) {
         $('#empManager').value = emp[MANAGER_FIELD] || '';
         $('#empShiftTime').value = formatShiftInput(emp.shiftStart, emp.shiftEnd) || '';
         resetPbxPasswordField(emp.pbxPasswordSet);
+        resetTunnel(emp);
         DOC_FIELDS.forEach((key) => {
             const input = docInput(key);
             const area = input.closest('.file-upload-area');
@@ -190,6 +438,7 @@ export function createCard(root, deps) {
         $('#empManager').value = '';
         $('#empShiftTime').value = '';
         resetPbxPasswordField(false);
+        resetTunnel(null);
         $('#empStatus').value = 'active';
         $('#empCountry').value = 'Российская Федерация';
     }
@@ -407,9 +656,15 @@ export function createCard(root, deps) {
         if (!isAlive() || !modal) return;
 
         if (employee) {
+            // editingId ставится ДО заполнения формы, а не после. Строка
+            // «Ключ туннеля» рисуется во время заполнения и по нему отличает
+            // сохранённого сотрудника от нового: при прежнем порядке
+            // открытая карточка показывала состояние «сначала сохраните
+            // карточку» — то есть у существующего человека кнопка выдачи была
+            // мертва (найдено проверкой интерфейса).
+            editingId = employee.id;
             fillForm(employee);
             saveBtn().textContent = 'Сохранить изменения';
-            editingId = employee.id;
         } else {
             clearForm();
             saveBtn().textContent = 'Добавить сотрудника';
@@ -669,6 +924,15 @@ export function createCard(root, deps) {
             setPbxShown(true);
             syncPbxButton();
         });
+
+        // Ключ туннеля: выдача и перевыпуск. Кнопка одна на оба случая —
+        // заведение и редактирование в проекте одно и то же окно.
+        form.querySelector('[data-role="tunnel-issue"]').addEventListener('click', issueTunnelKey);
+
+        // Статус влияет на кнопку выдачи: тому, кого сейчас отправят в архив,
+        // ключ выдавать незачем. Пилюлю выбранный статус не трогает — она про
+        // сохранённое состояние.
+        form.querySelector('#empStatus').addEventListener('change', renderTunnelRow);
 
         // Правка поля — единственный повод отправить пароль на сервер.
         form.querySelector('#empPbxPassword').addEventListener('input', () => {

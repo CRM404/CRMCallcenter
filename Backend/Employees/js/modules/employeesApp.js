@@ -87,6 +87,10 @@ export async function mount(container, ctx) {
     card = createCard(container, {
         ...deps,
         confirm: ctx.confirm,
+        // Перевыпуск ключа туннеля — необратимое действие: прежний ключ
+        // перестаёт работать сразу, и оператор с ним теряет связь. Такое
+        // подтверждение накрывает ВЕСЬ экран, а не свою панель (паспорт Р1Б).
+        confirmDanger: ctx.confirmDanger,
         onSaved: () => table.refresh()
     });
 
