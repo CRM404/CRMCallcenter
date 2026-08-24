@@ -16,6 +16,7 @@ const { startOfDay, startOfNextDay, zonedParts } = require('../services/appTime'
 const { distributePendingLeads, findNewFunnelStatusId } = require('../services/leadDistribution');
 const { normalizePhone, normalizeForSearch } = require('../services/phoneFormat');
 const { phoneColumnsFor, findLeadByPhone, leadTitle } = require('../services/phoneFix');
+const { mergeLeads } = require('../services/leadMerge');
 
 const router = express.Router();
 
@@ -747,6 +748,38 @@ router.put('/:id', async (req, res) => {
         res.status(500).json({ error: 'Не удалось сохранить лида' });
     } finally {
         client.release();
+    }
+});
+
+// POST /api/leads-admin/:id/merge { otherId } — объединить двух лидов.
+//
+// ОТДЕЛЬНАЯ ВЫЗЫВАЕМАЯ ОПЕРАЦИЯ, а не шаг миграции: требование паспорта Р10.
+// Кнопка «Объединить лидов» на экране разбора зовёт ровно её, и миграция,
+// найдя дубли, зовёт её же. Кто из двух старший, решает не вызывающий, а сама
+// операция — по дате создания (правило 1 плана 5.4).
+router.post('/:id/merge', async (req, res) => {
+    try {
+        const otherId = Number(req.body && req.body.otherId);
+        if (!Number.isInteger(otherId) || otherId <= 0) {
+            return res.status(400).json({ error: 'Не указан второй лид для объединения' });
+        }
+        if (otherId === Number(req.params.id)) {
+            return res.status(400).json({ error: 'Лида нельзя объединить с самим собой' });
+        }
+        const result = await mergeLeads(pool, req.params.id, otherId);
+        res.json({
+            leadId: result.elderId,
+            mergedId: result.juniorId,
+            lead: await fetchLeadById(result.elderId)
+        });
+    } catch (err) {
+        // .reason ставит сам механизм слияния: «не найден», «уже влит», «разные
+        // номера». Это ответы человеку, а не поломка сервера.
+        if (err.reason) {
+            return res.status(err.reason === 'not-found' ? 404 : 400).json({ error: err.message });
+        }
+        console.error(err);
+        res.status(500).json({ error: 'Не удалось объединить лидов' });
     }
 });
 
