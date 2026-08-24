@@ -23,6 +23,7 @@
     <link rel="stylesheet" href="/ui/field.css">
     <link rel="stylesheet" href="/ui/chip.css">
     <link rel="stylesheet" href="/ui/tabs.css">
+    <link rel="stylesheet" href="/ui/note.css">
 
     <!-- 3. Составные элементы -->
     <link rel="stylesheet" href="/ui/modal.css">
@@ -32,6 +33,7 @@
     <link rel="stylesheet" href="/ui/popover.css">
     <link rel="stylesheet" href="/ui/empty-state.css">
     <link rel="stylesheet" href="/ui/skeleton.css">
+    <link rel="stylesheet" href="/ui/solo.css">
 </head>
 <body>
 
@@ -75,6 +77,11 @@
 
     .type-row { display: flex; align-items: baseline; gap: var(--ui-space-5); padding: var(--ui-space-2) 0; border-bottom: 1px solid var(--ui-color-line); }
     .type-row span:last-child { margin-left: auto; font-size: 10.5px; color: var(--ui-color-ink-faint); }
+
+    /* Лист .ui-solo в каталоге: своей высоты 100dvh здесь быть не должно —
+       она растянула бы демонстрацию на весь экран. Показываем в рамке. */
+    .cat-solo { margin-bottom: var(--ui-space-5); border: 1px dashed var(--ui-color-line-strong); border-radius: var(--ui-radius-md); overflow: hidden; }
+    .cat-solo .ui-solo { min-height: 0; }
 
     .tok-box { width: 56px; height: 34px; background: var(--ui-color-surface); border: 1px solid var(--ui-color-line); }
     .tok-space { height: 20px; background: var(--ui-color-accent); border-radius: 2px; }
@@ -125,7 +132,7 @@
             <div class="sw"><div class="sw-color" style="background: var(--ui-color-off-ink)"></div><div class="sw-meta"><b>off</b>проблема</div></div>
             <div class="sw"><div class="sw-color" style="background: var(--ui-color-danger)"></div><div class="sw-meta"><b>danger</b>удаление</div></div>
         </div>
-        <div class="cat-rule" style="margin-top: var(--ui-space-4)"><b>Правило.</b> Синий — только интерактив: фокус, наведение, активный пункт, выбранный день. Зелёный, жёлтый, красный — только статус.</div>
+        <div class="cat-rule" style="margin-top: var(--ui-space-4)"><b>Правило.</b> <span>Синий — только интерактив: фокус, наведение, активный пункт, выбранный день. Зелёный, жёлтый, красный — только статус.</span></div>
 
         <div class="cat-cap" style="margin: var(--ui-space-5) 0 var(--ui-space-2)">радиусы, тени, отступы — тоже токены, и раздел их не объявляет</div>
         <div class="cat-row" data-role="tokens-shape">
@@ -160,7 +167,7 @@
         <div class="type-row"><span style="font-size: var(--ui-text-md)">Основной текст: строка таблицы, значение поля.</span><span>--ui-text-md</span></div>
         <div class="type-row"><span style="font-size: var(--ui-text-sm); color: var(--ui-color-ink-soft)">Вторичный текст: подпись под значением.</span><span>--ui-text-sm / ink-soft</span></div>
         <div class="type-row"><span style="font-size: var(--ui-text-xs); color: var(--ui-color-ink-faint)">Третьестепенное: подсказка, единицы, «показано 6 из 14».</span><span>--ui-text-xs / ink-faint</span></div>
-        <div class="cat-rule" style="margin-top: var(--ui-space-4)"><b>Правило.</b> Уровней три: значение, подпись к нему и третьестепенное. Четвёртого размера «чуть меньше» в разделе не появляется — если текст нужно приглушить, меняется цвет, а не кегль.</div>
+        <div class="cat-rule" style="margin-top: var(--ui-space-4)"><b>Правило.</b> <span>Уровней три: значение, подпись к нему и третьестепенное. Четвёртого размера «чуть меньше» в разделе не появляется — если текст нужно приглушить, меняется цвет, а не кегль.</span></div>
     </section>
 
     <!-- ========================== КНОПКИ ========================== -->
@@ -179,8 +186,8 @@
             <span class="cat-item"><span class="cat-cap">в процессе</span><button type="button" class="ui-btn is-busy" disabled>Сохраняем</button></span>
             <span class="cat-item"><span class="cat-cap">в строке таблицы</span><button type="button" class="ui-btn ui-btn--icon ui-btn--row" aria-label="Изменить"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-edit"></use></svg></button></span>
         </div>
-        <div class="cat-rule"><b>Правило.</b> Неактивная кнопка обязана читаться как неактивная — бледная, курсор «нельзя». Атрибута <code>disabled</code> мало: у старой кнопки был непрозрачный декоративный слой, из-за которого приглушение не работало. Это уже стоило круга приёмки.</div>
-        <div class="cat-rule"><b>Правило.</b> «В процессе» — класс <code>is-busy</code> вместе с <code>disabled</code>: без второго действие уйдёт дважды.</div>
+        <div class="cat-rule"><b>Правило.</b> <span>Неактивная кнопка обязана читаться как неактивная — бледная, курсор «нельзя». Атрибута <code>disabled</code> мало: у старой кнопки был непрозрачный декоративный слой, из-за которого приглушение не работало. Это уже стоило круга приёмки.</span></div>
+        <div class="cat-rule"><b>Правило.</b> <span>«В процессе» — класс <code>is-busy</code> вместе с <code>disabled</code>: без второго действие уйдёт дважды.</span></div>
     </section>
 
     <!-- =========================== ПОЛЯ =========================== -->
@@ -281,10 +288,10 @@
                 <span class="ui-field__hint">Пароль задан. Открыть его может только руководитель.</span>
             </div>
         </div>
-        <div class="cat-rule"><b>Правило.</b> Ошибка живёт под полем, а не в тосте: тост исчезает, поле остаётся.</div>
-        <div class="cat-rule"><b>«Скрыто навсегда» — это про сервер, а не про вид.</b> Кнопки нет вовсе и <code>.ui-field--reveal</code> не ставится, потому что значение с сервера не приходит: точки в приглашении нарисованы, а не маскируют пароль. Прятать значение интерфейсом нельзя — оно осталось бы в исходном коде страницы.</div>
-        <div class="cat-rule"><b>Кнопка внутри поля — не <code>.ui-btn</code>.</b> У кнопки слоя своя высота, рамка и фон: внутри поля вышла бы рамка в рамке. <code>.ui-field__reveal</code> — 34&nbsp;×&nbsp;34 (38&nbsp;−&nbsp;2&nbsp;−&nbsp;2), кольцо фокуса внутрь, открытое значение моноширинным. Свою строку «поле и кнопка» раздел не заводит: она здесь.</div>
-        <div class="cat-rule"><b>Ступени две.</b> Обычная — 38 px, мелкая (<code>--sm</code>) — 32 px, ровно как у кнопки тулбара, и нужна только там, где поле стоит с такими кнопками в одном ряду. Задать её у себя раздел не может: <code>min-height</code> слоя выигрывает у <code>height</code> раздела независимо от порядка правил.</div>
+        <div class="cat-rule"><b>Правило.</b> <span>Ошибка живёт под полем, а не в тосте: тост исчезает, поле остаётся.</span></div>
+        <div class="cat-rule"><b>«Скрыто навсегда» — это про сервер, а не про вид.</b> <span>Кнопки нет вовсе и <code>.ui-field--reveal</code> не ставится, потому что значение с сервера не приходит: точки в приглашении нарисованы, а не маскируют пароль. Прятать значение интерфейсом нельзя — оно осталось бы в исходном коде страницы.</span></div>
+        <div class="cat-rule"><b>Кнопка внутри поля — не <code>.ui-btn</code>.</b> <span>У кнопки слоя своя высота, рамка и фон: внутри поля вышла бы рамка в рамке. <code>.ui-field__reveal</code> — 34&nbsp;×&nbsp;34 (38&nbsp;−&nbsp;2&nbsp;−&nbsp;2), кольцо фокуса внутрь, открытое значение моноширинным. Свою строку «поле и кнопка» раздел не заводит: она здесь.</span></div>
+        <div class="cat-rule"><b>Ступени две.</b> <span>Обычная — 38 px, мелкая (<code>--sm</code>) — 32 px, ровно как у кнопки тулбара, и нужна только там, где поле стоит с такими кнопками в одном ряду. Задать её у себя раздел не может: <code>min-height</code> слоя выигрывает у <code>height</code> раздела независимо от порядка правил.</span></div>
     </section>
 
     <!-- ============ СТАТУСЫ, СЧЁТЧИКИ, ВКЛАДКИ ============ -->
@@ -344,8 +351,8 @@
             <button type="button" class="ui-fchips__clear">Очистить всё</button>
         </div>
 
-        <div class="cat-rule" style="margin-top: var(--ui-space-4)"><b>Правило.</b> Прочерк вместо нуля, когда данных нет.</div>
-        <div class="cat-rule"><b>Правило.</b> Счётчики внутри разделов остаются. Числа владелец убрал с плиток рабочего стола — и только оттуда.</div>
+        <div class="cat-rule" style="margin-top: var(--ui-space-4)"><b>Правило.</b> <span>Прочерк вместо нуля, когда данных нет.</span></div>
+        <div class="cat-rule"><b>Правило.</b> <span>Счётчики внутри разделов остаются. Числа владелец убрал с плиток рабочего стола — и только оттуда.</span></div>
     </section>
 
     <!-- ===================== ЗАГРУЗКА РАЗДЕЛА ===================== -->
@@ -362,7 +369,7 @@
                 <div class="ui-skeleton__row"><span class="ui-sk ui-sk--cell" style="flex:2"></span><span class="ui-sk ui-sk--cell" style="flex:1"></span><span class="ui-sk ui-sk--cell" style="flex:1"></span></div>
             </div>
         </div>
-        <div class="cat-rule" style="margin-top: var(--ui-space-4)"><b>Правило.</b> Панель не остаётся пустой ни одного кадра: сначала скелет, потом содержимое. Спиннер по центру не используем — он не показывает, что именно грузится.</div>
+        <div class="cat-rule" style="margin-top: var(--ui-space-4)"><b>Правило.</b> <span>Панель не остаётся пустой ни одного кадра: сначала скелет, потом содержимое. Спиннер по центру не используем — он не показывает, что именно грузится.</span></div>
     </section>
 
     <!-- ================ ТАБЛИЦА И ПУСТОЕ СОСТОЯНИЕ ================ -->
@@ -461,8 +468,8 @@
             <button type="button" class="ui-btn ui-btn--ghost ui-empty__action">Добавить счёт</button>
         </div>
 
-        <div class="cat-rule" style="margin-top: var(--ui-space-4)"><b>Правило.</b> Таблица прокручивается внутри своей обёртки, а не растягивает панель. Числовые колонки вправо, первая колонка закрепляется классом.</div>
-        <div class="cat-rule"><b>Правило.</b> Действия в строке по умолчанию видны всегда. Наведение — отдельный класс: на «Сотрудниках» их сделали постоянными по прямому замечанию владельца, и перенос раздела не должен молча это отменить.</div>
+        <div class="cat-rule" style="margin-top: var(--ui-space-4)"><b>Правило.</b> <span>Таблица прокручивается внутри своей обёртки, а не растягивает панель. Числовые колонки вправо, первая колонка закрепляется классом.</span></div>
+        <div class="cat-rule"><b>Правило.</b> <span>Действия в строке по умолчанию видны всегда. Наведение — отдельный класс: на «Сотрудниках» их сделали постоянными по прямому замечанию владельца, и перенос раздела не должен молча это отменить.</span></div>
     </section>
 
     <!-- ==================== ОКНА И СООБЩЕНИЯ ==================== -->
@@ -555,10 +562,98 @@
             </div>
         </div>
 
-        <div class="cat-rule"><b>Модалка накрывает свою панель</b>, а не весь экран: иначе непонятно, к какой панели она относится, и вторая блокируется ни за что.</div>
-        <div class="cat-rule"><b>Необратимые действия — на весь экран.</b> Цена ошибки выше.</div>
-        <div class="cat-rule"><b>Поповер не выходит за границы своей панели</b> и переворачивается вверх у нижнего края.</div>
-        <div class="cat-rule"><b>Тост один на приложение</b>, снизу справа, и называет объект: «Белов Д. С.: 15 августа — выходной», а не «Сохранено».</div>
+        <div class="cat-rule"><b>Модалка накрывает свою панель</b> <span>, а не весь экран: иначе непонятно, к какой панели она относится, и вторая блокируется ни за что.</span></div>
+        <div class="cat-rule"><b>Необратимые действия — на весь экран.</b> <span>Цена ошибки выше.</span></div>
+        <div class="cat-rule"><b>Поповер не выходит за границы своей панели</b> <span>и переворачивается вверх у нижнего края.</span></div>
+        <div class="cat-rule"><b>Тост один на приложение</b> <span>, снизу справа, и называет объект: «Белов Д. С.: 15 августа — выходной», а не «Сохранено».</span></div>
+    </section>
+
+    <!-- ============ ПЛАШКА-ПРИМЕЧАНИЕ И СТРАНИЦА ВНЕ ОБОЛОЧКИ ============ -->
+    <section class="cat-sec">
+        <h2>Примечание и страница вне оболочки</h2>
+        <p class="cat-note">Пришли с паспортом Р1Б («Звонки», часть 1Б). Плашка нужна там, где текст читают ДО действия, а не после него; раскладка <code>.ui-solo</code> — там, где страницу открывают без оболочки: вход оператора и выдача настройки туннеля.</p>
+
+        <div class="cat-demos">
+            <div class="cat-demo">
+                <div class="cat-cap">Примечание без вида: просто сноска</div>
+                <div class="cat-frame">
+                    <div class="ui-note">
+                        <svg class="ui-ic ui-ic--sm ui-note__icon" aria-hidden="true"><use href="#ui-ic-doc"></use></svg>
+                        <div class="ui-note__body">
+                            <div class="ui-note__text">Файл <b>ivanov-101.conf</b>. Не переименовывайте его: этим именем туннель появится в списке WireGuard.</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="cat-demo">
+                <div class="cat-cap">С заголовком, вид <code>--warn</code>: последствие обратимо, но знать о нём надо заранее</div>
+                <div class="cat-frame">
+                    <div class="ui-note ui-note--warn">
+                        <svg class="ui-ic ui-ic--sm ui-note__icon" aria-hidden="true"><use href="#ui-ic-warn"></use></svg>
+                        <div class="ui-note__body">
+                            <div class="ui-note__title">Ссылка показывается один раз</div>
+                            <div class="ui-note__text">Отдайте её сотруднику сейчас. Показать её повторно нельзя.</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="cat-demo">
+                <div class="cat-cap">Вид <code>--danger</code>: уже пошло не так или пойдёт необратимо</div>
+                <div class="cat-frame">
+                    <div class="ui-note ui-note--danger">
+                        <svg class="ui-ic ui-ic--sm ui-note__icon" aria-hidden="true"><use href="#ui-ic-warn"></use></svg>
+                        <div class="ui-note__body">
+                            <div class="ui-note__title">Если открываете впервые — скажите руководителю</div>
+                            <div class="ui-note__text">Значит ссылку открыл кто-то другой.</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="cat-rule"><b>Плашка — не тост, не ошибка поля и не пустое состояние.</b> <span>Тост исчезает через три секунды, ошибка поля говорит про поле, пустое состояние — про отсутствие данных. Плашка стоит на месте и читается до нажатия.</span></div>
+        <div class="cat-rule"><b>Полоса слева, а не рамка кругом.</b> <span>Рамка спорит с рамками полей, стоящих рядом в той же форме: две рамки подряд читаются как вложенный блок.</span></div>
+        <div class="cat-rule"><b>Состояний у плашки нет ни одного</b> <span>, и это не пропуск: она не нажимается, фокуса не берёт, приезжает вместе со своим блоком, а пустая не рисуется вовсе. «Ошибка» здесь — вид <code>--danger</code>, а не состояние.</span></div>
+        <div class="cat-rule"><b>Заголовок необязателен.</b> <span>У короткой плашки <code>.ui-note__title</code> нет в разметке вовсе — пустой заголовок не оставляют.</span></div>
+
+        <div class="cat-cap" style="margin: var(--ui-space-6) 0 var(--ui-space-2)">лист страницы вне оболочки: здесь показан в рамке и без своей высоты, на самой странице он один на весь экран</div>
+        <div class="cat-solo">
+            <div class="ui-solo">
+                <div class="ui-solo__card">
+                    <div class="ui-solo__brand">CRM · настройка связи</div>
+                    <h3 class="ui-solo__title">Настройка для Иванова Ивана</h3>
+                    <p class="ui-solo__text">Скачайте файл и внесите его в WireGuard — он поднимет защищённое соединение, без которого звонки из-за границы не проходят.</p>
+                    <button type="button" class="ui-btn ui-btn--lg ui-btn--block"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-download"></use></svg>Скачать настройку</button>
+                    <ol class="ui-solo__steps">
+                        <li>Откройте WireGuard на этом компьютере.</li>
+                        <li>Нажмите «Импорт туннелей из файла».</li>
+                        <li>Выберите скачанный файл и включите туннель.</li>
+                    </ol>
+                    <div class="ui-solo__meta">Ссылка действует до <b>25 августа, 12:40</b> по Москве</div>
+                    <div class="ui-solo__alt">
+                        <div class="ui-solo__brand">Если импорт файла не подходит</div>
+                        <div class="ui-field ui-field--mono">
+                            <label class="ui-field__label" for="catConf">Тот же текст настройки</label>
+                            <textarea class="ui-field__control" id="catConf" rows="4" readonly>[Interface]
+Address = 10.77.0.7/32
+DNS = 194.58.125.120, 194.67.94.40
+MTU = 1280</textarea>
+                            <span class="ui-field__hint">В WireGuard: «Добавить пустой туннель», вставить текст, сохранить.</span>
+                        </div>
+                        <div class="ui-btn-row ui-btn-row--end">
+                            <button type="button" class="ui-btn ui-btn--secondary"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-copy"></use></svg>Скопировать текст</button>
+                        </div>
+                    </div>
+                    <div class="ui-solo__foot">Соединение включится не сразу: сначала руководитель должен впустить ваш ключ.</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="cat-rule"><b>Лист не растягивается.</b> <span>Ширина — токен <code>--ui-solo-w</code> 520, и число не круглое: самая длинная строка настройки 57 знаков, и при меньшей ширине она переносится. <b>Перенесённая настройка читается как испорченная</b>, и человек начинает её править.</span></div>
+        <div class="cat-rule"><b>Лист выше экрана — допустимо.</b> <span>Правило «панель не едет вниз» здесь не действует: панели нет, есть лист бумаги, и страница прокручивается по вертикали. Выше сгиба обязано быть только главное действие.</span></div>
+        <div class="cat-rule"><b><code>.ui-field--mono</code> — поле с машинным текстом:</b> <span>настройка, ключ, токен. Читается по знакам, а в пропорциональном шрифте <code>l</code>, <code>I</code> и <code>1</code> неразличимы.</span></div>
+        <div class="cat-rule"><b><code>.ui-btn--block</code> — там, где действие одно.</b> <span>Внутри форм и тулбаров не применяется: там кнопка стоит в ряду с другими, и растянутая на всю ширину она сообщает, что выбора нет, — а он есть.</span></div>
+        <div class="cat-rule"><b>Своих классов раздел здесь не заводит ни одного.</b> <span>Всё, что добавила часть 1Б, принадлежит слою и будет работать на входе оператора без единой правки — ради этого переезда <code>.ui-solo</code> и объявлен здесь, а не своей страницей.</span></div>
     </section>
 
 </div>

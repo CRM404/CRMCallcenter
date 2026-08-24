@@ -1,0 +1,72 @@
+/* --- ui/note.css: БЛОК 2 — базовые элементы ------------------------------
+   Плашка-примечание: короткий текст, который надо прочитать ДО действия.
+
+   ЗАЧЕМ ОТДЕЛЬНЫЙ УЗЕЛ, А НЕ ОДИН ИЗ ТРЁХ СУЩЕСТВУЮЩИХ (паспорт Р1Б):
+     тост       — исчезает через три секунды, а это читают перед нажатием;
+     ошибка поля — она про поле, у плашки поля нет вовсе;
+     пустое состояние — оно про отсутствие данных, а тут данные есть.
+
+   Полоса слева, а не рамка кругом: рамка спорит с рамками полей, стоящих
+   рядом в той же форме, и две рамки подряд читаются как вложенный блок.
+
+   Три вида по весу последствия:
+     без вида   — просто примечание (имя файла, «сообщать никому не нужно»);
+     --warn     — действие обратимо, но о последствии надо знать заранее;
+     --danger   — что-то уже пошло не так или пойдёт необратимо.
+   ------------------------------------------------------------------------ */
+
+.ui-note {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--ui-space-3);
+    padding: 10px 14px;
+    /* Полоса 3 px — голое число, и это сознательно: она есть только у плашки,
+       к ступеням отступов и радиусов отношения не имеет (паспорт Р1Б). */
+    border-left: 3px solid var(--ui-color-line-strong);
+    border-radius: 0 var(--ui-radius-sm) var(--ui-radius-sm) 0;
+    background: var(--ui-color-surface-sunken);
+    color: var(--ui-color-ink);
+    font-size: var(--ui-text-sm);
+    line-height: var(--ui-line-base);
+}
+
+/* Значок не сжимается и отбит на 1 вниз по оптике: без этого он висит выше
+   первой строки текста, потому что у строки есть межстрочный интервал. */
+.ui-note__icon {
+    flex: 0 0 auto;
+    margin-top: 1px;
+    color: var(--ui-color-ink-faint);
+}
+.ui-note__body {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+/* Заголовок НЕОБЯЗАТЕЛЕН: у короткой плашки его нет в разметке вовсе. */
+.ui-note__title {
+    font-weight: var(--ui-weight-bold);
+    color: var(--ui-color-ink);
+}
+.ui-note__text { color: var(--ui-color-ink-soft); }
+.ui-note__text b { color: var(--ui-color-ink); font-weight: var(--ui-weight-bold); }
+
+.ui-note--warn {
+    border-left-color: var(--ui-color-warn-ink);
+    background: var(--ui-color-warn-bg);
+}
+.ui-note--warn .ui-note__icon { color: var(--ui-color-warn-ink); }
+/* На цветной подложке приглушённый текст теряется — он становится основным. */
+.ui-note--warn .ui-note__text { color: var(--ui-color-ink); }
+
+.ui-note--danger {
+    border-left-color: var(--ui-color-danger);
+    background: var(--ui-color-danger-wash);
+}
+.ui-note--danger .ui-note__icon { color: var(--ui-color-danger); }
+.ui-note--danger .ui-note__text { color: var(--ui-color-ink); }
+
+/* СОСТОЯНИЙ У ПЛАШКИ НЕТ НИ ОДНОГО, и это не пропуск (паспорт Р1Б):
+   наведение, нажатие, фокус, неактивное, выделенное и загрузка не бывают —
+   плашка не нажимается и приезжает вместе со своим блоком; пустая плашка не
+   рисуется вовсе; «ошибка» — это вид --danger, а не состояние. Ссылка внутри
+   текста берёт фокус как обычная ссылка, своего правила ей не нужно. */

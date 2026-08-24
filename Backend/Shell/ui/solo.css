@@ -1,0 +1,104 @@
+/* --- ui/solo.css: БЛОК 3 — составные элементы ----------------------------
+   Страница, которую открывают БЕЗ оболочки: ни стола, ни панелей, ни
+   разделов. Таких страниц в проекте две — вход оператора и выдача настройки
+   туннеля, — и до сегодняшнего дня правил для них в слое не было ни одного.
+
+   ПОЧЕМУ В СЛОЕ, А НЕ СВОЕЙ СТРАНИЦЕЙ. Вход оператора собран собственными
+   классами op-login-* и тянет значки с внешнего адреса (Operator/
+   operator-login.html:8, проверено на main 3fc9d0a). Вторая такая страница
+   означала бы третью копию одного вида. Узлы объявлены здесь, чтобы вход
+   оператора потом переехал на них тем же приёмом, каким «Сотрудники»
+   переехали на .ui-field__row (future_implementation_notes.md, п. 39).
+
+   ЭТОТ ФАЙЛ НЕ ПОДКЛЮЧЁН К ОБОЛОЧКЕ намеренно: Shell/index.html — это и есть
+   оболочка, и раскладка страницы без оболочки ей не нужна ни в одном
+   маршруте. Его подключают сами такие страницы и каталог элементов.
+   ------------------------------------------------------------------------ */
+
+/* Подложка во всю высоту. 100dvh, а не 100vh: на мобильных полоса браузера
+   съедает часть vh, и лист уезжал бы под неё. */
+.ui-solo {
+    min-height: 100dvh;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    padding: var(--ui-space-7) var(--ui-space-5);
+    background: var(--ui-color-surface-sunken);
+    font-family: var(--ui-font-ui);
+    color: var(--ui-color-ink);
+}
+
+/* Лист бумаги, а не раздел: на широком экране он НЕ растягивается.
+   Ширина — токеном --ui-solo-w: значение одно на обе страницы вне оболочки,
+   и держать его числом в двух местах значит развести их при первой правке. */
+.ui-solo__card {
+    width: 100%;
+    max-width: var(--ui-solo-w);
+    display: flex;
+    flex-direction: column;
+    gap: var(--ui-space-4);
+    /* 22 по горизонтали — голое число: ступени 20 и 24 обе мимо, а внутренняя
+       ширина листа задана замером строки настройки (паспорт Р1Б). */
+    padding: var(--ui-space-7) 22px;
+    background: var(--ui-color-surface);
+    border: 1px solid var(--ui-color-line);
+    border-radius: var(--ui-radius-lg);
+    box-shadow: var(--ui-shadow-card);
+}
+
+/* Надстрочник листа. Работает дважды: шапкой страницы и заголовком
+   запасного пути внутри .ui-solo__alt. */
+.ui-solo__brand {
+    font-size: var(--ui-text-2xs);
+    font-weight: var(--ui-weight-bold);
+    letter-spacing: .09em;
+    text-transform: uppercase;
+    color: var(--ui-color-ink-faint);
+}
+.ui-solo__title {
+    margin: 0;
+    font-size: var(--ui-text-title);
+    font-weight: var(--ui-weight-bold);
+    letter-spacing: -.01em;
+    line-height: var(--ui-line-tight);
+}
+.ui-solo__text {
+    margin: 0;
+    font-size: var(--ui-text-md);
+    color: var(--ui-color-ink-soft);
+}
+.ui-solo__meta {
+    font-size: var(--ui-text-sm);
+    color: var(--ui-color-ink-soft);
+}
+.ui-solo__meta b { color: var(--ui-color-ink); font-weight: var(--ui-weight-bold); }
+.ui-solo__steps {
+    margin: 0;
+    padding-left: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: var(--ui-space-2);
+    font-size: var(--ui-text-sm);
+}
+
+/* Запасной путь: то же самое другим способом. Отбит линией и тише кеглем,
+   чтобы человек не выбирал там, где выбор ему не нужен. */
+.ui-solo__alt {
+    display: flex;
+    flex-direction: column;
+    gap: var(--ui-space-3);
+    padding-top: var(--ui-space-4);
+    border-top: 1px solid var(--ui-color-line);
+}
+.ui-solo__foot {
+    padding-top: var(--ui-space-4);
+    border-top: 1px solid var(--ui-color-line);
+    font-size: var(--ui-text-xs);
+    color: var(--ui-color-ink-faint);
+}
+
+/* СОСТОЯНИЙ У ЛИСТА НЕТ (паспорт Р1Б): наведение, нажатие, фокус, неактивное
+   и выделенное не бывают — лист не нажимается; загрузки не бывает — страницу
+   отдаёт сервер уже со своим состоянием; пустой страницы по ссылке не
+   существует вовсе. Отказ оформляется плашкой .ui-note ВНУТРИ листа, а не
+   отдельным видом листа: лист один, а причин у отказа несколько. */
