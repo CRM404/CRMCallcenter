@@ -903,6 +903,25 @@ h2 {
     margin: -12px 0 14px 2px;
     line-height: 1.45;
 }
+/* Номер не приведён к единому виду (часть 4, паспорт Р10). Плашка, а не
+   подсказка серым: её читают ДО набора, и потеряться в тексте карточки она не
+   должна. Цвета — те же, что у предупреждения о числе попыток рядом
+   (.op-attempt.warn): страница оператора живёт вне слоя оболочки и своих
+   токенов не имеет. */
+.op-phone-note {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    margin: -8px 0 14px;
+    padding: 10px 14px;
+    border-radius: 8px;
+    border-left: 3px solid #8a6410;
+    background: #faf1d8;
+    color: #8a6410;
+    font-size: 12.5px;
+    line-height: 1.45;
+}
+.op-phone-note i { margin-top: 2px; font-size: 13px; }
 
 /* ----- Перезвон ----- */
 .op-callback {

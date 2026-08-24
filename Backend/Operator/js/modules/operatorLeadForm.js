@@ -175,6 +175,28 @@ const FIELD_KEYS = [...ALWAYS_VISIBLE_KEYS, ...GEO_KEYS, ...PARAMS_KEYS];
 const DOWN_PAYMENT_WORDS = ['ипотек', 'материнск', 'рассрочк'];
 const RETIREE_VALUE = 'Пенсионер';
 
+// Плашка под полем «Телефон»: номер лида не приведён к единому виду (часть 4,
+// паспорт Р10, тексты дословно).
+//
+// СТОИТ ЗДЕСЬ, А НЕ В СПИСКЕ, И ЭТО ВАЖНЕЕ ЗНАКА В СПИСКЕ. Оператор списка не
+// видит вовсе — он получает лида карточкой. Решением владельца 65 неразобранный
+// лид попадает в раздачу, включая безнадёжных, значит плашка — единственное,
+// что стоит между человеком и набором номера, которого нет.
+const PHONE_NOTES = {
+    hopeless: 'По этому номеру дозвониться не выйдет. В базе он записан неполностью, ' +
+        'и восстановить его не удалось. Времени на набор не тратьте.',
+    unresolved: 'Номер записан не в едином виде. Набирайте как есть. ' +
+        'Если не дозвонитесь — скажите руководителю, номер разберут.'
+};
+
+function phoneNote(lead) {
+    // Строго false: у лида, заведённого до части 4, поле приходит пустым, и
+    // плашка там сказала бы о номере то, чего никто не проверял.
+    if (lead.phoneNormalized !== false) return '';
+    const text = lead.phoneFixVerdict === 'hopeless' ? PHONE_NOTES.hopeless : PHONE_NOTES.unresolved;
+    return `<div class="op-phone-note"><i class="fas fa-triangle-exclamation" aria-hidden="true"></i>${escapeHtml(text)}</div>`;
+}
+
 function needsDownPayment(paymentMethod) {
     const value = (paymentMethod || '').toLowerCase();
     return DOWN_PAYMENT_WORDS.some((word) => value.includes(word));
@@ -221,6 +243,7 @@ export function renderLeadForm(container, lead, statuses, paramLists, onSave, op
             <input id="op-field-phone" name="phone" type="tel" value="${escapeHtml(lead.phone)}" aria-label="Телефон">
             ${attempts ? `<span class="op-attempt${attempts >= ATTEMPTS_WARN_FROM ? ' warn' : ''}">Попытка ${attempts} из ${MAX_CALL_ATTEMPTS}</span>` : ''}
         </div>
+        ${phoneNote(lead)}
         ${attempts ? `<div class="op-attempt-note">Предыдущая попытка: ${escapeHtml(formatDateTime(lead.lastCallAt)) || '—'}. Счётчик общий по всем операторам линии; после ${MAX_CALL_ATTEMPTS}-й лид уйдёт в статус «Не ответил после N перезвонов».</div>` : ''}
 
         <div class="op-form-section">

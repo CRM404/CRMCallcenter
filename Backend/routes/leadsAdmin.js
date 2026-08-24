@@ -139,6 +139,12 @@ function rowToLead(row) {
         firstName: row.first_name,
         middleName: row.middle_name,
         phone: row.phone,
+        // Разбор номера (часть 4). Нужен списку и карточке: у лида,
+        // чей номер не приведён, рядом с номером стоит знак — между
+        // оператором и набором номера, которого нет, не стоит больше
+        // ничего (решение владельца 65).
+        phoneNormalized: row.phone_normalized,
+        phoneFixVerdict: row.phone_fix_verdict,
         sourceId: row.source_id,
         sourceName: row.source_name,
         lineType: row.line_type,

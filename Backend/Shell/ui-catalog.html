@@ -134,6 +134,15 @@
         </div>
         <div class="cat-rule" style="margin-top: var(--ui-space-4)"><b>Правило.</b> <span>Синий — только интерактив: фокус, наведение, активный пункт, выбранный день. Зелёный, жёлтый, красный — только статус.</span></div>
 
+        <div class="cat-cap" style="margin: var(--ui-space-5) 0 var(--ui-space-2)">цвет значка — признак, а не размер: раздел своих цветов значкам не пишет</div>
+        <div class="cat-row">
+            <span class="cat-item"><span class="cat-cap">по тексту</span><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-doc"></use></svg></span>
+            <span class="cat-item"><span class="cat-cap">--quiet · вспомогательный</span><svg class="ui-ic ui-ic--sm ui-ic--quiet" aria-hidden="true"><use href="#ui-ic-doc"></use></svg></span>
+            <span class="cat-item"><span class="cat-cap">--accent · несёт смысл строки</span><svg class="ui-ic ui-ic--sm ui-ic--accent" aria-hidden="true"><use href="#ui-ic-phone"></use></svg></span>
+            <span class="cat-item"><span class="cat-cap">--warn · предупреждение</span><svg class="ui-ic ui-ic--sm ui-ic--warn" aria-hidden="true"><use href="#ui-ic-warn"></use></svg></span>
+        </div>
+        <div class="cat-rule"><b>Вид <code>--warn</code> пришёл с паспортом Р10 («Звонки», часть 4).</b> <span>Он для значка, стоящего <b>одиноко</b> — без плашки и без пилюли, рядом с номером лида, который не приведён к единому виду. Там, где предупреждение занимает целый блок, берётся <code>.ui-note--warn</code>, а не голый значок.</span></div>
+
         <div class="cat-cap" style="margin: var(--ui-space-5) 0 var(--ui-space-2)">радиусы, тени, отступы — тоже токены, и раздел их не объявляет</div>
         <div class="cat-row" data-role="tokens-shape">
             <span class="cat-item"><span class="cat-cap">radius-sm</span><span class="tok-box" style="border-radius: var(--ui-radius-sm)"></span></span>

@@ -210,3 +210,15 @@
 .leads-wrap .upload-note { font-size: 12px; color: var(--ink-soft); margin-top: 10px; line-height: 1.5; }
 .leads-wrap .upload-summary { margin-top: 16px; }
 
+
+/* ----- Номер лида: место под знак разбора (часть 4, паспорт Р10) -----
+   inline-flex с зазором, чтобы значок встал рядом с номером по базовой линии,
+   а не поехал на вторую строку. Табличные цифры у ячейки остаются: колонка
+   номеров читается столбиком. Цвет знака пишет слой (.ui-ic--warn) — раздел
+   своих цветов значкам не объявляет. */
+.leads-wrap .lead-phone {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--ui-space-2);
+    font-variant-numeric: tabular-nums;
+}

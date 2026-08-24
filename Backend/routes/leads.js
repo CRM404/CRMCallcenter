@@ -71,6 +71,12 @@ function rowToLead(row) {
         firstName: row.first_name,
         middleName: row.middle_name,
         phone: row.phone,
+        // Разбор номера (часть 4). Нужен списку и карточке: у лида,
+        // чей номер не приведён, рядом с номером стоит знак — между
+        // оператором и набором номера, которого нет, не стоит больше
+        // ничего (решение владельца 65).
+        phoneNormalized: row.phone_normalized,
+        phoneFixVerdict: row.phone_fix_verdict,
         // source и offerId убраны 13.08.2026: обе колонки в leads больше не
         // существуют (source заменён на source_id ещё задачей «Лиды»,
         // offer_id заменён связкой lead_offers этой задачей), поэтому оба

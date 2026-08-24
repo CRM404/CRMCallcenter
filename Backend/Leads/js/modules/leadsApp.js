@@ -426,6 +426,28 @@ function applyColumnVisibility() {
     });
 }
 
+// Ячейка «Номер». У лида, чей номер не приведён к единому виду, рядом с
+// номером стоит знак (часть 4, паспорт Р10). Он обязателен, а не желателен:
+// решением владельца 65 неразобранный лид попадает в раздачу, включая
+// безнадёжных, и между оператором и набором номера, которого нет, не стоит
+// больше ничего. Цвет значка берётся из слоя (.ui-ic--warn) — своих цветов
+// значкам раздел не пишет.
+const PHONE_WARNINGS = {
+    hopeless: 'Номер помечен безнадёжным — дозвониться, скорее всего, не выйдет',
+    unresolved: 'Номер не приведён к единому виду — наберите как есть'
+};
+
+function phoneCell(lead) {
+    const number = escapeHtml(lead.phone);
+    // phoneNormalized === false, а не «не true»: у лида, заведённого до части 4
+    // и ещё не прошедшего миграцию, поле приходит пустым, и знак там соврал бы.
+    if (lead.phoneNormalized !== false) return `<span class="lead-phone">${number}</span>`;
+    const title = lead.phoneFixVerdict === 'hopeless' ? PHONE_WARNINGS.hopeless : PHONE_WARNINGS.unresolved;
+    return `<span class="lead-phone">${number}<svg class="ui-ic ui-ic--sm ui-ic--warn" role="img"` +
+        ` aria-label="${escapeHtml(title)}"><title>${escapeHtml(title)}</title>` +
+        '<use href="#ui-ic-warn"></use></svg></span>';
+}
+
 function rowHtml(lead) {
     const name = fullName(lead)
         ? `<span class="ui-table__main">${escapeHtml(fullName(lead))}</span>`
@@ -443,7 +465,7 @@ function rowHtml(lead) {
             <td class="ui-table__sel"><input type="checkbox" data-check-id="${lead.id}" aria-label="Выбрать лида ${lead.id}"${checked}></td>
             <td>${lead.id}</td>
             <td>${name}</td>
-            <td>${escapeHtml(lead.phone)}</td>
+            <td>${phoneCell(lead)}</td>
             ${cells}
             <td class="ui-table__acts">
                 <button type="button" class="ui-btn ui-btn--icon ui-btn--row" data-edit="${lead.id}" title="Изменить" aria-label="Изменить"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-edit"></use></svg></button>
