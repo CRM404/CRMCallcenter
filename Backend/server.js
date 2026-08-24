@@ -10,6 +10,7 @@ const { runMigrations } = require('./migrate');
 const auditContext = require('./services/auditContext');
 const { pool } = require('./db');
 const { checkStatusFlagsConfigured } = require('./services/leadCallRules');
+const { runPhoneNormalization } = require('./services/phoneMigration');
 const employeesRouter = require('./routes/employees');
 const documentsRouter = require('./routes/documents');
 const authRouter = require('./routes/auth');
@@ -152,6 +153,14 @@ const PORT = process.env.PORT || 3000;
 runMigrations()
     .then(() => checkStatusFlagsConfigured(pool).catch((err) => {
         console.error('Не удалось проверить флаги статусов воронки:', err);
+    }))
+    // Приведение номеров к единому формату (часть 4, Б1.2). Идёт ПОСЛЕ схемы, а
+    // не внутри неё: правила приведения обязаны быть в проекте одни, и живут они
+    // в services/phoneFormat.js — разбор в шапке services/phoneMigration.js.
+    // Свой замок (applied_migrations) там же, поэтому прогон разовый, а попытка
+    // включить уникальность номера повторяется при каждом старте.
+    .then(() => runPhoneNormalization(pool).catch((err) => {
+        console.error('Не удалось привести номера к единому формату:', err);
     }))
     .then(() => {
         app.listen(PORT, () => {

@@ -1661,6 +1661,111 @@ BEGIN
     END IF;
 END $$;
 
+-- ===== ЧАСТЬ 4 · ЕДИНЫЙ ФОРМАТ ТЕЛЕФОНА =====================================
+-- Разбор непривёдшихся номеров и указатель слияния (план 5, пункты Б1.1–Б1.6,
+-- паспорт Р10 редакции 2). Структура стоит ДО подключения триггеров аудита,
+-- разовая миграция — в конце файла, ПОСЛЕ них: иначе массовая правка номеров
+-- прошла бы мимо журнала, а она ровно та операция, которую потом захочется
+-- посмотреть (часть 3 и делалась раньше ради этого).
+
+-- Причины, по которым строка не разобралась. СПРАВОЧНИК, а не текст в колонке
+-- (требование паспорта Р10): по причине отбирают и считают, а свободный текст
+-- ни отобрать, ни сосчитать. Числовой ключ, а не код строкой, — чтобы журнал
+-- изменений показывал причину словами через audit_ref_map, как любую другую
+-- ссылку на справочник.
+--
+-- ПОРЯДОК ОБЯЗАТЕЛЕН И ЖИВЁТ В sort_order: пусто → буквы → длина. Строка
+-- «8 (916) 123-45-67 доб. 102» подходит сразу под две причины, и без
+-- назначенного порядка получала бы разную в зависимости от того, какая
+-- проверка сработала первой, — а счётчики посчитали бы её дважды. Строка
+-- получает РОВНО ОДНУ причину.
+CREATE TABLE IF NOT EXISTS phone_fix_reasons (
+    id SERIAL PRIMARY KEY,
+    code VARCHAR NOT NULL UNIQUE,
+    title VARCHAR NOT NULL,
+    sort_order INTEGER NOT NULL
+);
+
+-- Сидинг идемпотентный (ON CONFLICT по code): файл прогоняется при каждом
+-- старте. Тексты — дословно из паспорта Р10.
+INSERT INTO phone_fix_reasons (code, title, sort_order) VALUES
+    ('empty',          'Пусто',                                        1),
+    ('letters',        'В строке есть буквы',                          2),
+    ('digits_lt_10',   'Цифр меньше десяти',                           3),
+    ('ten_not_nine',   'Десять цифр, начинается не с девятки',         4),
+    ('eleven_foreign', 'Одиннадцать цифр, начинается не с 7 и не с 8', 5),
+    ('digits_gt_11',   'Цифр больше одиннадцати',                      6)
+ON CONFLICT (code) DO NOTHING;
+
+-- ----- Разбор у лида --------------------------------------------------------
+-- ИСХОДНАЯ СТРОКА ХРАНИТСЯ БЕССРОЧНО, а не до выхода строки из разбора
+-- (паспорт Р10). Два довода, и оба практические: неверно сработавшее приведение
+-- испортит хороший номер, и без исходника его не восстановить (ответ куратора
+-- И34); и человек, глядя на исправленный номер, должен видеть, что пришло на
+-- самом деле, а не только то, что получилось.
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS phone_raw VARCHAR;
+
+-- Признак «разобрался». Из него собирается список разбора и счётчик на вкладке.
+-- DEFAULT false, а не true: у всех существующих строк номер ещё не проверялся,
+-- и объявить их приведёнными до миграции значило бы соврать.
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS phone_normalized BOOLEAN NOT NULL DEFAULT false;
+
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS phone_fix_reason_id INTEGER REFERENCES phone_fix_reasons(id) ON DELETE RESTRICT;
+
+-- Вердикт человека. Четыре значения, и «проверен» с «безнадёжен» — РАЗНЫЕ, а не
+-- одно «выведен из разбора»: у первого звонить можно прямо сейчас, у второго
+-- некуда (решение владельца 63). NULL означает «разбора не было вовсе», то есть
+-- номер привёлся сам.
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS phone_fix_verdict VARCHAR;
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'leads_phone_fix_verdict_check') THEN
+        ALTER TABLE leads ADD CONSTRAINT leads_phone_fix_verdict_check
+            CHECK (phone_fix_verdict IS NULL
+                   OR phone_fix_verdict IN ('pending', 'checked', 'hopeless', 'fixed'));
+    END IF;
+END $$;
+
+-- КТО И КОГДА вынес вердикт. Три колонки автора — те же три, что у журнала
+-- (audit_log.actor_*), и берутся они из того же источника: заголовков единого
+-- транспорта. Отдельного поля с ручным вводом здесь нет намеренно (решение
+-- куратора И66): поле, которое человек заполняет руками, — второй источник
+-- правды, и он разойдётся с первым в тот же день, когда кто-то вынесет вердикт
+-- и забудет представиться. Появится вход — подпись заполнится сама.
+--
+-- Ссылки на employees у actor_id нет по той же причине, что и в журнале:
+-- удалённый сотрудник не должен стирать подпись под вердиктом.
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS phone_fix_actor_id INTEGER;
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS phone_fix_actor_kind VARCHAR;
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS phone_fix_actor_name VARCHAR;
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS phone_fix_at TIMESTAMP;
+
+-- ----- Указатель слияния ----------------------------------------------------
+-- КУДА ДЕЛСЯ ЛИД. Слитый лид не удаляется (решение владельца 11.2: лидов не
+-- удаляем, а отправляем в архив) и не ждёт архива из части 5 — иначе часть 4
+-- встанет. Он получает указатель на того, в кого влит: пропадает из списков,
+-- из раздачи и из подбора оператора, но существует, и на вопрос «куда делся
+-- лид 1287» ответ есть навсегда (решение куратора И58).
+--
+-- ON DELETE RESTRICT, а не SET NULL: обнулить указатель значит вернуть слитого
+-- лида в списки как самостоятельного — с тем же номером, что у живого. Отказ
+-- объясняется словами там, где удаляют (routes/leadsAdmin.js).
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS merged_into_id INTEGER REFERENCES leads(id) ON DELETE RESTRICT;
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS merged_at TIMESTAMP;
+
+CREATE INDEX IF NOT EXISTS idx_leads_phone_fix ON leads (phone_fix_verdict)
+    WHERE phone_normalized = false;
+CREATE INDEX IF NOT EXISTS idx_leads_merged_into ON leads (merged_into_id)
+    WHERE merged_into_id IS NOT NULL;
+
+-- Расшифровка причины в журнале: «3 → 7» превращается в «Цифр меньше десяти».
+-- Замка не нужно — карта дополняется по мере появления ссылок, конфликт по
+-- (table_name, column_name) гасится сам.
+INSERT INTO audit_ref_map (table_name, column_name, ref_table, ref_title_columns) VALUES
+    ('leads', 'phone_fix_reason_id', 'phone_fix_reasons', 'title'),
+    ('leads', 'merged_into_id',      'leads',             'last_name first_name phone')
+ON CONFLICT (table_name, column_name) DO NOTHING;
+
 -- ----- Подключение триггера ко всем таблицам --------------------------------
 -- Перебором, а не списком: новая таблица подключается САМА, при первом же
 -- старте сервера после её появления. Иначе про аудит пришлось бы помнить при
