@@ -17,6 +17,16 @@ const { distributePendingLeads, findNewFunnelStatusId } = require('../services/l
 const { normalizePhone, normalizeForSearch } = require('../services/phoneFormat');
 const { phoneColumnsFor, findLeadByPhone, leadTitle } = require('../services/phoneFix');
 const { mergeLeads } = require('../services/leadMerge');
+const { currentCommit } = require('../services/phoneMigration');
+const { formatMoscow } = require('../services/tunnelKeys');
+
+// Дата и время по Москве одной строкой — для выгрузки. Формат тот же, что
+// показывает страница выдачи ключа: всё, что видит человек, показывается
+// московским временем (решение владельца 47).
+function formatMoscowStamp(value) {
+    if (!value) return '';
+    return formatMoscow(value).full;
+}
 
 const router = express.Router();
 
@@ -604,6 +614,68 @@ router.get('/check-phone', async (req, res) => {
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: 'Не удалось проверить номер' });
+    }
+});
+
+// GET /api/leads-admin/phone-fix/export.csv — список номеров, которые не
+// привелись, файлом (Б1.3).
+//
+// ПОКА ЭКРАНА РАЗБОРА НЕТ, ЭТО ЕДИНСТВЕННЫЙ СПОСОБ УВИДЕТЬ СПИСОК. План 5.3
+// требует: что не разобрали — показываем, решает человек. Экран Р10 нарисован,
+// но собирается в разделе «Лиды», приведённом к макету; до тех пор работает
+// выгрузка — так прямо разрешено брифом.
+//
+// Объявлен ДО '/:id', иначе Express прочитает «phone-fix» как идентификатор.
+router.get('/phone-fix/export.csv', async (req, res) => {
+    try {
+        const rows = await pool.query(
+            `SELECT l.id, l.phone, l.phone_raw, l.phone_fix_verdict, r.title AS reason,
+                    l.last_name, l.first_name, l.middle_name, s.root_source, l.created_at
+               FROM leads l
+               LEFT JOIN phone_fix_reasons r ON r.id = l.phone_fix_reason_id
+               LEFT JOIN sources s ON s.id = l.source_id
+              WHERE l.phone_normalized = false AND l.merged_into_id IS NULL
+              ORDER BY r.sort_order NULLS LAST, l.id`);
+        const total = await pool.query('SELECT count(*)::int AS n FROM leads WHERE merged_into_id IS NULL');
+
+        const VERDICTS = {
+            pending: 'на разборе', checked: 'проверен', hopeless: 'безнадёжен', fixed: 'исправлен'
+        };
+        // Точка с запятой, а не запятая: Excel в русской локали разбирает по
+        // ней. Кавычки удваиваются — номер бывает записан как угодно, включая
+        // кавычки внутри строки.
+        const cell = (value) => `"${String(value === null || value === undefined ? '' : value).replace(/"/g, '""')}"`;
+        const line = (cells) => cells.map(cell).join(';');
+
+        // Первая строка — заголовок прогона (требование куратора И71): файл,
+        // найденный через месяц, должен сам говорить, откуда он.
+        const head = line([
+            `Номера на разбор · снято ${formatMoscowStamp(new Date())} · коммит ${currentCommit()}` +
+            ` · лидов всего ${total.rows[0].n} · не привелось ${rows.rows.length}`
+        ]);
+        const header = line(['Лид', 'Исходная строка', 'Что сейчас в базе', 'Причина', 'Вердикт',
+            'ФИО', 'Источник', 'Заведён']);
+        const body = rows.rows.map((r) => line([
+            r.id,
+            r.phone_raw || r.phone,
+            r.phone,
+            r.reason || '',
+            VERDICTS[r.phone_fix_verdict] || '',
+            [r.last_name, r.first_name, r.middle_name].filter(Boolean).join(' '),
+            r.root_source || '',
+            formatMoscowStamp(r.created_at)
+        ]));
+
+        // BOM обязателен: без метки Excel открывает кириллицу мусором, и весь
+        // смысл выгрузки пропадает на ровном месте (И71).
+        const csv = '﻿' + [head, header, ...body].join('\r\n') + '\r\n';
+        res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+        res.setHeader('Content-Disposition',
+            `attachment; filename="phone-fix-${new Date().toISOString().slice(0, 10)}.csv"`);
+        res.send(csv);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Не удалось собрать список номеров на разбор' });
     }
 });
 
