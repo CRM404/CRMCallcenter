@@ -11,6 +11,7 @@
 
 const express = require('express');
 const { pool } = require('../db');
+const auditContext = require('../services/auditContext');
 const { startOfDay, startOfNextDay, zonedParts } = require('../services/appTime');
 const { distributePendingLeads, findNewFunnelStatusId } = require('../services/leadDistribution');
 
@@ -761,7 +762,10 @@ router.post('/bulk-update', async (req, res) => {
 // лидов) не блокируют вставку — только помечаются в ответе. Вся вставка +
 // связки + распределение — одной транзакцией.
 router.post('/bulk-import', async (req, res) => {
-    const { sourceId, rows } = req.body;
+    // fileName пришёл вместе с частью 3: в журнале партия разворачивается в
+    // сводку, и «какой файл залили» — первый вопрос при разборе неудачной
+    // загрузки. Раньше браузер разбирал файл сам и имя никуда не отдавал.
+    const { sourceId, rows, fileName } = req.body;
     if (!Array.isArray(rows) || rows.length === 0) {
         return res.status(400).json({ error: 'Файл пуст или не содержит строк для загрузки' });
     }
@@ -787,6 +791,17 @@ router.post('/bulk-import', async (req, res) => {
         }
 
         await client.query('BEGIN');
+
+        // ПАРТИЯ. Пять тысяч лидов — одно действие человека, и в журнале оно
+        // обязано читаться как одно (Б2.10). Признак ставится на это же
+        // соединение, в открытую транзакцию: не состоится загрузка — откатится
+        // и он.
+        const batchId = await auditContext.startBatch(pool, {
+            kind: 'import',
+            title: 'Загрузка базы лидов',
+            fileName: typeof fileName === 'string' ? fileName.slice(0, 255) : null
+        });
+        await auditContext.markClientBatch(client, batchId, 'Импорт');
 
         const newStatusId = await findNewFunnelStatusId(client);
         if (newStatusId === null) {

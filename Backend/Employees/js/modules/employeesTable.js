@@ -623,8 +623,17 @@ export function createTable(root, deps) {
         const btn = $('[data-role="mass-apply"]');
         btn.disabled = true;
         try {
-            if (action === 'inactive') await runMassInactive(ids);
-            else if (action === 'delete') await runMassDelete(ids);
+            // ОДНО ДЕЙСТВИЕ ЧЕЛОВЕКА — ОДНА ПАРТИЯ В ЖУРНАЛЕ (часть 3, Б2.10).
+            // Массовое действие клиент делает чередой обычных запросов, и без
+            // общего признака сто выделенных строк дали бы в журнале сто
+            // отдельных правок, за которыми не видно одного нажатия.
+            const title = action === 'inactive'
+                ? `Массово в архив: ${ids.length}`
+                : `Массовое удаление: ${ids.length}`;
+            await storage.batched(title, async () => {
+                if (action === 'inactive') await runMassInactive(ids);
+                else if (action === 'delete') await runMassDelete(ids);
+            });
         } finally {
             massApplying = false;
             btn.disabled = false;

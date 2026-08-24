@@ -28,6 +28,7 @@
 
 const { withTransaction } = require('./dbTx');
 const { HELD_LEAD_RELEASE_HOURS } = require('./appTime');
+const auditContext = require('./auditContext');
 
 async function findNewFunnelStatusId(db) {
     const result = await db.query("SELECT id FROM lead_funnel_statuses WHERE stage_number = 0 LIMIT 1");
@@ -127,7 +128,11 @@ async function releaseHeldLeads(db, newStatusId) {
 // очереди с фронта полный проход НЕ запускает (dialog.md D3) — он разбирает
 // очередь только под запросившего оператора, см. assignNextLeadForEmployee.
 async function distributePendingLeads(db) {
-    return withTransaction(db, async (client) => {
+    // АВТОР У РАЗДАЧИ СЛУЖЕБНЫЙ, и это честнее человека. Запускает её выход
+    // оператора на линию или загрузка партии, но переставляет лидов система по
+    // своим правилам: записать сюда фамилию нажавшего значит приписать ему
+    // решение, которого он не принимал (часть 3, план 10.3).
+    return auditContext.runAsService('Раздача', () => withTransaction(db, async (client) => {
         const newStatusId = await findNewFunnelStatusId(client);
         if (newStatusId === null) return { distributed: 0 };
 
@@ -153,7 +158,7 @@ async function distributePendingLeads(db) {
             distributed++;
         }
         return { distributed };
-    });
+    }));
 }
 
 // Очередь одного оператора: вернуть ему карточку, с которой он должен работать

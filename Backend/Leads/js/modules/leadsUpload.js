@@ -249,7 +249,10 @@ export function createUpload(root, deps) {
             if (rows.length === 0) {
                 return problem('В файле не найдено ни одной строки с номером телефона');
             }
-            const result = await storage.bulkImportLeads({ ...params, rows });
+            // Имя файла уходит на сервер вместе со строками: браузер разбирает
+            // файл сам, и без этого поля партия в журнале изменений осталась бы
+            // без ответа на первый же вопрос — «а что залили?» (часть 3).
+            const result = await storage.bulkImportLeads({ ...params, rows, fileName: selectedFile.name });
             // Партия уже загружена — но панели, в которую надо нарисовать
             // сводку, может уже не быть.
             if (!isAlive()) return false;

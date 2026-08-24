@@ -19,4 +19,53 @@ const pool = new Pool({
     ssl: process.env.PGSSL === 'require' ? { rejectUnauthorized: false } : false
 });
 
+// --- Настройки соединения для аудита ---------------------------------------
+//
+// Триггер журнала не знает ни про запросы, ни про браузер: единственное, что он
+// умеет читать, — настройки соединения. Класть их надо на ТО ЖЕ соединение, на
+// котором пойдёт запрос, а pool.query() берёт из пула любое свободное. Отсюда
+// правило: соединение сначала берётся, потом настраивается, и только потом на
+// нём работают.
+//
+// ЗАЧЕМ СТАВИТЬ ДАЖЕ ПУСТЫЕ ЗНАЧЕНИЯ. Настройка уровня сеанса переживает
+// освобождение соединения и достаётся следующему, кто его возьмёт. Пропустив
+// установку там, где контекста нет (фоновая работа, миграция при старте), мы
+// приписали бы её записи автора из чужого, уже закончившегося запроса. Поэтому
+// установка безусловная: нет контекста — кладём пустое.
+//
+// Цена — один лишний обход до базы на каждое взятие соединения. Обойтись
+// транзакцией с SET LOCAL нельзя: тогда каждый одиночный запрос проекта стал бы
+// транзакцией, а это уже другое поведение, а не другая цена.
+const { currentSettings } = require('./services/auditContext');
+
+const APPLY_SETTINGS = `SELECT set_config('crm.audit_actor_id', $1, false),
+                               set_config('crm.audit_actor_kind', $2, false),
+                               set_config('crm.audit_actor_name', $3, false),
+                               set_config('crm.audit_page', $4, false),
+                               set_config('crm.audit_batch', $5, false)`;
+
+const poolConnect = pool.connect.bind(pool);
+
+pool.connect = async function connectWithAuditContext() {
+    const client = await poolConnect();
+    try {
+        await client.query(APPLY_SETTINGS, currentSettings());
+    } catch (err) {
+        client.release();
+        throw err;
+    }
+    return client;
+};
+
+// pool.query переписан ЧЕРЕЗ pool.connect, а не рядом с ним: иначе настройки
+// пришлось бы ставить в двух местах и однажды разойтись.
+pool.query = async function queryWithAuditContext(...args) {
+    const client = await pool.connect();
+    try {
+        return await client.query(...args);
+    } finally {
+        client.release();
+    }
+};
+
 module.exports = { pool };

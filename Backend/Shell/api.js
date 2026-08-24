@@ -21,15 +21,45 @@
 export const API_BASE_URL = '/api';
 
 /**
+ * ПОМЕТКА «С КАКОЙ СТРАНИЦЫ» — ЗДЕСЬ, В ОДНОМ МЕСТЕ НА ВЕСЬ ПРОЕКТ.
+ *
+ * Журналу изменений нужно знать, из какого раздела пришла правка (Б2.7). Ради
+ * этого оболочка и сводила запросы всех разделов в одну функцию: пометка
+ * добавляется однажды, и её получают все разделы разом — включая те, которых
+ * ещё нет.
+ *
+ * Автора здесь не бывает: в админке нет входа, называться некому, и сервер
+ * честно запишет «не указан». Свой номер прикладывает только страница
+ * оператора — у неё свой транспорт.
+ */
+function auditHeaders(page) {
+    return page ? { 'X-CRM-Page': page } : {};
+}
+
+/**
  * Запрос к API. Текст ошибки — тот же, что раздавали копии: пользователь
  * видел эти формулировки и до переезда.
  */
 export async function request(path, options = {}) {
+    const { page, batch, batchTitle, ...rest } = options;
     let response;
     try {
         response = await fetch(`${API_BASE_URL}${path}`, {
-            headers: { 'Content-Type': 'application/json' },
-            ...options
+            ...rest,
+            headers: {
+                'Content-Type': 'application/json',
+                ...auditHeaders(page),
+                // Признак партии: череда обычных запросов, которую человек
+                // сделал ОДНИМ действием (массовая правка в таблице), обязана
+                // читаться в журнале как одно действие, а не как сто.
+                ...(batch ? { 'X-CRM-Batch': batch } : {}),
+                // Заголовок партии — русский текст, а в заголовок HTTP он не
+                // лезет вовсе: значение обязано быть латиницей, и fetch на
+                // кириллице падает ошибкой ещё до отправки. Поэтому кодируем;
+                // сервер раскодирует обратно.
+                ...(batch && batchTitle ? { 'X-CRM-Batch-Title': encodeURIComponent(batchTitle) } : {}),
+                ...(rest.headers || {})
+            }
         });
     } catch (e) {
         // Отмена приходит сюда же, но это не сбой связи, и говорить о ней
@@ -80,6 +110,13 @@ export function buildQuery(filters = {}) {
 export function createApiScope(hooks = {}) {
     const controller = new AbortController();
     let alive = true;
+    // Ключ раздела, с которым оболочка смонтировала панель. Уходит в журнал
+    // изменений как «какая страница CRM».
+    const page = hooks.page || null;
+    // Признак партии живёт ровно столько, сколько идёт массовое действие:
+    // ставится перед ним и снимается сразу после.
+    let batch = null;
+    let batchTitle = null;
 
     // Чтение отличается от действия по методу. Оболочка вешает на чтение
     // показ полосы «данные не загрузились» (ui/load-error.js): отказавший
@@ -97,7 +134,7 @@ export function createApiScope(hooks = {}) {
     const send = (path, options = {}) => {
         if (!alive) return Promise.reject(abortError());
         const read = isRead(options);
-        return request(path, { ...options, signal: controller.signal }).then(
+        return request(path, { ...options, page, batch, batchTitle, signal: controller.signal }).then(
             (body) => {
                 if (read && alive && hooks.onReadOk) hooks.onReadOk(readKey(path));
                 return body;
@@ -119,6 +156,22 @@ export function createApiScope(hooks = {}) {
         put: (path, payload) => send(path, { method: 'PUT', body: JSON.stringify(payload) }),
         patch: (path, payload) => send(path, { method: 'PATCH', body: JSON.stringify(payload) }),
         del: (path) => send(path, { method: 'DELETE' }),
+
+        /**
+         * Массовое действие: череда запросов, которую человек сделал одним
+         * нажатием. Признак снимается в finally — иначе следующая одиночная
+         * правка приедет в журнал как часть чужой партии.
+         */
+        async batched(title, fn) {
+            batch = (crypto.randomUUID && crypto.randomUUID()) || null;
+            batchTitle = title || null;
+            try {
+                return await fn();
+            } finally {
+                batch = null;
+                batchTitle = null;
+            }
+        },
 
         /** Оболочка зовёт это при закрытии панели. Раздел — не зовёт. */
         abort() {

@@ -205,6 +205,10 @@ async function mountSection(panelId, key, container) {
     // повторное чтение КАЖДОГО из них.
     const failedReads = new Set();
     const api = createApiScope({
+        // Ключ раздела уходит в журнал изменений как «какая страница CRM»
+        // (часть 3, Б2.7). Правка одна на все разделы — ради этого запросы и
+        // сводились в единый транспорт.
+        page: key,
         onReadFail: (err, path) => {
             if (mounted.get(panelId) !== record) return;
             failedReads.add(path);

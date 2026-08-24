@@ -1,13 +1,31 @@
 // --- operatorStorage.js: клиент REST API для страницы оператора ---
 
+import { getOperatorIdentity } from './operatorIdentity.js';
+
 export const API_BASE_URL = '/api';
+
+// КТО И С КАКОЙ СТРАНИЦЫ — для журнала изменений (часть 3, Б2.7).
+//
+// Страница оператора — единственное место в проекте, где браузер знает, кто за
+// экраном: после входа он держит номер сотрудника и прикладывает его к
+// запросам. Проверить этот номер сервер не может — прислать чужой ничто не
+// мешает, — поэтому в журнале он записывается как «указан браузером», и в
+// интерфейсе так и написано. Это честная пометка, а не обман.
+function auditHeaders() {
+    const identity = getOperatorIdentity();
+    const id = identity && identity.id;
+    return {
+        'X-CRM-Page': 'operator',
+        ...(id ? { 'X-CRM-Actor': String(id) } : {})
+    };
+}
 
 async function request(path, options = {}) {
     let response;
     try {
         response = await fetch(`${API_BASE_URL}${path}`, {
-            headers: { 'Content-Type': 'application/json' },
-            ...options
+            ...options,
+            headers: { 'Content-Type': 'application/json', ...auditHeaders(), ...(options.headers || {}) }
         });
     } catch (e) {
         throw new Error('Не удалось связаться с сервером. Проверьте подключение.');

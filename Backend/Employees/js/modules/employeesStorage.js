@@ -21,6 +21,11 @@ export const DOCUMENT_TYPE_MAP = {
 
 export function createStorage(api) {
     return {
+        // Массовое действие одной партией: одно нажатие человека обязано
+        // читаться в журнале изменений как одно, а не как сто (часть 3, Б2.10).
+        // Пробрасывается из транспорта — своего признака раздел не заводит.
+        batched: (title, fn) => api.batched(title, fn),
+
         // --- Сотрудники ---
 
         fetchEmployees: (filters = {}) => api.get('/employees', filters),

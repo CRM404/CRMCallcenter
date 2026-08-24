@@ -7,6 +7,7 @@ const express = require('express');
 const cors = require('cors');
 
 const { runMigrations } = require('./migrate');
+const auditContext = require('./services/auditContext');
 const { pool } = require('./db');
 const { checkStatusFlagsConfigured } = require('./services/leadCallRules');
 const employeesRouter = require('./routes/employees');
@@ -34,6 +35,12 @@ const app = express();
 
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
+
+// КОНТЕКСТ АУДИТА СТАВИТСЯ ДО ВСЕХ МАРШРУТОВ и охватывает запрос целиком —
+// включая то, что маршрут делает после await. Стоит на каждом запросе, а не
+// только на изменяющем: отличить чтение от записи по глаголу нельзя, у нас
+// `GET /api/leads/next` и `GET /api/employees/:id/work-state` пишут в базу.
+app.use(auditContext.middleware(pool));
 
 app.get('/api/health', (req, res) => {
     res.json({ status: 'ok' });
