@@ -1082,3 +1082,72 @@ ALTER TABLE employees ADD COLUMN IF NOT EXISTS pbx_password VARCHAR;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_employees_pbx_extension
     ON employees (pbx_extension)
     WHERE pbx_extension IS NOT NULL AND status <> 'inactive';
+
+-- ---------------------------------------------------------------------------
+-- КЛЮЧ ТУННЕЛЯ У СОТРУДНИКА И ОДНОРАЗОВЫЕ ССЫЛКИ НА ВЫДАЧУ
+-- (задача «Звонки», часть 1Б; бриф — часть 1Б, паспорт Р1Б).
+--
+-- ГЛАВНОЕ, ЧТО НАДО ПОНЯТЬ ПРО ЭТИ ТАБЛИЦЫ: ключ сам по себе не пропуск.
+-- Чтобы человек попал в сеть, его ОТКРЫТЫЙ ключ должен лежать в списке
+-- допущенных ([Peer]) на сервере туннеля, и вносится он туда руками. Пар
+-- можно нагенерировать сколько угодно — без записи в тот список это
+-- бесполезные байты. Значит здесь хранится не пропуск, а учёт: кому, когда,
+-- на какой адрес и кем выдано.
+--
+-- ЗАКРЫТОГО КЛЮЧА ЗДЕСЬ НЕТ И БЫТЬ НЕ МОЖЕТ — ни в открытом виде, ни в
+-- зашифрованном. Он рождается в момент открытия одноразовой ссылки, уходит
+-- в ответ единственным показом и не сохраняется нигде (правило 1 брифа,
+-- «нарушение обнуляет всю схему»).
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS tunnel_public_key VARCHAR;
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS tunnel_address VARCHAR;
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS tunnel_issued_at TIMESTAMP;
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS tunnel_issued_by INTEGER REFERENCES employees(id) ON DELETE SET NULL;
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS tunnel_revoked_at TIMESTAMP;
+
+-- tunnel_public_key заполняется НЕ в момент выдачи ссылки, а в момент её
+-- открытия: пара рождается там же, где показывается. Пока ссылку не открыли,
+-- адрес и дата уже есть, а открытого ключа ещё нет — и это не полусостояние
+-- ошибки, а честная запись: вносить в список допущенных пока нечего.
+--
+-- tunnel_revoked_at ставится при уходе сотрудника в архив и при перевыпуске.
+-- Ключ считается действующим, только когда адрес выдан и отзыва не было; на
+-- этом же условии стоит частичный индекс ниже.
+
+-- УНИКАЛЬНОСТЬ АДРЕСА В ПОДСЕТИ — В БАЗЕ, А НЕ В КОДЕ РАСПРЕДЕЛИТЕЛЯ.
+-- Два человека с одним адресом означают, что второй не подключится вовсе, а
+-- разбираться придётся на сервере туннеля. Проверка «свободен ли адрес» и
+-- вставка идут разными запросами, и между ними успевает вклиниться вторая
+-- выдача — полагаться можно только на индекс.
+--
+-- Условие ровно то же, что у добавочного (idx_employees_pbx_extension):
+-- отозванный ключ адрес ОСВОБОЖДАЕТ, отдельного действия «освободить» нет.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_employees_tunnel_address
+    ON employees (tunnel_address)
+    WHERE tunnel_address IS NOT NULL AND tunnel_revoked_at IS NULL;
+
+-- ОДНОРАЗОВЫЕ ССЫЛКИ. Хранится ХЕШ токена, а не сам токен: утечка этой
+-- таблицы тогда не даёт ни одной рабочей ссылки. Токен существует ровно в
+-- одном месте — в ссылке, которую руководитель отдал сотруднику.
+CREATE TABLE IF NOT EXISTS tunnel_key_tokens (
+    id SERIAL PRIMARY KEY,
+    employee_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+    -- sha256 в hex. UNIQUE — не украшение: одинаковый хеш означал бы две
+    -- ссылки на один секрет, и «сгорела» бы только одна из них.
+    token_hash VARCHAR NOT NULL UNIQUE,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    created_by INTEGER REFERENCES employees(id) ON DELETE SET NULL,
+    expires_at TIMESTAMP NOT NULL,
+    -- Отметка «ссылку открыли». Именно она отличает мёртвое состояние
+    -- «уже забирали» (возможен перехват, человека надо подтолкнуть сказать)
+    -- от «срок истёк» (бытовая ситуация). Одна заглушка на оба случая стёрла
+    -- бы единственный признак утечки, который у нас есть.
+    used_at TIMESTAMP,
+    -- Перевыпуск гасит прежние ссылки того же сотрудника, не дожидаясь срока:
+    -- «прежний ключ перестанет работать сразу» — обещание окна подтверждения.
+    revoked_at TIMESTAMP
+);
+
+-- Поиск идёт всегда по хешу токена (UNIQUE-индекс уже есть) и по сотруднику —
+-- при перевыпуске, когда прежние ссылки надо погасить разом.
+CREATE INDEX IF NOT EXISTS idx_tunnel_key_tokens_employee
+    ON tunnel_key_tokens (employee_id);

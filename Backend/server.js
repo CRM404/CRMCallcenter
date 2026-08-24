@@ -28,6 +28,7 @@ const geoSuggestRouter = require('./routes/geoSuggest');
 const sourcesRouter = require('./routes/sources');
 const leadsAdminRouter = require('./routes/leadsAdmin');
 const scheduleRouter = require('./routes/schedule');
+const tunnelPageRouter = require('./routes/tunnelPage');
 
 const app = express();
 
@@ -57,6 +58,14 @@ app.use('/api/geo-suggest', geoSuggestRouter);
 app.use('/api/sources', sourcesRouter);
 app.use('/api/leads-admin', leadsAdminRouter);
 app.use('/api/schedule', scheduleRouter);
+
+// СТРАНИЦА ВЫДАЧИ НАСТРОЙКИ ТУННЕЛЯ — не под /api: её открывает человек в
+// браузере, и она отдаёт разметку, а не JSON. Стоит ДО express.static по той
+// же причине, что и редиректы ниже: статика ответила бы раньше, если бы в
+// какой-нибудь из восьми папок однажды завёлся каталог k/.
+//
+// Адрес короткий намеренно: ссылку иногда придётся диктовать голосом.
+app.use('/k', tunnelPageRouter);
 
 // Отдаём страницы "Сотрудники", "Оператор", "Скрипт (админ)", "Главная",
 // "CPA-сети", "Источники" и "Лиды" тем же сервером — отдельный статический
