@@ -410,6 +410,14 @@ router.put('/:id', async (req, res) => {
         if (err.code === '23503') {
             return res.status(400).json({ error: 'Указан несуществующий статус воронки' });
         }
+        // Дубль номера, проскочивший мимо предварительной проверки (К176): окно
+        // между findLeadByPhone и UPDATE открыто, и без этой ветки оператор
+        // получил бы 500 вместо объяснения.
+        if (err.code === '23505' && err.constraint === 'idx_leads_phone_unique') {
+            return res.status(409).json({
+                error: 'Этот номер уже у другого лида. Сохранить нельзя — скажите руководителю, лидов объединят'
+            });
+        }
         console.error(err);
         res.status(500).json({ error: 'Не удалось сохранить лида' });
     }

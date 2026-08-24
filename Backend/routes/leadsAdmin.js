@@ -18,14 +18,21 @@ const { normalizePhone, normalizeForSearch } = require('../services/phoneFormat'
 const { phoneColumnsFor, findLeadByPhone, leadTitle } = require('../services/phoneFix');
 const { mergeLeads } = require('../services/leadMerge');
 const { currentCommit } = require('../services/phoneMigration');
-const { formatMoscow } = require('../services/tunnelKeys');
 
-// Дата и время по Москве одной строкой — для выгрузки. Формат тот же, что
-// показывает страница выдачи ключа: всё, что видит человек, показывается
-// московским временем (решение владельца 47).
+// Дата и время по Москве одной строкой — для выгрузки. Московское время потому,
+// что всё, что видит человек, показывается московским (решение владельца 47).
+//
+// С ГОДОМ, в отличие от страницы выдачи ключа (К177, приёмка части 4). Там срок
+// живёт сутки и год лишний; здесь файл сам должен говорить, откуда он, а через
+// год «5 марта» не значит ничего.
 function formatMoscowStamp(value) {
     if (!value) return '';
-    return formatMoscow(value).full;
+    const date = value instanceof Date ? value : new Date(value);
+    return new Intl.DateTimeFormat('ru-RU', {
+        timeZone: 'Europe/Moscow',
+        day: '2-digit', month: '2-digit', year: 'numeric',
+        hour: '2-digit', minute: '2-digit', hour12: false
+    }).format(date).replace(', ', ' ');
 }
 
 const router = express.Router();
@@ -213,6 +220,20 @@ const FK_MESSAGES = {
     lead_script_statuses_funnel_status_id_fkey: 'Один из выбранных статусов показа не найден',
     lead_distribution_pool_employee_id_fkey: 'Один из выбранных сотрудников не найден'
 };
+
+// Дубль номера, проскочивший мимо предварительной проверки (К176, приёмка
+// части 4). Окно между findLeadByPhone и записью открыто: проверка идёт до
+// BEGIN, и двое, сохраняющие один номер одновременно, доходят до индекса. Без
+// этой обработки второй получал бы 500 «Не удалось сохранить лида» — то есть
+// ровно ту голую ошибку базы, от которой часть 4 и уводит.
+function handleDuplicatePhone(err, res, rawPhone) {
+    if (err.code !== '23505' || err.constraint !== 'idx_leads_phone_unique') return false;
+    const { phone } = normalizePhone(rawPhone);
+    res.status(409).json({
+        error: `Номер ${phone} уже у другого лида. Сохранить нельзя — лидов можно объединить`
+    });
+    return true;
+}
 
 function handleFkError(err, res) {
     if (err.code !== '23503') return false;
@@ -747,6 +768,7 @@ router.post('/', async (req, res) => {
         res.status(201).json(await fetchLeadById(leadId));
     } catch (err) {
         await client.query('ROLLBACK').catch(() => {});
+        if (handleDuplicatePhone(err, res, req.body.phone)) return;
         if (handleFkError(err, res)) return;
         console.error(err);
         res.status(500).json({ error: 'Не удалось создать лида' });
@@ -821,6 +843,7 @@ router.put('/:id', async (req, res) => {
         res.json(await fetchLeadById(leadId));
     } catch (err) {
         await client.query('ROLLBACK').catch(() => {});
+        if (handleDuplicatePhone(err, res, req.body.phone)) return;
         if (handleFkError(err, res)) return;
         console.error(err);
         res.status(500).json({ error: 'Не удалось сохранить лида' });
@@ -1101,6 +1124,12 @@ router.post('/bulk-import', async (req, res) => {
         });
     } catch (err) {
         await client.query('ROLLBACK').catch(() => {});
+        if (err.code === '23505' && err.constraint === 'idx_leads_phone_unique') {
+            return res.status(409).json({
+                error: 'В файле есть номер, который уже занят другим лидом. Загрузка отменена целиком — ' +
+                    'проверьте файл и повторите'
+            });
+        }
         if (handleFkError(err, res)) return;
         console.error(err);
         res.status(500).json({ error: 'Не удалось загрузить базу' });
