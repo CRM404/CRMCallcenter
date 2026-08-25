@@ -72,7 +72,6 @@ export async function mount(container, ctx) {
 
     table = createTable(container, {
         ...deps,
-        confirmDanger: ctx.confirmDanger,
         getHiddenColumns: () => columns.getHiddenColumns(),
         onEdit: (id) => card.openById(id),
         // Список изменился — если график уже загружен, его строки показывают
