@@ -148,7 +148,14 @@ const LEAD_CARD_SELECT = `
     SELECT l.*,
            CASE
                WHEN s.id IS NULL THEN NULL
-               ELSE COALESCE(p.name || ' · ', '') || s.root_source
+               -- ИСТОЧНИК ЛИДОВ, А НЕ КОРНЕВОЙ (25.08.2026). До правки данных
+               -- номер лежал в root_source вместе со словом в скобках, и
+               -- подпись была осмысленной. Теперь номер в lead_source, а в
+               -- root_source у всех 916 записей одно и то же «ДОМ.РФ» —
+               -- подпись стала одинаковой у всех лидов. COALESCE держит
+               -- случай пустого поля: колонка nullable, обязательность
+               -- проверяется маршрутом, а не базой.
+               ELSE COALESCE(p.name || ' · ', '') || COALESCE(NULLIF(s.lead_source, ''), s.root_source)
            END AS source_name
     FROM leads l
     LEFT JOIN sources s ON s.id = l.source_id

@@ -408,7 +408,9 @@ export function createLeadModal(root, deps) {
         funnelStatuses = statuses;
         allEmployees = employees;
 
-        fillSelectFromList($('#ldSource'), sources.map((s) => ({ id: s.id, name: s.rootSource })), '— не выбран —');
+        // Источник лидов, а не корневой: см. правку данных 25.08.2026 —
+        // в корневом у всех записей одно слово, выбирать по нему нельзя.
+        fillSelectFromList($('#ldSource'), sources.map((s) => ({ id: s.id, name: s.leadSource || s.rootSource })), '— не выбран —');
         fillSelectFromList($('#ldScript'), scripts.map((s) => ({ id: s.id, name: s.title })), '— не выбран —');
         fillSelectFromList($('#ldRepeatScript'), scripts.map((s) => ({ id: s.id, name: s.title })), '— не выбран —');
         fillFunnelStatusSelect($('#ldFunnelStatus'), funnelStatuses, true);

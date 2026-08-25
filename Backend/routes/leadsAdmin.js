@@ -129,7 +129,11 @@ function normalizeIdArray(value) {
 // три связки одним json_agg на каждую (без N+1 с фронта, dialog.md H2).
 const BASE_SELECT = `
     SELECT l.*,
-           s.root_source AS source_name,
+           -- Колонка «Источник» в таблице: источник лидов, а не корневой
+           -- (25.08.2026). После разделения номера и слова в root_source у
+           -- всех записей стоит «ДОМ.РФ», и колонка показывала бы одно и то
+           -- же во всех строках.
+           COALESCE(NULLIF(s.lead_source, ''), s.root_source) AS source_name,
            CASE WHEN e.id IS NOT NULL THEN e.last_name || ' ' || e.first_name ELSE NULL END AS employee_name,
            fs.status_name, fs.stage_name, fs.stage_number,
            sc.title AS script_title,
@@ -692,7 +696,9 @@ router.get('/phone-fix/export.csv', async (req, res) => {
     try {
         const rows = await pool.query(
             `SELECT l.id, l.phone, l.phone_raw, l.phone_fix_verdict, r.title AS reason,
-                    l.last_name, l.first_name, l.middle_name, s.root_source, l.created_at
+                    l.last_name, l.first_name, l.middle_name,
+                    COALESCE(NULLIF(s.lead_source, ''), s.root_source) AS source_label,
+                    l.created_at
                FROM leads l
                LEFT JOIN phone_fix_reasons r ON r.id = l.phone_fix_reason_id
                LEFT JOIN sources s ON s.id = l.source_id
@@ -724,7 +730,7 @@ router.get('/phone-fix/export.csv', async (req, res) => {
             r.reason || '',
             VERDICTS[r.phone_fix_verdict] || '',
             [r.last_name, r.first_name, r.middle_name].filter(Boolean).join(' '),
-            r.root_source || '',
+            r.source_label || '',
             formatMoscowStamp(r.created_at)
         ]));
 

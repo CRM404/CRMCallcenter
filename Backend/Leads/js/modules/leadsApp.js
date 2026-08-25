@@ -168,7 +168,9 @@ const COLUMNS_SECTION = 'leads';
 const FILTER_FIELDS = [
     { key: 'fio', sel: '#fltFio', label: 'ФИО' },
     { key: 'phone', sel: '#fltPhone', label: 'Номер' },
-    { key: 'sourceId', sel: '#fltSource', label: 'Источник', list: () => sources, field: 'rootSource' },
+    // field — источник лидов: корневой у всех записей один и тот же после
+    // правки данных 25.08.2026, чипом активного отбора он ничего не сообщал бы.
+    { key: 'sourceId', sel: '#fltSource', label: 'Источник', list: () => sources, field: 'leadSource' },
     { key: 'employeeId', sel: '#fltEmployee', label: 'Сотрудник', list: () => employees, field: 'fullName' },
     { key: 'funnelStatusId', sel: '#fltStatus', label: 'Статус', list: () => statuses, field: 'statusName' },
     { key: 'lineType', sel: '#fltLine', label: 'Линия' },
@@ -855,7 +857,7 @@ async function runMassPatch(config, select, ids, my) {
 
 function fillFilterSelects() {
     $('#fltSource').innerHTML = '<option value="">Все источники</option>'
-        + sources.map((s) => `<option value="${s.id}">${escapeHtml(s.rootSource)}</option>`).join('');
+        + sources.map((s) => `<option value="${s.id}">${escapeHtml(s.leadSource || s.rootSource)}</option>`).join('');
     $('#fltEmployee').innerHTML = '<option value="">Все сотрудники</option><option value="none">— без оператора —</option>'
         + employees.map((e) => `<option value="${e.id}">${escapeHtml(e.lastName + ' ' + e.firstName)}</option>`).join('');
 
@@ -886,7 +888,7 @@ function fillFilterSelects() {
     quickStatus.value = '';
 
     $('[data-role="quick-source"]').innerHTML = '<option value="">Все источники</option>'
-        + sources.map((src) => `<option value="${src.id}">${escapeHtml(src.rootSource)}</option>`).join('');
+        + sources.map((src) => `<option value="${src.id}">${escapeHtml(src.leadSource || src.rootSource)}</option>`).join('');
 }
 
 async function applyFilters() {

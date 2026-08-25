@@ -246,11 +246,15 @@ router.delete('/:id', async (req, res) => {
         ]);
         if (blockers.length > 0) return guards.refuse(res, blockers);
 
-        const found = await pool.query('SELECT root_source, city_region FROM sources WHERE id = $1', [id]);
+        const found = await pool.query('SELECT root_source, lead_source, city_region FROM sources WHERE id = $1', [id]);
         if (found.rows.length === 0) {
             return res.status(404).json({ error: 'Источник не найден' });
         }
-        const title = [found.rows[0].root_source, found.rows[0].city_region].filter(Boolean).join(' · ');
+        // Имя записи — источник лидов и город. Корневой источник в подписи
+        // больше не участвует: после правки данных 25.08.2026 он одинаков у
+        // всех записей и различать их не помогает.
+        const title = [found.rows[0].lead_source || found.rows[0].root_source,
+            found.rows[0].city_region].filter(Boolean).join(' · ');
         const removed = await guards.deleteAsBatch(
             pool, `Удаление источника «${title}»`, async (client) => {
                 await client.query('DELETE FROM source_cpa_networks WHERE source_id = $1', [id]);

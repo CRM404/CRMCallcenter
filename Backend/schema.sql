@@ -1549,7 +1549,7 @@ BEGIN
         ('organization_taxes',               '*', 'tax_type',                         'id',          'organizations',      'organization_id'),
         ('departments',                      '*', 'name',                             'id',          'organizations',      'organization_id'),
         ('cpa_networks',                     '*', 'name',                             'id',          NULL,                 NULL),
-        ('sources',                          '*', 'root_source city_region',          'id',          NULL,                 NULL),
+        ('sources',                          '*', 'lead_source city_region',          'id',          NULL,                 NULL),
         ('ad_platforms',                     '*', 'name',                             'id',          NULL,                 NULL),
         ('source_cpa_networks',              '*', NULL,                               'source_id',   'sources',            'source_id'),
         ('real_estate_offers',               '*', 'name',                             'id',          NULL,                 NULL),
@@ -1621,7 +1621,7 @@ BEGIN
     INSERT INTO audit_ref_map (table_name, column_name, ref_table, ref_title_columns) VALUES
         ('leads',                        'funnel_status_id',   'lead_funnel_statuses', 'status_name'),
         ('leads',                        'employee_id',        'employees',            'last_name first_name'),
-        ('leads',                        'source_id',          'sources',              'root_source city_region'),
+        ('leads',                        'source_id',          'sources',              'lead_source city_region'),
         ('leads',                        'script_id',          'scripts',              'title'),
         ('leads',                        'repeat_script_id',   'scripts',              'title'),
         ('employees',                    'manager_id',         'employees',            'last_name first_name'),
@@ -1632,7 +1632,7 @@ BEGIN
         ('departments',                  'organization_id',    'organizations',        'name'),
         ('organization_bank_accounts',   'organization_id',    'organizations',        'name'),
         ('organization_taxes',           'organization_id',    'organizations',        'name'),
-        ('source_cpa_networks',          'source_id',          'sources',              'root_source city_region'),
+        ('source_cpa_networks',          'source_id',          'sources',              'lead_source city_region'),
         ('source_cpa_networks',          'cpa_network_id',     'cpa_networks',         'name'),
         ('lead_offers',                  'lead_id',            'leads',                'last_name first_name'),
         ('lead_offers',                  'offer_id',           'real_estate_offers',   'name'),
@@ -1765,6 +1765,37 @@ INSERT INTO audit_ref_map (table_name, column_name, ref_table, ref_title_columns
     ('leads', 'phone_fix_reason_id', 'phone_fix_reasons', 'title'),
     ('leads', 'merged_into_id',      'leads',             'last_name first_name phone')
 ON CONFLICT (table_name, column_name) DO NOTHING;
+
+
+-- ----- Имя записи источника: источник лидов, а не корневой -------------------
+-- ПРАВКА СЕМЕНИ НЕ ДОХОДИТ ДО УЖЕ ЗАСЕЯННОЙ БАЗЫ, и это здесь главное. Строки
+-- выше вставляются под замком '2026-08-24-audit-rules-seed'; на боевой базе он
+-- уже сработал, значит изменённый текст семени там не появится никогда. Нужен
+-- отдельный замок и UPDATE.
+--
+-- Почему меняем. 25.08.2026 в «Источниках» разделили слипшееся значение: номер
+-- уехал в lead_source, а в root_source у всех 916 записей осталось одно и то же
+-- слово «ДОМ.РФ». Журнал подписывал запись парой «корневой источник · город» —
+-- и после правки все 916 записей стали называться одинаково, «ДОМ.РФ · Москва».
+-- Подпись, одинаковая у всех записей таблицы, не подпись.
+--
+-- Прежние записи журнала НЕ переписываются: они хранят имя, снятое в момент
+-- события, и это правильно — так было видно, как запись называлась тогда.
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM applied_migrations WHERE id = '2026-08-25-source-title-lead-source') THEN
+        UPDATE audit_rules
+           SET title_columns = 'lead_source city_region'
+         WHERE table_name = 'sources' AND title_columns = 'root_source city_region';
+
+        UPDATE audit_ref_map
+           SET ref_title_columns = 'lead_source city_region'
+         WHERE ref_table = 'sources' AND ref_title_columns = 'root_source city_region';
+
+        INSERT INTO applied_migrations (id) VALUES ('2026-08-25-source-title-lead-source');
+        RAISE NOTICE 'Имя записи источника переведено на lead_source';
+    END IF;
+END $$;
 
 -- ===== ЧАСТЬ 5 · УДАЛЕНИЯ, КАСКАДЫ И АРХИВ ==================================
 -- План раздел 11 целиком, пункты Б3.1–Б3.5, решения владельца 70–76,

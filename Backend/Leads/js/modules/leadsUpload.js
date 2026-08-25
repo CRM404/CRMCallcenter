@@ -288,7 +288,7 @@ export function createUpload(root, deps) {
         allEmployees = employees;
         allStatuses = statuses;
 
-        fillSelect($('#upSource'), sources.map((s) => ({ id: s.id, name: s.rootSource })), '— выберите источник —');
+        fillSelect($('#upSource'), sources.map((s) => ({ id: s.id, name: s.leadSource || s.rootSource })), '— выберите источник —');
         fillSelect($('#upScript'), scripts.map((s) => ({ id: s.id, name: s.title })), '— не выбран —');
         fillSelect($('#upRepeatScript'), scripts.map((s) => ({ id: s.id, name: s.title })), '— не выбран —');
 
