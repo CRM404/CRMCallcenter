@@ -311,56 +311,65 @@
 }
 .schedule-field.bad .field-hint { color: var(--ui-color-danger-deep); font-weight: 600; }
 
-/* ----- Окно фильтров ----- */
-.emp-wrap .filter-checks { display: flex; gap: 16px; align-items: center; min-height: 40px; }
-.emp-wrap .filter-checkbox { display: flex; align-items: center; gap: 7px; font-size: 13.5px; color: var(--e-ink); cursor: pointer; }
-.emp-wrap .filter-checkbox input { width: 16px; height: 16px; accent-color: var(--e-accent); cursor: pointer; }
+/* ----- Окно фильтров -----
+   Без приставки: окно монтируется на root (employeesTable.js), .emp-wrap ему не
+   предок. Область держит .filter-checks — имя в проекте одно. */
+.filter-checks { display: flex; gap: 16px; align-items: center; min-height: 40px; }
+.filter-checks .filter-checkbox { display: flex; align-items: center; gap: 7px; font-size: 13.5px; color: var(--ui-color-ink); cursor: pointer; }
+.filter-checks .filter-checkbox input { width: 16px; height: 16px; accent-color: var(--ui-color-accent); cursor: pointer; }
 
-/* ----- Окно «Видимые колонки» ----- */
-/* Как и в «Лидах» (К38): колонки считаются от места, а не от ширины окна —
-   точка перелома по окну в панели не срабатывала никогда. */
-.emp-wrap .column-checkbox-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 9px 16px; }
-.emp-wrap .column-checkbox-item { display: flex; align-items: center; gap: 8px; font-size: 13.5px; color: var(--e-ink); cursor: pointer; }
-.emp-wrap .column-checkbox-item input { width: 16px; height: 16px; accent-color: var(--e-accent); cursor: pointer; }
+/* ----- Окно «Видимые колонки» -----
+   Как и в «Лидах» (К38): колонки считаются от места, а не от ширины окна —
+   точка перелома по окну в панели не срабатывала никогда.
 
-/* ----- Окно «Управление отделами» ----- */
-.emp-wrap .departments-list { display: flex; flex-direction: column; gap: 8px; }
-.emp-wrap .department-row {
+   Область держит data-role, а НЕ класс .column-checkbox-list: класс есть и в
+   «Лидах» (leadsApp.js:918), а data-role там нет — он в проекте один. Взять
+   класс значило бы писать правила поверх чужого окна. */
+[data-role="columns-list"] { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 9px 16px; }
+[data-role="columns-list"] .column-checkbox-item { display: flex; align-items: center; gap: 8px; font-size: 13.5px; color: var(--ui-color-ink); cursor: pointer; }
+[data-role="columns-list"] .column-checkbox-item input { width: 16px; height: 16px; accent-color: var(--ui-color-accent); cursor: pointer; }
+
+/* ----- Окно «Управление отделами» -----
+   Без приставки: окно монтируется на root (employeesDepartments.js:191).
+   Область держит .departments-list — имя в проекте одно, и весь список рядов
+   вместе с кнопкой «Добавить отдел» кладётся внутрь него (там же, :99, :182). */
+.departments-list { display: flex; flex-direction: column; gap: 8px; }
+.departments-list .department-row {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-    border: 1px solid var(--e-line);
-    border-radius: var(--e-radius-sm);
+    border: 1px solid var(--ui-color-line);
+    border-radius: var(--ui-radius-sm);
     background: rgba(255, 255, 255, .55);
     padding: 10px 14px;
 }
-.emp-wrap .department-row-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.emp-wrap .department-row-name { font-size: 13.5px; font-weight: 600; color: var(--e-ink); }
-.emp-wrap .department-row-org { font-size: 11.5px; color: var(--e-ink-faint); }
-.emp-wrap .department-row-actions { display: flex; gap: 4px; flex-shrink: 0; }
-.emp-wrap .department-row-form { flex-direction: column; align-items: stretch; }
-.emp-wrap .department-form-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 10px; }
+.departments-list .department-row-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.departments-list .department-row-name { font-size: 13.5px; font-weight: 600; color: var(--ui-color-ink); }
+.departments-list .department-row-org { font-size: 11.5px; color: var(--ui-color-ink-faint); }
+.departments-list .department-row-actions { display: flex; gap: 4px; flex-shrink: 0; }
+.departments-list .department-row-form { flex-direction: column; align-items: stretch; }
+.departments-list .department-form-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 10px; }
 /* Пунктирная строка «+ Добавить отдел»: место для нового ряда, а не кнопка
    где-то сбоку. */
-.emp-wrap .department-add-row {
+.departments-list .department-add-row {
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 8px;
     width: 100%;
-    border: 1.5px dashed var(--e-line-strong);
-    border-radius: var(--e-radius-sm);
+    border: 1.5px dashed var(--ui-color-line-strong);
+    border-radius: var(--ui-radius-sm);
     background: transparent;
     padding: 11px 14px;
-    color: var(--e-ink-soft);
+    color: var(--ui-color-ink-soft);
     font-family: inherit;
     font-size: 13.5px;
     font-weight: 600;
     cursor: pointer;
     transition: border-color var(--ui-dur-fast), color var(--ui-dur-fast), background var(--ui-dur-fast);
 }
-.emp-wrap .department-add-row:hover { border-color: var(--e-accent); color: var(--e-accent); background: rgba(0, 0, 255, .04); }
+.departments-list .department-add-row:hover { border-color: var(--ui-color-accent); color: var(--ui-color-accent); background: rgba(0, 0, 255, .04); }
 
 /* ----- Мелочи окон -----
    Правило .emp-wrap .ui-form-grid--single убрано 25.08.2026. Оно не работало и
