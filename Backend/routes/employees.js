@@ -10,6 +10,8 @@ const {
     isBlank, parseWorkDays, parseTimeOfDay, parseShiftTimes, DAYS_FORMAT_ERROR
 } = require('../services/scheduleFormat');
 const tunnelKeys = require('../services/tunnelKeys');
+const archive = require('../services/employeeArchive');
+const auditContext = require('../services/auditContext');
 
 const router = express.Router();
 
@@ -117,6 +119,11 @@ function rowToEmployee(row) {
         managerName: row.manager_name || null,
         hireDate: row.hire_date,
         status: row.status,
+        // Архив (часть 5). Две пометки вместо одной «Неактивен»: решение
+        // владельца 70. status при этом прежний — на нём висят освобождение
+        // добавочного и отзыв ключа туннеля.
+        archiveKind: row.archive_kind,
+        frozenAt: row.frozen_at,
         terminationDate: row.termination_date,
         lineType: row.line_type,
         workSchedule: row.work_schedule,
@@ -253,13 +260,10 @@ function validateRequiredFields(body) {
 
 // Фамилия и инициалы: «Иванов И. И.». Нужны в одном месте — в тексте про
 // занятый добавочный, поэтому живут здесь, а не в общем помощнике.
-function shortName(row) {
-    const initials = [row.first_name, row.middle_name]
-        .filter(Boolean)
-        .map((part) => `${String(part).trim().charAt(0).toUpperCase()}.`)
-        .join(' ');
-    return [row.last_name, initials].filter(Boolean).join(' ');
-}
+// Фамилия с инициалами живёт в services/employeeArchive.js: она нужна и там —
+// отказ при возврате называет, У КОГО теперь добавочный, — а две копии одного
+// форматирования расходятся в первый же день правки.
+const { shortName } = archive;
 
 // АСИНХРОННАЯ намеренно: ошибка занятого добавочного обязана называть, У КОГО
 // номер («Номер 102 уже у Иванова И. И.»), а это второй запрос. «Номер занят»
@@ -449,6 +453,39 @@ router.put('/:id', async (req, res) => {
         return res.status(400).json({ error: validationError });
     }
     try {
+        // СОСТОЯНИЕ ДО ПРАВКИ. Нужно, чтобы отличить переход от повторного
+        // сохранения: «ушёл в архив» и «архивную карточку сохранили ещё раз» —
+        // разные события, и лиды открепляются только в первом.
+        const before = await pool.query(
+            'SELECT status, archive_kind, frozen_at FROM employees WHERE id = $1', [req.params.id]);
+        if (before.rows.length === 0) {
+            return res.status(404).json({ error: 'Сотрудник не найден' });
+        }
+        const wasArchived = before.rows[0].status === 'inactive';
+        const willBeArchived = normalizeValue('status', req.body.status) === 'inactive';
+
+        // ВОЗВРАТ ИЗ АРХИВА — ТОЛЬКО С ДОБАВОЧНЫМ (решение владельца 71).
+        // Старый номер освободился в момент ухода и мог уйти другому, поэтому
+        // вернуть человека, не выдав номер, нельзя.
+        //
+        // ПРАВИЛО УЗКОЕ И РАСШИРЯТЬ ЕГО НЕЛЬЗЯ: оно про ВОЗВРАТ, а не про
+        // сотрудника вообще. Сотрудник без добавочного существовать по-прежнему
+        // может и должен — первыми туннель понадобился разработчикам в
+        // Кыргызстане, добавочного у них нет вовсе, и выдача ключа это
+        // учитывает (services/tunnelKeys.js). Глухое NOT NULL на pbx_extension
+        // сломало бы им доступ молча, поэтому проверка стоит здесь, а не в базе.
+        if (wasArchived && !willBeArchived) {
+            const extension = String(req.body.pbxExtension || '').trim();
+            if (!extension) {
+                const taken = await archive.takenExtensions(pool);
+                return res.status(400).json({
+                    error: 'Вернуть в работу без внутреннего номера нельзя — прежний мог уйти другому',
+                    code: 'extension_required',
+                    extensionsTaken: taken
+                });
+            }
+        }
+
         const values = FIELD_COLUMNS.map(([key]) => normalizeValue(key, req.body[key]));
         const setClauses = FIELD_COLUMNS.map(([, col], i) => `${col} = $${i + 1}`);
         // Ключа нет — приходит null, и COALESCE оставляет прежнее значение.
@@ -479,6 +516,19 @@ router.put('/:id', async (req, res) => {
             + ' AND tunnel_address IS NOT NULL THEN COALESCE(tunnel_revoked_at, NOW())'
             + ' ELSE tunnel_revoked_at END');
 
+        // ВИД АРХИВА И ДАТА ЗАМОРОЗКИ. Считаются здесь, а не в FIELD_COLUMNS, и
+        // это не придирка к месту: PUT переписывает ВЕСЬ список FIELD_COLUMNS, а
+        // normalizeValue на отсутствующий ключ отдаёт null. Стоял бы archive_kind
+        // там — первое же сохранение карточки старым интерфейсом стёрло бы вид
+        // архива всем, кого он касается, молча. Та же мина, что у pbx_password и
+        // pbx_extension_id (см. GUARDED_COLUMNS выше).
+        const archiveSet = archive.archiveColumns(
+            willBeArchived, archive.normalizeArchiveKind(req.body.archiveKind), before.rows[0]);
+        for (const [col, val] of Object.entries(archiveSet)) {
+            values.push(val);
+            setClauses.push(`${col} = $${values.length}`);
+        }
+
         values.push(req.params.id);
         const result = await pool.query(
             `UPDATE employees SET ${setClauses.join(', ')} WHERE id = $${values.length} RETURNING id, status, tunnel_revoked_at`,
@@ -496,12 +546,110 @@ router.put('/:id', async (req, res) => {
                 [result.rows[0].id]
             );
         }
+        // ЛИДЫ ОТКРЕПЛЯЮТСЯ СРАЗУ (решение владельца 72), а не через полтора
+        // суток, как это происходит с лидами ушедшего домой оператора.
+        //
+        // Только на ПЕРЕХОДЕ в архив: повторное сохранение архивной карточки
+        // ничего не откреплять не должно, иначе безобидная правка фамилии
+        // уволенного разгоняла бы очередь.
+        let detached = 0;
+        if (!wasArchived && result.rows[0].status === 'inactive') {
+            detached = (await archive.detachLeads(pool, result.rows[0].id)).detached;
+        }
         const row = await fetchEmployeeWithManager(result.rows[0].id);
-        res.json(rowToEmployee(row));
+        res.json(Object.assign(rowToEmployee(row), detached > 0 ? { detachedLeads: detached } : {}));
     } catch (err) {
         if (await handleUniqueViolation(err, res, req.body)) return;
         console.error(err);
         res.status(500).json({ error: 'Не удалось сохранить изменения' });
+    }
+});
+
+// GET /api/employees/:id/archive-preview — числа ДО действия.
+//
+// Паспорт Р7 требует их от сервера, потому что экран не считает ничего сам: он
+// показывает то, что вернули. Здесь и три числа очереди, и владелец прежнего
+// добавочного с датой выдачи, и список занятых номеров для подсказки поля.
+//
+// Запрос НИЧЕГО НЕ МЕНЯЕТ — в отличие от двух других GET проекта
+// (/api/leads/next и /api/employees/:id/work-state), которые пишут в базу.
+router.get('/:id/archive-preview', async (req, res) => {
+    try {
+        const preview = await archive.archivePreview(pool, req.params.id);
+        if (!preview) return res.status(404).json({ error: 'Сотрудник не найден' });
+        res.json(preview);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Не удалось собрать сведения о выводе из работы' });
+    }
+});
+
+// POST /api/employees/bulk-archive { employeeIds, archiveKind } — «Вывести из
+// работы» пачкой.
+//
+// Кнопки ещё нет (экран — отдельная часть, решение владельца 76), но серверная
+// половина делается сейчас (ответ куратора И90): иначе экран упрётся в её
+// отсутствие. ОДНОЙ ПАРТИЕЙ — одно нажатие обязано читаться как одно действие.
+//
+// Возврата пачкой НЕТ и быть не может: каждому возвращаемому нужен свой
+// добавочный (решение владельца 71), а списка номеров в запросе пачки нет.
+router.post('/bulk-archive', async (req, res) => {
+    const raw = (req.body && req.body.employeeIds) || [];
+    const ids = Array.isArray(raw)
+        ? raw.map((x) => Number(x)).filter((x) => Number.isInteger(x) && x > 0)
+        : [];
+    if (!Array.isArray(raw)) return res.status(400).json({ error: 'Некорректный список сотрудников' });
+    if (ids.length === 0) return res.status(400).json({ error: 'Выберите хотя бы одного сотрудника' });
+
+    const kind = archive.normalizeArchiveKind(req.body && req.body.archiveKind) || 'dismissed';
+
+    try {
+        const pending = await pool.query(
+            "SELECT id FROM employees WHERE id = ANY($1::int[]) AND status <> 'inactive'", [ids]);
+        if (pending.rows.length === 0) {
+            return res.json({ archived: 0, skipped: ids.length, detachedLeads: 0 });
+        }
+        const targets = pending.rows.map((r) => r.id);
+
+        const done = await auditContext.runAsBatch(
+            pool, { kind: 'archive', title: 'Вывод сотрудников из работы', actorName: 'Вывод из работы' },
+            async () => {
+                const updated = await pool.query(
+                    `UPDATE employees
+                        SET status = 'inactive',
+                            -- Приведение типа обязательно: один и тот же $2
+                            -- стоит и в присваивании, и в сравнении, а без
+                            -- касты Postgres выводит для него два разных типа
+                            -- и отказывается разбирать запрос.
+                            archive_kind = $2::varchar,
+                            frozen_at = CASE WHEN $2::varchar = 'frozen'
+                                             THEN COALESCE(frozen_at, CURRENT_DATE) ELSE NULL END,
+                            tunnel_revoked_at = CASE WHEN tunnel_address IS NOT NULL
+                                                     THEN COALESCE(tunnel_revoked_at, NOW())
+                                                     ELSE tunnel_revoked_at END
+                      WHERE id = ANY($1::int[]) RETURNING id`,
+                    [targets, kind]);
+                // Живая ссылка на выдачу у архивного — дверь, которую забыли
+                // закрыть. То же, что делает одиночный PUT.
+                await pool.query(
+                    `UPDATE tunnel_key_tokens SET revoked_at = NOW()
+                      WHERE employee_id = ANY($1::int[]) AND used_at IS NULL AND revoked_at IS NULL`,
+                    [targets]);
+                // Лиды — той же партией: одно нажатие, одно действие.
+                const leads = await pool.query(
+                    `UPDATE leads SET employee_id = NULL, opened_at = NULL, updated_at = NOW()
+                      WHERE employee_id = ANY($1::int[]) RETURNING id`, [targets]);
+                return { archived: updated.rows.length, detachedLeads: leads.rows.length };
+            });
+
+        res.json({
+            archived: done.archived,
+            skipped: ids.length - done.archived,
+            detachedLeads: done.detachedLeads
+        });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Не удалось вывести сотрудников из работы' });
     }
 });
 
