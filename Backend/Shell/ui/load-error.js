@@ -23,6 +23,12 @@ import { iconNode } from './icons.js';
 
 const ROLE = 'load-error';
 
+// Заголовок по умолчанию. Он верен, пока полоса говорит о наших же данных, и
+// перестаёт быть верным там, где данные как раз загрузились: в «Звонках»
+// молчит телефония, и «Данные не загрузились» там — прямая неправда. Поэтому
+// заголовок стал параметром вызова, а не остался зашитым (паспорт Р1).
+const DEFAULT_TITLE = 'Данные не загрузились';
+
 function build(container, onRetry) {
     const box = document.createElement('div');
     box.className = 'ui-load-error';
@@ -35,7 +41,10 @@ function build(container, onRetry) {
     text.className = 'ui-load-error__text';
 
     const title = document.createElement('b');
-    title.textContent = 'Данные не загрузились';
+    // Роль нужна, чтобы повторный вызов МЕНЯЛ заголовок, а не оставлял первый:
+    // полоса одна на панель, а причин отказа у неё бывает несколько подряд.
+    title.dataset.role = 'load-error-title';
+    title.textContent = DEFAULT_TITLE;
 
     const reason = document.createElement('span');
     reason.className = 'ui-load-error__reason';
@@ -61,15 +70,32 @@ function build(container, onRetry) {
  * @param {HTMLElement} container тело панели
  * @param {string} reason сообщение, с которым отказал запрос
  * @param {Function} onRetry что делать по кнопке «Повторить»
+ * @param {string} [title] свой заголовок; без него — «Данные не загрузились»
+ *
+ * ЗАГОЛОВОК ЧЕТВЁРТЫМ, А НЕ ТРЕТЬИМ (ответ куратора И45). Третье место занято
+ * `onRetry`, и вставка в середину молча сломала бы вызовы, которые его передают.
  */
-export function showLoadError(container, reason, onRetry) {
+export function showLoadError(container, reason, onRetry, title) {
     if (!container || !container.isConnected) return;
     const box = container.querySelector(`[data-role="${ROLE}"]`) || build(container, onRetry);
+    const head = box.querySelector(`[data-role="load-error-title"]`);
+    if (head) head.textContent = title || DEFAULT_TITLE;
     const slot = box.querySelector(`[data-role="load-error-reason"]`);
     // Причина — рядом с заголовком, а не вместо него: текст сервера бывает
     // техническим, и он не должен оставаться единственным объяснением.
-    slot.textContent = reason ? ` — ${reason}. Показанное может быть неполным.`
+    //
+    // ТОЧКУ ШАБЛОН БОЛЬШЕ НЕ СТАВИТ САМ. Причины приходят из двух разных мест:
+    // одни — техническим текстом без знака в конце, другие — готовой фразой,
+    // которая точкой уже заканчивается («Показано последнее, что мы знали в
+    // 15:42.»). Шаблон, добавлявший точку всегда, во втором случае давал две.
+    slot.textContent = reason
+        ? ` — ${endsSentence(reason) ? reason : reason + '.'} Показанное может быть неполным.`
         : ' — показанное может быть неполным.';
+}
+
+/** Есть ли у фразы свой знак конца — тогда наш добавлять нельзя. */
+function endsSentence(text) {
+    return /[.!?…]$/.test(String(text).trim());
 }
 
 /** Снять полосу: пришёл удачный ответ, показанному снова можно верить. */
