@@ -212,4 +212,26 @@ function currentSettings() {
     ];
 }
 
-module.exports = { middleware, currentSettings, startBatch, markClientBatch, runAsBatch, runAsService, storage };
+/**
+ * Кто сейчас действует — для колонок автора В САМОЙ ЗАПИСИ, а не в журнале.
+ *
+ * Часть 4 завела такие колонки у вердикта разбора номера, часть 5 — у архива
+ * лида, и обе берут автора отсюда, а не из заголовков запроса напрямую. Разница
+ * существенная: здесь имя УЖЕ разрешено по базе (resolveActorName), то есть в
+ * записи окажется настоящая фамилия по присланному номеру, а не то, что браузер
+ * назвал именем. Читать заголовок в маршруте значило бы завести второй способ
+ * узнать автора — и он разошёлся бы с журналом в первый же спорный случай.
+ */
+function currentActor() {
+    const ctx = storage.getStore() || {};
+    return {
+        id: ctx.actorId || null,
+        kind: ctx.actorKind || 'none',
+        name: ctx.actorName || null
+    };
+}
+
+module.exports = {
+    middleware, currentSettings, startBatch, markClientBatch,
+    runAsBatch, runAsService, currentActor, storage
+};

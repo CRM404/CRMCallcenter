@@ -166,7 +166,8 @@ router.get('/', async (req, res) => {
         // другого, работать с ним нечего, а рядом со старшим он читался бы как
         // тот же дубль, ради устранения которого слияние и делалось.
         const result = await pool.query(
-            'SELECT * FROM leads WHERE employee_id = $1 AND merged_into_id IS NULL ORDER BY created_at DESC',
+            'SELECT * FROM leads WHERE employee_id = $1 AND merged_into_id IS NULL AND archived_at IS NULL'
+            + ' ORDER BY created_at DESC',
             [employeeId]
         );
         res.json(result.rows.map(rowToLead));

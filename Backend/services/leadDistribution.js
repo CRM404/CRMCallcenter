@@ -31,6 +31,13 @@
 // у него тот же самый — выдать его оператору значило бы позвонить человеку
 // второй раз по той же карточке. Условие добавлено в queueCondition (общее для
 // трёх запросов), в разбор осиротевших карточек и в выдачу уже открытой.
+//
+// Что изменила часть 5 «архив»: АРХИВНЫЙ ЛИД ИСЧЕЗАЕТ РОВНО ТАМ ЖЕ, ГДЕ СЛИТЫЙ.
+// Это не догадка про симметрию, а требование: места те же самые, все три, и
+// пройти надо по всем. Пропустить одно значит отдать архивного лида оператору —
+// и выглядеть это будет случайностью, а не забытым условием. Условие второе, но
+// стоит рядом с первым намеренно: кто будет добавлять третье (например,
+// «в чёрном списке»), увидит оба сразу и не заведёт его в одном месте из трёх.
 
 const { withTransaction } = require('./dbTx');
 const { HELD_LEAD_RELEASE_HOURS } = require('./appTime');
@@ -51,7 +58,8 @@ function queueCondition(alias, statusParam) {
     // слит» относилось бы только ко второй половине выражения.
     return `((${alias}.funnel_status_id = ${statusParam}
               OR (${alias}.next_call_at IS NOT NULL AND ${alias}.next_call_at <= NOW()))
-             AND ${alias}.merged_into_id IS NULL)`;
+             AND ${alias}.merged_into_id IS NULL
+             AND ${alias}.archived_at IS NULL)`;
 }
 
 // Дольше всех свободен — первый в очереди (ORDER BY on_line_since ASC).
@@ -98,7 +106,7 @@ async function releaseHeldLeads(db, newStatusId) {
     // джойнится с employees, которых уже нет. До этой задачи лид просто вернулся
     // бы в общую раздачу, теперь пропадал бы навсегда — тот же класс потери, что
     // и лид с пустым статусом. Снимаем метку и возвращаем его в очередь.
-    await db.query('UPDATE leads SET opened_at = NULL, updated_at = NOW() WHERE employee_id IS NULL AND opened_at IS NOT NULL AND merged_into_id IS NULL');
+    await db.query('UPDATE leads SET opened_at = NULL, updated_at = NOW() WHERE employee_id IS NULL AND opened_at IS NOT NULL AND merged_into_id IS NULL AND archived_at IS NULL');
 
     const result = await db.query(
         `UPDATE leads l
@@ -195,7 +203,8 @@ async function assignNextLeadForEmployee(db, employeeId) {
 
         const opened = await client.query(
             `SELECT id FROM leads WHERE employee_id = $1 AND opened_at IS NOT NULL
-               AND merged_into_id IS NULL ORDER BY opened_at ASC LIMIT 1`,
+               AND merged_into_id IS NULL AND archived_at IS NULL
+             ORDER BY opened_at ASC LIMIT 1`,
             [employeeId]
         );
         if (opened.rows.length > 0) {
@@ -245,5 +254,12 @@ module.exports = {
     findAvailableEmployee,
     findNewFunnelStatusId,
     assignNextLeadForEmployee,
-    releaseHeldLeads
+    releaseHeldLeads,
+    // Наружу — ради части 5. Окно вывода сотрудника из работы обязано сказать,
+    // сколько его лидов вернётся в очередь, и считать это ПО ФАКТИЧЕСКОМУ
+    // УСЛОВИЮ ОЧЕРЕДИ (ответ куратора И88). Написать там второе такое же
+    // условие значило завести две правды: они совпадут в день написания и
+    // разойдутся в первый же день правки — а расхождение это будет выглядеть
+    // как «окно соврало», и искать его пойдут в окне, а не здесь.
+    queueCondition
 };

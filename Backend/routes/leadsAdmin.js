@@ -13,7 +13,7 @@ const express = require('express');
 const { pool } = require('../db');
 const auditContext = require('../services/auditContext');
 const { startOfDay, startOfNextDay, zonedParts } = require('../services/appTime');
-const { distributePendingLeads, findNewFunnelStatusId } = require('../services/leadDistribution');
+const { distributePendingLeads, findNewFunnelStatusId, queueCondition } = require('../services/leadDistribution');
 const { normalizePhone, normalizeForSearch } = require('../services/phoneFormat');
 const { phoneColumnsFor, findLeadByPhone, leadTitle } = require('../services/phoneFix');
 const guards = require('../services/deleteGuards');
@@ -206,9 +206,39 @@ function rowToLead(row) {
         downPaymentPercent: row.down_payment_percent,
         purchaseTimeframe: row.purchase_timeframe,
         notes: row.notes,
+        // Архив (часть 5). Наружу едут все четыре колонки: пилюля рисуется по
+        // archivedAt, а строка под ней — «кто и когда отправил» (паспорт Р7).
+        // Имя автора снимком, а не ссылкой на сотрудника: подпись обязана
+        // пережить удаление того, кто её поставил.
+        archivedAt: row.archived_at,
+        archivedActorId: row.archived_actor_id,
+        archivedActorKind: row.archived_actor_kind,
+        archivedActorName: row.archived_actor_name,
         createdAt: row.created_at,
         updatedAt: row.updated_at
     };
+}
+
+// Куда попадёт лид, если снять с него архив. Три ответа, а не два (ответ
+// куратора И88 и правка Р7-5): «сразу», «позже» и «работы больше нет».
+//
+// Считается ПО ФАКТИЧЕСКОМУ УСЛОВИЮ ОЧЕРЕДИ, взятому из services/
+// leadDistribution.js, а не по флагу lead_funnel_statuses.releases_lead.
+// Флаг описывает, что делать ПОСЛЕ звонка, а не попадёт ли лид в раздачу: у
+// лида со статусом «Перезвон» и временем на завтра флаг стоит, а в сегодняшнюю
+// очередь он не попадёт. Обещать ему «вернётся в очередь» значит соврать.
+async function queuePlacement(db, leadId) {
+    const newStatusId = await findNewFunnelStatusId(db);
+    if (newStatusId === null) return 'none';
+    const result = await db.query(
+        `SELECT ${queueCondition('l', '$2')} AS in_queue,
+                (l.next_call_at IS NOT NULL AND l.next_call_at > NOW()) AS later
+           FROM leads l WHERE l.id = $1`,
+        [leadId, newStatusId]);
+    const row = result.rows[0];
+    if (!row) return 'none';
+    if (row.in_queue) return 'now';
+    return row.later ? 'later' : 'none';
 }
 
 const FK_MESSAGES = {
@@ -486,6 +516,16 @@ router.get('/', async (req, res) => {
         // работе его нет: показывать его рядом со старшим значило бы вернуть тот
         // самый дубль, ради устранения которого слияние и делалось.
         conditions.push('l.merged_into_id IS NULL');
+
+        // АРХИВНЫЕ ЛИДЫ ПО УМОЛЧАНИЮ НЕ ПОКАЗЫВАЮТСЯ, но отбор остаётся за
+        // экраном (бриф части 5, пункт 3): значение «archived» приходит
+        // параметром, и раздел волен показать архив, только архив или всё
+        // вместе. Умолчание именно «скрыть», потому что экрана с переключателем
+        // ещё нет: покажи мы архивных сегодня, они молча подмешались бы в общий
+        // список, и отличить их было бы нечем.
+        const archivedMode = String(req.query.archived || '').trim();
+        if (archivedMode === 'only') conditions.push('l.archived_at IS NOT NULL');
+        else if (archivedMode !== 'all') conditions.push('l.archived_at IS NULL');
 
         // ПОИСК ПО ЦИФРАМ, А НЕ ПО СТРОКЕ. Человек набирает «916 123», в базе
         // лежит «+79161234567», а у неразобранного лида — сырая строка
@@ -937,6 +977,166 @@ router.delete('/:id', async (req, res) => {
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: 'Не удалось удалить лида' });
+    }
+});
+
+// ---------------------------------------------------------------------------
+// АРХИВ ЛИДА (часть 5, план 11.2, решения владельца 74 и 75)
+// ---------------------------------------------------------------------------
+//
+// Архив — это ПОМЕТКА, а не удаление, и в журнале она обязана читаться как
+// обычная правка поля, а не как отдельный вид операции (паспорт Р7). Поэтому
+// здесь нет ни партии на один лид, ни служебного автора: правку делает человек,
+// триггер части 3 записывает её сам, с автором и страницей.
+
+/** Общая часть: находит лида и проверяет, что с ним можно это сделать. */
+async function loadLeadForArchive(id, res, wantArchived) {
+    const found = await pool.query(
+        'SELECT id, last_name, first_name, phone, archived_at, merged_into_id FROM leads WHERE id = $1',
+        [id]);
+    if (found.rows.length === 0) {
+        res.status(404).json({ error: 'Лид не найден' });
+        return null;
+    }
+    const lead = found.rows[0];
+    if (lead.merged_into_id !== null) {
+        // Слитый лид уже вне работы: он влит в старшего и не участвует нигде.
+        // Отправлять его в архив нечего — состояние получилось бы двойным, и
+        // объяснить, что оно значит, было бы нельзя.
+        res.status(409).json({ error: 'Этот лид влит в другого — архив к нему неприменим' });
+        return null;
+    }
+    if (wantArchived && lead.archived_at !== null) {
+        res.status(409).json({ error: 'Лид уже в архиве' });
+        return null;
+    }
+    if (!wantArchived && lead.archived_at === null) {
+        res.status(409).json({ error: 'Лид не в архиве' });
+        return null;
+    }
+    return lead;
+}
+
+// POST /api/leads-admin/:id/archive — отправить лида в архив.
+router.post('/:id/archive', async (req, res) => {
+    try {
+        const lead = await loadLeadForArchive(req.params.id, res, true);
+        if (!lead) return;
+
+        const actor = auditContext.currentActor();
+        const result = await pool.query(
+            `UPDATE leads
+                SET archived_at = NOW(),
+                    archived_actor_id = $2,
+                    archived_actor_kind = $3,
+                    archived_actor_name = $4,
+                    -- Открытая карточка закрывается, employee_id остаётся. Тот
+                    -- же приём, что у слияния (services/leadMerge.js): лид
+                    -- уходит из работы, но за кем он числился — остаётся видно.
+                    opened_at = NULL,
+                    updated_at = NOW()
+              WHERE id = $1
+          RETURNING id, archived_at, archived_actor_name`,
+            [lead.id, actor.id, actor.kind, actor.name]);
+        res.json({
+            id: result.rows[0].id,
+            archivedAt: result.rows[0].archived_at,
+            archivedActorName: result.rows[0].archived_actor_name
+        });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Не удалось отправить лида в архив' });
+    }
+});
+
+// POST /api/leads-admin/:id/unarchive — вернуть лида из архива.
+//
+// СТАТУС НЕ ТРОГАЕТСЯ (ответ куратора И85). Решение владельца 75: все ранее
+// проставленные статусы окончательны, и менять их — работа решения 74, где это
+// делает входящий звонок. Поэтому возврат из архива сам по себе НЕ обещает
+// очереди: лид со статусом «Отказ» вернётся, а в раздачу не попадёт.
+//
+// Чтобы окно 5Б не обещало лишнего, ответ несёт признак placement: 'now' |
+// 'later' | 'none'. Три значения, а не два — «перезвон на завтра» самый частый
+// случай у работающего оператора, и свалить его в любую из крайностей значит
+// соврать в том самом окне, по которому человек принимает решение.
+router.post('/:id/unarchive', async (req, res) => {
+    try {
+        const lead = await loadLeadForArchive(req.params.id, res, false);
+        if (!lead) return;
+
+        const result = await pool.query(
+            `UPDATE leads
+                SET archived_at = NULL,
+                    archived_actor_id = NULL,
+                    archived_actor_kind = NULL,
+                    archived_actor_name = NULL,
+                    updated_at = NOW()
+              WHERE id = $1 RETURNING id`,
+            [lead.id]);
+        // Считается ПОСЛЕ снятия архива: условие очереди само проверяет
+        // archived_at, и на архивном лиде ответ был бы всегда 'none'.
+        const placement = await queuePlacement(pool, lead.id);
+        // Раздача запускается только когда лид действительно готов работать:
+        // гонять полный проход ради лида с окончательным статусом незачем.
+        if (placement === 'now') await distributePendingLeads(pool);
+        res.json({ id: result.rows[0].id, placement });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Не удалось вернуть лида из архива' });
+    }
+});
+
+// POST /api/leads-admin/bulk-archive { leadIds } — «Отправить в архив» пачкой.
+//
+// Кнопки этого действия ещё нет (экран — отдельная часть, решение владельца
+// 76), но серверная половина делается сейчас (ответ куратора И90): иначе экран
+// упрётся в её отсутствие, а партия журнала — механизм части 3, уже в бою.
+//
+// ОДНОЙ ПАРТИЕЙ: полсотни лидов, отправленных в архив одним нажатием, обязаны
+// читаться в журнале как одно действие (Б2.10).
+router.post('/bulk-archive', async (req, res) => {
+    const ids = normalizeIdArray(req.body && req.body.leadIds);
+    if (ids === null) return res.status(400).json({ error: 'Некорректный список лидов' });
+    if (ids.length === 0) return res.status(400).json({ error: 'Выберите хотя бы одного лида' });
+
+    try {
+        // СНАЧАЛА СМОТРИМ, ЕСТЬ ЛИ ЧТО ДЕЛАТЬ. Партия заводится строкой в
+        // журнале до самой работы, и без этой проверки повторное нажатие по уже
+        // архивным лидам оставляло бы в журнале пустую партию — запись о
+        // действии, которого не было. Гонку это не закрывает (кто-то успеет
+        // заархивировать между проверкой и правкой), но убирает единственный
+        // случай, который случается регулярно: нажали дважды.
+        const pending = await pool.query(
+            `SELECT id FROM leads
+              WHERE id = ANY($1::int[]) AND archived_at IS NULL AND merged_into_id IS NULL`,
+            [ids]);
+        if (pending.rows.length === 0) {
+            return res.json({ archived: 0, skipped: ids.length });
+        }
+
+        const actor = auditContext.currentActor();
+        const archived = await auditContext.runAsBatch(
+            pool, { kind: 'archive', title: 'Отправка лидов в архив', actorName: 'Отправка в архив' },
+            () => pool.query(
+                `UPDATE leads
+                    SET archived_at = NOW(),
+                        archived_actor_id = $2,
+                        archived_actor_kind = $3,
+                        archived_actor_name = $4,
+                        opened_at = NULL,
+                        updated_at = NOW()
+                  WHERE id = ANY($1::int[])
+                    AND archived_at IS NULL
+                    AND merged_into_id IS NULL
+              RETURNING id`,
+                [ids, actor.id, actor.kind, actor.name]));
+        // Пропущенные названы числом, а не молчанием: человек выделил сорок
+        // строк, а в архив ушло тридцать восемь — он обязан это увидеть.
+        res.json({ archived: archived.rows.length, skipped: ids.length - archived.rows.length });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Не удалось отправить лидов в архив' });
     }
 });
 
