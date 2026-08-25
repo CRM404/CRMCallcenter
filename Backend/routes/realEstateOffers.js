@@ -7,6 +7,7 @@
 const express = require('express');
 const { pool } = require('../db');
 const { MAX_OFFERS_PER_LEAD, TOO_MANY_OFFERS_HINT } = require('../services/leadOfferLimits');
+const guards = require('../services/deleteGuards');
 
 const router = express.Router();
 
@@ -630,12 +631,34 @@ router.put('/:id', async (req, res) => {
     }
 });
 
-// DELETE /api/real-estate-offers/:id — сегменты/география чистятся каскадом
-// (ON DELETE CASCADE), отдельный код не нужен.
+// DELETE /api/real-estate-offers/:id — порядок плана 11.4, «Объект недвижимости».
+//
+// Шаг 1 — связи с лидами: есть хоть одна, удаление запрещено. Связь
+// lead_offers → real_estate_offers переведена в запрет (класс Б, ответ
+// куратора И74): нельзя удалить объект, который кому-то подобран. Обратная
+// сторона той же связки, lead_offers → leads, осталась каскадной — там запрет
+// сделал бы удаление лида невозможным всегда.
+// Шаг 2 — сегменты, гео, оплата и ипотеки уходят каскадом (класс А).
+// Шаг 3 — сам объект.
 router.delete('/:id', async (req, res) => {
     try {
-        const result = await pool.query('DELETE FROM real_estate_offers WHERE id = $1 RETURNING id', [req.params.id]);
-        if (result.rows.length === 0) {
+        const id = req.params.id;
+        const blockers = guards.orderBlockers([
+            await guards.countBlocker(pool, 'leads',
+                `FROM leads l
+                  WHERE EXISTS (SELECT 1 FROM lead_offers lo WHERE lo.lead_id = l.id AND lo.offer_id = $1)
+                  ORDER BY l.id`, [id])
+        ]);
+        if (blockers.length > 0) return guards.refuse(res, blockers);
+
+        const found = await pool.query('SELECT name FROM real_estate_offers WHERE id = $1', [id]);
+        if (found.rows.length === 0) {
+            return res.status(404).json({ error: 'Оффер не найден' });
+        }
+        const removed = await guards.deleteAsBatch(
+            pool, `Удаление объекта «${found.rows[0].name}»`,
+            (client) => client.query('DELETE FROM real_estate_offers WHERE id = $1 RETURNING id', [id]));
+        if (removed.rows.length === 0) {
             return res.status(404).json({ error: 'Оффер не найден' });
         }
         res.status(204).send();

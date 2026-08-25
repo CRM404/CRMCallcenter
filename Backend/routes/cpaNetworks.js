@@ -4,6 +4,7 @@
 
 const express = require('express');
 const { pool } = require('../db');
+const guards = require('../services/deleteGuards');
 
 const router = express.Router();
 
@@ -165,18 +166,62 @@ router.put('/:id', async (req, res) => {
     }
 });
 
-// DELETE /api/cpa-networks/:id — блокируется, если на сеть ссылается хотя бы
-// один источник (report_2026-08-01.md, 11.08.2026, страница «Источники») —
-// тот же принцип понятного 409 вместо голой ошибки ON DELETE RESTRICT, что и
-// у площадок (routes/adPlatforms.js).
+// DELETE /api/cpa-networks/:id — порядок плана 11.4, «CPA-сеть».
+//
+// ЭТО САМАЯ ГРОМКАЯ ИЗ ТРЁХ МОЛЧАЛИВЫХ ЦЕПОЧЕК плана 11.1. До части 5 одно
+// нажатие сносило сеть, все её объекты недвижимости, у каждого — сегменты,
+// географию, способы оплаты и виды ипотеки, и связи объектов с лидами. Три
+// уровня вглубь, и человек об этом не узнавал.
+//
+// Теперь связь real_estate_offers → cpa_networks запрещающая (класс Б), и
+// каталог сам по себе уже не пропадёт. Но голый отказ базы читается как
+// «нарушение ограничения внешнего ключа», поэтому маршрут проверяет помехи
+// сам и называет их числами.
+//
+// Шаг 1 — связи объектов сети с лидами. Проверяются ДО источников намеренно:
+// подобранный объект дороже связки с источником, и человек должен увидеть
+// сначала то, что тяжелее (порядок помех в deleteGuards).
+// Шаг 2 — источники.
+// Шаг 3 — объекты сети поштучно; сегменты, гео, оплата и ипотеки уходят
+// каскадом как части целого (класс А).
+// Шаг 4 — сама сеть.
 router.delete('/:id', async (req, res) => {
     try {
-        const sourcesCount = await pool.query('SELECT count(*)::int AS c FROM source_cpa_networks WHERE cpa_network_id = $1', [req.params.id]);
-        if (sourcesCount.rows[0].c > 0) {
-            return res.status(409).json({ error: 'Нельзя удалить CPA-сеть, пока на неё ссылаются источники' });
+        const id = req.params.id;
+        const blockers = guards.orderBlockers([
+            await guards.countBlocker(pool, 'leads',
+                `FROM leads l
+                  WHERE EXISTS (SELECT 1 FROM lead_offers lo
+                                  JOIN real_estate_offers o ON o.id = lo.offer_id
+                                 WHERE lo.lead_id = l.id AND o.network_id = $1)
+                  ORDER BY l.id`, [id]),
+            await guards.countBlocker(pool, 'sources',
+                `FROM sources s
+                  WHERE EXISTS (SELECT 1 FROM source_cpa_networks sc
+                                 WHERE sc.source_id = s.id AND sc.cpa_network_id = $1)
+                  ORDER BY s.id`, [id])
+        ]);
+        if (blockers.length > 0) return guards.refuse(res, blockers);
+
+        const found = await pool.query('SELECT name FROM cpa_networks WHERE id = $1', [id]);
+        if (found.rows.length === 0) {
+            return res.status(404).json({ error: 'CPA-сеть не найдена' });
         }
-        const result = await pool.query('DELETE FROM cpa_networks WHERE id = $1 RETURNING id', [req.params.id]);
-        if (result.rows.length === 0) {
+
+        const removed = await guards.deleteAsBatch(
+            pool, `Удаление CPA-сети «${found.rows[0].name}»`, async (client) => {
+                // Поштучно, а не одним DELETE ... WHERE network_id: так каждый
+                // объект попадает в журнал отдельной записью со своим
+                // содержимым, и восстановить можно любой из них по одному.
+                const offers = await client.query(
+                    'SELECT id FROM real_estate_offers WHERE network_id = $1 ORDER BY id', [id]);
+                for (const offer of offers.rows) {
+                    await client.query('DELETE FROM real_estate_offers WHERE id = $1', [offer.id]);
+                }
+                const gone = await client.query('DELETE FROM cpa_networks WHERE id = $1 RETURNING id', [id]);
+                return { offers: offers.rows.length, network: gone.rows.length };
+            });
+        if (removed.network === 0) {
             return res.status(404).json({ error: 'CPA-сеть не найдена' });
         }
         res.status(204).send();

@@ -84,6 +84,11 @@ export async function request(path, options = {}) {
         // тост, и отличить этот отказ от прочих можно только по коду.
         const error = new Error((body && body.error) || 'Произошла ошибка на сервере');
         if (body && body.code) error.code = body.code;
+        // Помехи удаления (часть 5) — списком, а не строкой: сервер отдаёт
+        // пары «сколько — чего», текст окна собирает раздел. Транспорт обязан
+        // их пронести, иначе структура доедет только до этого места и раздел
+        // снова будет разбирать готовую фразу — то, от чего часть 5 и уходила.
+        if (body && Array.isArray(body.blockers)) error.blockers = body.blockers;
         error.status = response.status;
         throw error;
     }

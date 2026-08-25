@@ -4,6 +4,7 @@
 
 const express = require('express');
 const { pool } = require('../db');
+const guards = require('../services/deleteGuards');
 
 const router = express.Router();
 
@@ -276,15 +277,38 @@ router.put('/scripts/:id', async (req, res) => {
     }
 });
 
-// DELETE /api/admin/scripts/:id — удалить скрипт целиком (каскадно удалит узлы).
-// Больше ничем не блокируется: прежняя блокировка «назначен операторам» ушла
-// вместе с employee_scripts, а у лидов привязка обнуляется сама
-// (leads.script_id / repeat_script_id — ON DELETE SET NULL). Подтверждено
-// владельцем вместе с макетом.
+// DELETE /api/admin/scripts/:id — порядок плана 11.4, «Скрипт».
+//
+// Шаг 1 — назначен лидам основным или повторным? Запрещено.
+//
+// ЭТО ИЗМЕНЕНИЕ ПОВЕДЕНИЯ, а не оформление прежнего. До части 5 удаление
+// скрипта ничем не блокировалось: привязка у лида обнулялась сама, потому что
+// leads.script_id и leads.repeat_script_id объявлены ON DELETE SET NULL. То
+// есть скрипт исчезал, а у лидов молча пропадало, по какому скрипту с ними
+// говорили, — и узнать это было уже неоткуда. План 11.4 требует запрета, и
+// связь остаётся обнуляющей намеренно: запрет живёт в маршруте, где его можно
+// объяснить словами, а SET NULL остаётся страховкой на случай удаления мимо
+// маршрута.
+//
+// Шаг 2 — узлы дерева уходят каскадом (класс А, script_nodes).
+// Шаг 3 — сам скрипт.
 router.delete('/scripts/:id', async (req, res) => {
     try {
-        const result = await pool.query('DELETE FROM scripts WHERE id = $1 RETURNING id', [req.params.id]);
-        if (result.rows.length === 0) {
+        const id = req.params.id;
+        const blockers = guards.orderBlockers([
+            await guards.countBlocker(pool, 'leads',
+                `FROM leads l WHERE l.script_id = $1 OR l.repeat_script_id = $1 ORDER BY l.id`, [id])
+        ]);
+        if (blockers.length > 0) return guards.refuse(res, blockers);
+
+        const found = await pool.query('SELECT title FROM scripts WHERE id = $1', [id]);
+        if (found.rows.length === 0) {
+            return res.status(404).json({ error: 'Скрипт не найден' });
+        }
+        const removed = await guards.deleteAsBatch(
+            pool, `Удаление скрипта «${found.rows[0].title}»`,
+            (client) => client.query('DELETE FROM scripts WHERE id = $1 RETURNING id', [id]));
+        if (removed.rows.length === 0) {
             return res.status(404).json({ error: 'Скрипт не найден' });
         }
         res.status(204).send();

@@ -16,6 +16,7 @@ const { startOfDay, startOfNextDay, zonedParts } = require('../services/appTime'
 const { distributePendingLeads, findNewFunnelStatusId } = require('../services/leadDistribution');
 const { normalizePhone, normalizeForSearch } = require('../services/phoneFormat');
 const { phoneColumnsFor, findLeadByPhone, leadTitle } = require('../services/phoneFix');
+const guards = require('../services/deleteGuards');
 const { mergeLeads } = require('../services/leadMerge');
 const { currentCommit } = require('../services/phoneMigration');
 
@@ -884,22 +885,52 @@ router.post('/:id/merge', async (req, res) => {
     }
 });
 
-// DELETE /api/leads-admin/:id — связки уходят каскадом.
+// DELETE /api/leads-admin/:id — порядок плана 11.4, «Лид».
 //
-// Кроме одного случая: в лида могли влить дубли (часть 4). Тогда удаление
-// отбивается связью, и вместо голого 23503 человек обязан получить объяснение —
-// сколько лидов в него влито и что они на него ссылаются.
+// ФИЗИЧЕСКОЕ УДАЛЕНИЕ ЛИДА ОСТАЁТСЯ РОВНО ДЛЯ ОДНОГО СЛУЧАЯ: «завели не того,
+// ни одного звонка не было» (план 11.2). Всё остальное — архив.
+//
+// Шаг 1 — есть звонки? Запрещено, только архив. Таблицы звонков ещё нет, она
+// придёт частью 6; место под эту помеху размечено в deleteGuards (kind
+// 'calls'), и добавить её будет одной строкой. Пока не притворяемся, что
+// проверяем: помехи нет, потому что нет данных, а не потому что мы решили её
+// не смотреть.
+//
+// Шаг 2 — связи с офферами, статусы скриптов и строка пула уходят каскадом
+// (класс А). Связка с офферами оставлена каскадной СО СТОРОНЫ ЛИДА намеренно:
+// офферы обязательны при создании (validateLeadParams требует минимум один),
+// значит запрет здесь сделал бы удаление невозможным всегда, и правило,
+// заведённое ради одного случая, не сработало бы ни разу (ответ куратора И72).
+//
+// Шаг 3 — сам лид.
+//
+// Помеха, которая остаётся: в лида могли влить дубли (часть 4). Указатель
+// слияния запрещающий, и вместо голого 23503 человек получает число.
+//
+// ЧЕГО В ПОМЕХАХ НЕТ И НЕ БУДЕТ — заполненного поля notes (ответ куратора
+// И73). Текст уезжает в журнал при удалении и восстановим оттуда; отказывать в
+// удалении ошибочно заведённого лида из-за непустого поля — придирка, которую
+// человек справедливо не поймёт.
 router.delete('/:id', async (req, res) => {
     try {
-        const merged = await pool.query(
-            'SELECT count(*)::int AS n FROM leads WHERE merged_into_id = $1', [req.params.id]);
-        if (merged.rows[0].n > 0) {
-            return res.status(400).json({
-                error: `Нельзя удалить: в этого лида влито ${merged.rows[0].n} дублей, они на него ссылаются`
-            });
+        const id = req.params.id;
+        const blockers = guards.orderBlockers([
+            await guards.countBlocker(pool, 'merged_leads',
+                `FROM leads l WHERE l.merged_into_id = $1 ORDER BY l.id`, [id])
+        ]);
+        if (blockers.length > 0) return guards.refuse(res, blockers);
+
+        const found = await pool.query(
+            'SELECT last_name, first_name, phone FROM leads WHERE id = $1', [id]);
+        if (found.rows.length === 0) {
+            return res.status(404).json({ error: 'Лид не найден' });
         }
-        const result = await pool.query('DELETE FROM leads WHERE id = $1 RETURNING id', [req.params.id]);
-        if (result.rows.length === 0) {
+        const who = found.rows[0];
+        const title = [who.last_name, who.first_name].filter(Boolean).join(' ') || who.phone;
+        const removed = await guards.deleteAsBatch(
+            pool, `Удаление лида «${title}»`,
+            (client) => client.query('DELETE FROM leads WHERE id = $1 RETURNING id', [id]));
+        if (removed.rows.length === 0) {
             return res.status(404).json({ error: 'Лид не найден' });
         }
         res.status(204).send();

@@ -7,6 +7,7 @@
 
 const express = require('express');
 const { pool } = require('../db');
+const guards = require('../services/deleteGuards');
 
 const router = express.Router();
 
@@ -222,11 +223,40 @@ router.put('/:id', async (req, res) => {
     }
 });
 
-// DELETE /api/sources/:id — без ограничений, строки связки уйдут каскадом
+// DELETE /api/sources/:id — порядок плана 11.4, «Источник».
+//
+// Шаг 1 — есть лиды с этим источником? Запрещено. План отмечает это словами
+// «сейчас молча обнуляется», и так оно и было: leads.source_id объявлен
+// ON DELETE SET NULL, поэтому удаление источника стирало у лидов, откуда они
+// пришли. Для лидов, купленных за деньги, это потеря учёта, а не мелочь.
+// Связь оставлена обнуляющей по тому же доводу, что у скрипта: запрет живёт в
+// маршруте, где его объясняют, а SET NULL страхует удаление мимо маршрута.
+//
+// Шаг 2 — связи с CPA-сетями удаляются ЯВНО. Раньше они уходили каскадом;
+// теперь source_cpa_networks → sources переведена в запрет (класс Б), и без
+// явного удаления источник не удалился бы вовсе.
+//
+// Шаг 3 — сам источник.
 router.delete('/:id', async (req, res) => {
     try {
-        const result = await pool.query('DELETE FROM sources WHERE id = $1 RETURNING id', [req.params.id]);
-        if (result.rows.length === 0) {
+        const id = req.params.id;
+        const blockers = guards.orderBlockers([
+            await guards.countBlocker(pool, 'leads',
+                `FROM leads l WHERE l.source_id = $1 ORDER BY l.id`, [id])
+        ]);
+        if (blockers.length > 0) return guards.refuse(res, blockers);
+
+        const found = await pool.query('SELECT root_source, city_region FROM sources WHERE id = $1', [id]);
+        if (found.rows.length === 0) {
+            return res.status(404).json({ error: 'Источник не найден' });
+        }
+        const title = [found.rows[0].root_source, found.rows[0].city_region].filter(Boolean).join(' · ');
+        const removed = await guards.deleteAsBatch(
+            pool, `Удаление источника «${title}»`, async (client) => {
+                await client.query('DELETE FROM source_cpa_networks WHERE source_id = $1', [id]);
+                return client.query('DELETE FROM sources WHERE id = $1 RETURNING id', [id]);
+            });
+        if (removed.rows.length === 0) {
             return res.status(404).json({ error: 'Источник не найден' });
         }
         res.status(204).send();
