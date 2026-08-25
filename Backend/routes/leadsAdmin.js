@@ -177,7 +177,6 @@ const BASE_SELECT = `
     LEFT JOIN sources s ON s.id = l.source_id
     LEFT JOIN employees e ON e.id = l.employee_id
     LEFT JOIN lead_funnel_statuses fs ON fs.id = l.funnel_status_id
-    LEFT JOIN scripts sc ON sc.id = l.script_id
 `;
 
 function rowToLead(row) {

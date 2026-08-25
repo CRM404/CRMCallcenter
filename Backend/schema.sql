@@ -1638,6 +1638,7 @@ BEGIN
         ('lead_offers',                  'offer_id',           'real_estate_offers',   'name'),
         ('lead_script_statuses',         'lead_id',            'leads',                'last_name first_name'),
         ('lead_script_statuses',         'funnel_status_id',   'lead_funnel_statuses', 'status_name'),
+        ('lead_script_statuses',         'script_id',          'scripts',              'title'),
         ('lead_distribution_pool',       'lead_id',            'leads',                'last_name first_name'),
         ('lead_distribution_pool',       'employee_id',        'employees',            'last_name first_name'),
         ('knowledge_articles',           'author_employee_id', 'employees',            'last_name first_name'),
@@ -2070,6 +2071,33 @@ END $$;
 -- неё сервер перестал, но её ещё читает разметка «Лидов» — колонка «Скрипт» в
 -- таблице и поле в карточке. Снимет её та часть, которая соберёт экран пар:
 -- уронить колонку раньше клиента значит уронить раздел.
+
+-- ----- Журнал обязан называть скрипт пары словом ------------------------------
+-- Колонка script_id появилась В СУЩЕСТВУЮЩЕЙ таблице, у которой уже стоит триггер
+-- аудита. Значит правка пары попадёт в журнал сразу — и без строки в карте
+-- расшифровки покажется как «script_id: 3 → 7». Ровно то, ради чего карта и
+-- заведена: «Статус: 3 → 7» человеку не говорит ничего.
+--
+-- Замка не нужно, и это не небрежность: карта дополняется по мере появления
+-- ссылок, конфликт по (table_name, column_name) гасится сам — тот же приём, что
+-- у карты причин разбора номеров ниже по файлу.
+INSERT INTO audit_ref_map (table_name, column_name, ref_table, ref_title_columns) VALUES
+    ('lead_script_statuses', 'script_id', 'scripts', 'title')
+ON CONFLICT (table_name, column_name) DO NOTHING;
+
+-- И уборка за собой: строка карты на leads.repeat_script_id указывает на
+-- колонку, которой больше нет. Вреда от неё нет — карту читают по имени
+-- колонки, а такой колонки не встретится, — но мёртвая строка в карте
+-- расшифровки через полгода читается как «а почему не работает».
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+         WHERE table_name = 'leads' AND column_name = 'repeat_script_id'
+    ) THEN
+        DELETE FROM audit_ref_map WHERE table_name = 'leads' AND column_name = 'repeat_script_id';
+    END IF;
+END $$;
 
 -- ----- Третий вид куска скрипта: фраза для перевода ---------------------------
 -- Решение владельца 86. Одна на весь скрипт, стоит ДО списка возражений,

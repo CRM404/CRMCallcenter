@@ -204,11 +204,24 @@ async function mergeLeads(db, idA, idB) {
             `INSERT INTO lead_offers (lead_id, offer_id)
              SELECT $1, offer_id FROM lead_offers WHERE lead_id = $2
              ON CONFLICT DO NOTHING`, [elder.id, junior.id]);
-        // Статусы показа скрипта: прохождение старшего — это разговор, который
-        // уже был; совпавшие остаются его.
+        // Наборы «скрипт + его статусы»: прохождение старшего — это разговор,
+        // который уже был; совпавшие статусы остаются его.
+        //
+        // SCRIPT_ID ОБЯЗАТЕЛЕН С 25.08.2026. Прежний запрос переносил только
+        // статус — тогда скрипт у лида был один и лежал в колонке. Теперь пара
+        // хранится строкой, script_id объявлен NOT NULL, и запрос без него
+        // упал бы на первом же слиянии дублей. Найдено повторной проверкой
+        // собственной работы, а не набором: слияние — редкий путь, и ни один
+        // из существующих наборов по нему не проходит вместе с наборами
+        // скриптов.
+        //
+        // ON CONFLICT DO NOTHING здесь делает больше, чем кажется: первичный
+        // ключ (lead_id, funnel_status_id) означает, что при совпадении статуса
+        // остаётся СКРИПТ СТАРШЕГО. Это и есть правило «совпавшие остаются
+        // его», только теперь оно решает и про скрипт тоже.
         await client.query(
-            `INSERT INTO lead_script_statuses (lead_id, funnel_status_id)
-             SELECT $1, funnel_status_id FROM lead_script_statuses WHERE lead_id = $2
+            `INSERT INTO lead_script_statuses (lead_id, script_id, funnel_status_id)
+             SELECT $1, script_id, funnel_status_id FROM lead_script_statuses WHERE lead_id = $2
              ON CONFLICT DO NOTHING`, [elder.id, junior.id]);
         // Пул раздачи НЕ объединяется: это не данные о человеке, а ограничение
         // «кому можно отдать». У старшего пула нет, у младшего есть — объединение
