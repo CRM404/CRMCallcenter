@@ -162,8 +162,7 @@
             <option value="">— выберите действие —</option>
             <option value="employee">Сменить оператора</option>
             <option value="status">Сменить статус</option>
-            <option value="script">Сменить скрипт</option>
-            <option value="repeatScript">Сменить скрипт для повторных</option>
+            <option value="script">Назначить скрипты</option>
             <!-- «Отправить в архив» — ОБЫЧНЫЙ ПУНКТ списка (паспорт Р7): архив
                  обратим, и выделять его нечем. Массового физического удаления
                  нет вовсе — оно убрано, а не переименовано. -->
@@ -171,8 +170,6 @@
         </select>
         <select class="ui-field__control mass-select" data-role="mass-employee" aria-label="Оператор" hidden><option value="">— не назначен —</option></select>
         <select class="ui-field__control mass-select" data-role="mass-status" aria-label="Статус" hidden></select>
-        <select class="ui-field__control mass-select" data-role="mass-script" aria-label="Скрипт" hidden></select>
-        <select class="ui-field__control mass-select" data-role="mass-repeat-script" aria-label="Скрипт для повторных" hidden></select>
         <button type="button" class="ui-btn" data-role="mass-apply">Применить</button>
         <!-- Здесь была отдельная кнопка «Удалить» (К47, К125). Убрана
              паспортом Р7: массового физического удаления нет вовсе.
@@ -299,21 +296,19 @@
             <p class="section-hint section-hint--after">Офферы лида — на вкладке «Офферы» (обязателен минимум один).</p>
         </div>
 
+        <!-- НАБОРЫ «СКРИПТ И ЕГО СТАТУСЫ» (пункт Р11, решения владельца 82–84).
+             Было: одно поле «Скрипт», один список статусов и условное поле
+             «Скрипт для повторных», включавшееся само на этапах 5–6. Стало: до
+             пяти наборов, и повторный скрипт — это просто набор с повторными
+             статусами. Разметка блока строится модулем leadsScriptPairs: он же
+             стоит в окне «Загрузить базу» и в окне массового назначения. -->
         <div class="form-section">
-            <h3>Скрипт звонка</h3>
-            <p class="section-hint">Оператор увидит основной скрипт, пока текущий статус лида входит в выбранные; на статусах этапов 5–6 — скрипт для повторных.</p>
-            <div class="ui-form-grid form-grid--top">
-                <div class="ui-field"><label class="ui-field__label ui-field__label--required" for="ldScript">Скрипт</label><select class="ui-field__control" id="ldScript"></select></div>
-                <div class="ui-field">
-                    <span class="ui-field__label ui-field__label--required">Статусы показа скрипта</span>
-                    <div class="pick-list" data-role="status-pick"></div>
-                </div>
-                <div class="ui-field" data-role="repeat-wrap" hidden>
-                    <label class="ui-field__label ui-field__label--required" for="ldRepeatScript">Скрипт для повторных</label>
-                    <select class="ui-field__control" id="ldRepeatScript"></select>
-                    <span class="cond-hint">Обязателен: среди статусов показа есть этапы 5–6</span>
-                </div>
+            <div class="form-section-head">
+                <h3>Скрипты звонка</h3>
+                <span class="ui-tag" data-role="script-pairs-count">1 из 5</span>
             </div>
+            <p class="section-hint">Оператор увидит тот скрипт, среди статусов которого стоит текущий статус лида. Скриптов можно указать до пяти, один обязателен. Один статус принадлежит только одному скрипту.</p>
+            <div data-role="script-pairs"></div>
         </div>
 
         <div class="form-section">
@@ -430,15 +425,12 @@
         <div class="ui-form-grid form-grid--top">
             <div class="ui-field"><label class="ui-field__label ui-field__label--required" for="upSource">Источник</label><select class="ui-field__control" id="upSource"><option value="">— выберите источник —</option></select></div>
             <div class="ui-field"><label class="ui-field__label ui-field__label--required" for="upLine">Линия</label><select class="ui-field__control" id="upLine"><option value="">— не выбрана —</option><option>Входящая</option><option>Исходящая</option></select></div>
-            <div class="ui-field"><label class="ui-field__label ui-field__label--required" for="upScript">Скрипт</label><select class="ui-field__control" id="upScript"></select></div>
-            <div class="ui-field">
-                <span class="ui-field__label ui-field__label--required">Статусы показа скрипта</span>
-                <div class="pick-list" data-role="up-status-pick"></div>
-            </div>
-            <div class="ui-field" data-role="up-repeat-wrap" hidden>
-                <label class="ui-field__label ui-field__label--required" for="upRepeatScript">Скрипт для повторных</label>
-                <select class="ui-field__control" id="upRepeatScript"></select>
-                <span class="cond-hint">Обязателен: среди статусов показа есть этапы 5–6</span>
+            <!-- Тот же блок наборов, что в карточке (решение 85): партия
+                 получает те же до пяти пар, а не один скрипт на всех. Полю
+                 --wide тут не нужно: блок и так во всю ширину окна. -->
+            <div class="ui-field ui-field--wide">
+                <span class="ui-field__label ui-field__label--required">Скрипты звонка</span>
+                <div data-role="up-script-pairs"></div>
             </div>
             <div class="ui-field ui-field--wide">
                 <span class="ui-field__label ui-field__label--required">Офферы</span>

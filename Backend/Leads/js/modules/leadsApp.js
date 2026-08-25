@@ -23,6 +23,8 @@
 
 import { createStorage } from './leadsStorage.js';
 import { createPickList } from './leadsPickList.js';
+import { createScriptPairs } from './leadsScriptPairs.js';
+import { openMassScriptPairs } from './leadsMassScripts.js';
 import { createOfferTabPicker } from './leadsOffers.js';
 import { createGeoAutocomplete } from './leadsGeo.js';
 import { createLeadModal, fillFunnelStatusSelect, DOWN_PAYMENT_OPTIONS } from './leadsModal.js';
@@ -205,8 +207,6 @@ function emptyFilters() {
     return FILTER_FIELDS.reduce((acc, f) => { acc[f.key] = ''; return acc; }, { q: '', archived: '' });
 }
 
-const REPEAT_STAGE_FROM = 5;
-
 // Ячейки, которые собираются в готовый HTML (пилюли/чипы), а не в текст.
 const RICH_CELLS = {
     // Статус — ПИЛЮЛЯ СЛОЯ, ОДНОГО ЦВЕТА для всех статусов (решение владельца
@@ -242,22 +242,15 @@ const RICH_CELLS = {
     lineType: (l) => (l.lineType
         ? `<span class="leads-line">${icon(l.lineType === 'Входящая' ? 'arrow-down-left' : 'arrow-up-right', 'sm', 'ui-ic--quiet')}${escapeHtml(l.lineType)}</span>`
         : null),
-    // Название основного скрипта + мини-чип «повт.», если задан повторный.
-    // Чип синий, когда лид сейчас на этапе 5–6 — то есть оператор видит
-    // именно повторный скрипт.
-    script: (l) => {
-        if (!l.scriptId) return null;
-        const onRepeat = l.stageNumber >= REPEAT_STAGE_FROM;
-        // Подсвеченный чип означает «оператор сейчас видит именно повторный» —
-        // подпись должна говорить то же самое, а не одно и то же в обоих состояниях.
-        const chipTitle = onRepeat
-            ? `Оператор сейчас видит скрипт для повторных: ${l.repeatScriptTitle || ''}`
-            : `Скрипт для повторных: ${l.repeatScriptTitle || ''}`;
-        const chip = l.repeatScriptId
-            ? `<span class="rep-chip ${onRepeat ? 'on' : ''}" title="${escapeHtml(chipTitle)}">повт.</span>`
-            : '';
-        return `${escapeHtml(l.scriptTitle || '')}${chip}`;
-    },
+    // ДЕЙСТВУЮЩИЙ скрипт — тот, чья пара содержит ТЕКУЩИЙ статус лида
+    // (пункт Р11). Чипа «повт.» больше нет: повторный скрипт перестал быть
+    // отдельным полем и стал обычным набором.
+    //
+    // ПУСТО — ЭТО НЕ ПОЛОМКА, А ВИДИМАЯ ДЫРА. У лида, чей текущий статус не
+    // входит ни в один набор, скрипта сейчас нет вовсе, и оператор увидит
+    // «Для этого статуса скрипт не назначен». Возврат пустой строки отдаёт
+    // ячейку общему прочерку таблицы — тому же, что у соседних колонок.
+    script: (l) => escapeHtml(l.scriptTitle || ''),
     // Первый оффер + счётчик остальных, полный список — в подсказке.
     offers: (l) => {
         const offers = l.offers || [];
@@ -292,8 +285,8 @@ function cellHtml(key, lead) {
 const MASS_PATCH_ACTIONS = {
     employee: { key: 'employeeId', role: 'mass-employee', required: false, done: 'Оператор изменён' },
     status: { key: 'funnelStatusId', role: 'mass-status', required: true, prompt: 'Выберите статус', done: 'Статус изменён' },
-    script: { key: 'scriptId', role: 'mass-script', required: true, prompt: 'Выберите скрипт', done: 'Скрипт изменён' },
-    repeatScript: { key: 'repeatScriptId', role: 'mass-repeat-script', required: false, done: 'Скрипт для повторных изменён' }
+    // «Назначить скрипты» здесь больше нет: до пяти наборов в полосу не
+    // помещаются, и действие открывает своё окно (пункт Р11, решение 85).
 };
 
 // ---------------------------------------------------------------- состояние
@@ -834,8 +827,6 @@ function handleMassActionChange() {
 
     $('[data-role="mass-employee"]').hidden = action !== 'employee';
     $('[data-role="mass-status"]').hidden = action !== 'status';
-    $('[data-role="mass-script"]').hidden = action !== 'script';
-    $('[data-role="mass-repeat-script"]').hidden = action !== 'repeatScript';
 }
 
 async function handleMassApply() {
@@ -850,6 +841,22 @@ async function handleMassApply() {
     if (!action) { showMassWarn('Выберите действие'); return; }
     if (selectedIds.size === 0) { showMassWarn('Выберите хотя бы одного лида'); return; }
     const ids = Array.from(selectedIds);
+
+    // «Назначить скрипты» идёт своим путём: наборов до пяти, и в полосу они не
+    // помещаются — действие открывает окно с тем же блоком, что в карточке.
+    if (action === 'script') {
+        await openMassScriptPairs({
+            scope: wrap,
+            ids,
+            scripts,
+            statuses,
+            storage,
+            toast: (text, kind) => shell.toast(text, kind),
+            isAlive: () => alive(my),
+            onDone: async () => { clearSelection(); await reloadAll(); }
+        });
+        return;
+    }
 
     // «Отправить в архив» идёт своим путём: это не правка поля, а отдельный
     // маршрут, который сам заводит партию журнала одним запросом.
@@ -1158,6 +1165,7 @@ export async function mount(container, ctx) {
         isAlive,
         isAbort,
         createPickList,
+        createScriptPairs,
         createOfferTabPicker: (opts) => createOfferTabPicker({ ...opts, storage, toast: ctx.toast, isAlive, isAbort }),
         createGeo: () => createGeoAutocomplete(container, { storage, toast: ctx.toast, isAlive, isAbort }),
         onSaved: reloadAll
@@ -1183,9 +1191,6 @@ export async function mount(container, ctx) {
         fillFunnelStatusSelect($('[data-role="mass-status"]'), statuses, false);
         // Список сотрудников для массового действия заполняется не здесь, а в
         // момент выбора действия: он зависит от линии выбранных лидов.
-        const scriptOptions = scripts.map((s) => `<option value="${s.id}">${escapeHtml(s.title)}</option>`).join('');
-        $('[data-role="mass-script"]').innerHTML = '<option value="">— выберите скрипт —</option>' + scriptOptions;
-        $('[data-role="mass-repeat-script"]').innerHTML = '<option value="">— снять скрипт —</option>' + scriptOptions;
 
         await reloadAll();
     } catch (e) {

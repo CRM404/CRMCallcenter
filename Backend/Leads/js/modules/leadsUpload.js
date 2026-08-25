@@ -11,10 +11,10 @@
 // Один набор на всю партию.
 
 import { createPickList } from './leadsPickList.js';
+import { createScriptPairs } from './leadsScriptPairs.js';
 import { createOfferInlinePicker } from './leadsOffers.js';
 import { openModal } from '/ui/modal.js';
 
-const REPEAT_STAGE_FROM = 5;
 
 // Раньше библиотека подключалась тегом <script> в leads.html. Во фрагменте
 // раздела так нельзя: фрагмент вставляется через innerHTML, а скрипты оттуда
@@ -113,7 +113,7 @@ export function createUpload(root, deps) {
     const leaveBtn = () => $('[data-role="upload-cancel"]');
 
     let selectedFile = null;
-    let statusPick = null;
+    let scriptPairs = null;
     let poolPick = null;
     let offerPick = null;
     let allEmployees = [];
@@ -137,13 +137,6 @@ export function createUpload(root, deps) {
         $('[data-role="up-dupes"]').textContent = '0';
     }
 
-    function syncRepeatVisibility() {
-        const chosen = new Set(statusPick.getValues());
-        const needsRepeat = allStatuses.some((s) => chosen.has(s.id) && s.stageNumber >= REPEAT_STAGE_FROM);
-        $('[data-role="up-repeat-wrap"]').hidden = !needsRepeat;
-        return needsRepeat;
-    }
-
     // Пул раздачи заполняется только после выбора линии и показывает лишь
     // сотрудников этой линии: раздача всё равно идёт только по своей линии,
     // остальные в списке были бы ловушкой.
@@ -162,9 +155,12 @@ export function createUpload(root, deps) {
         );
     }
 
+    // Партия начинается с одного набора, в котором предвыбран «Новый»:
+    // загруженные лиды приходят именно с ним, и оператор увидит скрипт
+    // сразу, а не после ручной правки каждого.
     function preselectNewStatus() {
         const newStatus = allStatuses.find((s) => s.stageNumber === 0);
-        statusPick.setValues(newStatus ? [newStatus.id] : []);
+        scriptPairs.setValues(newStatus ? [{ scriptId: null, statusIds: [newStatus.id] }] : []);
     }
 
     // Окно открывается пустым: файл, параметры и сводка сбрасываются при
@@ -176,10 +172,7 @@ export function createUpload(root, deps) {
         fileInput.value = '';
         $('#upSource').value = '';
         $('#upLine').value = '';
-        $('#upScript').value = '';
-        $('#upRepeatScript').value = '';
         preselectNewStatus();
-        syncRepeatVisibility();
         syncPoolByLine();
         offerPick.clear();
         resetSummary();
@@ -225,9 +218,7 @@ export function createUpload(root, deps) {
         const params = {
             sourceId: $('#upSource').value,
             lineType: $('#upLine').value,
-            scriptId: $('#upScript').value,
-            repeatScriptId: $('#upRepeatScript').value || null,
-            scriptStatusIds: statusPick.getValues(),
+            scriptPairs: scriptPairs.getValues(),
             poolEmployeeIds: poolPick.getValues(),
             offerIds: offerPick.getValues()
         };
@@ -235,10 +226,14 @@ export function createUpload(root, deps) {
         const problem = (message) => { toast(message, 'error'); return false; };
         if (!params.sourceId) return problem('Выберите источник для партии');
         if (!params.lineType) return problem('Выберите линию');
-        if (!params.scriptId) return problem('Выберите скрипт');
-        if (params.scriptStatusIds.length === 0) return problem('Выберите хотя бы один статус показа скрипта');
-        if (syncRepeatVisibility() && !params.repeatScriptId) {
-            return problem('Среди статусов показа есть этапы 5–6 — укажите скрипт для повторных');
+        // Наборы отказывают под полем, а не тостом: ошибка живёт там, где её
+        // исправляют.
+        const pairsProblem = scriptPairs.validate();
+        if (pairsProblem) {
+            pairsProblem.focus.scrollIntoView({ block: 'center', behavior: 'smooth' });
+            const control = pairsProblem.focus.querySelector('select, input');
+            if (control) control.focus();
+            return false;
         }
         if (params.offerIds.length === 0) return problem('Выберите хотя бы один оффер');
         if (!selectedFile) return problem('Выберите файл');
@@ -289,16 +284,11 @@ export function createUpload(root, deps) {
         allStatuses = statuses;
 
         fillSelect($('#upSource'), sources.map((s) => ({ id: s.id, name: s.leadSource || s.rootSource })), '— выберите источник —');
-        fillSelect($('#upScript'), scripts.map((s) => ({ id: s.id, name: s.title })), '— не выбран —');
-        fillSelect($('#upRepeatScript'), scripts.map((s) => ({ id: s.id, name: s.title })), '— не выбран —');
-
-        statusPick = createPickList($('[data-role="up-status-pick"]'), {
-            emptyText: 'Ни один статус не выбран — обязателен минимум один.',
-            onChange: syncRepeatVisibility
-        });
-        statusPick.setItems(statuses.map((s) => ({
-            id: s.id, label: s.statusName, stageNumber: s.stageNumber, stageName: s.stageName
-        })));
+        // Тот же блок наборов, что в карточке лида и в окне массового
+        // назначения: один модуль на три места (решение 85).
+        scriptPairs = createScriptPairs($('[data-role="up-script-pairs"]'), { createPickList });
+        scriptPairs.setScripts(scripts);
+        scriptPairs.setStatuses(statuses);
 
         // Без emptyText: та же мысль уже сказана в подписи поля под списком —
         // две одинаковые подсказки подряд читаются как ошибка вёрстки.

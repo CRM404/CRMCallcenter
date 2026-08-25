@@ -303,3 +303,30 @@
     .scr-inline { flex-direction: column; align-items: stretch; }
     .scr-inline__field { min-width: 0; }
 }
+
+/* ----- Вкладка «Статусы воронки» (пункт Р11, решение владельца 87) --------
+   Пятьдесят строк, семь коробок по этапам, только чтение.
+
+   ПОЧЕМУ auto-fill, А НЕ auto-fit. У auto-fit пустые дорожки схлопываются, и
+   этап из одного статуса («Новый») растянул бы единственную строку на всю
+   ширину коробки, а этап из трёх дал бы три колонки вместо четырёх. Ширина
+   строки прыгала бы от этапа к этапу без всякой причины.
+
+   Своей точки перелома список не заводит: раздел уже меряет себя по панели
+   (container-type: inline-size на .scr-section), и число колонок считается от
+   ширины коробки этапа. */
+.scr-statuses {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    row-gap: var(--ui-space-2);
+    column-gap: var(--ui-space-5);
+}
+/* Выравнивание по базовой линии, а не по центру: пилюля свойства ниже строки
+   имени, и по центру их основания разъехались бы. */
+.scr-status {
+    display: flex;
+    align-items: baseline;
+    gap: var(--ui-space-2);
+    padding: 4px 0;
+    border-bottom: 1px solid var(--ui-color-line);
+}

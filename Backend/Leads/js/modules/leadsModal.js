@@ -20,7 +20,6 @@ import { openModal } from '/ui/modal.js';
 export const DOWN_PAYMENT_OPTIONS = ['10', '15', '20', '25', '30', '50'];
 
 // «Повторные» — этапы воронки 5 и 6 (решение владельца п.2).
-const REPEAT_STAGE_FROM = 5;
 
 // Поля, читаемые/заполняемые 1:1 по value (id = `ld` + key с большой первой
 // буквы) — и текстовые, и выпадающие: у select тот же .value. Телефон, связки и
@@ -132,12 +131,13 @@ function employeeName(employee) {
 /**
  * @param {HTMLElement} root   контейнер панели
  * @param {Object}      deps   { storage, toast, isAlive, isAbort, createPickList,
- *                               createOfferTabPicker, createGeo, onSaved }
+ *                               createScriptPairs, createOfferTabPicker, createGeo,
+ *                               onSaved }
  */
 export function createLeadModal(root, deps) {
     const {
         wrap, confirm, storage, toast, isAlive, isAbort,
-        createPickList, createOfferTabPicker, createGeo, onSaved
+        createPickList, createScriptPairs, createOfferTabPicker, createGeo, onSaved
     } = deps;
 
     const $ = (sel) => root.querySelector(sel);
@@ -156,7 +156,7 @@ export function createLeadModal(root, deps) {
     let editingLeadId = null;
     let funnelStatuses = [];
     let allEmployees = [];
-    let statusPick = null;
+    let scriptPairs = null;
     let offerPicker = null;
     let geo = null;
     let saving = false;
@@ -237,16 +237,6 @@ export function createLeadModal(root, deps) {
         syncPurchaseCascades(false);
     }
 
-    // Условный «Скрипт для повторных»: в скрытом виде места в сетке НЕ
-    // резервирует (display:none через [hidden], а не visibility) — фидбек
-    // владельца про пустоту в форме.
-    function syncRepeatVisibility() {
-        const selectedStatusIds = new Set(statusPick.getValues());
-        const needsRepeat = funnelStatuses.some((s) => selectedStatusIds.has(s.id) && s.stageNumber >= REPEAT_STAGE_FROM);
-        $('[data-role="repeat-wrap"]').hidden = !needsRepeat;
-        return needsRepeat;
-    }
-
     function switchTab(tab) {
         const isMain = tab === 'main';
         $('[data-role="tab-main"]').classList.toggle('ui-tabs__tab--active', isMain);
@@ -286,9 +276,9 @@ export function createLeadModal(root, deps) {
         data.lineType = $('#ldLine').value || null;
         data.employeeId = $('#ldEmployee').value || null;
         data.funnelStatusId = $('#ldFunnelStatus').value || null;
-        data.scriptId = $('#ldScript').value || null;
-        data.repeatScriptId = $('#ldRepeatScript').value || null;
-        data.scriptStatusIds = statusPick.getValues();
+        // Наборы «скрипт и его статусы» вместо трёх прежних полей: сервер
+        // раскладывает их по строкам, одна строка на статус.
+        data.scriptPairs = scriptPairs.getValues();
         data.offerIds = offerPicker.getValues();
         data.poolEmployeeIds = [];
         // Трёхзначность: null — условие каскада не выполнено, поле неприменимо;
@@ -324,10 +314,18 @@ export function createLeadModal(root, deps) {
         if (!data.phone) return problem('Укажите номер телефона', 'main');
         if (!data.lineType) return problem('Выберите линию', 'main');
         if (!data.sourceId) return problem('Выберите источник', 'main');
-        if (!data.scriptId) return problem('Выберите скрипт', 'main');
-        if (data.scriptStatusIds.length === 0) return problem('Выберите хотя бы один статус показа скрипта', 'main');
-        if (syncRepeatVisibility() && !data.repeatScriptId) {
-            return problem('Среди статусов показа есть этапы 5–6 — укажите скрипт для повторных', 'main');
+        // Наборы отказывают ИНАЧЕ, чем остальные поля карточки: ошибка
+        // живёт под полем, а не в тосте (паспорт Р11). Тост исчезает через
+        // три секунды, а исправлять человек будет дольше. Тоста здесь нет
+        // намеренно: окно переключает вкладку, прокручивается к неверному
+        // набору и ставит фокус в поле — этого видно достаточно.
+        const pairsProblem = scriptPairs.validate();
+        if (pairsProblem) {
+            switchTab('main');
+            pairsProblem.focus.scrollIntoView({ block: 'center', behavior: 'smooth' });
+            const control = pairsProblem.focus.querySelector('select, input');
+            if (control) control.focus();
+            return false;
         }
         // Сохранение без офферов само переключает на вкладку «Офферы» — там же
         // и подсказка «обязателен минимум один» (решение дизайн-сессии).
@@ -411,8 +409,9 @@ export function createLeadModal(root, deps) {
         // Источник лидов, а не корневой: см. правку данных 25.08.2026 —
         // в корневом у всех записей одно слово, выбирать по нему нельзя.
         fillSelectFromList($('#ldSource'), sources.map((s) => ({ id: s.id, name: s.leadSource || s.rootSource })), '— не выбран —');
-        fillSelectFromList($('#ldScript'), scripts.map((s) => ({ id: s.id, name: s.title })), '— не выбран —');
-        fillSelectFromList($('#ldRepeatScript'), scripts.map((s) => ({ id: s.id, name: s.title })), '— не выбран —');
+        // Список скриптов уходит в блок наборов: своих полей «Скрипт» и
+        // «Скрипт для повторных» у карточки больше нет.
+        scriptPairs.setScripts(scripts);
         fillFunnelStatusSelect($('#ldFunnelStatus'), funnelStatuses, true);
 
         fillPlainSelect($('#ldDecisionMaker'), paramLists.decisionMaker || [], '— не выбран —');
@@ -428,13 +427,14 @@ export function createLeadModal(root, deps) {
         fillPlainSelect($('#ldPurchaseTimeframe'), paramLists.purchaseTerm || [], '— не выбран —');
         fillPlainSelect($('#ldDownPaymentPercent'), DOWN_PAYMENT_OPTIONS, '— не выбран —');
 
-        statusPick = createPickList($('[data-role="status-pick"]'), {
-            emptyText: 'Ни один статус не выбран — обязателен минимум один.',
-            onChange: syncRepeatVisibility
+        // Счётчик «N из 5» в шапке раздела: потолок обязан быть виден до
+        // того, как человек упрётся в неактивную кнопку.
+        const pairsCount = $('[data-role="script-pairs-count"]');
+        scriptPairs = createScriptPairs($('[data-role="script-pairs"]'), {
+            createPickList,
+            onCountChange: (count, max) => { pairsCount.textContent = `${count} из ${max}`; }
         });
-        statusPick.setItems(funnelStatuses.map((s) => ({
-            id: s.id, label: s.statusName, stageNumber: s.stageNumber, stageName: s.stageName
-        })));
+        scriptPairs.setStatuses(funnelStatuses);
 
         offerPicker = createOfferTabPicker({
             rootSelect: $('#ofltRoot'), platSelect: $('#ofltPlat'),
@@ -498,18 +498,15 @@ export function createLeadModal(root, deps) {
         syncEmployeesByLine();
         $('#ldEmployee').value = lead && lead.employeeId ? lead.employeeId : '';
         $('#ldFunnelStatus').value = lead && lead.funnelStatusId ? lead.funnelStatusId : '';
-        $('#ldScript').value = lead && lead.scriptId ? lead.scriptId : '';
-        $('#ldRepeatScript').value = lead && lead.repeatScriptId ? lead.repeatScriptId : '';
-
         // «Новый» предвыбран у нового лида (требование куратора): иначе легко
-        // создать лида, у которого оператор сразу не увидит скрипта.
+        // создать лида, у которого оператор сразу не увидит скрипта. Правило
+        // пережило переделку на наборы — оно про первый набор.
         if (lead) {
-            statusPick.setValues(lead.scriptStatusIds || []);
+            scriptPairs.setValues(lead.scriptPairs || []);
         } else {
             const newStatus = funnelStatuses.find((s) => s.stageNumber === 0);
-            statusPick.setValues(newStatus ? [newStatus.id] : []);
+            scriptPairs.setValues(newStatus ? [{ scriptId: null, statusIds: [newStatus.id] }] : []);
         }
-        syncRepeatVisibility();
 
         tabsNode.hidden = false;
         fieldsNode.hidden = false;

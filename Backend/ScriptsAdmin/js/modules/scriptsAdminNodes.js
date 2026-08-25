@@ -516,6 +516,48 @@ function renderRootBlock(root, uiState) {
     `;
 }
 
+// ФРАЗА ДЛЯ ПЕРЕВОДА (решения владельца 86 и 90) — третий блок наполнения,
+// между основным текстом и возражениями.
+//
+// ЧТО ЭТО ЗА ФРАЗА. То, что оператор говорит клиенту в момент передачи дальше:
+// этап 4 «Передача лида», статусы «Лид переведен „ЯН"» и «Лид переведен „МС"».
+// Пояснение говорит это прямо, по образцу соседа: у основного текста — «то, что
+// оператор читает с начала разговора».
+//
+// ПУСТОЕ СОСТОЯНИЕ ВНУТРЕННЕЕ, А НЕ ПОЛНОЕ. У основного текста пустота полная —
+// со значком, заголовком и кнопкой: без него скрипт не работает. Здесь
+// работает: поле необязательное, и полное пустое состояние требовало бы
+// действия, которого никто не должен.
+//
+// ОДНА НА ВЕСЬ СКРИПТ, И ЭТО ДЕРЖИТ БАЗА: частичный уникальный индекс
+// idx_script_nodes_one_transfer. Экран второй кнопки не рисует, но полагается
+// на индекс, а не на себя.
+const TRANSFER_HEAD_SUB = 'то, что оператор говорит клиенту, передавая его партнёру';
+
+function renderTransferBlock(transfer, uiState) {
+    if (uiState.transferEditing) {
+        return `
+            <div class="scr-card">
+                ${renderCardHead('Фраза для перевода', TRANSFER_HEAD_SUB, '')}
+                ${renderEditorBox(transfer ? transfer.content : '')}
+                <div class="ui-btn-row">
+                    <button type="button" class="ui-btn" data-role="transfer-save">Сохранить</button>
+                    <button type="button" class="ui-btn ui-btn--ghost" data-role="transfer-cancel">Отмена</button>
+                </div>
+            </div>
+        `;
+    }
+    const action = `<button type="button" class="ui-btn ui-btn--secondary" data-role="transfer-edit">${transfer ? 'Изменить' : 'Добавить'}</button>`;
+    return `
+        <div class="scr-card">
+            ${renderCardHead('Фраза для перевода', TRANSFER_HEAD_SUB, action)}
+            ${transfer
+                ? `<div class="scr-node__content">${transfer.content}</div>`
+                : '<div class="ui-empty ui-empty--inline"><span class="ui-empty__text">Фраза не задана — она не обязательна</span></div>'}
+        </div>
+    `;
+}
+
 // Форма возражения — одна на добавление и правку (К156). Текст правится тем же
 // редактором, что и основной: возражение оператор читает вслух так же, и
 // выделить в нём ключевую фразу нужно ровно так же. Сервер и раньше принимал
@@ -608,9 +650,16 @@ function renderObjectionsBlock(objections, uiState) {
 //              onDeleteObjection(id) }
 export function renderNodesPanel(container, nodes, uiState, handlers) {
     const root = nodes.find((n) => n.parentId === null) || null;
-    const objections = root ? nodes.filter((n) => n.parentId === root.id) : [];
+    // ВИД, А НЕ РОДИТЕЛЬ. Пока видов было два, «дети корня» и «возражения»
+    // значили одно и то же. С появлением фразы для перевода — уже нет: она
+    // тоже висит на корне, и прежний отбор молча показал бы её в списке
+    // возражений, с кнопками «Изменить» и «Удалить» в придачу.
+    const transfer = root ? nodes.find((n) => n.nodeType === 'transfer') || null : null;
+    const objections = root ? nodes.filter((n) => n.parentId === root.id && n.nodeType === 'objection') : [];
 
-    container.innerHTML = renderRootBlock(root, uiState) + (root ? renderObjectionsBlock(objections, uiState) : '');
+    container.innerHTML = renderRootBlock(root, uiState)
+        + (root ? renderTransferBlock(transfer, uiState) : '')
+        + (root ? renderObjectionsBlock(objections, uiState) : '');
 
     // Кнопки, которые шлют запрос, блокируются на время запроса (handlers.busy).
     // Без этого двойной клик уходит дважды: по «Добавить возражение» это два
@@ -647,6 +696,25 @@ export function renderNodesPanel(container, nodes, uiState, handlers) {
         editorEl.focus();
     } else {
         container.querySelector('[data-role="root-edit"]').addEventListener('click', handlers.onEditRootStart);
+    }
+
+    // Фраза для перевода: правка одним редактором, как у основного текста.
+    if (uiState.transferEditing) {
+        // Редактор фразы — ВТОРАЯ коробка на экране, когда основной текст
+        // тоже открыт на правку. Брать первую попавшуюся значило бы писать
+        // в чужое поле — та же ловушка, ради которой setupEditor принимает
+        // коробку, а не контейнер.
+        const transferBox = container.querySelector('[data-role="transfer-save"]').closest('.scr-card').querySelector('.scr-rte');
+        const editorEl = setupEditor(transferBox, handlers.toast);
+        const saveBtn = container.querySelector('[data-role="transfer-save"]');
+        saveBtn.addEventListener('click', () => {
+            handlers.busy(saveBtn, () => handlers.onSaveTransfer(transfer, getEditorHtmlForSave(editorEl)));
+        });
+        container.querySelector('[data-role="transfer-cancel"]').addEventListener('click', handlers.onCancelTransferEdit);
+        editorEl.focus();
+    } else {
+        const transferBtn = container.querySelector('[data-role="transfer-edit"]');
+        if (transferBtn) transferBtn.addEventListener('click', handlers.onEditTransferStart);
     }
 
     const addBtn = container.querySelector('[data-role="objection-add"]');

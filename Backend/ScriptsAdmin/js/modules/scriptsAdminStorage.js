@@ -16,6 +16,11 @@ export function createStorage(api) {
         updateScript: (id, data) => api.put(`/admin/scripts/${id}`, data),
         deleteScript: (id) => api.del(`/admin/scripts/${id}`),
 
+        // Справочник статусов воронки — только чтение: список закреплён
+        // схемой, эндпоинтов записи у него нет вовсе. Тот же маршрут читают
+        // «Лиды» и рабочее место оператора.
+        fetchFunnelStatuses: () => api.get('/lead-funnel-statuses'),
+
         fetchScriptNodes: (scriptId) => api.get(`/admin/scripts/${scriptId}/nodes`),
         createScriptNode: (scriptId, data) => api.post(`/admin/scripts/${scriptId}/nodes`, data),
         updateScriptNode: (nodeId, data) => api.put(`/admin/script-nodes/${nodeId}`, data),

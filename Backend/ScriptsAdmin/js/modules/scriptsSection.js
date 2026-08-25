@@ -24,7 +24,7 @@ import { isAbort } from '/api.js';
 // Окно отказа — общее на пять разделов (ответ на И118).
 import { openDeleteBlocked, isDeleteBlocked } from '/deleteBlocked.js';
 import { createStorage } from './scriptsAdminStorage.js';
-import { renderScriptRows, CONFIRM_TEXTS } from './scriptsAdminScriptList.js';
+import { renderScriptRows, CONFIRM_TEXTS, escapeHtml } from './scriptsAdminScriptList.js';
 import { renderNodesPanel } from './scriptsAdminNodes.js';
 
 // Открытые экземпляры раздела. Оболочка зовёт unmount() без аргументов, а
@@ -51,6 +51,11 @@ export async function mount(container, ctx) {
         selectedScript: null,
         nodes: [],
         nodesUi: emptyNodesUi(),
+        // Вкладка «Статусы воронки» (решение владельца 87). Справочник
+        // грузится ОДИН РАЗ и по первому открытию вкладки: пятьдесят строк
+        // не меняются, а разделу они не нужны, пока на них не посмотрят.
+        tab: 'scripts',
+        funnelStatuses: null,
         destroyed: false
     };
     instances.push(state);
@@ -63,7 +68,14 @@ export async function mount(container, ctx) {
 // пустого основного текста, развёрнутый кнопкой пустого состояния: до нажатия
 // его нет, иначе пустой блок с открытым полем читается как сломанное поле.
 function emptyNodesUi() {
-    return { rootEditing: false, rootCreating: false, addingObjection: false, editingObjectionId: null };
+    return {
+        rootEditing: false, rootCreating: false,
+        // Фраза для перевода правится одним состоянием на оба случая:
+        // «ещё нет» и «уже есть» отличаются только тем, что уйдёт на сервер
+        // — создание или правка.
+        transferEditing: false,
+        addingObjection: false, editingObjectionId: null
+    };
 }
 
 export function unmount() {
@@ -127,6 +139,7 @@ async function reloadNodes(state) {
 // Счётчики считаются из уже загруженного списка — отдельного эндпоинта под три
 // числа заводить не нужно (решение куратора).
 function renderStats(state) {
+    $(state, 'tab-scripts-count').textContent = state.scripts.length;
     $(state, 'stat-total').textContent = state.scripts.length;
     $(state, 'stat-active').textContent = state.scripts.filter((s) => s.status === 'active').length;
     $(state, 'stat-draft').textContent = state.scripts.filter((s) => s.status === 'draft').length;
@@ -198,6 +211,50 @@ function renderNodes(state) {
                 if (state.destroyed) return;
                 state.ctx.toast('Основной текст сохранён', 'success');
                 state.nodesUi.rootEditing = false;
+                await reloadNodes(state);
+            } catch (err) {
+                if (!isAbort(err)) state.ctx.toast(err.message, 'error');
+            }
+        },
+
+        onEditTransferStart: () => { state.nodesUi.transferEditing = true; renderNodes(state); },
+        onCancelTransferEdit: () => { state.nodesUi.transferEditing = false; renderNodes(state); },
+
+        /**
+         * Сохранение фразы для перевода.
+         *
+         * ПУСТОЙ ТЕКСТ — ЭТО СНЯТЬ ФРАЗУ, А НЕ ОШИБКА. Поле необязательное
+         * (решение 86), и человек, стерший текст и нажавший «Сохранить», хочет
+         * именно этого. Отказ «укажите текст» на необязательном поле оставил
+         * бы его без способа передумать: другого пути снять фразу на экране
+         * нет вовсе.
+         */
+        onSaveTransfer: async (transfer, content) => {
+            const empty = !content || !content.trim();
+            try {
+                if (empty && transfer) {
+                    await state.storage.deleteScriptNode(transfer.id);
+                    if (state.destroyed) return;
+                    state.ctx.toast('Фраза для перевода снята', 'success');
+                } else if (!empty && transfer) {
+                    await state.storage.updateScriptNode(transfer.id, {
+                        parentId: transfer.parentId, nodeType: 'transfer', label: null,
+                        content, sortOrder: transfer.sortOrder
+                    });
+                    if (state.destroyed) return;
+                    state.ctx.toast('Фраза для перевода сохранена', 'success');
+                } else if (!empty) {
+                    // Фраза висит на корне, как и возражения: корневым узлом
+                    // может быть только один, и второй сервер не примет.
+                    const root = state.nodes.find((n) => n.parentId === null);
+                    await state.storage.createScriptNode(state.selectedScript.id, {
+                        parentId: root ? root.id : null, nodeType: 'transfer', label: null,
+                        content, sortOrder: 0
+                    });
+                    if (state.destroyed) return;
+                    state.ctx.toast('Фраза для перевода добавлена', 'success');
+                }
+                state.nodesUi.transferEditing = false;
                 await reloadNodes(state);
             } catch (err) {
                 if (!isAbort(err)) state.ctx.toast(err.message, 'error');
@@ -360,11 +417,112 @@ function openCreateModal(state) {
 
 // ---------------------------------------------------------------- события
 
+// ---------------------------------------------------------- вкладка статусов
+
+// Слова признаков взяты не по смыслу названия колонки, а по тому, что колонка
+// ДЕЛАЕТ (services/leadCallRules.js): releases_lead отцепляет оператора и
+// отпускает лида, auto_recall ставит перезвон через час, requires_call_time
+// ставит время, названное клиентом. Имена колонок человеку, который пишет
+// скрипты, не говорят ничего.
+const STATUS_PROPS = [
+    { key: 'releasesLead', label: 'разговора не было' },
+    { key: 'autoRecall', label: 'перезвон через час' },
+    { key: 'requiresCallTime', label: 'спросит время перезвона' }
+];
+
+function statusesWord(count) {
+    const tail = count % 100;
+    if (tail >= 11 && tail <= 14) return 'статусов';
+    switch (count % 10) {
+        case 1: return 'статус';
+        case 2:
+        case 3:
+        case 4: return 'статуса';
+        default: return 'статусов';
+    }
+}
+
+function renderStatuses(state) {
+    const box = $(state, 'statuses-stages');
+    const list = state.funnelStatuses || [];
+    $(state, 'tab-statuses-count').textContent = list.length;
+
+    // Этапы собираются из самих данных, а не из зашитого перечня: разбивка
+    // живёт в схеме, и второй список этапов здесь разошёлся бы с ней молча.
+    const stages = [];
+    list.forEach((s) => {
+        let stage = stages.find((x) => x.number === s.stageNumber);
+        if (!stage) { stage = { number: s.stageNumber, name: s.stageName, items: [] }; stages.push(stage); }
+        stage.items.push(s);
+    });
+
+    box.innerHTML = stages.map((stage) => {
+        const rows = stage.items.map((item) => {
+            // Свойство стоит СРАЗУ ЗА ИМЕНЕМ, а не отдельной колонкой: свойства
+            // есть у пяти статусов из пятидесяти, и колонка пустовала бы в
+            // сорока пяти строках из пятидесяти.
+            const pills = STATUS_PROPS
+                .filter((prop) => item[prop.key])
+                .map((prop) => `<span class="ui-pill ui-pill--mute">${prop.label}</span>`)
+                .join('');
+            return `<div class="scr-status"><span>${escapeHtml(item.statusName)}</span>${pills}</div>`;
+        }).join('');
+        return `
+            <div class="scr-card">
+                <div class="scr-card__head">
+                    <h3 class="scr-card__title">${stage.number} · ${escapeHtml(stage.name)}</h3>
+                    <span class="scr-card__sub">${stage.items.length} ${statusesWord(stage.items.length)}</span>
+                </div>
+                <div class="scr-statuses">${rows}</div>
+            </div>
+        `;
+    }).join('');
+}
+
+// Кнопка «Новый скрипт» и три чипа уходят вместе со списком: кнопка заводит
+// скрипт, чипы считают скрипты, а на вкладке статусов нет ни того, ни другого.
+// Кнопка, которая ничего не сделает, и число не про то, что на экране, читаются
+// как поломка.
+async function switchTab(state, tab) {
+    state.tab = tab;
+    const onScripts = tab === 'scripts';
+    $(state, 'tab-scripts').classList.toggle('ui-tabs__tab--active', onScripts);
+    $(state, 'tab-statuses').classList.toggle('ui-tabs__tab--active', !onScripts);
+    $(state, 'tab-scripts').setAttribute('aria-selected', String(onScripts));
+    $(state, 'tab-statuses').setAttribute('aria-selected', String(!onScripts));
+    $(state, 'list-wrap').hidden = !onScripts;
+    $(state, 'statuses-wrap').hidden = onScripts;
+    state.container.querySelector('.ui-page-chips').hidden = !onScripts;
+    state.container.querySelector('[data-role="new-script"]').hidden = !onScripts;
+    // Открытый скрипт прячется вместе со списком, но НЕ закрывается: вернувшись
+    // на первую вкладку, человек застаёт его там же, где оставил.
+    $(state, 'opened').hidden = !onScripts || !state.selectedScript;
+
+    if (!onScripts && state.funnelStatuses === null) {
+        try {
+            const list = await state.storage.fetchFunnelStatuses();
+            if (state.destroyed) return;
+            state.funnelStatuses = list;
+        } catch (err) {
+            if (!isAbort(err)) state.ctx.toast(err.message, 'error');
+            return;
+        }
+    }
+    if (!onScripts) renderStatuses(state);
+}
+
 function bindEvents(state) {
     const container = state.container;
 
     container.addEventListener('click', async (event) => {
         const target = event.target;
+
+        const tabScripts = target.closest('[data-role="tab-scripts"]');
+        const tabStatuses = target.closest('[data-role="tab-statuses"]');
+        if (tabScripts || tabStatuses) {
+            await switchTab(state, tabScripts ? 'scripts' : 'statuses');
+            return;
+        }
 
         if (target.closest('[data-role="new-script"]') || target.closest('[data-role="empty-action"]')) {
             openCreateModal(state);

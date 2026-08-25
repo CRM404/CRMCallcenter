@@ -87,10 +87,56 @@
 /* Линия лида — обычный текст со значком направления. Рамка и заливка сняты:
    пилюля в макете означает СТАТУС, а линия статусом не является (М23). */
 .leads-wrap .leads-line { display: inline-flex; align-items: center; gap: 5px; color: var(--ui-color-ink); }
-/* Скрипт: название + маркер «повт.». Синий — лид сейчас на этапе 5–6,
-   т.е. оператор видит именно повторный скрипт. */
-.leads-wrap .rep-chip { display: inline-block; margin-left: 6px; font-size: 10.5px; font-weight: 700; color: var(--ink-faint); background: rgba(96, 112, 148, .12); padding: 2px 7px; border-radius: 20px; cursor: default; }
-.leads-wrap .rep-chip.on { color: var(--accent); background: rgba(0, 0, 255, .08); }
+/* ----- Наборы «скрипт и его статусы» (пункт Р11) ---------------------------
+   Повторяющийся блок собран на узоре формы оффера CPA-сетей
+   (cpa-networks-light.css:251): та же рамка, тот же радиус, тот же фон и та же
+   кнопка добавления пунктиром. Второй узор для того же самого разошёлся бы с
+   первым при первой же правке.
+
+   ЗНАЧЕНИЯ — ТОКЕНЫ СЛОЯ С :root, НИ ОДНОГО АЛИАСА ОБЁРТКИ. Алиасы --line,
+   --ink, --radius-md объявлены на .leads-wrap, а не в :root, и правило,
+   потерявшее приставку, покрасило бы рамку в currentColor, а фон — в
+   прозрачное. Молча, без единой ошибки в консоли. Урок К180. */
+.leads-wrap .lead-script-rows { display: flex; flex-direction: column; gap: var(--ui-space-3); }
+.leads-wrap .lead-script-row {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--ui-space-4);
+    padding: var(--ui-space-4);
+    border: 1px solid var(--ui-color-line);
+    border-radius: var(--ui-radius-sm);
+    background: var(--ui-color-surface-sunken);
+}
+/* Поля занимают всё, кроме кнопки. min-width: 0 обязателен: без него длинное
+   название статуса в теге растянуло бы сетку и вытолкнуло кнопку за край. */
+.leads-wrap .lead-script-row__fields { flex: 1; min-width: 0; }
+/* Кнопка стоит по центру ПЕРВОГО ПОЛЯ, а не по центру набора: высота набора
+   зависит от числа выбранных статусов и гуляет от 161 до 209 и дальше — центр
+   уехал бы вместе с тегами и оказался напротив пустого места. 28 — голое
+   число, и оно посчитано: до верха поля 23 (метка 12.5 × 1.45 ≈ 18 плюс её
+   отступ 5), ещё 5 центрируют кнопку 28 внутри поля 38. */
+.leads-wrap .lead-script-row__del { margin-top: 28px; }
+/* Пунктир — не украшение: это продолжение списка, а не обычное действие.
+   Сплошная кнопка во всю ширину читалась бы как главное действие формы,
+   которым она не является. */
+.leads-wrap .lead-script-add {
+    width: 100%;
+    margin-top: var(--ui-space-3);
+    border-style: dashed;
+    border-color: var(--ui-color-line-strong);
+}
+/* Два правила к чужим именам, оба без нового класса. Первое: курсивная строка
+   мультивыбора уступает место ошибке — два текста под одним полем читаются как
+   один (то же правило, по которому уступает .ui-field__hint, field.css:145).
+   Второе: отступ плашке недозвона задаётся соседством с кнопкой добавления, а
+   не своим классом. */
+.leads-wrap .ui-field--error .pick-empty { display: none; }
+.leads-wrap .lead-script-add + .ui-note { margin-top: var(--ui-space-4); }
+/* Подсказка раздела прижата к заголовку: у шапки со счётчиком свой отступ
+   снизу, и без этого подсказка отходила бы от заголовка дальше, чем от
+   наборов, к которым относится. */
+.leads-wrap .form-section-head + .section-hint { margin-top: -6px; }
+
 /* Офферы: первый + счётчик остальных */
 .leads-wrap .offer-more { display: inline-block; margin-left: 6px; font-size: 11px; font-weight: 700; color: var(--ink-soft); background: rgba(96, 112, 148, .14); padding: 2px 7px; border-radius: 20px; cursor: default; }
 

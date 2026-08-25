@@ -1286,6 +1286,33 @@ router.post('/bulk-archive', async (req, res) => {
     }
 });
 
+// POST /api/leads-admin/script-pairs-preview { leadIds } — сколько из выбранных
+// лидов УЖЕ имеют наборы скриптов.
+//
+// ЗАЧЕМ ОТДЕЛЬНЫЙ МАРШРУТ. Окно массового назначения обязано сказать заранее:
+// «У 9 лидов из 24 скрипты уже назначены. Они будут заменены целиком, а не
+// дополнены» (паспорт Р11). Посчитать это на клиенте нечем — списки статусов
+// лидов на страницу не грузятся, в таблице лежит только название действующего
+// скрипта, а его нет как раз у того лида, чей текущий статус не покрыт.
+//
+// Ничего не меняет: только считает. Поэтому POST, а не GET, — список
+// идентификаторов уходит телом, и в адресной строке ему не место.
+router.post('/script-pairs-preview', async (req, res) => {
+    const ids = normalizeIdArray(req.body && req.body.leadIds);
+    if (ids === null) return res.status(400).json({ error: 'Некорректный список лидов' });
+    if (ids.length === 0) return res.status(400).json({ error: 'Выберите хотя бы одного лида' });
+    try {
+        const result = await pool.query(
+            `SELECT count(DISTINCT lss.lead_id)::int AS with_pairs
+               FROM lead_script_statuses lss
+              WHERE lss.lead_id = ANY($1::int[])`, [ids]);
+        res.json({ total: ids.length, withPairs: result.rows[0].with_pairs });
+    } catch (err) {
+        console.error('Ошибка подсчёта наборов у выбранных лидов:', err);
+        res.status(500).json({ error: 'Не удалось посчитать наборы у выбранных лидов' });
+    }
+});
+
 // POST /api/leads-admin/bulk-update { leadIds, patch } — лёгкая PATCH-семантика
 // под массовые действия списка (dialog.md B1). Полное тело лида не требуется,
 // поэтому массово править можно и старых лидов, у которых ещё не заполнены

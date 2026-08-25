@@ -66,6 +66,10 @@ export function createStorage(api) {
         // не нужно, поэтому массово править можно и старых лидов, у которых ещё
         // не заполнены обязательные для PUT поля (линия/скрипт/офферы/статусы).
         bulkUpdateLeads: (leadIds, patch) => api.post('/leads-admin/bulk-update', { leadIds, patch }),
+        // Сколько из выбранных лидов уже имеют наборы: окно массового
+        // назначения обязано сказать это ДО замены. Считает сервер — на
+        // клиенте нечем.
+        previewScriptPairs: (leadIds) => api.post('/leads-admin/script-pairs-preview', { leadIds }),
 
         // --- Справочники, переиспользуемые с других разделов (только чтение) ---
 
