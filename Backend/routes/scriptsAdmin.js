@@ -8,6 +8,15 @@ const guards = require('../services/deleteGuards');
 
 const router = express.Router();
 
+// ТРИ ВИДА КУСКОВ СКРИПТА. 'transfer' — «Фраза для перевода», добавлена решением
+// владельца 86 от 25.08.2026: свободный текст, одна на весь скрипт, стоит ДО
+// списка возражений, заполнять не обязательно.
+//
+// ОДНА НА СКРИПТ ДЕРЖИТСЯ БАЗОЙ, а не проверкой здесь: частичный уникальный
+// индекс idx_script_nodes_one_transfer (schema.sql). Проверка в приложении
+// осталась бы обещанием — маршрут доступен напрямую.
+const NODE_TYPES = new Set(['statement', 'objection', 'transfer']);
+
 // Белый список тегов для content ЛЮБОГО узла — и корневого, и возражения
 // (rich-text тулбар в scriptsAdminNodes.js). Для большинства тегов ВСЕ атрибуты
 // отбрасываются — неразрешённые теги вырезаются целиком (текст внутри
@@ -282,13 +291,20 @@ router.put('/scripts/:id', async (req, res) => {
 // Шаг 1 — назначен лидам основным или повторным? Запрещено.
 //
 // ЭТО ИЗМЕНЕНИЕ ПОВЕДЕНИЯ, а не оформление прежнего. До части 5 удаление
-// скрипта ничем не блокировалось: привязка у лида обнулялась сама, потому что
-// leads.script_id и leads.repeat_script_id объявлены ON DELETE SET NULL. То
-// есть скрипт исчезал, а у лидов молча пропадало, по какому скрипту с ними
-// говорили, — и узнать это было уже неоткуда. План 11.4 требует запрета, и
-// связь остаётся обнуляющей намеренно: запрет живёт в маршруте, где его можно
-// объяснить словами, а SET NULL остаётся страховкой на случай удаления мимо
-// маршрута.
+// скрипта ничем не блокировалось: привязка у лида обнулялась сама. Скрипт
+// исчезал, а у лидов молча пропадало, по какому скрипту с ними говорили, — и
+// узнать это было уже неоткуда. План 11.4 требует запрета.
+//
+// ИЩЕМ ПО ПАРАМ, А НЕ ПО КОЛОНКАМ ЛИДА (25.08.2026, решение владельца 82).
+// Прежний запрос смотрел `l.script_id = $1 OR l.repeat_script_id = $1`. Второй
+// колонки больше нет вовсе — запрос упал бы на первой же попытке удалить
+// скрипт; в первую сервер больше не пишет. Связь лида со скриптом теперь одна:
+// строка в lead_script_statuses. Она объявлена ON DELETE CASCADE, и без запрета
+// в маршруте удаление скрипта унесло бы пары лидов молча — тем опаснее, что
+// каскад тише, чем прежний SET NULL.
+//
+// DISTINCT обязателен: у одного лида пара занимает столько строк, сколько в ней
+// статусов, и без него «привязано 3 лида» превратилось бы в «привязано 12».
 //
 // Шаг 2 — узлы дерева уходят каскадом (класс А, script_nodes).
 // Шаг 3 — сам скрипт.
@@ -297,7 +313,8 @@ router.delete('/scripts/:id', async (req, res) => {
         const id = req.params.id;
         const blockers = guards.orderBlockers([
             await guards.countBlocker(pool, 'leads',
-                `FROM leads l WHERE l.script_id = $1 OR l.repeat_script_id = $1 ORDER BY l.id`, [id])
+                `FROM (SELECT DISTINCT lss.lead_id AS id FROM lead_script_statuses lss
+                        WHERE lss.script_id = $1) l ORDER BY l.id`, [id])
         ]);
         if (blockers.length > 0) return guards.refuse(res, blockers);
 
@@ -346,7 +363,7 @@ router.post('/scripts/:id/nodes', async (req, res) => {
         if (!content || !String(content).trim()) {
             return res.status(400).json({ error: 'Укажите текст узла' });
         }
-        if (nodeType !== 'statement' && nodeType !== 'objection') {
+        if (!NODE_TYPES.has(nodeType)) {
             return res.status(400).json({ error: 'Недопустимый тип узла' });
         }
 
@@ -401,7 +418,7 @@ router.put('/script-nodes/:id', async (req, res) => {
         if (!content || !String(content).trim()) {
             return res.status(400).json({ error: 'Укажите текст узла' });
         }
-        if (nodeType !== 'statement' && nodeType !== 'objection') {
+        if (!NODE_TYPES.has(nodeType)) {
             return res.status(400).json({ error: 'Недопустимый тип узла' });
         }
 

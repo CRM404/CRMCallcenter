@@ -1993,3 +1993,108 @@ BEGIN
             || ' FOR EACH ROW EXECUTE FUNCTION audit_row_change()', v_table.name);
     END LOOP;
 END $$;
+
+-- ===== СКРИПТЫ ЛИДА ПАРАМИ ====================================================
+-- Решения владельца 82–88 от 25.08.2026. Было: у лида ОДИН скрипт, ОДИН общий
+-- список статусов показа и отдельное поле «повторный скрипт», которое включалось
+-- само на этапах 5–6. Стало: до пяти пар «скрипт + его статусы», и при указанных
+-- статусах открывается выбранный скрипт.
+--
+-- ПОЧЕМУ ПАРА ХРАНИТСЯ СТРОКОЙ НА КАЖДЫЙ СТАТУС, А НЕ СПИСКОМ В ОДНОЙ СТРОКЕ.
+-- Первичный ключ (lead_id, funnel_status_id) уже стоит на этой таблице — и он
+-- ДАРОМ даёт главное правило владельца (решение 83): один статус может стоять
+-- только в одной паре одного лида. Хранили бы пару строкой со списком статусов —
+-- пришлось бы проверять пересечение списков руками, в приложении, и оно
+-- разошлось бы с базой при первом же обходе интерфейса.
+
+ALTER TABLE lead_script_statuses ADD COLUMN IF NOT EXISTS script_id INTEGER REFERENCES scripts(id) ON DELETE CASCADE;
+
+-- Перенос прежних данных ПОД ЗАМКОМ: это утверждение о прошлом, а не приведение
+-- к правилу. Прежний общий список статусов относился к leads.script_id — значит
+-- он и есть первая пара. Строки лидов без скрипта пары не образуют и удаляются:
+-- статус показа без скрипта не значит ничего.
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM applied_migrations WHERE id = '2026-08-25-lead-script-pairs') THEN
+        UPDATE lead_script_statuses lss
+           SET script_id = l.script_id
+          FROM leads l
+         WHERE l.id = lss.lead_id AND lss.script_id IS NULL AND l.script_id IS NOT NULL;
+
+        DELETE FROM lead_script_statuses WHERE script_id IS NULL;
+
+        INSERT INTO applied_migrations (id) VALUES ('2026-08-25-lead-script-pairs');
+        RAISE NOTICE 'Скрипты лида: прежние списки статусов перенесены в пары';
+    END IF;
+END $$;
+
+-- NOT NULL ставится ПОСЛЕ переноса и только когда переносить больше нечего.
+-- Отдельным блоком, а не в ADD COLUMN: на первом старте колонка появляется
+-- пустой, и NOT NULL уронил бы весь пакет.
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+         WHERE table_name = 'lead_script_statuses' AND column_name = 'script_id'
+           AND is_nullable = 'YES'
+    ) AND NOT EXISTS (SELECT 1 FROM lead_script_statuses WHERE script_id IS NULL) THEN
+        ALTER TABLE lead_script_statuses ALTER COLUMN script_id SET NOT NULL;
+    END IF;
+END $$;
+
+-- Поиск «какой скрипт у этого лида при этом статусе» идёт по первичному ключу.
+-- А вот обратный вопрос — «какие лиды используют этот скрипт» — нужен запрету
+-- удаления скрипта, и для него свой индекс.
+CREATE INDEX IF NOT EXISTS idx_lead_script_statuses_script ON lead_script_statuses (script_id);
+
+-- ----- Поле «повторный скрипт» уходит -----------------------------------------
+-- Решение владельца 82. Повторный скрипт — это просто пара, в которой выбраны
+-- повторные статусы; отдельное поле и правило «этап 5–6 включает его сам» больше
+-- не нужны.
+--
+-- DROP COLUMN необратим, поэтому перед ним проверка пустоты — правило проекта.
+-- На бою 25.08.2026 колонка пуста у всех трёх лидов (проверено запросом), но
+-- проверка стоит в коде, а не в отчёте: файл прогоняется и на чужих копиях.
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+         WHERE table_name = 'leads' AND column_name = 'repeat_script_id'
+    ) AND NOT EXISTS (SELECT 1 FROM leads WHERE repeat_script_id IS NOT NULL) THEN
+        ALTER TABLE leads DROP COLUMN repeat_script_id;
+        RAISE NOTICE 'Скрипты лида: поле repeat_script_id снято (было пусто)';
+    END IF;
+END $$;
+
+-- leads.script_id ОСТАЁТСЯ, и это осознанно. Данные из неё перенесены, писать в
+-- неё сервер перестал, но её ещё читает разметка «Лидов» — колонка «Скрипт» в
+-- таблице и поле в карточке. Снимет её та часть, которая соберёт экран пар:
+-- уронить колонку раньше клиента значит уронить раздел.
+
+-- ----- Третий вид куска скрипта: фраза для перевода ---------------------------
+-- Решение владельца 86. Одна на весь скрипт, стоит ДО списка возражений,
+-- правится той же полосой инструментов, заполнять не обязательно.
+--
+-- CHECK ПЕРЕСОБИРАЕТСЯ, А НЕ ДОПИСЫВАЕТСЯ: у ограничения нет «добавить значение».
+-- Снимаем по имени и ставим заново — обе операции под проверкой существования,
+-- иначе второй старт упадёт на попытке снять уже снятое.
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM pg_constraint
+         WHERE conname = 'script_nodes_node_type_check'
+           AND pg_get_constraintdef(oid) NOT LIKE '%transfer%'
+    ) THEN
+        ALTER TABLE script_nodes DROP CONSTRAINT script_nodes_node_type_check;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'script_nodes_node_type_check') THEN
+        ALTER TABLE script_nodes ADD CONSTRAINT script_nodes_node_type_check
+            CHECK (node_type IN ('statement', 'objection', 'transfer'));
+    END IF;
+END $$;
+
+-- ОДНА ФРАЗА НА СКРИПТ — правилом базы, а не обещанием приложения. Частичный
+-- уникальный индекс: на прочие виды кусков он не распространяется, их у скрипта
+-- сколько угодно.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_script_nodes_one_transfer
+    ON script_nodes (script_id) WHERE node_type = 'transfer';

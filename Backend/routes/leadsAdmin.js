@@ -52,8 +52,6 @@ const FIELD_COLUMNS = [
     ['lineType', 'line_type'],
     ['employeeId', 'employee_id'],
     ['funnelStatusId', 'funnel_status_id'],
-    ['scriptId', 'script_id'],
-    ['repeatScriptId', 'repeat_script_id'],
     ['decisionMaker', 'decision_maker'],
     ['clientType', 'client_type'],
     ['otherBorrower', 'other_borrower'],
@@ -82,7 +80,7 @@ const FIELD_COLUMNS = [
     ['notes', 'notes']
 ];
 
-const NUMERIC_FIELDS = new Set(['sourceId', 'employeeId', 'funnelStatusId', 'scriptId', 'repeatScriptId', 'priceFrom', 'priceTo', 'areaFrom', 'areaTo', 'downPaymentPercent']);
+const NUMERIC_FIELDS = new Set(['sourceId', 'employeeId', 'funnelStatusId', 'priceFrom', 'priceTo', 'areaFrom', 'areaTo', 'downPaymentPercent']);
 
 // «Иной заёмщик» трёхзначный (NULL / true / false) — та же обработка, что в
 // routes/leads.js: без неё строка 'false' из формы легла бы в базу как true.
@@ -91,11 +89,14 @@ const BOOLEAN_FIELDS = new Set(['otherBorrower']);
 // Ключи, которые разрешено менять через bulk-update. Строгий whitelist, а не
 // «всё, что пришло» (требование куратора, dialog.md B1): иначе лёгкий PATCH
 // стал бы чёрным ходом мимо обязательной валидации PUT.
+// СКРИПТА ЗДЕСЬ БОЛЬШЕ НЕТ, и это не забывчивость. С 25.08.2026 скрипт лида —
+// не колонка, а пара «скрипт + его статусы» (решение владельца 82), и заменить
+// её присвоением одного значения нельзя. Массовое назначение скриптов идёт
+// отдельной веткой того же маршрута, через patch.scriptPairs, и проходит ту же
+// проверку, что и карточка.
 const BULK_PATCH_COLUMNS = {
     employeeId: 'employee_id',
-    funnelStatusId: 'funnel_status_id',
-    scriptId: 'script_id',
-    repeatScriptId: 'repeat_script_id'
+    funnelStatusId: 'funnel_status_id'
 };
 
 function normalizeValue(key, value) {
@@ -136,13 +137,30 @@ const BASE_SELECT = `
            COALESCE(NULLIF(s.lead_source, ''), s.root_source) AS source_name,
            CASE WHEN e.id IS NOT NULL THEN e.last_name || ' ' || e.first_name ELSE NULL END AS employee_name,
            fs.status_name, fs.stage_name, fs.stage_number,
-           sc.title AS script_title,
-           rsc.title AS repeat_script_title,
+           -- Скрипт, который увидит оператор ПРЯМО СЕЙЧАС: тот, чья пара
+           -- содержит текущий статус лида. Не leads.script_id — в неё сервер
+           -- больше не пишет, она ждёт снятия вместе с экраном (см. schema.sql).
+           (SELECT sp.title FROM lead_script_statuses lss2
+              JOIN scripts sp ON sp.id = lss2.script_id
+             WHERE lss2.lead_id = l.id AND lss2.funnel_status_id = l.funnel_status_id) AS script_title,
            COALESCE((SELECT json_agg(json_build_object('id', o.id, 'name', o.name) ORDER BY o.name)
                      FROM lead_offers lo JOIN real_estate_offers o ON o.id = lo.offer_id
                      WHERE lo.lead_id = l.id), '[]'::json) AS offers,
-           COALESCE((SELECT json_agg(lss.funnel_status_id ORDER BY lss.funnel_status_id)
-                     FROM lead_script_statuses lss WHERE lss.lead_id = l.id), '[]'::json) AS script_status_ids,
+           -- ПАРЫ ОДНИМ ЗАПРОСОМ, СОБРАННЫЕ ИЗ СТРОК. В базе пара разложена по
+           -- строкам (одна на статус) — так первичный ключ дарит запрет одного
+           -- статуса в двух парах. Экрану же нужна именно пара, поэтому группируем
+           -- обратно здесь, а не на фронте: иначе каждый читатель собирал бы её
+           -- по-своему.
+           COALESCE((SELECT json_agg(pair ORDER BY pair->>'scriptTitle')
+                     FROM (SELECT json_build_object(
+                                      'scriptId', lss.script_id,
+                                      'scriptTitle', max(sp.title),
+                                      'statusIds', json_agg(lss.funnel_status_id ORDER BY lss.funnel_status_id)
+                                  ) AS pair
+                             FROM lead_script_statuses lss
+                             JOIN scripts sp ON sp.id = lss.script_id
+                            WHERE lss.lead_id = l.id
+                            GROUP BY lss.script_id) pairs), '[]'::json) AS script_pairs,
            COALESCE((SELECT json_agg(ldp.employee_id ORDER BY ldp.employee_id)
                      FROM lead_distribution_pool ldp WHERE ldp.lead_id = l.id), '[]'::json) AS pool_employee_ids,
            -- СКОЛЬКО ДУБЛЕЙ В НЕГО ВЛИТО (часть 5Б). Окно «Отправить в архив»
@@ -160,7 +178,6 @@ const BASE_SELECT = `
     LEFT JOIN employees e ON e.id = l.employee_id
     LEFT JOIN lead_funnel_statuses fs ON fs.id = l.funnel_status_id
     LEFT JOIN scripts sc ON sc.id = l.script_id
-    LEFT JOIN scripts rsc ON rsc.id = l.repeat_script_id
 `;
 
 function rowToLead(row) {
@@ -186,13 +203,13 @@ function rowToLead(row) {
         statusName: row.status_name,
         stageName: row.stage_name,
         stageNumber: row.stage_number,
-        scriptId: row.script_id,
+        // scriptId/repeatScriptId наружу больше не отдаются: пары называют
+        // скрипт сами. scriptTitle остался — это ДЕЙСТВУЮЩИЙ скрипт, тот, что
+        // оператор увидит при нынешнем статусе, и колонка списка показывает его.
         scriptTitle: row.script_title,
-        repeatScriptId: row.repeat_script_id,
-        repeatScriptTitle: row.repeat_script_title,
         offers,
         offerIds: offers.map((o) => o.id),
-        scriptStatusIds: row.script_status_ids || [],
+        scriptPairs: row.script_pairs || [],
         poolEmployeeIds: row.pool_employee_ids || [],
         decisionMaker: row.decision_maker,
         clientType: row.client_type,
@@ -263,10 +280,9 @@ const FK_MESSAGES = {
     leads_source_id_fkey: 'Указанный источник не найден',
     leads_employee_id_fkey: 'Указанный сотрудник не найден',
     leads_funnel_status_id_fkey: 'Указанный статус воронки не найден',
-    leads_script_id_fkey: 'Указанный скрипт не найден',
-    leads_repeat_script_id_fkey: 'Указанный скрипт для повторных не найден',
     lead_offers_offer_id_fkey: 'Один из выбранных офферов не найден',
     lead_script_statuses_funnel_status_id_fkey: 'Один из выбранных статусов показа не найден',
+    lead_script_statuses_script_id_fkey: 'Один из выбранных скриптов не найден',
     lead_distribution_pool_employee_id_fkey: 'Один из выбранных сотрудников не найден'
 };
 
@@ -301,14 +317,67 @@ async function checkActiveScript(db, scriptId, label) {
     return null;
 }
 
-// "Повторные" = этапы воронки 5 и 6 (решение владельца п.2).
-async function hasRepeatStages(db, statusIds) {
-    if (statusIds.length === 0) return false;
-    const result = await db.query(
-        'SELECT 1 FROM lead_funnel_statuses WHERE id = ANY($1::int[]) AND stage_number >= 5 LIMIT 1',
-        [statusIds]
-    );
-    return result.rows.length > 0;
+// ПАРЫ «СКРИПТ + ЕГО СТАТУСЫ» (решения владельца 82–84 от 25.08.2026).
+//
+// Что здесь проверяется и почему именно здесь:
+//   · до пяти пар — потолок владельца, и он не в базе: в базе пара не сущность,
+//     а группа строк, и считать группы ограничением накладно;
+//   · половин не бывает — ни скрипта без статусов, ни статусов без скрипта;
+//   · ОДИН СТАТУС ТОЛЬКО В ОДНОЙ ПАРЕ. Первичный ключ таблицы это тоже отбивает,
+//     но отбивает КОДОМ БАЗЫ, а человеку нужно имя статуса. Поэтому проверяем
+//     заранее и называем виновника, а ключ остаётся страховкой на случай обхода;
+//   · один и тот же скрипт в двух парах РАЗРЕШЁН (решение 84) — предупреждение о
+//     нём живёт на экране, сервер молчит.
+//
+// Прежняя проверка hasRepeatStages снята вместе с полем «повторный скрипт»:
+// повторный скрипт теперь просто пара с повторными статусами.
+const MAX_SCRIPT_PAIRS = 5;
+
+async function validateScriptPairs(db, raw) {
+    if (!Array.isArray(raw)) return { error: 'Некорректный список скриптов лида' };
+    if (raw.length === 0) return { error: 'Выберите хотя бы один скрипт и статусы к нему' };
+    if (raw.length > MAX_SCRIPT_PAIRS) {
+        return { error: `Слишком много скриптов у одного лида: ${raw.length}, максимум ${MAX_SCRIPT_PAIRS}` };
+    }
+
+    const pairs = [];
+    const statusOwner = new Map();
+
+    for (let i = 0; i < raw.length; i++) {
+        const pair = raw[i] || {};
+        const place = `Скрипт ${i + 1}`;
+
+        const scriptId = pair.scriptId ? Number(pair.scriptId) : null;
+        if (!Number.isInteger(scriptId) || scriptId <= 0) {
+            return { error: `${place}: не выбран скрипт` };
+        }
+        const scriptError = await checkActiveScript(db, scriptId, place);
+        if (scriptError) return { error: scriptError };
+
+        const statusIds = normalizeIdArray(pair.statusIds);
+        if (statusIds === null) return { error: `${place}: некорректный список статусов` };
+        if (statusIds.length === 0) return { error: `${place}: выберите хотя бы один статус показа` };
+
+        for (const statusId of statusIds) {
+            if (statusOwner.has(statusId)) {
+                const name = await statusName(db, statusId);
+                return { error: `Статус «${name}» выбран дважды: у скрипта ${statusOwner.get(statusId)} и у скрипта ${i + 1}. Один статус может открывать только один скрипт` };
+            }
+            statusOwner.set(statusId, i + 1);
+        }
+
+        pairs.push({ scriptId, statusIds });
+    }
+
+    return { data: pairs };
+}
+
+// Имя статуса нужно ровно в одном месте — в отказе выше. Отдельный запрос вместо
+// того, чтобы тянуть весь справочник: отказ случается редко, а справочник в
+// пятьдесят строк ради него грузить незачем.
+async function statusName(db, statusId) {
+    const result = await db.query('SELECT status_name FROM lead_funnel_statuses WHERE id = $1', [statusId]);
+    return result.rows.length > 0 ? result.rows[0].status_name : `№${statusId}`;
 }
 
 // Общий набор параметров подбора — одинаков для карточки лида (POST/PUT) и
@@ -328,32 +397,14 @@ async function validateLeadParams(db, body) {
         return { error: `Слишком много офферов на одного лида: ${offerIds.length}, максимум ${MAX_OFFERS_PER_LEAD}. ${TOO_MANY_OFFERS_HINT}` };
     }
 
-    const scriptStatusIds = normalizeIdArray(body.scriptStatusIds);
-    if (scriptStatusIds === null) return { error: 'Некорректный список статусов показа скрипта' };
-    if (scriptStatusIds.length === 0) return { error: 'Выберите хотя бы один статус показа скрипта' };
+    const pairsCheck = await validateScriptPairs(db, body.scriptPairs);
+    if (pairsCheck.error) return { error: pairsCheck.error };
+    const scriptPairs = pairsCheck.data;
 
     const poolEmployeeIds = normalizeIdArray(body.poolEmployeeIds);
     if (poolEmployeeIds === null) return { error: 'Некорректный список сотрудников для пула раздачи' };
 
-    if (!body.scriptId) return { error: 'Заполните обязательное поле: Скрипт' };
-    const scriptError = await checkActiveScript(db, body.scriptId, 'Скрипт');
-    if (scriptError) return { error: scriptError };
-
-    // Скрипт для повторных обязателен, если среди статусов показа есть этапы
-    // 5–6. Если не обязателен, но всё равно передан — сохраняем (лид может
-    // дойти до повторного этапа и без такого статуса в списке), но проверяем
-    // так же строго.
-    const repeatScriptId = body.repeatScriptId ? Number(body.repeatScriptId) : null;
-    const needsRepeat = await hasRepeatStages(db, scriptStatusIds);
-    if (needsRepeat && !repeatScriptId) {
-        return { error: 'Среди статусов показа есть этапы 5–6 — укажите скрипт для повторных' };
-    }
-    if (repeatScriptId) {
-        const repeatError = await checkActiveScript(db, repeatScriptId, 'Скрипт для повторных');
-        if (repeatError) return { error: repeatError };
-    }
-
-    return { data: { offerIds, scriptStatusIds, poolEmployeeIds, repeatScriptId } };
+    return { data: { offerIds, scriptPairs, poolEmployeeIds } };
 }
 
 async function validateFullLeadBody(db, body) {
@@ -395,14 +446,29 @@ async function checkEmployeeLine(db, { employeeId, lineType, currentEmployeeId }
 
 // Пересборка целиком: delete + один INSERT ... SELECT unnest на связку.
 // unnest вместо цикла — при 1000 офферов цикл дал бы 1000 round-trip'ов.
-async function replaceLeadLinks(client, leadId, { offerIds, scriptStatusIds, poolEmployeeIds }) {
+async function replaceLeadLinks(client, leadId, { offerIds, scriptPairs, poolEmployeeIds }) {
     await client.query('DELETE FROM lead_offers WHERE lead_id = $1', [leadId]);
     if (offerIds.length > 0) {
         await client.query('INSERT INTO lead_offers (lead_id, offer_id) SELECT $1, unnest($2::int[])', [leadId, offerIds]);
     }
     await client.query('DELETE FROM lead_script_statuses WHERE lead_id = $1', [leadId]);
-    if (scriptStatusIds.length > 0) {
-        await client.query('INSERT INTO lead_script_statuses (lead_id, funnel_status_id) SELECT $1, unnest($2::int[])', [leadId, scriptStatusIds]);
+    // Пары раскладываются в строки: одна на статус. Два массива вместо цикла по
+    // парам — тот же довод, что у офферов: пять пар по десять статусов дали бы
+    // пятьдесят обращений вместо одного.
+    const flatScriptIds = [];
+    const flatStatusIds = [];
+    for (const pair of scriptPairs) {
+        for (const statusId of pair.statusIds) {
+            flatScriptIds.push(pair.scriptId);
+            flatStatusIds.push(statusId);
+        }
+    }
+    if (flatStatusIds.length > 0) {
+        await client.query(
+            `INSERT INTO lead_script_statuses (lead_id, script_id, funnel_status_id)
+             SELECT $1, sid, stid FROM unnest($2::int[], $3::int[]) AS t(sid, stid)`,
+            [leadId, flatScriptIds, flatStatusIds]
+        );
     }
     await client.query('DELETE FROM lead_distribution_pool WHERE lead_id = $1', [leadId]);
     if (poolEmployeeIds.length > 0) {
@@ -413,7 +479,7 @@ async function replaceLeadLinks(client, leadId, { offerIds, scriptStatusIds, poo
 // Тот же набор связок сразу на всю партию — одним запросом на связку,
 // а не на каждого лида: CROSS JOIN двух unnest'ов даёт декартово
 // произведение "все лиды партии × все значения набора".
-async function insertBatchLinks(client, leadIds, { offerIds, scriptStatusIds, poolEmployeeIds }) {
+async function insertBatchLinks(client, leadIds, { offerIds, scriptPairs, poolEmployeeIds }) {
     if (leadIds.length === 0) return;
     if (offerIds.length > 0) {
         await client.query(
@@ -423,12 +489,26 @@ async function insertBatchLinks(client, leadIds, { offerIds, scriptStatusIds, po
             [leadIds, offerIds]
         );
     }
-    if (scriptStatusIds.length > 0) {
+    // Пары партии: те же у всех лидов загрузки (решение владельца 85). Пара
+    // разложена в две плоские колонки, и CROSS JOIN размножает их по лидам —
+    // так тысяча лидов с пятью парами обходится одним обращением, а не пятью
+    // тысячами.
+    const flatScriptIds = [];
+    const flatStatusIds = [];
+    for (const pair of scriptPairs) {
+        for (const statusId of pair.statusIds) {
+            flatScriptIds.push(pair.scriptId);
+            flatStatusIds.push(statusId);
+        }
+    }
+    if (flatStatusIds.length > 0) {
         await client.query(
-            `INSERT INTO lead_script_statuses (lead_id, funnel_status_id)
-             SELECT l, s FROM unnest($1::int[]) l CROSS JOIN unnest($2::int[]) s
+            `INSERT INTO lead_script_statuses (lead_id, script_id, funnel_status_id)
+             SELECT l, t.sid, t.stid
+               FROM unnest($1::int[]) l
+               CROSS JOIN unnest($2::int[], $3::int[]) AS t(sid, stid)
              ON CONFLICT DO NOTHING`,
-            [leadIds, scriptStatusIds]
+            [leadIds, flatScriptIds, flatStatusIds]
         );
     }
     if (poolEmployeeIds.length > 0) {
@@ -838,7 +918,7 @@ router.post('/', async (req, res) => {
         }
 
         await client.query('BEGIN');
-        const body = { ...req.body, repeatScriptId: validation.data.repeatScriptId };
+        const body = { ...req.body };
         const values = FIELD_COLUMNS.map(([key]) => normalizeValue(key, body[key]));
         const columns = FIELD_COLUMNS.map(([, col]) => col);
         // Номер кладётся приведённым, а рядом — что с ним стало: разобрался ли,
@@ -906,7 +986,7 @@ router.put('/:id', async (req, res) => {
         }
 
         await client.query('BEGIN');
-        const body = { ...req.body, repeatScriptId: validation.data.repeatScriptId };
+        const body = { ...req.body };
         const values = FIELD_COLUMNS.map(([key]) => normalizeValue(key, body[key]));
         const setClauses = FIELD_COLUMNS.map(([, col], i) => `${col} = $${i + 1}`);
         values[FIELD_COLUMNS.findIndex(([, col]) => col === 'phone')] = phoneFix.phone;
@@ -1205,19 +1285,24 @@ router.post('/bulk-update', async (req, res) => {
     }
     const keys = Object.keys(patch);
     if (keys.length === 0) return res.status(400).json({ error: 'Не передан набор изменений' });
-    const unknown = keys.filter((key) => !Object.prototype.hasOwnProperty.call(BULK_PATCH_COLUMNS, key));
+    // scriptPairs — не колонка, поэтому в whitelist его нет, а разрешить надо.
+    const unknown = keys.filter((key) => key !== 'scriptPairs'
+        && !Object.prototype.hasOwnProperty.call(BULK_PATCH_COLUMNS, key));
     if (unknown.length > 0) {
         return res.status(400).json({ error: `Это поле нельзя изменить массово: ${unknown.join(', ')}` });
     }
 
+    let massPairs = null;
+    if (keys.includes('scriptPairs')) {
+        // Проверка ТА ЖЕ, что у карточки: массовое действие не должно быть
+        // чёрным ходом мимо правил — ровно тот довод, по которому у bulk-update
+        // вообще появился whitelist.
+        const pairsCheck = await validateScriptPairs(pool, patch.scriptPairs);
+        if (pairsCheck.error) return res.status(400).json({ error: pairsCheck.error });
+        massPairs = pairsCheck.data;
+    }
+
     try {
-        for (const key of ['scriptId', 'repeatScriptId']) {
-            if (keys.includes(key) && patch[key]) {
-                const label = key === 'scriptId' ? 'Скрипт' : 'Скрипт для повторных';
-                const scriptError = await checkActiveScript(pool, patch[key], label);
-                if (scriptError) return res.status(400).json({ error: scriptError });
-            }
-        }
 
         // Массовое назначение оператора проверяется по КАЖДОМУ лиду отдельно:
         // линия у них своя, а у части может стоять то же назначение (тогда
@@ -1237,14 +1322,47 @@ router.post('/bulk-update', async (req, res) => {
             }
         }
 
-        const setClauses = keys.map((key, i) => `${BULK_PATCH_COLUMNS[key]} = $${i + 1}`);
-        const values = keys.map((key) => normalizeValue(key, patch[key]));
-        values.push(ids);
-        const result = await pool.query(
-            `UPDATE leads SET ${setClauses.join(', ')}, updated_at = NOW() WHERE id = ANY($${values.length}::int[]) RETURNING id`,
-            values
-        );
-        res.json({ updated: result.rows.length });
+        // Колонок может не быть вовсе — когда массово меняют только пары.
+        const columnKeys = keys.filter((key) => key !== 'scriptPairs');
+
+        // ОДНОЙ ТРАНЗАКЦИЕЙ, а не двумя запросами подряд: правка колонок и замена
+        // пар — одно действие человека, и остановка между ними оставила бы часть
+        // лидов с новыми парами и старым оператором.
+        const client = await pool.connect();
+        let touched;
+        try {
+            await client.query('BEGIN');
+
+            if (columnKeys.length > 0) {
+                const setClauses = columnKeys.map((key, i) => `${BULK_PATCH_COLUMNS[key]} = $${i + 1}`);
+                const values = columnKeys.map((key) => normalizeValue(key, patch[key]));
+                values.push(ids);
+                const result = await client.query(
+                    `UPDATE leads SET ${setClauses.join(', ')}, updated_at = NOW() WHERE id = ANY($${values.length}::int[]) RETURNING id`,
+                    values
+                );
+                touched = result.rows.length;
+            } else {
+                const found = await client.query('SELECT id FROM leads WHERE id = ANY($1::int[])', [ids]);
+                touched = found.rows.length;
+            }
+
+            if (massPairs) {
+                // Замена, а не дополнение: пары лида — набор целиком, и «добавить
+                // пятую к четырём чужим» превысило бы потолок молча.
+                await client.query('DELETE FROM lead_script_statuses WHERE lead_id = ANY($1::int[])', [ids]);
+                await insertBatchLinks(client, ids, { offerIds: [], scriptPairs: massPairs, poolEmployeeIds: [] });
+                await client.query('UPDATE leads SET updated_at = NOW() WHERE id = ANY($1::int[])', [ids]);
+            }
+
+            await client.query('COMMIT');
+        } catch (err) {
+            await client.query('ROLLBACK');
+            throw err;
+        } finally {
+            client.release();
+        }
+        res.json({ updated: touched });
     } catch (err) {
         if (handleFkError(err, res)) return;
         console.error(err);
@@ -1254,7 +1372,7 @@ router.post('/bulk-update', async (req, res) => {
 
 // POST /api/leads-admin/bulk-import — массовая загрузка. Парсинг Excel/CSV на
 // фронте, сюда приходит готовый JSON: { sourceId, lineType, scriptId,
-// repeatScriptId?, offerIds, scriptStatusIds, poolEmployeeIds?, rows }.
+// offerIds, scriptPairs, poolEmployeeIds?, rows }.
 // Один набор параметров на всю партию. Каждая строка становится лидом со
 // статусом "Новый" и без оператора; сразу после вставки запускается
 // автораспределение. Дубли по телефону — внутри файла и против существующих
@@ -1275,7 +1393,7 @@ router.post('/bulk-import', async (req, res) => {
         if (validation.error) {
             return res.status(400).json({ error: validation.error });
         }
-        const { offerIds, scriptStatusIds, poolEmployeeIds, repeatScriptId } = validation.data;
+        const { offerIds, scriptPairs, poolEmployeeIds } = validation.data;
 
         // Потолок на лида (проверен выше) партию не защищает: связки
         // перемножаются, и 5000 строк × 1000 офферов дали бы 5 млн строк в
@@ -1349,9 +1467,9 @@ router.post('/bulk-import', async (req, res) => {
 
             const inserted = await client.query(
                 `INSERT INTO leads (last_name, first_name, middle_name, phone, source_id, funnel_status_id,
-                                    line_type, script_id, repeat_script_id,
+                                    line_type,
                                     phone_raw, phone_normalized, phone_fix_reason_id, phone_fix_verdict)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING id`,
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id`,
                 [
                     row.lastName ? String(row.lastName).trim() || null : null,
                     row.firstName ? String(row.firstName).trim() || null : null,
@@ -1360,8 +1478,6 @@ router.post('/bulk-import', async (req, res) => {
                     sourceId,
                     newStatusId,
                     req.body.lineType,
-                    req.body.scriptId,
-                    repeatScriptId,
                     phoneFix.phone_raw,
                     phoneFix.phone_normalized,
                     phoneFix.phone_fix_reason_id,
@@ -1371,7 +1487,7 @@ router.post('/bulk-import', async (req, res) => {
             insertedIds.push(inserted.rows[0].id);
         }
 
-        await insertBatchLinks(client, insertedIds, { offerIds, scriptStatusIds, poolEmployeeIds });
+        await insertBatchLinks(client, insertedIds, { offerIds, scriptPairs, poolEmployeeIds });
         await distributePendingLeads(client);
 
         // Сколько именно из ЭТОЙ партии распределилось/осталось в очереди —
