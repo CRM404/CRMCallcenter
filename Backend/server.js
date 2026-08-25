@@ -11,6 +11,8 @@ const auditContext = require('./services/auditContext');
 const { pool } = require('./db');
 const { checkStatusFlagsConfigured } = require('./services/leadCallRules');
 const { runPhoneNormalization } = require('./services/phoneMigration');
+const scheduler = require('./services/scheduler');
+const eventChannel = require('./services/eventChannel');
 const employeesRouter = require('./routes/employees');
 const documentsRouter = require('./routes/documents');
 const authRouter = require('./routes/auth');
@@ -31,11 +33,41 @@ const sourcesRouter = require('./routes/sources');
 const leadsAdminRouter = require('./routes/leadsAdmin');
 const scheduleRouter = require('./routes/schedule');
 const tunnelPageRouter = require('./routes/tunnelPage');
+const pbxEventsRouter = require('./routes/pbxEvents');
 
 const app = express();
 
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
+
+// ЧТЕНИЕ ФОРМАТА ВЕБХУКОВ (часть 6, В1). Телфин шлёт события в
+// `application/x-www-form-urlencoded` — и при GET, и при POST. До этой строки
+// сервер умел только JSON, и тела событий приходили бы ПУСТЫМИ И БЕЗ ОШИБКИ:
+// приложение отвечало бы «принято», записывало пустой звонок и не жаловалось.
+// Ловить такое потом мучительно (план 7.6).
+//
+// `extended: false` — вложенности в событиях станции нет, поля плоские.
+// Свой лимит, а не общие десять мегабайт: событие станции не бывает большим, а
+// десять мегабайт на открытом наружу адресе — это приглашение.
+app.use(express.urlencoded({ extended: false, limit: '64kb' }));
+
+// ПРИЁМ СОБЫТИЙ ОТ АТС СТОИТ ДО КОНТЕКСТА АУДИТА (ответ куратора И130).
+// Событие станции — не правка записи человеком: автора у него нет и взяться ему
+// неоткуда, а подписка контекста на каждый такой запрос вешала бы на журнал
+// работу, у которой нет ни автора, ни страницы.
+//
+// Адрес не под /api намеренно: его прописывают на стороне станции, и он к
+// нашему API отношения не имеет — как и страница выдачи ключа туннеля ниже.
+app.use('/ext-event', pbxEventsRouter);
+
+// ЖИВОЙ КАНАЛ СЕРВЕР → БРАУЗЕР (часть 6, В3). Не под /api и ДО контекста аудита
+// по той же причине, что и приёмник событий, только сильнее: подписка живёт
+// часами, и контекст аудита провисел бы ровно столько же на запросе, который
+// ничего не меняет (ответ куратора И136).
+//
+// Потребителя в браузере пока нет — вкладка «Активные» приходит частью 7.
+// Разбор канала и его границ — в шапке services/eventChannel.js.
+app.get('/events', (req, res) => eventChannel.subscribe(req, res));
 
 // КОНТЕКСТ АУДИТА СТАВИТСЯ ДО ВСЕХ МАРШРУТОВ и охватывает запрос целиком —
 // включая то, что маршрут делает после await. Стоит на каждом запросе, а не
@@ -163,9 +195,36 @@ runMigrations()
         console.error('Не удалось привести номера к единому формату:', err);
     }))
     .then(() => {
-        app.listen(PORT, () => {
+        const server = app.listen(PORT, () => {
             console.log(`API запущен на порту ${PORT}`);
         });
+
+        // РАБОТА ПО РАСПИСАНИЮ (часть 6, В2). Стартует ПОСЛЕ накатки схемы: его
+        // первая же задача — раздача, а она читает статусы воронки, которых на
+        // пустой базе до миграций ещё нет.
+        //
+        // По умолчанию выключен, включается переменной SCHEDULER_ENABLED —
+        // разбор в шапке services/scheduler.js.
+        scheduler.start(pool);
+
+        // Сердцебиение канала — СВОИМ таймером (ответ куратора И139):
+        // планировщик по умолчанию выключен, а канал обязан жить и без него.
+        eventChannel.start();
+
+        // ОСТАНОВКА ПО СИГНАЛУ. Служба перезапускается выкаткой
+        // (/usr/local/bin/crm-deploy.sh), systemd шлёт SIGTERM. Без этого
+        // обработчика тик оборвался бы посередине раздачи (ответ куратора И134).
+        //
+        // SIGINT здесь по той же причине: на стенде сервер останавливают
+        // Ctrl+C, и вести себя при этом иначе, чем на бою, он не должен.
+        const shutdown = async (signal) => {
+            console.log(`Получен ${signal}: останавливаюсь`);
+            await scheduler.stop();
+            eventChannel.stop();
+            server.close(() => process.exit(0));
+        };
+        process.on('SIGTERM', () => { shutdown('SIGTERM'); });
+        process.on('SIGINT', () => { shutdown('SIGINT'); });
     })
     .catch(err => {
         console.error('Не удалось накатить схему БД при старте:', err);
