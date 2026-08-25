@@ -643,15 +643,44 @@ router.get('/stats', async (req, res) => {
         const p = zonedParts(now);
         const todayDate = `${p.year}-${String(p.month).padStart(2, '0')}-${String(p.day).padStart(2, '0')}`;
 
+        // ТРИ СЧЁТЧИКА СЧИТАЛИ ТО, ЧЕГО В СПИСКЕ НЕТ ВОВСЕ (К183). Запрос шёл
+        // `FROM leads` без единого условия, а список отбрасывает двоих:
+        // слитых безусловно (`l.merged_into_id IS NULL`, часть 4) и архивных по
+        // умолчанию (`l.archived_at IS NULL`, часть 5).
+        //
+        // Часть 4 в бою с 25.08, и первое же слияние завысило бы «Всего»: дубль
+        // ушёл из списка и остался в счётчике. С приходом экрана архива стало
+        // бы хуже — завысились бы И «Всего», И «Без оператора»: у архивного
+        // лида оператора нет по определению, он попал бы в «Без оператора», а
+        // раздача его не берёт (queueCondition отбрасывает архив). Шапка звала
+        // бы разбирать очередь, которой нет.
+        //
+        // Паспорт Р7 говорит это прямо: «Архивный лид не попадает в счётчики
+        // шапки», «счётчики шапки, раздача и подбор считают по этому же
+        // набору».
+        //
+        // ЧЕТВЁРТОЕ ЧИСЛО — «В АРХИВЕ» — считается ровно тем набором, что и
+        // список при archived=only: архивные, но не слитые. Иначе число в чипе
+        // разошлось бы с тем, что человек увидит, щёлкнув по отбору.
+        //
+        // Место ему здесь, а не в ответе списка: список считает total тем же
+        // условием, что и выборку, и число архивных меняло бы значение от
+        // каждой набранной в поиске буквы. Отбор так вести себя не должен.
         const result = await pool.query(`
             SELECT
-                count(*)::int AS total,
-                count(*) FILTER (WHERE employee_id IS NULL)::int AS queue,
-                count(*) FILTER (WHERE created_at >= $1 AND created_at < $2)::int AS today
+                count(*) FILTER (WHERE merged_into_id IS NULL AND archived_at IS NULL)::int AS total,
+                count(*) FILTER (WHERE merged_into_id IS NULL AND archived_at IS NULL
+                                   AND employee_id IS NULL)::int AS queue,
+                count(*) FILTER (WHERE merged_into_id IS NULL AND archived_at IS NULL
+                                   AND created_at >= $1 AND created_at < $2)::int AS today,
+                count(*) FILTER (WHERE merged_into_id IS NULL AND archived_at IS NOT NULL)::int AS archived
             FROM leads
         `, [dayStart, dayEnd]);
         const row = result.rows[0];
-        res.json({ total: row.total, queue: row.queue, today: row.today, todayDate });
+        res.json({
+            total: row.total, queue: row.queue, today: row.today,
+            archived: row.archived, todayDate
+        });
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: 'Не удалось получить статистику' });

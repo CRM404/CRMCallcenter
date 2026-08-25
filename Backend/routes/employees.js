@@ -310,7 +310,7 @@ async function handleUniqueViolation(err, res, body) {
 // GET /api/employees — список с фильтрами
 router.get('/', async (req, res) => {
     try {
-        const { search, status, department, position, lineType,
+        const { search, status, archiveKind, department, position, lineType,
             hasWhatsapp, hasTelegram, hireDateFrom, hireDateTo } = req.query;
 
         const conditions = [];
@@ -332,6 +332,18 @@ router.get('/', async (req, res) => {
         if (status) {
             params.push(status);
             conditions.push(`e.status = $${params.length}`);
+        }
+        // ВИД АРХИВА — ОТДЕЛЬНЫЙ ОТБОР, А НЕ ЧАСТЬ status (И112). «Уволенных
+        // нет» и «Замороженных нет» — разные пустые состояния, и различить их
+        // можно только настоящим отбором; клиентский тут не годится.
+        //
+        // СВОДИТЬ ЭТИ ДВА УСЛОВИЯ В ОДНО НЕЛЬЗЯ, и схема предупреждает об этом
+        // отдельным абзацем: status держит освобождение добавочного и отзыв
+        // ключа туннеля, archive_kind — только слово в карточке. Отбор
+        // «Активные» — это status = 'active', а НЕ archive_kind IS NULL.
+        if (archiveKind) {
+            params.push(archiveKind);
+            conditions.push(`e.archive_kind = $${params.length}`);
         }
         if (department) {
             params.push(department);
@@ -397,6 +409,30 @@ router.get('/list-for-manager', async (req, res) => {
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: 'Не удалось получить список руководителей' });
+    }
+});
+
+// GET /api/employees/archive-preview?ids=1,2,3 — последствия ВЫВОДА ПАЧКОЙ.
+//
+// ЗАРЕГИСТРИРОВАН ВЫШЕ `/:id` НАМЕРЕННО: иначе тот съест слово
+// «archive-preview» как идентификатор и вернёт 404. В этом же файле такой
+// образец уже есть — `/list-for-manager` стоит выше по той же причине.
+//
+// Числа — одним снимком на всех выбранных; почему не N запросов, объяснено в
+// services/employeeArchive.js.
+router.get('/archive-preview', async (req, res) => {
+    try {
+        const ids = String(req.query.ids || '')
+            .split(',')
+            .map((x) => Number(String(x).trim()))
+            .filter((x) => Number.isInteger(x) && x > 0);
+        if (ids.length === 0) {
+            return res.status(400).json({ error: 'Не передан список сотрудников' });
+        }
+        res.json(await archive.bulkArchivePreview(pool, ids));
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Не удалось собрать сведения о выводе из работы' });
     }
 });
 
