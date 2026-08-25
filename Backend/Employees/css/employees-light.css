@@ -217,23 +217,41 @@
    паролю АТС, а следом понадобится «Настройкам», и третья копия одного вида —
    это К36. Строка живёт в слое как .ui-field__row (часть 2 задачи «Звонки»). */
 
-.emp-wrap .docs-list { display: flex; flex-direction: column; gap: 10px; }
-.emp-wrap .file-upload-wrapper { display: flex; flex-direction: column; gap: 5px; }
-.emp-wrap .doc-label { font-size: 12.5px; font-weight: 600; color: var(--e-ink-soft); white-space: nowrap; }
-.emp-wrap .file-upload-area {
+/* БЕЗ ПРИСТАВКИ .emp-wrap — по той же причине, что у соседа выше: блок живёт
+   в окне карточки, а окно монтируется НА root (employeesCard.js: scope: root,
+   ui/modal.js: host = scope). .emp-wrap — ребёнок root, окно ему брат, и правило
+   с приставкой не применяется НИ К ЧЕМУ. Видно это было так: у каждого документа
+   стояли ДВЕ кнопки — родная кнопка <input type="file"> вместо display: none и
+   своя .file-trigger (К186).
+
+   Область держится .docs-list, а не голыми именами, и это не перестраховка.
+   Три имени из девяти живут ещё и в «Лидах», в окне загрузки базы:
+   .file-upload-area, .file-name, .hidden-file-input. Без контейнера правила
+   протекли бы туда — у области загрузки лидов своего background нет, и она
+   получила бы белую подложку сотрудников. .docs-list в проекте один
+   (git grep по всем html и js) и лежит внутри окна.
+
+   Значения переведены с алиасов раздела на токены слоя тем же заходом: алиасы
+   --e-* объявлены НА ОБЁРТКЕ (строка 24) и в окно тоже не попадают. Снять
+   приставку и оставить их — это К180: рамка ушла бы в currentColor, фон в
+   прозрачный. */
+.docs-list { display: flex; flex-direction: column; gap: 10px; }
+.docs-list .file-upload-wrapper { display: flex; flex-direction: column; gap: 5px; }
+.docs-list .doc-label { font-size: 12.5px; font-weight: 600; color: var(--ui-color-ink-soft); white-space: nowrap; }
+.docs-list .file-upload-area {
     display: flex;
     align-items: center;
     gap: 12px;
-    border: 1.5px dashed var(--e-line-strong);
-    border-radius: var(--e-radius-sm);
+    border: 1.5px dashed var(--ui-color-line-strong);
+    border-radius: var(--ui-radius-sm);
     padding: 10px 14px;
     background: rgba(255, 255, 255, .5);
 }
-.emp-wrap .doc-file-icon { color: var(--e-ink-faint); }
-.emp-wrap .file-upload-area .file-name { flex: 1; font-size: 13px; color: var(--e-ink-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.emp-wrap .file-upload-area .file-name:empty::before { content: 'Файл не выбран'; color: var(--e-ink-faint); font-style: italic; }
-.emp-wrap .file-status-icon { color: var(--e-ok-ink); }
-.emp-wrap .hidden-file-input { display: none; }
+.docs-list .doc-file-icon { color: var(--ui-color-ink-faint); }
+.docs-list .file-name { flex: 1; font-size: 13px; color: var(--ui-color-ink-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.docs-list .file-name:empty::before { content: 'Файл не выбран'; color: var(--ui-color-ink-faint); font-style: italic; }
+.docs-list .file-status-icon { color: var(--ui-color-ok-ink); }
+.docs-list .hidden-file-input { display: none; }
 
 /* ----- Блок «График работы» в карточке ----- */
 .emp-wrap .schedule-field .field-hint {
