@@ -173,8 +173,18 @@
 /* Стрелка сортировки стоит рядом с шапкой таблицы (10.5 px) — ступень xs;
    цвет акцентный, потому что она несёт смысл, а не сопровождает текст (К14). */
 
-/* Списки в полосе массовых действий: рост под полосу, а не под форму. */
-.emp-wrap .mass-select { width: auto; min-width: 190px; min-height: 34px; padding: 6px 10px; font-size: 13px; }
+/* Списки в полосе массовых действий: рост под полосу, а не под форму.
+
+   ОТСТУП СПРАВА ПИШЕТСЯ ЯВНО, короткой записи здесь быть не может. Слой держит
+   у списка padding-right: var(--ui-space-8) = 32px — это жёлоб под стрелку,
+   которую он же и рисует фоном (select.ui-field__control, ui/field.css).
+   Короткая запись padding: 6px 10px затирала жёлоб до 10px, и стрелка ложилась
+   на текст (находка дизайн-сессии 24.08.2026, замер куратора 25.08.2026). */
+.emp-wrap .mass-select {
+    width: auto; min-width: 190px; min-height: 34px;
+    padding: 6px var(--ui-space-8) 6px 10px;
+    font-size: 13px;
+}
 
 /* ----- Пагинация ----- */
 .emp-wrap .pagination { display: flex; gap: 6px; flex-wrap: wrap; }
@@ -235,17 +245,33 @@
 .emp-wrap .file-status-icon { color: var(--e-ok-ink); }
 .emp-wrap .hidden-file-input { display: none; }
 
-/* ----- Блок «График работы» в карточке ----- */
-.emp-wrap .schedule-field .field-hint {
+/* ----- Блок «График работы» в карточке -----
+   БЕЗ ПРИСТАВКИ .emp-wrap, И ЭТО НЕ НЕДОСМОТР — тот же случай, что у правила
+   [data-role="tunnel-link-block"] ниже. Разметка блока лежит внутри
+   <template data-role="employee-tpl"> (employees-section.html), а шаблон
+   разворачивается в ТЕЛО ОКНА: employeesCard.js собирает <div>, кладёт в него
+   клон шаблона и передаёт в openModal со scope = root. Окно монтируется в root,
+   а .emp-wrap — сам ребёнок root (employees-section.html:25), то есть окну оно
+   СОСЕД, а не предок.
+
+   С приставкой все четыре правила существовали, загружались и не применялись ни
+   к чему. Хуже всех — .bad: время смены с ошибкой не краснело вовсе, и человек
+   получал молчаливый отказ сохранения без единого признака, какое поле виновато
+   (найдено приёмкой куратора 25.08.2026 на main 1990646).
+
+   Имя .schedule-field своё, разделу принадлежит только оно — глобальность
+   правила без приставки ничем не грозит. Не «приводить к единообразию» с
+   соседями выше: соседи метят в узлы САМОГО раздела, эти — в узлы окна. */
+.schedule-field .field-hint {
     font-size: 11.5px;
     color: var(--e-ink-faint);
     line-height: 1.4;
     margin-top: 4px;
     display: block;
 }
-.emp-wrap .schedule-field .field-hint.warn { color: var(--s-vac-ink); font-weight: 600; }
-.emp-wrap .schedule-field.bad .ui-field__control { border-color: var(--e-danger-deep); background: var(--s-danger-bg); }
-.emp-wrap .schedule-field.bad .field-hint { color: var(--e-danger-deep); font-weight: 600; }
+.schedule-field .field-hint.warn { color: var(--s-vac-ink); font-weight: 600; }
+.schedule-field.bad .ui-field__control { border-color: var(--e-danger-deep); background: var(--s-danger-bg); }
+.schedule-field.bad .field-hint { color: var(--e-danger-deep); font-weight: 600; }
 
 /* ----- Окно фильтров ----- */
 .emp-wrap .filter-checks { display: flex; gap: 16px; align-items: center; min-height: 40px; }
@@ -298,6 +324,12 @@
 }
 .emp-wrap .department-add-row:hover { border-color: var(--e-accent); color: var(--e-accent); background: rgba(0, 0, 255, .04); }
 
-/* ----- Мелочи окон ----- */
-.emp-wrap .ui-form-grid--single { grid-template-columns: 1fr; }
+/* ----- Мелочи окон -----
+   Правило .emp-wrap .ui-form-grid--single убрано 25.08.2026. Оно не работало и
+   работать не могло: модификатор --single ставится только в «Скриптах»
+   (scriptsSection.js, окно создания), а с приставкой «Сотрудников» до чужого
+   раздела не дотянуться. Видимых последствий у пропажи нет — сетка слоя и так
+   даёт одну колонку при одном поле (repeat(auto-fit, minmax(220px, 1fr))),
+   поэтому правило просто снято, а не переписано и не перенесено: переносить
+   надо то, что кому-то нужно, а не то, что однажды написали. */
 
