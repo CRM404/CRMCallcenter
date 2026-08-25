@@ -144,7 +144,17 @@ const BASE_SELECT = `
            COALESCE((SELECT json_agg(lss.funnel_status_id ORDER BY lss.funnel_status_id)
                      FROM lead_script_statuses lss WHERE lss.lead_id = l.id), '[]'::json) AS script_status_ids,
            COALESCE((SELECT json_agg(ldp.employee_id ORDER BY ldp.employee_id)
-                     FROM lead_distribution_pool ldp WHERE ldp.lead_id = l.id), '[]'::json) AS pool_employee_ids
+                     FROM lead_distribution_pool ldp WHERE ldp.lead_id = l.id), '[]'::json) AS pool_employee_ids,
+           -- СКОЛЬКО ДУБЛЕЙ В НЕГО ВЛИТО (часть 5Б). Окно «Отправить в архив»
+           -- открывается в одном из двух состояний — «удалить можно» и «удалить
+           -- нельзя», — и выбрать состояние надо ДО открытия. Спросить об этом
+           -- отдельным запросом неоткуда: маршрута предпросмотра у лида нет, а
+           -- заводить его ради одного числа дороже, чем посчитать здесь.
+           --
+           -- Считается по idx_leads_merged_into — частичному индексу части 4,
+           -- где лежат только слитые строки; на списке в полсотни лидов это
+           -- полсотни обращений к маленькому индексу, а не проход по таблице.
+           (SELECT count(*)::int FROM leads m WHERE m.merged_into_id = l.id) AS merged_count
     FROM leads l
     LEFT JOIN sources s ON s.id = l.source_id
     LEFT JOIN employees e ON e.id = l.employee_id
@@ -218,6 +228,10 @@ function rowToLead(row) {
         archivedActorId: row.archived_actor_id,
         archivedActorKind: row.archived_actor_kind,
         archivedActorName: row.archived_actor_name,
+        // Единственная сегодняшняя помеха физическому удалению лида: подобранные
+        // объекты ушли из помех (Р7-4), комментарии помехой не считаются (И73),
+        // звонки появятся частью 7.
+        mergedCount: row.merged_count || 0,
         createdAt: row.created_at,
         updatedAt: row.updated_at
     };
@@ -647,15 +661,44 @@ router.get('/stats', async (req, res) => {
         const p = zonedParts(now);
         const todayDate = `${p.year}-${String(p.month).padStart(2, '0')}-${String(p.day).padStart(2, '0')}`;
 
+        // ТРИ СЧЁТЧИКА СЧИТАЛИ ТО, ЧЕГО В СПИСКЕ НЕТ ВОВСЕ (К183). Запрос шёл
+        // `FROM leads` без единого условия, а список отбрасывает двоих:
+        // слитых безусловно (`l.merged_into_id IS NULL`, часть 4) и архивных по
+        // умолчанию (`l.archived_at IS NULL`, часть 5).
+        //
+        // Часть 4 в бою с 25.08, и первое же слияние завысило бы «Всего»: дубль
+        // ушёл из списка и остался в счётчике. С приходом экрана архива стало
+        // бы хуже — завысились бы И «Всего», И «Без оператора»: у архивного
+        // лида оператора нет по определению, он попал бы в «Без оператора», а
+        // раздача его не берёт (queueCondition отбрасывает архив). Шапка звала
+        // бы разбирать очередь, которой нет.
+        //
+        // Паспорт Р7 говорит это прямо: «Архивный лид не попадает в счётчики
+        // шапки», «счётчики шапки, раздача и подбор считают по этому же
+        // набору».
+        //
+        // ЧЕТВЁРТОЕ ЧИСЛО — «В АРХИВЕ» — считается ровно тем набором, что и
+        // список при archived=only: архивные, но не слитые. Иначе число в чипе
+        // разошлось бы с тем, что человек увидит, щёлкнув по отбору.
+        //
+        // Место ему здесь, а не в ответе списка: список считает total тем же
+        // условием, что и выборку, и число архивных меняло бы значение от
+        // каждой набранной в поиске буквы. Отбор так вести себя не должен.
         const result = await pool.query(`
             SELECT
-                count(*)::int AS total,
-                count(*) FILTER (WHERE employee_id IS NULL)::int AS queue,
-                count(*) FILTER (WHERE created_at >= $1 AND created_at < $2)::int AS today
+                count(*) FILTER (WHERE merged_into_id IS NULL AND archived_at IS NULL)::int AS total,
+                count(*) FILTER (WHERE merged_into_id IS NULL AND archived_at IS NULL
+                                   AND employee_id IS NULL)::int AS queue,
+                count(*) FILTER (WHERE merged_into_id IS NULL AND archived_at IS NULL
+                                   AND created_at >= $1 AND created_at < $2)::int AS today,
+                count(*) FILTER (WHERE merged_into_id IS NULL AND archived_at IS NOT NULL)::int AS archived
             FROM leads
         `, [dayStart, dayEnd]);
         const row = result.rows[0];
-        res.json({ total: row.total, queue: row.queue, today: row.today, todayDate });
+        res.json({
+            total: row.total, queue: row.queue, today: row.today,
+            archived: row.archived, todayDate
+        });
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: 'Не удалось получить статистику' });

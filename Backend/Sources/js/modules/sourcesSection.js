@@ -25,6 +25,7 @@
 
 import { openModal } from '/ui/modal.js';
 import { isAbort } from '/api.js';
+import { openDeleteBlocked, isDeleteBlocked } from '/deleteBlocked.js';
 import {
     fetchPlatforms, createPlatform, updatePlatform, deletePlatform,
     fetchCpaNetworks, fetchSources, createSource, updateSource, deleteSource
@@ -924,6 +925,18 @@ async function removeSource(state, source) {
             : 'Источник удалён', 'success');
         await reloadAll(state);
     } catch (err) {
+        // До части 5 источник удалялся всегда, а у лидов молча обнулялось,
+        // откуда они пришли. Теперь это запрет — и он обязан объясниться.
+        if (isDeleteBlocked(err)) {
+            openDeleteBlocked({
+                scope: state.panel,
+                sub: `Источник «${source.rootSource}»`,
+                lead: 'К источнику привязано то, что удалением потерялось бы навсегда:',
+                tail: 'Отвяжите или удалите это по отдельности — тогда источник удалится.',
+                blockers: err.blockers
+            });
+            return;
+        }
         fail(state, err);
     }
 }

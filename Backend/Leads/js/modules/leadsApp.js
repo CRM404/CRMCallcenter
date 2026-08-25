@@ -33,6 +33,10 @@ import { openModal } from '/ui/modal.js';
 import { isAbort } from '/api.js';
 import { readHiddenColumns, writeHiddenColumns, hasHiddenColumns } from '/viewPrefs.js';
 import { icon } from '/ui/icons.js';
+// Окно отказа общее на пять разделов (ответ на И118), но зовёт его отсюда не
+// сам раздел, а окно архива: единственное место, где лида удаляют, — кнопка
+// «Удалить насовсем» внутри него.
+import { openLeadArchive, openLeadReturn } from './leadsArchive.js';
 
 const PAGE_SIZE = 30;
 
@@ -194,7 +198,11 @@ const FILTER_FIELDS = [
  *  добавить в окно и забыть в сбросе — именно так фильтр и переживает
  *  «Сбросить все», оставаясь действующим и невидимым. */
 function emptyFilters() {
-    return FILTER_FIELDS.reduce((acc, f) => { acc[f.key] = ''; return acc; }, { q: '' });
+    // `archived` — отбор «Показывать»: пусто значит «в работе», и это умолчание
+    // раздела. Он стоит в общем наборе фильтров, а не сбоку: иначе сброс
+    // фильтров оставил бы состав списка прежним, и человек решил бы, что сброс
+    // не сработал.
+    return FILTER_FIELDS.reduce((acc, f) => { acc[f.key] = ''; return acc; }, { q: '', archived: '' });
 }
 
 const REPEAT_STAGE_FROM = 5;
@@ -214,9 +222,22 @@ const RICH_CELLS = {
     // этапе 4 и оставался серым. Зелёный читался как «хорошо», а означал
     // «этап ≥ 5». Признак «успешный статус» появится полем в справочнике
     // lead_funnel_statuses, а не порогом в коде раздела.
-    funnelStatus: (l) => (l.funnelStatusId
-        ? `<span class="ui-pill ui-pill--mute">${escapeHtml(l.statusName)}</span>`
-        : null),
+    // У АРХИВНОГО ЛИДА ВМЕСТО ПИЛЮЛИ СТАТУСА — ПИЛЮЛЯ «В архиве», а под ней
+    // дата и автор (паспорт Р7). Прежний статус при этом НИКУДА НЕ ДЕЛСЯ: он
+    // просто не показан, и потому уезжает в подсказку пилюли — терять значение
+    // нельзя, оно понадобится при возврате (правка дизайн-сессии по И110).
+    funnelStatus: (l) => {
+        if (l.archivedAt) {
+            const since = formatDate(l.archivedAt);
+            const who = l.archivedActorName ? ` · ${escapeHtml(l.archivedActorName)}` : '';
+            const was = l.statusName ? ` title="Прежний статус: ${escapeHtml(l.statusName)}"` : '';
+            return `<span class="ui-pill ui-pill--mute"${was}>В архиве</span>`
+                + (since ? `<span class="arc-since">с ${since}${who}</span>` : '');
+        }
+        return l.funnelStatusId
+            ? `<span class="ui-pill ui-pill--mute">${escapeHtml(l.statusName)}</span>`
+            : null;
+    },
     // Линия — обычный текст со значком направления, без рамки-пилюли (М23).
     lineType: (l) => (l.lineType
         ? `<span class="leads-line">${icon(l.lineType === 'Входящая' ? 'arrow-down-left' : 'arrow-up-right', 'sm', 'ui-ic--quiet')}${escapeHtml(l.lineType)}</span>`
@@ -376,6 +397,9 @@ async function loadStats(mountId) {
         $('[data-role="stat-total"]').textContent = stats.total;
         $('[data-role="stat-queue"]').textContent = stats.queue;
         $('[data-role="stat-today"]').textContent = stats.today;
+        // Четвёртое число (И101). Приходит из того же ответа: единственный
+        // способ увидеть, что в архиве вообще кто-то есть, не переключаясь туда.
+        $('[data-role="stat-archived"]').textContent = stats.archived ?? 0;
         // Подпись шапки — из того же ответа, что и счётчики: день, по которому
         // они посчитаны, и день в подписи обязаны совпадать.
         fillQueueDate(stats.todayDate);
@@ -450,29 +474,56 @@ function phoneCell(lead) {
         '<use href="#ui-ic-warn"></use></svg></span>';
 }
 
+/**
+ * КРАСНОГО ЗНАЧКА В СТРОКЕ ЛИДА НЕТ (паспорт Р7). Вместо него «Отправить в
+ * архив» знаком archive, без цвета: действие обратимо, а красный обещал бы
+ * необратимость. Единственный красный на весь пункт — «Удалить насовсем» в
+ * окне, и там он объяснён.
+ *
+ * У архивной строки действие одно — «Вернуть из архива». Ни смены оператора,
+ * ни смены статуса: любое из них было бы обещанием работы, которой не будет.
+ */
+function rowActions(lead, archived) {
+    if (archived) {
+        return `<button type="button" class="ui-btn ui-btn--row" data-unarchive="${lead.id}"`
+            + ' title="Вернуть из архива">Вернуть из архива</button>';
+    }
+    return `
+        <button type="button" class="ui-btn ui-btn--icon ui-btn--row" data-edit="${lead.id}" title="Изменить" aria-label="Изменить"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-edit"></use></svg></button>
+        <button type="button" class="ui-btn ui-btn--icon ui-btn--row" data-archive="${lead.id}" title="Отправить в архив: лид выйдет из раздачи, история останется" aria-label="Отправить в архив"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-archive"></use></svg></button>`;
+}
+
 function rowHtml(lead) {
     const name = fullName(lead)
         ? `<span class="ui-table__main">${escapeHtml(fullName(lead))}</span>`
         : '<span class="ui-table__muted">— без ФИО —</span>';
-    const employeeCell = lead.employeeId
-        ? escapeHtml(lead.employeeName)
-        : '<span class="ui-table__muted">не назначен</span><span class="ui-pill ui-pill--warn queue-tag">в очереди</span>';
+    const archived = Boolean(lead.archivedAt);
+    // У АРХИВНОГО В КОЛОНКЕ «Сотрудник» ПРОЧЕРК, а не «в очереди»: он не
+    // участвует в раздаче, и плашка «в очереди» обещала бы работу, которой не
+    // будет.
+    const employeeCell = archived
+        ? '<span class="ui-table__muted">—</span>'
+        : (lead.employeeId
+            ? escapeHtml(lead.employeeName)
+            : '<span class="ui-table__muted">не назначен</span><span class="ui-pill ui-pill--warn queue-tag">в очереди</span>');
     const cells = COLUMN_ORDER.map((key) => {
         const body = key === 'employee' ? employeeCell : cellHtml(key, lead);
         return `<td data-col="${key}"${visibleColumns[key] ? '' : ' hidden'}>${body}</td>`;
     }).join('');
     const checked = selectedIds.has(lead.id) ? ' checked' : '';
+    // ЧЕКБОКСА У АРХИВНОЙ СТРОКИ НЕТ (ответ И111): массовое действие к ней не
+    // применится, а пустой чекбокс обещал бы, что применится.
+    const selCell = archived
+        ? ''
+        : `<input type="checkbox" data-check-id="${lead.id}" aria-label="Выбрать лида ${lead.id}"${checked}>`;
     return `
         <tr class="${selectedIds.has(lead.id) ? 'ui-table__row--selected' : ''}" data-row-id="${lead.id}">
-            <td class="ui-table__sel"><input type="checkbox" data-check-id="${lead.id}" aria-label="Выбрать лида ${lead.id}"${checked}></td>
+            <td class="ui-table__sel">${selCell}</td>
             <td>${lead.id}</td>
             <td>${name}</td>
             <td>${phoneCell(lead)}</td>
             ${cells}
-            <td class="ui-table__acts">
-                <button type="button" class="ui-btn ui-btn--icon ui-btn--row" data-edit="${lead.id}" title="Изменить" aria-label="Изменить"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-edit"></use></svg></button>
-                <button type="button" class="ui-btn ui-btn--icon ui-btn--row ui-btn--danger" data-del="${lead.id}" title="Удалить" aria-label="Удалить"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-trash"></use></svg></button>
-            </td>
+            <td class="ui-table__acts">${rowActions(lead, archived)}</td>
         </tr>`;
 }
 
@@ -533,7 +584,32 @@ function renderFooter() {
  * искать и сбрасывать несуществующее (К39).
  */
 function showEmptyState() {
-    const filtered = activeFilterLabels().length > 0;
+    // «Показывать: все» — единственный отбор, который список НЕ укорачивает, а
+    // расширяет. Считать его фильтром здесь значит на пустой базе звать
+    // «снять лишний фильтр» вместо честного «лидов пока нет».
+    const filtered = activeFilterLabels().some((f) => f.key !== 'archived');
+    const iconBox = $('[data-role="empty-icon"]');
+
+    // ПУСТОЙ АРХИВ — СВОЁ СОСТОЯНИЕ, а не «ничего не найдено по фильтрам»
+    // (паспорт Р7). Общий текст звал бы снять лишний фильтр, хотя снимать
+    // нечего: в архив просто ещё ничего не клали.
+    //
+    // Значок обычный, приглушённый: пустой архив — не хорошая и не плохая
+    // новость. Зелёный .ui-empty--good здесь не применяется, и его в слое пока
+    // нет вовсе — он объявлен пунктом Р10 и ждёт того, кто соберёт экран первым.
+    if (filters.archived === 'only') {
+        iconBox.innerHTML = icon('archive', 'lg', 'ui-empty__icon');
+        iconBox.hidden = false;
+        $('[data-role="empty-title"]').textContent = 'В архиве пусто';
+        $('[data-role="empty-text"]').textContent =
+            'Ни один лид не отправлен в архив. Отправить можно из списка — '
+            + 'кнопкой в строке или пачкой.';
+        $('[data-role="empty-state"]').hidden = false;
+        return;
+    }
+    iconBox.hidden = true;
+    iconBox.innerHTML = '';
+
     $('[data-role="empty-title"]').textContent = filtered
         ? 'Ничего не найдено по текущим фильтрам'
         : 'Лидов пока нет';
@@ -552,6 +628,18 @@ function activeFilterLabels() {
         return found ? found[field] : id;
     };
     if (filters.q) out.push({ key: 'q', label: 'Поиск', value: filters.q });
+    // «Показывать» — тоже отбор, и молчать о нём нельзя: человек, переключивший
+    // список на архив, иначе не видит ни одного признака, что список урезан, и
+    // «Сбросить все» ему этого не предложит (К192). У умолчания «В работе» чипа
+    // нет намеренно — чип обещает, что список укорочен, а умолчание показывает
+    // то, ради чего раздел существует.
+    if (filters.archived) {
+        out.push({
+            key: 'archived',
+            label: 'Показывать',
+            value: filters.archived === 'only' ? 'в архиве' : 'все'
+        });
+    }
     // Чипы — по тому же списку, что и само окно: поле, добавленное в окно и
     // забытое здесь, отбирал бы молча, и короткий список объяснить было бы
     // нечем.
@@ -594,6 +682,7 @@ function renderFilterChips() {
 function syncFilterControls() {
     const set = (sel, value) => { const node = $(sel); if (node) node.value = value; };
     set('[data-role="search"]', filters.q);
+    set('[data-role="quick-archived"]', filters.archived);
     set('[data-role="quick-status"]', filters.funnelStatusId);
     set('[data-role="quick-source"]', filters.sourceId);
     FILTER_FIELDS.forEach((f) => set(f.sel, filters[f.key]));
@@ -762,6 +851,20 @@ async function handleMassApply() {
     if (selectedIds.size === 0) { showMassWarn('Выберите хотя бы одного лида'); return; }
     const ids = Array.from(selectedIds);
 
+    // «Отправить в архив» идёт своим путём: это не правка поля, а отдельный
+    // маршрут, который сам заводит партию журнала одним запросом.
+    if (action === 'archive') {
+        massApplying = true;
+        setBusy('[data-role="mass-apply"]', true);
+        try {
+            await runMassArchive(ids, my);
+        } finally {
+            massApplying = false;
+            setBusy('[data-role="mass-apply"]', false);
+        }
+        return;
+    }
+
     const config = MASS_PATCH_ACTIONS[action];
     if (!config) return;
     // Выделение могли изменить уже после выбора действия — перепроверяем.
@@ -783,61 +886,31 @@ async function handleMassApply() {
 }
 
 /**
- * Удаление — своя кнопка и свой путь (К47). Пятым пунктом в списке действий оно
- * выбиралось тем же движением руки, что «Сменить статус», а стоит дороже всех
- * остальных вместе взятых.
+ * Отправка в архив ПАЧКОЙ — одним запросом, а не чередой.
+ *
+ * Здесь были handleMassDelete и runMassDelete: отдельная кнопка «Удалить» и
+ * проход по списку с запросом на каждого лида. Оба убраны паспортом Р7 —
+ * массового физического удаления нет вовсе. Необратимое действие над тысячей
+ * записей одним нажатием не должно существовать, и подтверждение не помогает:
+ * его нажимают не глядя ровно потому, что нажимали уже сто раз.
+ *
+ * Счётчик «Удалено N из M» в полосе тоже ушёл вместе с ними, и он больше не
+ * нужен: сервер отвечает одним числом, ждать нечего.
  */
-async function handleMassDelete() {
-    if (massApplying) return;
-    const my = generation;
-    if (selectedIds.size === 0) { showMassWarn('Выберите хотя бы одного лида'); return; }
-    const ids = Array.from(selectedIds);
-
-    massApplying = true;
-    setBusy('[data-role="mass-delete"]', true);
+async function runMassArchive(ids, my) {
     try {
-        await runMassDelete(ids, my);
-    } finally {
-        massApplying = false;
-        setBusy('[data-role="mass-delete"]', false);
-    }
-}
-
-async function runMassDelete(ids, my) {
-    const ok = await shell.confirmDanger({
-        title: 'Удалить лиды?',
-        message: `Будет удалено: ${ids.length}. Действие необратимо.`
-    });
-    if (!ok || !alive(my)) return;
-    let deleted = 0;
-    let failed = 0;
-    const counter = $('[data-role="selected-count"]');
-    for (const id of ids) {
-        try {
-            await storage.deleteLead(id);
-            deleted++;
-        } catch (e) {
-            // Отмена = панель закрыли посреди пачки: оставшиеся запросы
-            // отбиваются мгновенно, и досчитывать их до конца незачем.
-            if (isAbort(e)) return;
-            failed++;
-        }
+        const res = await storage.bulkArchiveLeads(ids);
         if (!alive(my)) return;
-        // Полоса считает вслух (К47): удаление идёт по запросу на лида, и на
-        // сорока шести выделенных это десятки секунд, в которые раньше на
-        // экране была только заблокированная кнопка.
-        //
-        // Считаются УДАЛЁННЫЕ, а не пройденные (К97). Прежний счёт попыток
-        // говорил «Удалено 46 из 46» и тут же опровергался тостом «Не удалось
-        // удалить: 3» — последнее число, которое человек видел, оказывалось
-        // неправдой. Счётчик может отставать от хода — это честно.
-        if (counter) counter.textContent = `Удалено ${deleted} из ${ids.length}`;
+        clearSelection();
+        await reloadAll();
+        if (!alive(my)) return;
+        // Пропущенных называем вслух: человек выделил пятнадцать, а в архив
+        // ушло двенадцать — молчание об этом читается как «всё сделано».
+        const tail = res.skipped > 0 ? `, пропущено: ${res.skipped} — уже в архиве` : '';
+        shell.toast(`В архив отправлено лидов: ${res.archived}${tail}`, 'success');
+    } catch (e) {
+        fail(my, e);
     }
-    clearSelection();
-    await reloadAll();
-    if (!alive(my)) return;
-    if (deleted > 0) shell.toast(`Удалено лидов: ${deleted}`, 'success');
-    if (failed > 0) shell.toast(`Не удалось удалить: ${failed}`, 'error');
 }
 
 async function runMassPatch(config, select, ids, my) {
@@ -1133,26 +1206,38 @@ function bindHandlers() {
             if (lead) await leadModal.open(lead);
             return;
         }
-        const delBtn = e.target.closest('[data-del]');
-        if (!delBtn) return;
-        const lead = leads.find((x) => x.id === Number(delBtn.dataset.del));
-        if (!lead) return;
-        // Удаление необратимо — подтверждение накрывает весь экран, а не только
-        // свою панель (правило дизайн-сессии, бриф 5.4).
-        const ok = await shell.confirmDanger({
-            title: 'Удалить лид?',
-            message: `Лид #${lead.id}${fullName(lead) ? ' («' + fullName(lead) + '»)' : ''} будет удалён без возможности восстановления.`
-        });
-        if (!ok || !alive(my)) return;
-        try {
-            await storage.deleteLead(lead.id);
-            if (!alive(my)) return;
-            shell.toast('Лид удалён', 'success');
-            selectedIds.delete(lead.id);
-            await reloadAll();
-        } catch (err) {
-            fail(my, err);
+        const archiveBtn = e.target.closest('[data-archive]');
+        if (archiveBtn) {
+            const target = leads.find((x) => x.id === Number(archiveBtn.dataset.archive));
+            if (target) {
+                openLeadArchive({
+                    scope: wrap,
+                    lead: target,
+                    storage,
+                    toast: shell.toast,
+                    onDone: async () => { selectedIds.delete(target.id); await reloadAll(); }
+                });
+            }
+            return;
         }
+        const unarchiveBtn = e.target.closest('[data-unarchive]');
+        if (unarchiveBtn) {
+            const target = leads.find((x) => x.id === Number(unarchiveBtn.dataset.unarchive));
+            if (target) {
+                openLeadReturn({
+                    scope: wrap,
+                    lead: target,
+                    storage,
+                    toast: shell.toast,
+                    onDone: async () => { await reloadAll(); }
+                });
+            }
+            return;
+        }
+        // Здесь была ветка красной кнопки удаления из строки. Кнопки больше
+        // нет (паспорт Р7): удаление живёт внутри окна «Отправить в архив» и
+        // только там, где оно вообще возможно. Отдельного подтверждения ему не
+        // нужно — окно уже назвало последствия и уже спросило.
     });
 
     // Выделение строки: правим только саму строку, а не перерисовываем таблицу
@@ -1196,7 +1281,6 @@ function bindHandlers() {
     // --- массовые действия ---
     $('[data-role="mass-clear"]').addEventListener('click', clearSelection);
     $('[data-role="mass-action"]').addEventListener('change', handleMassActionChange);
-    $('[data-role="mass-delete"]').addEventListener('click', handleMassDelete);
     $('[data-role="mass-apply"]').addEventListener('click', handleMassApply);
 
     // --- фильтры ---
@@ -1214,6 +1298,10 @@ function bindHandlers() {
             filters = { ...filters, q: value };
             applyFilterState(my);
         }, 300);
+    });
+    $('[data-role="quick-archived"]').addEventListener('change', (e) => {
+        filters = { ...filters, archived: e.target.value };
+        applyFilterState(my);
     });
     $('[data-role="quick-status"]').addEventListener('change', (e) => {
         filters = { ...filters, funnelStatusId: e.target.value };

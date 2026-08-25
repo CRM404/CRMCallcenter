@@ -23,6 +23,9 @@ export function createStorage(api) {
                 priceFrom, priceTo, areaFrom, areaTo,
                 region, locality,
                 clientType, mortgageType, downPaymentPercent,
+                // Отбор «Показывать» (часть 5Б): пусто — «в работе», 'all' —
+                // живые и архивные вперемешку, 'only' — только архивные.
+                archived,
                 limit, offset
             } = filters;
             return api.get('/leads-admin', {
@@ -31,6 +34,7 @@ export function createStorage(api) {
                 priceFrom, priceTo, areaFrom, areaTo,
                 region, locality,
                 clientType, mortgageType, downPaymentPercent,
+                archived,
                 limit, offset
             });
         },
@@ -46,6 +50,14 @@ export function createStorage(api) {
         updateLead: (id, data) => api.put(`/leads-admin/${id}`, data),
 
         deleteLead: (id) => api.del(`/leads-admin/${id}`),
+
+        // --- Архив лида (часть 5Б) ---
+        //
+        // Возврат отдаёт placement — «сразу», «позже» или «работы больше нет».
+        // Считает его сервер условием очереди; экран только показывает.
+        archiveLead: (id) => api.post(`/leads-admin/${id}/archive`),
+        unarchiveLead: (id) => api.post(`/leads-admin/${id}/unarchive`),
+        bulkArchiveLeads: (leadIds) => api.post('/leads-admin/bulk-archive', { leadIds }),
 
         // Один набор параметров подбора на всю партию + строки файла.
         bulkImportLeads: (params) => api.post('/leads-admin/bulk-import', params),

@@ -21,6 +21,8 @@
 
 import { openModal } from '/ui/modal.js';
 import { isAbort } from '/api.js';
+// Окно отказа — общее на пять разделов (ответ на И118).
+import { openDeleteBlocked, isDeleteBlocked } from '/deleteBlocked.js';
 import { createStorage } from './scriptsAdminStorage.js';
 import { renderScriptRows, CONFIRM_TEXTS } from './scriptsAdminScriptList.js';
 import { renderNodesPanel } from './scriptsAdminNodes.js';
@@ -498,6 +500,18 @@ async function removeScript(state, script) {
         if (state.selectedScript && state.selectedScript.id === script.id) hideOpened(state);
         await reloadScripts(state);
     } catch (err) {
+        // Раньше скрипт удалялся всегда, а привязка у лидов обнулялась молча —
+        // и по какому скрипту с лидом говорили, узнать становилось неоткуда.
+        if (isDeleteBlocked(err)) {
+            openDeleteBlocked({
+                scope: state.panel,
+                sub: `Скрипт «${script.title}»`,
+                lead: 'К скрипту привязано то, что удалением потерялось бы навсегда:',
+                tail: 'Смените скрипт у этих лидов — тогда скрипт удалится.',
+                blockers: err.blockers
+            });
+            return;
+        }
         if (!isAbort(err)) state.ctx.toast(err.message, 'error');
     }
 }

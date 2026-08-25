@@ -49,6 +49,22 @@ export function createStorage(api) {
 
         deleteEmployee: (id) => api.del(`/employees/${id}`),
 
+        // --- Архив: вывод из работы и возврат (часть 5Б) ---
+        //
+        // Числа последствий считает СЕРВЕР и отдаёт готовыми — экран не считает
+        // ничего сам (паспорт Р7). Вторая копия расчёта совпала бы в день
+        // написания и разошлась в первый же день правки, а выглядело бы это как
+        // «окно соврало», и искать пошли бы в окне.
+        fetchArchivePreview: (id) => api.get(`/employees/${id}/archive-preview`),
+
+        // Пачкой — ОДНИМ запросом на всех, а не N по одному: сбой одного из
+        // пятидесяти дал бы заниженную сумму молча (ответ на И115).
+        fetchBulkArchivePreview: (ids) => api.get('/employees/archive-preview', { ids: ids.join(',') }),
+
+        bulkArchive: (employeeIds, archiveKind) =>
+            api.post('/employees/bulk-archive', { employeeIds, archiveKind }),
+
+
         // --- Документы сотрудника ---
 
         fetchEmployeeDocuments: (employeeId) => api.get(`/employees/${employeeId}/documents`),

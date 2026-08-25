@@ -28,6 +28,9 @@
 
 import { openModal, confirm } from '/ui/modal.js';
 import { isAbort } from '/api.js';
+// Окно отказа — общее на пять разделов (ответ на И118): устройство у него
+// одно, и пять копий разошлись бы на первой же правке текста.
+import { openDeleteBlocked, isDeleteBlocked } from '/deleteBlocked.js';
 import { createStorage } from './cpaStorage.js';
 
 const SEARCH_DEBOUNCE_MS = 300;
@@ -1177,6 +1180,19 @@ async function removeOffer(state, offer) {
         state.ctx.toast('Оффер удалён', 'success');
         await reloadAll(state);
     } catch (err) {
+        // Связь объекта с лидами теперь запрещающая (часть 5, класс Б): нельзя
+        // удалить объект, который кому-то подобран. Голый тост назвал бы это
+        // одной фразой; окно называет числами и говорит, что сделать.
+        if (isDeleteBlocked(err)) {
+            openDeleteBlocked({
+                scope: state.panel,
+                sub: `Объект «${offer.name}»`,
+                lead: 'К объекту привязано то, что удалением потерялось бы навсегда:',
+                tail: 'Отвяжите или удалите это по отдельности — тогда объект удалится.',
+                blockers: err.blockers
+            });
+            return;
+        }
         fail(state, err);
     }
 }
@@ -1454,6 +1470,16 @@ function openNetworksModal(state, { openForm: startWithForm = false, editId = nu
             await reloadAll(state);
             renderList();
         } catch (err) {
+            if (isDeleteBlocked(err)) {
+                openDeleteBlocked({
+                    scope: state.panel,
+                    sub: `CPA-сеть «${network.name}»`,
+                    lead: 'К сети привязано то, что удалением потерялось бы навсегда:',
+                    tail: 'Отвяжите или удалите это по отдельности — тогда сеть удалится.',
+                    blockers: err.blockers
+                });
+                return;
+            }
             fail(state, err);
         }
     });

@@ -1,6 +1,6 @@
 // --- services/employeeArchive.js: вывод сотрудника из работы и возврат ---
 //
-// Решения владельца 70, 71 и 72; план 11.2; паспорт Р7 редакции 2.
+// Решения владельца 70, 71 и 72; план 11.2; паспорт Р7 редакции 3.
 //
 // ГЛАВНОЕ, ЧТО НАДО ЗНАТЬ ПРО ЭТОТ ФАЙЛ: он НЕ трогает employees.status и не
 // пытается его заменить. На условии status <> 'inactive' стоят две вещи,
@@ -113,11 +113,14 @@ async function detachLeads(pool, employeeId) {
  * заново: две копии одного правила совпадают в день написания и расходятся в
  * первый же день правки, а расхождение будет выглядеть как «окно соврало».
  */
-async function queueBuckets(db, employeeId) {
+async function queueBucketsFor(db, employeeIds) {
+    const ids = employeeIds.filter((x) => Number.isInteger(x) && x > 0);
+    if (ids.length === 0) return { total: 0, now: 0, later: 0, none: 0 };
+
     const newStatusId = await findNewFunnelStatusId(db);
     if (newStatusId === null) {
         const all = await db.query(
-            'SELECT count(*)::int AS n FROM leads WHERE employee_id = $1', [employeeId]);
+            'SELECT count(*)::int AS n FROM leads WHERE employee_id = ANY($1::int[])', [ids]);
         return { total: all.rows[0].n, now: 0, later: 0, none: all.rows[0].n };
     }
     const cond = queueCondition('l', '$2');
@@ -128,8 +131,8 @@ async function queueBuckets(db, employeeId) {
                                    AND l.next_call_at IS NOT NULL AND l.next_call_at > NOW()
                                    AND l.merged_into_id IS NULL
                                    AND l.archived_at IS NULL)::int AS later_count
-           FROM leads l WHERE l.employee_id = $1`,
-        [employeeId, newStatusId]);
+           FROM leads l WHERE l.employee_id = ANY($1::int[])`,
+        [ids, newStatusId]);
     const row = result.rows[0];
     return {
         total: row.total,
@@ -137,6 +140,11 @@ async function queueBuckets(db, employeeId) {
         later: row.later_count,
         none: row.total - row.now_count - row.later_count
     };
+}
+
+/** Один сотрудник — частный случай множества. Двух реализаций не заводим. */
+function queueBuckets(db, employeeId) {
+    return queueBucketsFor(db, [Number(employeeId)]);
 }
 
 /**
@@ -206,7 +214,8 @@ async function takenExtensions(db) {
 async function archivePreview(db, employeeId) {
     const found = await db.query(
         `SELECT id, last_name, first_name, middle_name, status, archive_kind,
-                frozen_at, termination_date, pbx_extension
+                frozen_at, termination_date, pbx_extension,
+                tunnel_address, tunnel_revoked_at
            FROM employees WHERE id = $1`, [employeeId]);
     if (found.rows.length === 0) return null;
     const emp = found.rows[0];
@@ -220,12 +229,52 @@ async function archivePreview(db, employeeId) {
         terminationDate: emp.termination_date,
         // Сколько лидов открепится и во что они превратятся.
         leads: { detached: leads.total, queue: { now: leads.now, later: leads.later, none: leads.none } },
+        // Ключ туннеля отзывается при выводе из работы — вторая строка
+        // списка последствий. Действующим он считается ровно тем условием,
+        // что стоит в схеме: адрес выдан и отзыва не было.
+        tunnelKeyActive: Boolean(emp.tunnel_address) && emp.tunnel_revoked_at === null,
         // Для окна возврата: чей теперь его прежний добавочный.
         extension: {
             value: emp.pbx_extension,
             heldBy: await extensionHolder(db, emp.pbx_extension, emp.id)
         },
         extensionsTaken: await takenExtensions(db)
+    };
+}
+
+/**
+ * Массовый предпросмотр — ОДНИМ ЗАПРОСОМ НА ВСЕХ, а не N по одному (ответ
+ * куратора и дизайн-сессии на И115). Два довода, и первый решающий:
+ *
+ * 1. Окно показывает ОДНУ СУММУ. При N запросах сбой одного даёт заниженную
+ *    сумму МОЛЧА — а это ровно то число, по которому человек принимает решение.
+ *    Пятьдесят ответов, из которых один упал, выглядят как честный ответ.
+ * 2. Три четверти работы лишние: владелец прежнего номера и весь список занятых
+ *    добавочных нужны окну ВОЗВРАТА, а массовому выводу — нет. Здесь их и нет.
+ *
+ * СЧИТАЕТ ТОЛЬКО ТЕХ, КОГО ДЕЙСТВИТЕЛЬНО ВЫВЕДУТ — тем же условием, что и
+ * bulk-archive: status <> 'inactive'. Иначе окно пообещало бы последствия за
+ * тех, кого сервер пропустит, и сумма разошлась бы с тостом.
+ */
+async function bulkArchivePreview(db, employeeIds) {
+    const ids = employeeIds.filter((x) => Number.isInteger(x) && x > 0);
+    if (ids.length === 0) {
+        return {
+            employees: 0, skipped: 0, extensionsFreed: 0, tunnelKeys: 0,
+            leads: { detached: 0, queue: { now: 0, later: 0, none: 0 } }
+        };
+    }
+    const targets = await db.query(
+        `SELECT id, pbx_extension, tunnel_address, tunnel_revoked_at
+           FROM employees WHERE id = ANY($1::int[]) AND status <> 'inactive'`, [ids]);
+    const rows = targets.rows;
+    const leads = await queueBucketsFor(db, rows.map((r) => r.id));
+    return {
+        employees: rows.length,
+        skipped: ids.length - rows.length,
+        extensionsFreed: rows.filter((r) => String(r.pbx_extension || '').trim() !== '').length,
+        tunnelKeys: rows.filter((r) => r.tunnel_address && r.tunnel_revoked_at === null).length,
+        leads: { detached: leads.total, queue: { now: leads.now, later: leads.later, none: leads.none } }
     };
 }
 
@@ -236,6 +285,8 @@ module.exports = {
     archiveColumns,
     detachLeads,
     queueBuckets,
+    queueBucketsFor,
+    bulkArchivePreview,
     extensionHolder,
     extensionSince,
     takenExtensions,

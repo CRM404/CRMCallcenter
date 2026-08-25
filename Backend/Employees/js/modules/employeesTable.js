@@ -11,8 +11,11 @@
 // далее переключаются целиком. Настройка колонок управляет и тем, и другим:
 // внутри составной ячейки — гранулярно, у остальных — колонкой целиком.
 
-import { iconNode } from '/ui/icons.js';
+import { icon, iconNode } from '/ui/icons.js';
 import { openModal } from '/ui/modal.js';
+import {
+    openEmployeeArchive, openEmployeeMassArchive, openEmployeeReturn
+} from './employeesArchive.js';
 
 const PAGE_SIZE = 20;
 const SEARCH_DEBOUNCE_MS = 300;
@@ -50,11 +53,11 @@ function createDebounced(fn, ms) {
 
 /**
  * @param {HTMLElement} root  контейнер панели
- * @param {Object}      deps  { storage, toast, confirmDanger, isAlive, isAbort,
+ * @param {Object}      deps  { storage, toast, isAlive, isAbort,
  *                              getHiddenColumns, onEdit, onDataChanged }
  */
 export function createTable(root, deps) {
-    const { storage, toast, confirmDanger, isAlive, isAbort, getHiddenColumns, onEdit, onDataChanged } = deps;
+    const { storage, toast, isAlive, isAbort, getHiddenColumns, onEdit, onDataChanged } = deps;
 
     const $ = (sel) => root.querySelector(sel);
     const $$ = (sel) => Array.from(root.querySelectorAll(sel));
@@ -155,9 +158,29 @@ export function createTable(root, deps) {
         return `<span class="manager-cell"><svg class="ui-ic ui-ic--sm ui-ic--quiet" aria-hidden="true"><use href="#ui-ic-user"></use></svg>${escapeHtml(emp.managerName)}</span>`;
     }
 
+    // ТРИ СОСТОЯНИЯ ВМЕСТО ДВУХ (решение владельца 70). Слово «Неактивен»
+    // уходит: неактивным человека делают и не увольняя.
+    //
+    // ОБЕ ПОМЕТКИ АРХИВА — --mute, ОДНИМ ЦВЕТОМ, и это решение, а не экономия:
+    // для системы разницы между ними нет, добавочный освобождается и ключ
+    // отзывается в обоих случаях. Цветом различать состояния, ведущие себя
+    // одинаково, значит обещать разное поведение.
+    //
+    // Строку выведенного НЕ ГАСИМ прозрачностью — её читают: когда ушёл, в
+    // каком отделе работал, какие документы остались. Состояние называет пилюля.
     function renderStatusBadge(emp) {
-        const isActive = emp.status === 'active';
-        return `<span class="ui-pill ${isActive ? 'ui-pill--ok' : 'ui-pill--mute'}">${isActive ? 'Активен' : 'Неактивен'}</span>`;
+        if (emp.status === 'active') {
+            return '<span class="ui-pill ui-pill--ok">Активен</span>';
+        }
+        // Вид архива мог не проставиться только у строки, заведённой мимо
+        // приложения: миграция части 5 проставила «Уволен» всем существующим.
+        const frozen = emp.archiveKind === 'frozen';
+        const label = frozen ? 'Заморожен' : 'Уволен';
+        // Дата под пилюлей: у уволенного — своя колонка, у замороженного —
+        // frozen_at. Одной колонки на два смысла нет намеренно (ответ И79).
+        const since = frozen ? emp.frozenAt : emp.terminationDate;
+        const line = since ? `<span class="arc-since">с ${formatDate(since)}</span>` : '';
+        return `<span class="ui-pill ui-pill--mute">${label}</span>${line}`;
     }
 
     // ------------------------------------------------------------ отрисовка
@@ -168,6 +191,26 @@ export function createTable(root, deps) {
         });
     }
 
+    /**
+     * КРАСНОГО ЗНАЧКА В СТРОКЕ СОТРУДНИКА НЕТ ВОВСЕ (паспорт Р7). Сотрудников
+     * физически не удаляют (план 11.2), и кнопка, которой нельзя
+     * воспользоваться, хуже отсутствующей. Вместо неё — «Вывести из работы»
+     * значком archive, без цвета: действие обратимо, а красный обещал бы
+     * необратимость, которой нет.
+     *
+     * У выведенной строки действие одно — «Вернуть в работу». Ни правки, ни
+     * чего-либо ещё: сначала верни, потом работай.
+     */
+    function renderRowActions(emp, archived) {
+        if (archived) {
+            return `<button type="button" class="ui-btn ui-btn--row" data-return="${emp.id}"`
+                + ` title="Вернуть в работу">Вернуть в работу</button>`;
+        }
+        return `
+            <button type="button" class="ui-btn ui-btn--icon ui-btn--row" data-edit="${emp.id}" title="Изменить" aria-label="Изменить"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-edit"></use></svg></button>
+            <button type="button" class="ui-btn ui-btn--icon ui-btn--row" data-archive="${emp.id}" title="Вывести из работы: уволить или заморозить. Карточка и документы останутся, добавочный освободится" aria-label="Вывести из работы"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-archive"></use></svg></button>`;
+    }
+
     function rowHtml(emp, hidden) {
         // Номер записи как есть: «0001» выглядит как код или артикул, а это
         // просто id строки (М29, подтверждено паспортом — «ID · номер записи»).
@@ -175,9 +218,16 @@ export function createTable(root, deps) {
         const hiddenAttr = (key) => (hidden.has(key) ? ' hidden' : '');
         const fullName = `${emp.lastName || ''} ${emp.firstName || ''}`.trim();
         const checked = selectedIds.has(emp.id) ? ' checked' : '';
+        const archived = emp.status === 'inactive';
+        // ЧЕКБОКСА У ВЫВЕДЕННОЙ СТРОКИ НЕТ (паспорт Р7, ответ И111): массовое
+        // действие к ней всё равно не применится, а пустой чекбокс обещал бы,
+        // что применится. Ячейка остаётся — иначе поедет вся таблица.
+        const cell = archived
+            ? ''
+            : `<input type="checkbox" data-check-id="${emp.id}" aria-label="Выбрать сотрудника ${idFormatted}"${checked}>`;
         return `
             <tr data-id="${emp.id}" class="${selectedIds.has(emp.id) ? 'ui-table__row--selected' : ''}">
-                <td class="ui-table__sel"><input type="checkbox" data-check-id="${emp.id}" aria-label="Выбрать сотрудника ${idFormatted}"${checked}></td>
+                <td class="ui-table__sel">${cell}</td>
                 <td>${idFormatted}</td>
                 <td>${renderEmployeeCell(emp, hidden)}</td>
                 <td data-col="department"${hiddenAttr('department')}>${emp.department ? escapeHtml(emp.department) : '<span class="ui-table__muted">—</span>'}</td>
@@ -189,10 +239,7 @@ export function createTable(root, deps) {
                 <td data-col="terminationDate"${hiddenAttr('terminationDate')}>${emp.terminationDate ? formatDate(emp.terminationDate) : '—'}</td>
                 <td data-col="lineType"${hiddenAttr('lineType')}>${emp.lineType ? escapeHtml(emp.lineType) : '—'}</td>
                 <td data-col="workSchedule"${hiddenAttr('workSchedule')}>${renderWorkScheduleCell(emp)}</td>
-                <td class="ui-table__acts">
-                    <button type="button" class="ui-btn ui-btn--icon ui-btn--row" data-edit="${emp.id}" title="Изменить" aria-label="Изменить"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-edit"></use></svg></button>
-                    <button type="button" class="ui-btn ui-btn--icon ui-btn--row ui-btn--danger" data-del="${emp.id}" data-name="${escapeHtml(fullName)}" title="Удалить" aria-label="Удалить"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-trash"></use></svg></button>
-                </td>
+                <td class="ui-table__acts">${renderRowActions(emp, archived)}</td>
             </tr>`;
     }
 
@@ -217,6 +264,32 @@ export function createTable(root, deps) {
         const filtered = hasActiveFilters();
         const box = $('[data-role="empty-state"]');
         const action = $('[data-role="empty-action"]');
+        const iconBox = $('[data-role="empty-icon"]');
+
+        // ПУСТОЙ АРХИВ — ОТДЕЛЬНОЕ СОСТОЯНИЕ, И ИХ ДВА, А НЕ ОДНО (паспорт Р7).
+        // «Уволенных нет» и «Замороженных нет» различить можно только настоящим
+        // отбором по виду архива — ради этого он и заведён на сервере (И112).
+        // Общий текст «ничего не найдено по фильтрам» звал бы сбросить отбор,
+        // хотя сбрасывать нечего: людей в этом состоянии просто нет.
+        const archiveKind = appliedFilters.status === 'dismissed' ? 'Уволенных'
+            : appliedFilters.status === 'frozen' ? 'Замороженных' : null;
+        if (archiveKind) {
+            // Значок обычный, приглушённый: пустой архив — не хорошая и не
+            // плохая новость, сюда пока ничего не клали. Зелёный .ui-empty--good
+            // здесь не применяется.
+            iconBox.innerHTML = icon('archive', 'lg', 'ui-empty__icon');
+            iconBox.hidden = false;
+            $('[data-role="empty-title"]').textContent = `${archiveKind} нет`;
+            $('[data-role="empty-text"]').textContent =
+                'Все сотрудники работают. Выведенные из работы останутся здесь '
+                + 'со всеми документами и графиком.';
+            action.hidden = false;
+            box.hidden = false;
+            return;
+        }
+        iconBox.hidden = true;
+        iconBox.innerHTML = '';
+
         $('[data-role="empty-title"]').textContent = filtered
             ? 'Ничего не найдено по текущим фильтрам'
             : 'Нет сотрудников';
@@ -269,12 +342,21 @@ export function createTable(root, deps) {
         });
     }
 
+    // ЧЕТЫРЕ ЧИСЛА, И СЧИТАЮТСЯ ОНИ ПО ПОКАЗАННОМУ СПИСКУ — они отвечают на
+    // вопрос «что сейчас на экране». Ровно поэтому (N) не ставится ещё и в
+    // отбор состояния: при любом другом отборе (отдел, линия, поиск) числа
+    // разошлись бы, и рядом стояли бы «уволены 0» и «Уволенные (4)» (И100).
+    //
+    // Условие ТО ЖЕ, что у отбора: «Активные» — это status === 'active', а не
+    // «вид архива пуст». Две разные проверки на одно состояние разойдутся.
     function renderStatChips(list) {
-        const total = list.length;
-        const active = list.filter((e) => e.status === 'active').length;
-        $('[data-role="stat-total"]').textContent = String(total);
-        $('[data-role="stat-active"]').textContent = String(active);
-        $('[data-role="stat-inactive"]').textContent = String(total - active);
+        const archived = list.filter((e) => e.status === 'inactive');
+        $('[data-role="stat-total"]').textContent = String(list.length);
+        $('[data-role="stat-active"]').textContent = String(list.length - archived.length);
+        $('[data-role="stat-dismissed"]').textContent =
+            String(archived.filter((e) => e.archiveKind !== 'frozen').length);
+        $('[data-role="stat-frozen"]').textContent =
+            String(archived.filter((e) => e.archiveKind === 'frozen').length);
     }
 
     function currentFilters() {
@@ -357,10 +439,27 @@ export function createTable(root, deps) {
      * настройка колонок сюда не ходят — они меняют лишь то, КАК показан уже
      * загруженный список.
      */
+    /**
+     * Одно значение отбора — два параметра сервера.
+     *
+     * status и archive_kind отвечают на РАЗНЫЕ вопросы, и сводить их в одно
+     * условие нельзя (предупреждение куратора при И112): на status висят
+     * освобождение добавочного и отзыв ключа туннеля, archive_kind — только
+     * слово в карточке. «Активные» — это status === 'active', а не «вид архива
+     * пуст».
+     */
+    function toServerFilters(filters) {
+        const { status, ...rest } = filters;
+        if (status === 'dismissed' || status === 'frozen') {
+            return { ...rest, status: 'inactive', archiveKind: status };
+        }
+        return { ...rest, status };
+    }
+
     async function load() {
         const filters = currentFilters();
         try {
-            const list = await storage.fetchEmployees(filters);
+            const list = await storage.fetchEmployees(toServerFilters(filters));
             if (!isAlive()) return false;
             rows = list;
             appliedFilters = filters;
@@ -536,76 +635,47 @@ export function createTable(root, deps) {
      * узнавал, что вместе с карточкой пропадёт весь проставленный ему месяц.
      * Ровно то же правилось у окна закрытия карточки (К92).
      */
-    async function handleDelete(id, name) {
-        const ok = await confirmDanger({
-            title: 'Удалить сотрудника?',
-            message: name
-                ? `Вместе с карточкой «${name}» удалятся все проставленные дни графика. Восстановить их из интерфейса нельзя.`
-                : 'Вместе с карточкой удалятся все проставленные дни графика. Восстановить их из интерфейса нельзя.'
-        });
-        if (!ok || !isAlive()) return;
+    /**
+     * «Вывести из работы» — одна строка.
+     *
+     * Числа последствий тянет само окно: они обязаны быть посчитаны ДО
+     * действия, потому что человек принимает решение по ним. Показать их
+     * следом, тостом, значит сообщить о случившемся вместо того, чтобы дать
+     * выбрать (паспорт Р7).
+     */
+    async function handleArchive(id) {
+        const emp = rows.find((e) => e.id === id);
+        if (!emp) return;
         try {
-            await storage.deleteEmployee(id);
-            if (!isAlive()) return;
-            selectedIds.delete(id);
-            toast('Сотрудник удалён', 'success');
-            await refresh();
+            await openEmployeeArchive({
+                scope: root,
+                employee: emp,
+                storage,
+                toast,
+                onDone: async () => { selectedIds.delete(id); await refresh(); }
+            });
         } catch (err) {
             if (!isAlive() || isAbort(err)) return;
             toast(err.message, 'error');
         }
     }
 
-    async function runMassInactive(ids) {
-        let changed = 0;
-        let failed = 0;
-        for (const id of ids) {
-            try {
-                const emp = await storage.fetchEmployeeById(id);
-                if (!isAlive()) return;
-                if (emp.status !== 'inactive') {
-                    await storage.updateEmployee(id, { ...emp, status: 'inactive' });
-                    changed++;
-                }
-            } catch (err) {
-                if (isAbort(err)) return;
-                failed++;
-            }
-            if (!isAlive()) return;
+    /** «Вернуть в работу» — с обязательным добавочным (решение владельца 71). */
+    async function handleReturn(id) {
+        const emp = rows.find((e) => e.id === id);
+        if (!emp) return;
+        try {
+            await openEmployeeReturn({
+                scope: root,
+                employee: emp,
+                storage,
+                toast,
+                onDone: async () => { await refresh(); }
+            });
+        } catch (err) {
+            if (!isAlive() || isAbort(err)) return;
+            toast(err.message, 'error');
         }
-        clearSelection();
-        await refresh();
-        if (!isAlive()) return;
-        if (changed > 0) toast(`Статус обновлён у ${changed} сотрудников`, 'success');
-        else if (failed === 0) toast('Нет сотрудников для изменения — они уже неактивны', 'info');
-        if (failed > 0) toast(`Не удалось обновить: ${failed}`, 'error');
-    }
-
-    async function runMassDelete(ids) {
-        const ok = await confirmDanger({
-            title: 'Удалить сотрудников?',
-            // Последствие то же, что у одиночного удаления (К114): дни графика
-            // уходят вместе с карточками, и здесь их разом больше.
-            message: `Будет удалено карточек: ${ids.length}. Вместе с ними удалятся все проставленные им дни графика. Восстановить их из интерфейса нельзя.`
-        });
-        if (!ok || !isAlive()) return;
-        let deleted = 0;
-        let failed = 0;
-        for (const id of ids) {
-            try {
-                await storage.deleteEmployee(id);
-                deleted++;
-            } catch (err) {
-                if (isAbort(err)) return;
-                failed++;
-            }
-            if (!isAlive()) return;
-        }
-        clearSelection();
-        await refresh();
-        if (!isAlive()) return;
-        if (deleted > 0) toast(`Удалено сотрудников: ${deleted}`, 'success');
-        if (failed > 0) toast(`Не удалось удалить: ${failed}`, 'error');
     }
 
     async function handleMassApply() {
@@ -627,13 +697,19 @@ export function createTable(root, deps) {
             // Массовое действие клиент делает чередой обычных запросов, и без
             // общего признака сто выделенных строк дали бы в журнале сто
             // отдельных правок, за которыми не видно одного нажатия.
-            const title = action === 'inactive'
-                ? `Массово в архив: ${ids.length}`
-                : `Массовое удаление: ${ids.length}`;
-            await storage.batched(title, async () => {
-                if (action === 'inactive') await runMassInactive(ids);
-                else if (action === 'delete') await runMassDelete(ids);
-            });
+            // ПАРТИЮ ЗДЕСЬ БОЛЬШЕ НЕ ЗАВОДИМ: массовый вывод из работы ушёл
+            // на серверный маршрут bulk-archive, и партию заводит он сам —
+            // одним запросом, а не чередой обычных. Признак партии от клиента
+            // тут только раздвоил бы одно действие на две записи.
+            if (action === 'archive') {
+                await openEmployeeMassArchive({
+                    scope: root,
+                    ids,
+                    storage,
+                    toast,
+                    onDone: async () => { clearSelection(); await refresh(); }
+                });
+            }
         } finally {
             massApplying = false;
             btn.disabled = false;
@@ -768,8 +844,11 @@ export function createTable(root, deps) {
         body.addEventListener('click', (e) => {
             const editBtn = e.target.closest('[data-edit]');
             if (editBtn) { onEdit(Number(editBtn.dataset.edit)); return; }
-            const delBtn = e.target.closest('[data-del]');
-            if (delBtn) handleDelete(Number(delBtn.dataset.del), delBtn.dataset.name || '');
+            const archiveBtn = e.target.closest('[data-archive]');
+            if (archiveBtn) { handleArchive(Number(archiveBtn.dataset.archive)); return; }
+            const returnBtn = e.target.closest('[data-return]');
+            if (returnBtn) { handleReturn(Number(returnBtn.dataset.return)); return; }
+
         });
         body.addEventListener('change', (e) => {
             const cb = e.target.closest('[data-check-id]');

@@ -44,9 +44,16 @@
     </div>
 
     <dl class="ui-chips ui-page-chips">
-        <div class="ui-chip"><dd class="ui-chip__value" data-role="stat-total">0</dd><dt class="ui-chip__label">Всего</dt></div>
+        <div class="ui-chip"><dd class="ui-chip__value" data-role="stat-total">0</dd><dt class="ui-chip__label">В работе</dt></div>
         <div class="ui-chip ui-chip--warn"><dd class="ui-chip__value" data-role="stat-queue">0</dd><dt class="ui-chip__label">Без оператора</dt></div>
         <div class="ui-chip ui-chip--ok"><dd class="ui-chip__value" data-role="stat-today">0</dd><dt class="ui-chip__label">За сегодня</dt></div>
+        <!-- ЧЕТВЁРТОЕ ЧИСЛО — В ШАПКЕ, А НЕ В ПОДПИСИ ОТБОРА (ответ на И101):
+             в шапке уже живут числа про лидов, и это их место. Считает его
+             /stats тем же набором, что список при archived=only, — иначе оно
+             разошлось бы с тем, что человек увидит, щёлкнув по отбору.
+             Первые три там же починены: они считали слитых и архивных, которых
+             в списке нет вовсе (К183). -->
+        <div class="ui-chip ui-chip--muted"><dd class="ui-chip__value" data-role="stat-archived">0</dd><dt class="ui-chip__label">В архиве</dt></div>
     </dl>
 
     <!-- Тулбар: поиск и два списка. Это НЕ дубль окна «Фильтры» — они держат
@@ -56,6 +63,18 @@
         <div class="ui-field leads-search">
             <input type="search" class="ui-field__control" data-role="search"
                    placeholder="Поиск по имени или телефону…" aria-label="Поиск лида">
+        </div>
+        <!-- «ПОКАЗЫВАТЬ» СТОИТ ПЕРВЫМ, ДО ДВУХ ОСТАЛЬНЫХ (ответ дизайн-сессии
+             И116). Он меняет СОСТАВ списка, а «Статус воронки» и «Источник»
+             фильтруют внутри состава. Список, меняющий состав, не может стоять
+             после тех, что фильтруют: человек отфильтрует, переключит состав и
+             решит, что фильтр слетел. -->
+        <div class="ui-field">
+            <select class="ui-field__control" data-role="quick-archived" aria-label="Показывать">
+                <option value="">В работе</option>
+                <option value="all">Все</option>
+                <option value="only">В архиве</option>
+            </select>
         </div>
         <div class="ui-field">
             <select class="ui-field__control" data-role="quick-status" aria-label="Статус воронки">
@@ -120,6 +139,8 @@
          и человек шёл искать и сбрасывать несуществующее. Тексты ставит
          leadsApp.js по признаку «есть ли активные фильтры». -->
     <div class="ui-empty ui-empty--inline" data-role="empty-state" hidden>
+        <!-- Значок появляется только у пустого архива (паспорт Р7). -->
+        <span data-role="empty-icon" hidden></span>
         <b class="ui-empty__title" data-role="empty-title"></b>
         <span class="ui-empty__text" data-role="empty-text"></span>
     </div>
@@ -143,18 +164,22 @@
             <option value="status">Сменить статус</option>
             <option value="script">Сменить скрипт</option>
             <option value="repeatScript">Сменить скрипт для повторных</option>
+            <!-- «Отправить в архив» — ОБЫЧНЫЙ ПУНКТ списка (паспорт Р7): архив
+                 обратим, и выделять его нечем. Массового физического удаления
+                 нет вовсе — оно убрано, а не переименовано. -->
+            <option value="archive">Отправить в архив</option>
         </select>
         <select class="ui-field__control mass-select" data-role="mass-employee" aria-label="Оператор" hidden><option value="">— не назначен —</option></select>
         <select class="ui-field__control mass-select" data-role="mass-status" aria-label="Статус" hidden></select>
         <select class="ui-field__control mass-select" data-role="mass-script" aria-label="Скрипт" hidden></select>
         <select class="ui-field__control mass-select" data-role="mass-repeat-script" aria-label="Скрипт для повторных" hidden></select>
         <button type="button" class="ui-btn" data-role="mass-apply">Применить</button>
-        <!-- Удаление — ОТДЕЛЬНАЯ кнопка (К47), но ТИХАЯ (К125): красная
-             заливка в проекте остаётся за кнопкой подтверждения в окне, которое
-             спрашивает. Здесь она стояла рядом с «Применить» и читалась как
-             равноправное действие. Пятым пунктом в списке действий
-             необратимое выбиралось тем же движением руки, что «Сменить статус». -->
-        <button type="button" class="ui-btn ui-btn--ghost" data-role="mass-delete">Удалить</button>
+        <!-- Здесь была отдельная кнопка «Удалить» (К47, К125). Убрана
+             паспортом Р7: массового физического удаления нет вовсе.
+             Необратимое действие над тысячей записей одним нажатием не должно
+             существовать, и подтверждение не помогает — его нажимают не глядя
+             ровно потому, что нажимали уже сто раз. Вместо него — «Отправить в
+             архив» обычным пунктом списка выше. -->
         <button type="button" class="ui-btn ui-btn--ghost ui-btn--icon ui-btn--row" data-role="mass-clear" aria-label="Сбросить выделение" title="Сбросить выделение"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-close"></use></svg></button>
         <!-- Причина, по которой действие не пойдёт: живёт в полосе и исчезает
              вместе с причиной (К46). -->
