@@ -11,6 +11,7 @@ const auditContext = require('./services/auditContext');
 const { pool } = require('./db');
 const { checkStatusFlagsConfigured } = require('./services/leadCallRules');
 const { runPhoneNormalization } = require('./services/phoneMigration');
+const scheduler = require('./services/scheduler');
 const employeesRouter = require('./routes/employees');
 const documentsRouter = require('./routes/documents');
 const authRouter = require('./routes/auth');
@@ -184,9 +185,31 @@ runMigrations()
         console.error('Не удалось привести номера к единому формату:', err);
     }))
     .then(() => {
-        app.listen(PORT, () => {
+        const server = app.listen(PORT, () => {
             console.log(`API запущен на порту ${PORT}`);
         });
+
+        // РАБОТА ПО РАСПИСАНИЮ (часть 6, В2). Стартует ПОСЛЕ накатки схемы: его
+        // первая же задача — раздача, а она читает статусы воронки, которых на
+        // пустой базе до миграций ещё нет.
+        //
+        // По умолчанию выключен, включается переменной SCHEDULER_ENABLED —
+        // разбор в шапке services/scheduler.js.
+        scheduler.start(pool);
+
+        // ОСТАНОВКА ПО СИГНАЛУ. Служба перезапускается выкаткой
+        // (/usr/local/bin/crm-deploy.sh), systemd шлёт SIGTERM. Без этого
+        // обработчика тик оборвался бы посередине раздачи (ответ куратора И134).
+        //
+        // SIGINT здесь по той же причине: на стенде сервер останавливают
+        // Ctrl+C, и вести себя при этом иначе, чем на бою, он не должен.
+        const shutdown = async (signal) => {
+            console.log(`Получен ${signal}: останавливаюсь`);
+            await scheduler.stop();
+            server.close(() => process.exit(0));
+        };
+        process.on('SIGTERM', () => { shutdown('SIGTERM'); });
+        process.on('SIGINT', () => { shutdown('SIGINT'); });
     })
     .catch(err => {
         console.error('Не удалось накатить схему БД при старте:', err);
