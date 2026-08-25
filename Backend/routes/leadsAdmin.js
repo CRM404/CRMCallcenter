@@ -140,7 +140,17 @@ const BASE_SELECT = `
            COALESCE((SELECT json_agg(lss.funnel_status_id ORDER BY lss.funnel_status_id)
                      FROM lead_script_statuses lss WHERE lss.lead_id = l.id), '[]'::json) AS script_status_ids,
            COALESCE((SELECT json_agg(ldp.employee_id ORDER BY ldp.employee_id)
-                     FROM lead_distribution_pool ldp WHERE ldp.lead_id = l.id), '[]'::json) AS pool_employee_ids
+                     FROM lead_distribution_pool ldp WHERE ldp.lead_id = l.id), '[]'::json) AS pool_employee_ids,
+           -- СКОЛЬКО ДУБЛЕЙ В НЕГО ВЛИТО (часть 5Б). Окно «Отправить в архив»
+           -- открывается в одном из двух состояний — «удалить можно» и «удалить
+           -- нельзя», — и выбрать состояние надо ДО открытия. Спросить об этом
+           -- отдельным запросом неоткуда: маршрута предпросмотра у лида нет, а
+           -- заводить его ради одного числа дороже, чем посчитать здесь.
+           --
+           -- Считается по idx_leads_merged_into — частичному индексу части 4,
+           -- где лежат только слитые строки; на списке в полсотни лидов это
+           -- полсотни обращений к маленькому индексу, а не проход по таблице.
+           (SELECT count(*)::int FROM leads m WHERE m.merged_into_id = l.id) AS merged_count
     FROM leads l
     LEFT JOIN sources s ON s.id = l.source_id
     LEFT JOIN employees e ON e.id = l.employee_id
@@ -214,6 +224,10 @@ function rowToLead(row) {
         archivedActorId: row.archived_actor_id,
         archivedActorKind: row.archived_actor_kind,
         archivedActorName: row.archived_actor_name,
+        // Единственная сегодняшняя помеха физическому удалению лида: подобранные
+        // объекты ушли из помех (Р7-4), комментарии помехой не считаются (И73),
+        // звонки появятся частью 7.
+        mergedCount: row.merged_count || 0,
         createdAt: row.created_at,
         updatedAt: row.updated_at
     };
