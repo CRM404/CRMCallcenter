@@ -12,6 +12,7 @@ const { pool } = require('./db');
 const { checkStatusFlagsConfigured } = require('./services/leadCallRules');
 const { runPhoneNormalization } = require('./services/phoneMigration');
 const scheduler = require('./services/scheduler');
+const eventChannel = require('./services/eventChannel');
 const employeesRouter = require('./routes/employees');
 const documentsRouter = require('./routes/documents');
 const authRouter = require('./routes/auth');
@@ -58,6 +59,15 @@ app.use(express.urlencoded({ extended: false, limit: '64kb' }));
 // Адрес не под /api намеренно: его прописывают на стороне станции, и он к
 // нашему API отношения не имеет — как и страница выдачи ключа туннеля ниже.
 app.use('/ext-event', pbxEventsRouter);
+
+// ЖИВОЙ КАНАЛ СЕРВЕР → БРАУЗЕР (часть 6, В3). Не под /api и ДО контекста аудита
+// по той же причине, что и приёмник событий, только сильнее: подписка живёт
+// часами, и контекст аудита провисел бы ровно столько же на запросе, который
+// ничего не меняет (ответ куратора И136).
+//
+// Потребителя в браузере пока нет — вкладка «Активные» приходит частью 7.
+// Разбор канала и его границ — в шапке services/eventChannel.js.
+app.get('/events', (req, res) => eventChannel.subscribe(req, res));
 
 // КОНТЕКСТ АУДИТА СТАВИТСЯ ДО ВСЕХ МАРШРУТОВ и охватывает запрос целиком —
 // включая то, что маршрут делает после await. Стоит на каждом запросе, а не
@@ -197,6 +207,10 @@ runMigrations()
         // разбор в шапке services/scheduler.js.
         scheduler.start(pool);
 
+        // Сердцебиение канала — СВОИМ таймером (ответ куратора И139):
+        // планировщик по умолчанию выключен, а канал обязан жить и без него.
+        eventChannel.start();
+
         // ОСТАНОВКА ПО СИГНАЛУ. Служба перезапускается выкаткой
         // (/usr/local/bin/crm-deploy.sh), systemd шлёт SIGTERM. Без этого
         // обработчика тик оборвался бы посередине раздачи (ответ куратора И134).
@@ -206,6 +220,7 @@ runMigrations()
         const shutdown = async (signal) => {
             console.log(`Получен ${signal}: останавливаюсь`);
             await scheduler.stop();
+            eventChannel.stop();
             server.close(() => process.exit(0));
         };
         process.on('SIGTERM', () => { shutdown('SIGTERM'); });

@@ -12,6 +12,7 @@
 const express = require('express');
 const { pool } = require('../db');
 const auditContext = require('../services/auditContext');
+const eventChannel = require('../services/eventChannel');
 const { startOfDay, startOfNextDay, zonedParts } = require('../services/appTime');
 const { distributePendingLeads, findNewFunnelStatusId, queueCondition } = require('../services/leadDistribution');
 const { normalizePhone, normalizeForSearch } = require('../services/phoneFormat');
@@ -1087,6 +1088,16 @@ router.post('/:id/archive', async (req, res) => {
               WHERE id = $1
           RETURNING id, archived_at, archived_actor_name`,
             [lead.id, actor.id, actor.kind, actor.name]);
+        // ЖИВОЙ КАНАЛ (часть 6, В3). Единственное настоящее событие, которое
+        // сегодня по нему едет: труба, по которой ни разу не проехал настоящий
+        // груз, проверена не будет (ответ куратора И119).
+        //
+        // Полезной нагрузкой — только идентификатор и время. Канал открыт, и
+        // класть в него телефон значит раздавать его всякому, кто открыл адрес.
+        eventChannel.publish('lead:archived', {
+            id: result.rows[0].id,
+            archivedAt: result.rows[0].archived_at
+        });
         res.json({
             id: result.rows[0].id,
             archivedAt: result.rows[0].archived_at,
@@ -1178,8 +1189,15 @@ router.post('/bulk-archive', async (req, res) => {
                   WHERE id = ANY($1::int[])
                     AND archived_at IS NULL
                     AND merged_into_id IS NULL
-              RETURNING id`,
+              RETURNING id, archived_at`,
                 [ids, actor.id, actor.kind, actor.name]));
+        // В КАНАЛ УХОДИТ СОБЫТИЕ НА КАЖДОГО, а не одно на пачку: подписчик
+        // следит за строками, а не за нашими кнопками, и разница между «один лид
+        // отправили сорок раз» и «сорок лидов ушли разом» ему не видна и не
+        // нужна. Отправляется ПОСЛЕ того, как правка закреплена в базе.
+        for (const row of archived.rows) {
+            eventChannel.publish('lead:archived', { id: row.id, archivedAt: row.archived_at });
+        }
         // Пропущенные названы числом, а не молчанием: человек выделил сорок
         // строк, а в архив ушло тридцать восемь — он обязан это увидеть.
         res.json({ archived: archived.rows.length, skipped: ids.length - archived.rows.length });
