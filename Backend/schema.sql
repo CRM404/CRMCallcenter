@@ -2080,6 +2080,214 @@ CREATE INDEX IF NOT EXISTS idx_leads_archived ON leads (archived_at)
 -- выбрать, чью карточку поднять. Условие в индексе одно, и оно про слияние
 -- (предупреждение куратора при ответе на И84).
 
+-- ===== ЧАСТЬ 7А · ЖУРНАЛ ЗВОНКОВ =============================================
+-- Решение владельца 34: ключ записи — РАЗГОВОР С КЛИЕНТОМ, а не плечо вызова.
+-- АТС считает плечами, и сделать плечо строкой журнала значит превратить один
+-- разговор в три: «сделано звонков» раздуется, средняя длительность поедет,
+-- конверсия просядет на пустом месте. Склеить всё в одну строку без участков —
+-- потерять, кто говорил и сколько (план 4.1).
+--
+-- Отсюда две таблицы: звонок и участки внутри него. Обычно участок один; при
+-- переводе — два и более.
+
+CREATE TABLE IF NOT EXISTS calls (
+    id SERIAL PRIMARY KEY,
+
+    -- КОРЕНЬ ВЫЗОВА. Станция присылает его во всех событиях одного вызова
+    -- (CallID) и по нему же склеиваются плечи. Хранится строкой: для нас это
+    -- непрозрачный идентификатор, наше дело — сравнивать и возвращать.
+    pbx_call_id VARCHAR,
+    -- Идентификатор для управления идущим вызовом (CallAPIID) и идентификатор
+    -- нашей инициации (CallBackID) — второй есть только у звонков, начатых
+    -- нами через API.
+    pbx_api_id VARCHAR,
+    pbx_callback_id VARCHAR,
+
+    -- Направление. Слов два, и перечень закрыт: третьего направления у звонка
+    -- не бывает, а свободная строка однажды приедет с «Out» или «исходящий».
+    direction VARCHAR NOT NULL DEFAULT 'out',
+
+    -- Какой номер видел клиент и по какому звонили ему.
+    our_number VARCHAR,
+    client_phone VARCHAR,
+
+    -- НАШИ СВЯЗИ. Лид запрещает своё удаление, пока есть хоть один звонок
+    -- (план 11.4: «Есть звонки? → запрещено, только архив»). Сотрудник — тем
+    -- более: «звонил оператор №14», у которого не осталось имени, это запись,
+    -- ссылающаяся в пустоту (план 11.2).
+    lead_id INTEGER REFERENCES leads(id) ON DELETE RESTRICT,
+    employee_id INTEGER REFERENCES employees(id) ON DELETE RESTRICT,
+
+    -- ДОБАВОЧНЫЙ — СНИМОК, А НЕ ССЫЛКА. Номер освобождается при выводе
+    -- сотрудника из работы и выдаётся другому (часть 5). Читать его из карточки
+    -- значит показать в звонке трёхмесячной давности того, кто получил номер
+    -- вчера.
+    operator_extension VARCHAR,
+
+    -- ИСХОД ХРАНИТСЯ ДВАЖДЫ, И ЭТО НЕ ИЗБЫТОЧНОСТЬ (ответ куратора И161).
+    -- `outcome` — наш перечень: он переживёт переименование у оператора связи и
+    -- по нему отбирают. `outcome_raw` — строка станции как есть: единственное
+    -- доказательство, когда цифры не сойдутся и начнётся спор, чья ошибка.
+    outcome VARCHAR,
+    outcome_raw VARCHAR,
+
+    -- Состоялся ли разговор. Отдельно от исхода: у «ответили» разговор есть
+    -- почти всегда, но исход приходит от станции, а этот признак — от факта.
+    answered BOOLEAN NOT NULL DEFAULT false,
+    transferred BOOLEAN NOT NULL DEFAULT false,
+
+    -- ВНУТРЕННИЙ ЗВОНОК ЗАПИСЫВАЕТСЯ, НО НЕ СЧИТАЕТСЯ (решение владельца 33).
+    -- Оператор ↔ оператор — это факт работы, и скрывать его нельзя; портить им
+    -- процент дозвона и среднюю длительность — тоже. Строка в списке остаётся,
+    -- из счётчиков и выгрузки исключается (ответ куратора И159).
+    is_internal BOOLEAN NOT NULL DEFAULT false,
+
+    -- Время и длительности. Секунды целым числом: микросекунды станции
+    -- приводятся один раз на входе, services/pbxTime.js.
+    started_at TIMESTAMP,
+    answered_at TIMESTAMP,
+    ended_at TIMESTAMP,
+    wait_seconds INTEGER,
+    talk_seconds INTEGER,
+
+    -- Запись разговора. Идентификатор непрозрачен: наше дело вернуть его
+    -- станции, а не разбирать. Пусто — записи нет вовсе, и кнопки в списке тоже
+    -- нет (ответ куратора И178).
+    record_id VARCHAR,
+
+    -- СНИМКИ НА МОМЕНТ ЗАВЕРШЕНИЯ, А НЕ ССЫЛКИ НА ЛИДА (план 4.3). Поля notes и
+    -- funnel_status_id лежат на лиде и перезаписываются при каждом сохранении:
+    -- подтягивая их, журнал показал бы у всех звонков к одному человеку
+    -- сегодняшний комментарий и сегодняшний статус. Он начал бы переписывать
+    -- собственную историю, и заметить это почти нельзя — цифры-то правильные.
+    --
+    -- Статус хранится ПАРОЙ (ответ куратора И162): имя защищает от
+    -- переименования, идентификатор нужен, чтобы отбирать по статусу, не
+    -- сравнивая строки.
+    funnel_status_id INTEGER REFERENCES lead_funnel_statuses(id) ON DELETE SET NULL,
+    funnel_status_name VARCHAR,
+    notes_snapshot TEXT,
+    -- Номер попытки тоже снимок: leads.call_attempts — сквозной счётчик, он
+    -- растёт, и в записи звонка он должен быть зафиксирован, а не пересчитан.
+    attempt_no INTEGER,
+
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'calls_direction_check') THEN
+        ALTER TABLE calls ADD CONSTRAINT calls_direction_check
+            CHECK (direction IN ('in', 'out'));
+    END IF;
+    -- Перечень исходов закрыт ограничением, а не соглашением. Шесть от станции
+    -- плюс служебный `lost`: строку, висящую активной дольше четырёх часов без
+    -- единого события, закрывает сторож (план 7.3). Без сторожа один сбойный
+    -- звонок остался бы в «Активных» навсегда, и вкладке перестали бы верить.
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'calls_outcome_check') THEN
+        ALTER TABLE calls ADD CONSTRAINT calls_outcome_check
+            CHECK (outcome IS NULL OR outcome IN
+                ('answered', 'busy', 'no_answer', 'cancelled', 'congestion', 'unavailable', 'lost'));
+    END IF;
+END $$;
+
+-- Отборы вкладки «Завершённые»: свежие сверху, по оператору, по лиду, по номеру.
+CREATE INDEX IF NOT EXISTS idx_calls_started ON calls (started_at DESC);
+CREATE INDEX IF NOT EXISTS idx_calls_lead ON calls (lead_id) WHERE lead_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_calls_employee ON calls (employee_id) WHERE employee_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_calls_client_phone ON calls (client_phone);
+-- Склейка событий в звонок идёт по корню вызова, и это самый горячий запрос
+-- приёмника: он выполняется на каждое событие станции.
+CREATE INDEX IF NOT EXISTS idx_calls_pbx_call ON calls (pbx_call_id) WHERE pbx_call_id IS NOT NULL;
+
+-- ----- Участки звонка --------------------------------------------------------
+-- Кто из операторов и сколько говорил ВНУТРИ одного звонка. Разговорное время
+-- делится по операторам: ни один не получает чужие минуты, а общее число
+-- звонков не раздувается.
+CREATE TABLE IF NOT EXISTS call_segments (
+    id SERIAL PRIMARY KEY,
+    -- Класс А по разбору части 5: участок без своего звонка бессмыслен, и
+    -- каскад здесь остаётся. Молчаливым он больше не бывает — попадает в журнал.
+    call_id INTEGER NOT NULL REFERENCES calls(id) ON DELETE CASCADE,
+    -- Порядок участка в цепочке: «Абрамова 1:20 → перевод → Волков 4:05».
+    position INTEGER NOT NULL DEFAULT 1,
+    -- Плечо вызова у станции (SubCallID). Здесь оно на своём месте — участком,
+    -- а не строкой журнала.
+    pbx_sub_call_id VARCHAR,
+    employee_id INTEGER REFERENCES employees(id) ON DELETE RESTRICT,
+    operator_extension VARCHAR,
+    started_at TIMESTAMP,
+    answered_at TIMESTAMP,
+    ended_at TIMESTAMP,
+    talk_seconds INTEGER,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_call_segments_call ON call_segments (call_id, position);
+CREATE INDEX IF NOT EXISTS idx_call_segments_employee
+    ON call_segments (employee_id) WHERE employee_id IS NOT NULL;
+-- Порядок внутри звонка уникален: два участка под одним номером — это ошибка
+-- разбора, и пусть она отобьётся здесь, а не всплывёт кривой цепочкой на экране.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_call_segments_position
+    ON call_segments (call_id, position);
+
+-- ----- Сырые сообщения станции ----------------------------------------------
+-- ЗАЧЕМ ХРАНИТЬ. Когда цифра в журнале не сойдётся, это единственный способ
+-- доказать, чья ошибка — наша или станции. Без них спор с телефонией выиграть
+-- нечем (план 7.5).
+--
+-- СКОЛЬКО ИХ. До полутора десятков на звонок; при сотне звонков в день — около
+-- полутора миллионов строк за полгода. Поэтому таблица сразу помесячными
+-- полками: через шесть месяцев полка выбрасывается целиком и мгновенно, а не
+-- вычищается построчно ночной уборкой на миллионах строк.
+--
+-- ПЕРВИЧНЫЙ КЛЮЧ СОСТАВНОЙ. У разрезанной таблицы он обязан включать ключ
+-- разреза — иначе Postgres откажется его создавать.
+CREATE TABLE IF NOT EXISTS pbx_events (
+    id BIGSERIAL,
+    -- Время события, уже приведённое из микросекунд. По нему же идёт разрез.
+    event_at TIMESTAMP NOT NULL,
+    -- Когда мы его приняли. Расхождение с event_at — первое, что смотрят, когда
+    -- события приходят с опозданием или не приходят вовсе.
+    received_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    event_type VARCHAR,
+    pbx_call_id VARCHAR,
+    pbx_sub_call_id VARCHAR,
+    -- Тело как пришло. JSONB, а не текст: по нему придётся искать, а разбирать
+    -- строку при каждом разборе спора — та же работа, только руками.
+    payload JSONB NOT NULL,
+    PRIMARY KEY (id, event_at)
+) PARTITION BY RANGE (event_at);
+
+CREATE INDEX IF NOT EXISTS idx_pbx_events_call ON pbx_events (pbx_call_id, event_at);
+CREATE INDEX IF NOT EXISTS idx_pbx_events_received ON pbx_events (received_at);
+
+-- Полки на год вперёд и на месяц назад, идемпотентно, тем же приёмом, что у
+-- журнала аудита (ответ куратора И154). Прогоняется при каждом старте — значит
+-- горизонт отодвигается сам, а перезапуск бывает при каждой выкатке.
+--
+-- ПОЛКИ «ПО УМОЛЧАНИЮ» НЕТ, и это то же решение, что у журнала: она приняла бы
+-- запись за пределами горизонта и тем самым запретила бы завести полку на этот
+-- месяц потом — старт сервера падал бы, и чинить пришлось бы руками на бою.
+DO $$
+DECLARE
+    v_start date;
+    v_month date;
+    v_name text;
+BEGIN
+    v_start := date_trunc('month', NOW())::date - INTERVAL '1 month';
+    FOR i IN 0..13 LOOP
+        v_month := (v_start + (i || ' month')::interval)::date;
+        v_name := 'pbx_events_' || to_char(v_month, 'YYYY_MM');
+        IF NOT EXISTS (SELECT 1 FROM pg_class WHERE relname = v_name) THEN
+            EXECUTE format(
+                'CREATE TABLE %I PARTITION OF pbx_events FOR VALUES FROM (%L) TO (%L)',
+                v_name, v_month, (v_month + INTERVAL '1 month')::date);
+        END IF;
+    END LOOP;
+END $$;
+
 -- ----- Подключение триггера ко всем таблицам --------------------------------
 -- Перебором, а не списком: новая таблица подключается САМА, при первом же
 -- старте сервера после её появления. Иначе про аудит пришлось бы помнить при
@@ -2091,7 +2299,14 @@ CREATE INDEX IF NOT EXISTS idx_leads_archived ON leads (archived_at)
 --                           в самих записях партии;
 --   applied_migrations    — машинный учёт накатанных миграций, к человеку
 --                           отношения не имеет, строк даст много, смысла ноль
---                           (решение куратора, ответ 9 по Р5).
+--                           (решение куратора, ответ 9 по Р5);
+--   pbx_events и его полки — сырые сообщения станции. Их до полутора десятков
+--                           НА КАЖДЫЙ звонок и полтора миллиона за полгода;
+--                           человек их не правит вовсе, а журнал изменений
+--                           хранится бессрочно. Сама таблица разрезана и в
+--                           перебор не попадает (relkind = 'p'), но ПОЛКИ —
+--                           обычные таблицы, и без этой строки триггер повесился
+--                           бы на каждую.
 --
 -- Таблицы настроек и правил аудита В ЖУРНАЛ ПИШУТСЯ, и это отдельное решение:
 -- изменение настройки объясняет поведение системы, а «кто и когда решил
@@ -2106,8 +2321,9 @@ BEGIN
           JOIN pg_namespace n ON n.oid = c.relnamespace
          WHERE n.nspname = 'public'
            AND c.relkind = 'r'
-           AND c.relname NOT IN ('audit_log', 'audit_batches', 'applied_migrations')
+           AND c.relname NOT IN ('audit_log', 'audit_batches', 'applied_migrations', 'pbx_events')
            AND c.relname NOT LIKE 'audit_log_%'
+           AND c.relname NOT LIKE 'pbx_events_%'
     LOOP
         EXECUTE format('DROP TRIGGER IF EXISTS audit_trg ON %I', v_table.name);
         EXECUTE format(
