@@ -60,6 +60,8 @@ function createInstance(container, ctx) {
         batchLabel: null,
         // Пресет периода тулбара. 'custom' — когда даты выбраны в окне.
         period: '7',
+        // Порядок списка. Свежие сверху — умолчание паспорта.
+        sort: 'desc',
         meta: { tables: [], people: [], services: [], ops: [] },
         rows: [],
         total: 0,
@@ -128,17 +130,32 @@ function createInstance(container, ctx) {
             // пару полей в тулбаре: список тулбара и поля окна держат одно
             // состояние, и второй пары там быть не должно.
             if (value === 'custom') { openFiltersModal(); return; }
+            // ПРЕСЕТ НЕ ПЕРЕВОДИТСЯ В ДАТЫ ЗДЕСЬ (К204). Прежняя редакция это
+            // делала — и брала «сегодня» из `state.filters.to`, который сама же
+            // обнуляла строкой выше. Ветка не срабатывала ни разу: в запросе не
+            // было ни одной даты, и все три пресета показывали одно и то же.
+            // Теперь на сервер уходит число дней, а даты считает он.
             state.period = value;
-            const days = Number(value);
+            state.filters.from = null;
             state.filters.to = null;
-            state.filters.from = days === 1 ? todayFromServer() : null;
-            state.filters.days = days;
             load();
         });
 
         $('[data-role="page"]').addEventListener('change', (e) => {
             state.filters.page = e.target.value || null;
             load();
+        });
+
+        // СОРТИРУЕТСЯ ТОЛЬКО ВРЕМЯ. Признак сортируемого заголовка стоял в
+        // разметке с самого начала, а обработчика не было вовсе: нажатие не
+        // делало ничего, и порядок не менялся (К207). Признак, который ничего
+        // не делает, хуже отсутствия признака.
+        const sortHead = $('[data-role="sort-when"]');
+        sortHead.addEventListener('click', toggleSort);
+        sortHead.addEventListener('keydown', (e) => {
+            if (e.key !== 'Enter' && e.key !== ' ') return;
+            e.preventDefault();   // Пробел иначе прокручивает панель
+            toggleSort();
         });
 
         $('[data-role="more"]').addEventListener('click', () => load(true));
@@ -155,22 +172,30 @@ function createInstance(container, ctx) {
             apply(data, Boolean(more));
             render(data.hasMore);
         } catch (err) {
-            if (!isAbort(err)) ctx.toast(err.message, 'error');
+            // ТОСТОВ У РАЗДЕЛА НЕТ ВОВСЕ (К209, паспорт Р5). Отказ чтения
+            // показывает полоса слоя: её вешает оболочка на любой неудавшийся
+            // запрос панели, и живёт полоса, пока живёт причина. Тост же гаснет
+            // через три секунды — и вместе с ним уходит единственное
+            // объяснение пустого списка.
+            if (!isAbort(err)) console.error('Журнал изменений: список не загрузился', err);
         }
     }
 
-    // Период тулбара переводится в даты ЗДЕСЬ, но «сегодня» берётся с сервера:
-    // часы у руководителя могут стоять в другом поясе.
+    function toggleSort() {
+        state.sort = state.sort === 'desc' ? 'asc' : 'desc';
+        $('[data-role="sort-icon"]')
+            .setAttribute('href', state.sort === 'asc' ? '#ui-ic-sort-asc' : '#ui-ic-sort-desc');
+        // Порядок сменился — курсор от прежнего порядка недействителен.
+        state.cursor = null;
+        load();
+    }
+
+    // ПЕРИОД УХОДИТ ПРЕСЕТОМ, ДАТЫ СЧИТАЕТ СЕРВЕР. «Сегодня» известно верно
+    // только там: часы у руководителя могут стоять в другом поясе, а границу
+    // суток задаёт рабочий пояс системы, а не браузер.
     function queryFilters() {
-        const f = { ...state.filters };
-        if (state.period !== 'custom' && !f.from && !f.to) {
-            const days = Number(state.period);
-            const today = todayFromServer();
-            if (today) {
-                f.to = today;
-                f.from = shiftIso(today, -(days - 1));
-            }
-        }
+        const f = { ...state.filters, sort: state.sort };
+        if (state.period !== 'custom' && !f.from && !f.to) f.days = Number(state.period);
         return f;
     }
 
@@ -248,6 +273,13 @@ function createInstance(container, ctx) {
         $('[data-role="empty-text"]').textContent = filtered
             ? 'По выбранному отбору изменений нет. Снимите часть условий — возможно, ищете в другом разделе или в другой таблице.'
             : 'За выбранный период записей в журнале нет. Это не сбой: в системе просто не было изменений.';
+        // ЗНАЧОК — ВТОРАЯ ПОЛОВИНА ТОГО ЖЕ РАЗЛИЧЕНИЯ (К208). Он стоял в
+        // разметке жёстко, и «Ничего не найдено» выходило под значком журнала,
+        // то есть под знаком второго случая: пусто не потому, что не нашли, а
+        // потому, что менять было нечего.
+        $('[data-role="empty-icon"]')
+            .setAttribute('href', filtered ? '#ui-ic-search' : '#ui-ic-history');
+
         const action = $('[data-role="empty-action"]');
         action.textContent = filtered ? 'Сбросить отбор' : 'Показать за 30 дней';
         action.onclick = filtered ? resetFilters : showThirtyDays;
@@ -270,9 +302,23 @@ function createInstance(container, ctx) {
 
     // ------------------------------------------------------------ отбор
 
+    /**
+     * Есть ли отбор ПОМИМО периода.
+     *
+     * ПЕРИОД СЮДА НЕ ВХОДИТ, и это видно по самим текстам паспорта: первое
+     * пустое состояние говорит «За выбранный период записей в журнале нет», а
+     * его заголовок склоняется по пресету — «За сегодня», «За месяц». Пока
+     * период считался отбором, эти слова было не показать вовсе: любой пресет,
+     * кроме умолчания, уводил на «Ничего не найдено», а умолчание на рабочем
+     * стенде пустым не бывает. Второе состояние про другое — «Снимите часть
+     * условий», и снимать там нечего, если условие одно и это период.
+     *
+     * Нашлось при проверке К204: пока период не доходил до сервера, разницы не
+     * было видно вообще.
+     */
     function hasAnyFilter() {
         const f = state.filters;
-        return Boolean(!state.periodIsDefault || f.page || f.table || f.op || f.actorId
+        return Boolean(f.page || f.table || f.op || f.actorId
             || f.actorKind || f.actorName || f.batchOnly || f.batchId || f.search);
     }
 
@@ -378,9 +424,12 @@ function createInstance(container, ctx) {
      */
     function filterByBatch(batchId, summary) {
         state.filters.batchId = batchId;
-        state.batchLabel = summary && summary.title
-            ? `${summary.title}${summary.startedAt ? `, ${shortDateTime(summary.startedAt)}` : ''}`
-            : 'выбранная';
+        // ПОДПИСЬ БЕРЁТСЯ ИЗ ТОГО, ЧТО ЕСТЬ. У партии может не быть своей
+        // строки — тогда нет и подписи, зато есть время начала из журнала;
+        // «Партия: выбранная» не говорит человеку ничего о том, что он открыл.
+        const when = summary && summary.startedAt ? shortDateTime(summary.startedAt) : null;
+        const title = summary && summary.title ? summary.title : 'массовая операция';
+        state.batchLabel = when ? `${title}, ${when}` : title;
         load();
     }
 
@@ -463,6 +512,36 @@ function createInstance(container, ctx) {
         filtersModal.result.then(() => { filtersModal = null; });
     }
 
+    /**
+     * Отказ выгрузки: в отборе больше строк, чем уходит в файл.
+     *
+     * ОКНО, А НЕ ТОСТ. Это отказ действия, которое человек запросил сам, и
+     * ответ на него — число, которое надо прочесть и сравнить со своим отбором.
+     * Тост на три секунды для этого не годится.
+     */
+    function showTooMany(data) {
+        const body = document.createElement('div');
+        // Абзац без класса: отступы абзаца в теле окна задаёт слой
+        // (`.ui-modal__body p`), своего правила раздел не заводит.
+        const p = document.createElement('p');
+        p.textContent = `Отобрано строк: ${count(data.total)}. Выгрузка отдаёт не больше `
+            + `${count(data.limit)} — сузьте период или отбор, и файл соберётся.`;
+        body.appendChild(p);
+
+        const modal = openModal({
+            title: 'Файл не собран',
+            sub: 'В отборе больше строк, чем уходит в файл',
+            body,
+            scope: container.querySelector('.hi-section') || container,
+            actions: [{ label: 'Понятно' }]
+        });
+        modal.result.catch(() => {});
+    }
+
+    function count(n) {
+        return Number(n).toLocaleString('ru-RU');
+    }
+
     function currentAuthorValue() {
         const f = state.filters;
         if (f.actorId) return `id:${f.actorId}`;
@@ -492,6 +571,10 @@ function createInstance(container, ctx) {
         try {
             const data = await fetchHistoryForExport(ctx.api, queryFilters());
             if (!alive) return;
+            // ОТКАЗ ПО ПОТОЛКУ — ОКНОМ С ЧИСЛОМ, а не молча урезанным файлом.
+            // Человек должен узнать, сколько он просил и сколько отдаётся: без
+            // числа «сузьте отбор» — совет вслепую.
+            if (data.tooMany) { showTooMany(data); return; }
             const { buildWorkbook } = await import('./historyExport.js');
             buildWorkbook(data.rows, queryFilters());
             // ОТМЕТКА — ПОСЛЕ ТОГО, КАК ФАЙЛ СОБРАН. Отметиться о выгрузке,
@@ -515,12 +598,6 @@ function createInstance(container, ctx) {
         const found = registry.find((s) => s.key === key);
         if (found) return found.title;
         return key === 'operator' ? 'Оператор' : key;
-    }
-
-    // «Сегодня» знает сервер: он же подставляет период по умолчанию и он же
-    // говорит, отличается ли выбранный период от умолчания.
-    function todayFromServer() {
-        return state.filters.to || null;
     }
 
     function dateField(parent, label, value) {
@@ -600,11 +677,4 @@ function humanDate(value) {
     if (Number.isNaN(d.getTime())) return String(value);
     return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })
         .replace(/\s*г\.?$/, '');
-}
-
-function shiftIso(iso, days) {
-    const [y, m, d] = String(iso).split('-').map(Number);
-    const moved = new Date(Date.UTC(y, m - 1, d + days));
-    const pad = (n) => String(n).padStart(2, '0');
-    return `${moved.getUTCFullYear()}-${pad(moved.getUTCMonth() + 1)}-${pad(moved.getUTCDate())}`;
 }

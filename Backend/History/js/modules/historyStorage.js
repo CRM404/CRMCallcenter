@@ -41,6 +41,12 @@ export function markExport(api, rows, filters) {
 
 function toQuery(f) {
     return {
+        // ПРЕСЕТ ПЕРИОДА УХОДИТ ЧИСЛОМ ДНЕЙ, А НЕ ПАРОЙ ДАТ (К204): «сегодня»
+        // знает сервер, и он же переводит пресет в даты. Даты идут только те,
+        // что выбраны руками в окне отбора.
+        days: f.days || undefined,
+        // Порядок — один на список, колонка у него одна: «Когда».
+        sort: f.sort || undefined,
         from: f.from || undefined,
         to: f.to || undefined,
         page: f.page || undefined,
