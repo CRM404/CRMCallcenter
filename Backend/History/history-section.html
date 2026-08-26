@@ -1,0 +1,111 @@
+<!-- Фрагмент раздела «История изменений». Грузится оболочкой при первом
+     открытии панели и кэшируется.
+
+     ВИД — ИЗ СЛОЯ ЦЕЛИКОМ. Шапка, чипы, тулбар, плашка, таблица, подвал,
+     пустое состояние и полоса отказа взяты как есть: .ui-page-head,
+     .ui-chips, .ui-toolbar, .ui-note, .ui-table, .ui-table-foot, .ui-empty,
+     .ui-load-error. Раздел объявляет только пятнадцать своих классов hi-*.
+
+     КОЛОНКИ ДЕЙСТВИЙ НЕТ ВОВСЕ. Журнал только на чтение: делать со строкой
+     нечего, поэтому нет ни выделения строк, ни массовой полосы, ни колонки
+     кнопок. Откатить изменение отсюда нельзя — это подтверждённое решение,
+     а не пропуск.
+
+     ID ЗДЕСЬ НЕТ НИ ОДНОГО: в документе живут две панели, и совпавший id
+     связал бы метку с чужим полем.
+-->
+
+<div class="hi-section">
+
+    <div class="ui-page-head">
+        <h2 class="ui-page-head__title">История изменений</h2>
+        <span class="ui-page-head__sub">Кто, когда и что поменял</span>
+        <span class="ui-page-head__acts">
+            <button type="button" class="ui-btn ui-btn--ghost" data-role="filters-btn"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-filter"></use></svg>Фильтры</button>
+            <button type="button" class="ui-btn ui-btn--ghost" data-role="export-btn"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-download"></use></svg>Выгрузить</button>
+        </span>
+    </div>
+
+    <dl class="ui-chips ui-page-chips">
+        <div class="ui-chip"><dd class="ui-chip__value" data-role="stat-changes">0</dd><dt class="ui-chip__label">Изменений</dt></div>
+        <div class="ui-chip"><dd class="ui-chip__value" data-role="stat-records">0</dd><dt class="ui-chip__label">Затронуто записей</dt></div>
+        <!-- ЧИП ПРЕДУПРЕЖДАЮЩИЙ, и это не украшение: две партии за день — это
+             две строки, за которыми стоят тысячи записей. Ровно этого не видно
+             в числе «Изменений», и ровно это меняет смысл всего, что человек
+             читает ниже. -->
+        <div class="ui-chip ui-chip--warn"><dd class="ui-chip__value" data-role="stat-batches">0</dd><dt class="ui-chip__label">Массовых операций</dt></div>
+    </dl>
+
+    <!-- Тулбар: поиск и два списка. Период стоит здесь, потому что его меняют
+         чаще всего; список тулбара и поле окна держат одно состояние. -->
+    <div class="ui-toolbar">
+        <div class="ui-field hi-search">
+            <input type="search" class="ui-field__control" data-role="search"
+                   placeholder="Поиск по записи: номер, фамилия, телефон" aria-label="Поиск по записи">
+        </div>
+        <div class="ui-field">
+            <select class="ui-field__control" data-role="period" aria-label="Период">
+                <option value="1">Сегодня</option>
+                <option value="7" selected>За 7 дней</option>
+                <option value="30">За 30 дней</option>
+                <option value="custom">Произвольный период…</option>
+            </select>
+        </div>
+        <div class="ui-field">
+            <select class="ui-field__control" data-role="page" aria-label="Раздел">
+                <option value="">Все разделы</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="ui-fchips" data-role="filter-chips" hidden></div>
+
+    <!-- Строка о выгрузке стоит МЕЖДУ тулбаром и таблицей — между кнопкой и
+         данными, которые она отдаёт. Плашка без вида: это не тревога, а
+         правило. Сказать это один раз честнее, чем считать, что все помнят. -->
+    <div class="ui-note hi-note">
+        <svg class="ui-ic ui-ic--sm ui-note__icon" aria-hidden="true"><use href="#ui-ic-info"></use></svg>
+        <div class="ui-note__body">
+            <div class="ui-note__text">Выгрузка отдаёт ровно то, что видно сейчас: тот же отбор и те же три уровня. <b>Дальше файл живёт по своим правилам</b> — в нём те же данные о людях, что в самой базе, а файл копируют, пересылают и забывают.</div>
+        </div>
+    </div>
+
+    <div class="ui-table-wrap" data-role="table-wrap">
+        <!-- Таблица НЕ широкая: .ui-table--wide не ставится, содержимое
+             переносится по словам, горизонтальной прокрутки у раздела нет ни на
+             одной ширине. -->
+        <table class="ui-table">
+            <thead>
+                <tr>
+                    <th class="ui-table__sortable" data-role="sort-when">Когда <svg class="ui-ic ui-ic--xs ui-table__sort-icon" aria-hidden="true"><use href="#ui-ic-sort-desc"></use></svg></th>
+                    <th>Кто</th>
+                    <th class="hi-col-page">Раздел</th>
+                    <th>Запись</th>
+                    <th>Что изменилось</th>
+                </tr>
+            </thead>
+            <tbody data-role="history-body"></tbody>
+        </table>
+    </div>
+
+    <div class="ui-table-foot" data-role="foot" hidden>
+        <span data-role="shown"></span>
+        <button type="button" class="ui-btn ui-btn--ghost" data-role="more" hidden>Показать ещё</button>
+    </div>
+
+    <!-- ДАТА ВКЛЮЧЕНИЯ ЖУРНАЛА СТОИТ НА ЭКРАНЕ ВСЕГДА. Без неё отсутствие
+         записей читается как «никто ничего не трогал», и журнал начинает врать
+         в самом чувствительном месте — там, где по нему судят о человеке. -->
+    <p class="ui-table-note">Реквизиты журнал хранит последними четырьмя знаками, пароли и файлы — только фактом изменения. Это правило таблицы правил, а не решение экрана: значений, которых нет в журнале, экран показать не может.</p>
+    <p class="ui-table-note" data-role="started-note"></p>
+
+    <!-- Два пустых состояния раздела. Третье — во вкладке карточки, оно там и
+         живёт: у каждого своя причина и свой следующий шаг. -->
+    <div class="ui-empty" data-role="empty" hidden>
+        <span class="ui-empty__icon"><svg class="ui-ic ui-ic--lg" aria-hidden="true"><use href="#ui-ic-history"></use></svg></span>
+        <div class="ui-empty__title" data-role="empty-title"></div>
+        <div class="ui-empty__text" data-role="empty-text"></div>
+        <button type="button" class="ui-btn ui-btn--secondary ui-empty__action" data-role="empty-action"></button>
+    </div>
+
+</div>

@@ -463,7 +463,7 @@ async function selectPage(whereSql, params, filters, collapse) {
                l.id, l.changed_at, l.op, l.table_name, l.record_id, l.record_title,
                l.actor_employee_id, l.actor_kind, l.actor_name, l.page, l.batch_id,
                l.changes, NULL::int AS batch_rows, NULL::text AS batch_title,
-               NULL::text AS batch_file
+               NULL::text AS batch_file, NULL::varchar AS batch_kind
           FROM audit_log l
          WHERE ${whereSql}${collapse ? ' AND l.batch_id IS NULL' : ''}`;
 
@@ -475,7 +475,8 @@ async function selectPage(whereSql, params, filters, collapse) {
                NULL::int AS actor_employee_id, 'service'::varchar AS actor_kind,
                max(b.title) AS actor_name, max(l.page) AS page, l.batch_id,
                '[]'::jsonb AS changes, count(*)::int AS batch_rows,
-               max(b.title) AS batch_title, max(b.file_name) AS batch_file
+               max(b.title) AS batch_title, max(b.file_name) AS batch_file,
+               max(b.kind) AS batch_kind
           FROM audit_log l
           LEFT JOIN audit_batches b ON b.id = l.batch_id
          WHERE ${whereSql} AND l.batch_id IS NOT NULL
@@ -504,10 +505,12 @@ function toRow(r) {
         page: r.page,
         batchId: r.batch_id,
         batch: r.kind === 'batch'
-            ? { rows: r.batch_rows, title: r.batch_title, fileName: r.batch_file }
+            ? { rows: r.batch_rows, title: r.batch_title, fileName: r.batch_file, kind: r.batch_kind }
             : null,
         changes: Array.isArray(r.changes) ? r.changes : [],
-        card: null
+        card: null,
+        // Проставляется в attachCards и только для строк, чью запись искали.
+        deleted: false
     };
 }
 
@@ -602,11 +605,18 @@ async function attachCards(rows) {
     }
 
     plan.forEach((p) => {
-        if (!p.id) return;
+        // Владельца не нашли — значит связочная строка удалена вместе со своей
+        // записью. Ссылки нет, и сказать про это можно честно.
+        if (!p.id) { p.row.deleted = true; return; }
         const set = alive.get(p.table);
-        if (!set || !set.has(String(p.id))) return;
+        if (!set || !set.has(String(p.id))) { p.row.deleted = true; return; }
         p.row.card = { section: p.section, id: Number(p.id) };
     });
+
+    // ПРИЗНАК «УДАЛЕНА» СТАВИТСЯ ТОЛЬКО ТАМ, ГДЕ ЗАПИСЬ ИСКАЛИ. У таблиц без
+    // карточки — справочников, настроек, самих правил аудита — мы её не искали
+    // вовсе, и молчание здесь единственный честный ответ: экран не вправе
+    // объявлять удалённым всё, во что нельзя перейти.
 }
 
 // ---------------------------------------------------------------- мелочи

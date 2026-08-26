@@ -1,0 +1,141 @@
+/* --- History/css/history-light.css: раскладка раздела «История изменений» --
+ *
+ * ПЯТНАДЦАТЬ СОБСТВЕННЫХ КЛАССОВ, все с приставкой hi-, все внутри
+ * .hi-section (паспорт Р5, карта классов). Своих кнопок, полей, окон, пилюль,
+ * таблиц, чипов, вкладок и пустых состояний раздел не объявляет ни одного:
+ * всё перечисленное берётся из слоя как есть.
+ *
+ * НОВОГО В СЛОЕ РАЗДЕЛ НЕ ЗАВОДИТ. Ссылка .ui-link описана паспортом этого
+ * пункта, но объявлена частью 7Б (Shell/ui/link.css): узел нужен первому, кто
+ * собрал экран, а первой собрала «Звонки». Второго объявления здесь нет — это
+ * было бы К36 второй раз. Плашка .ui-note приехала частью 1Б.
+ *
+ * ГЛОБАЛЬНЫХ СЕЛЕКТОРОВ ПО АТРИБУТУ РАЗДЕЛ НЕ ОБЪЯВЛЯЕТ — К83. Правил к чужим
+ * именам здесь тоже нет.
+ *
+ * ГОЛЫХ ЧИСЕЛ ЧЕТЫРЕ, и все объяснены по месту: отступ подчёркивания ссылки
+ * живёт в слое, здесь остаются зазор списка полей 3, отступы кнопки разворота
+ * и боковой отступ развёрнутой строки 11.
+ */
+
+/* Раздел меряет себя по ПАНЕЛИ, а не по окну: панель делится пополам и
+ * сворачивается, и медиазапрос об этом не знает.
+ */
+.hi-section { container-type: inline-size; }
+
+/* Поиск занимает остаток строки тулбара; списки периода и раздела стоят справа
+ * от него на ширине из слоя (.ui-toolbar select).
+ */
+.hi-search { flex: 1 1 260px; min-width: 0; }
+
+/* Плашка о выгрузке стоит между тулбаром и таблицей, и отбить её от таблицы —
+ * забота раздела: у узла слоя своих отступов нет. Класс, а не селектор по
+ * .ui-note внутри раздела: правило по чужому классу — это правка слоя из
+ * раздела, сделанная украдкой (родня К83).
+ */
+.hi-note { margin-bottom: var(--ui-space-4); }
+
+/* ----- Ячейка «Что изменилось» -----
+ * Список изменившихся полей одной записи. Больше трёх полей — остальные под
+ * кнопкой: строка журнала не должна расти вниз на двадцать полей импорта.
+ */
+.hi-changes {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    margin: 0;
+    min-width: 0;
+}
+
+/* Одна строка: имя поля, значения, признак уровня. Значок стоит ПЕРЕД именем
+ * поля, а не после значений: он объясняет, почему значений нет, и должен быть
+ * прочитан раньше их отсутствия.
+ */
+.hi-change {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: var(--ui-space-2);
+    font-size: var(--ui-text-sm);
+    line-height: var(--ui-line-base);
+}
+.hi-change > .ui-ic { align-self: center; }
+
+/* Имя поля — человеческое, из расшифровки. Двоеточие ставит ::after, а не
+ * разметка: это знак препинания подписи, а не часть имени.
+ */
+.hi-name { color: var(--ui-color-ink-soft); }
+.hi-name::after { content: ':'; }
+
+/* Было и стало. Прежнее значение приглушено, новое — обычным цветом текста:
+ * глаз ищет то, что теперь, а не то, что было.
+ */
+.hi-old { color: var(--ui-color-ink-faint); }
+.hi-arrow { color: var(--ui-color-ink-faint); }
+.hi-new { color: var(--ui-color-ink); font-weight: var(--ui-weight-medium); }
+
+/* Уровень «только факт»: значения нет, и это сказано словами, а не пустотой. */
+.hi-fact { color: var(--ui-color-ink-faint); }
+
+/* Переименованная колонка: расшифровки нет, показываем как есть моноширинным,
+ * чтобы техническое имя не читалось как русское название поля.
+ */
+.hi-raw { font-family: var(--ui-font-mono); font-size: var(--ui-text-xs); }
+
+/* ----- Кнопка разворота -----
+ * Та же геометрия и тот же приём, что у разворота перевода в «Звонках»: строка
+ * раскрывается ВНИЗ, значок поворачивается.
+ */
+.hi-more {
+    align-self: flex-start;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--ui-space-1);
+    margin-top: 2px;
+    padding: 1px 7px;
+    border: 1px solid var(--ui-color-line-strong);
+    border-radius: var(--ui-radius-lg);
+    background: transparent;
+    color: var(--ui-color-ink-soft);
+    font-family: inherit;
+    font-size: var(--ui-text-2xs);
+    font-weight: var(--ui-weight-bold);
+    cursor: pointer;
+}
+.hi-more:hover { background: var(--ui-color-wash-hover); color: var(--ui-color-ink); }
+.hi-more:focus-visible { outline: 2px solid var(--ui-color-accent); outline-offset: 1px; }
+.hi-more .ui-ic { width: var(--ui-icon-xs); height: var(--ui-icon-xs); transition: transform var(--ui-dur-fast); }
+.hi-more[aria-expanded="true"] .ui-ic { transform: rotate(180deg); }
+
+/* ----- Развёрнутая строка -----
+ * Продолжение той же записи: подложка утоплена, чтобы было видно, что это не
+ * соседняя строка журнала.
+ */
+.hi-detail > td {
+    background: var(--ui-color-surface-sunken);
+    padding: var(--ui-space-4) 11px;
+}
+.hi-detail .hi-changes { gap: var(--ui-space-1); }
+
+/* Сводка партии внутри развёрнутой строки: что именно приехало. Пять тысяч
+ * строк сюда не разворачиваются никогда — партия открывается отбором.
+ */
+.hi-batch {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--ui-space-4);
+    font-size: var(--ui-text-sm);
+    color: var(--ui-color-ink-soft);
+}
+.hi-batch b { color: var(--ui-color-ink); font-weight: var(--ui-weight-bold); }
+
+/* Единственная точка перелома раздела. Медиазапросов — ноль. */
+@container (max-width: 720px) {
+    .hi-search { flex: 1 1 100%; }
+    /* Колонка «Раздел» уходит: она отвечает на «где это делали», а это чаще
+     * всего видно по самой записи. «Кто» и «Что изменилось» не убираются
+     * никогда — без них журнал перестаёт быть журналом.
+     */
+    .hi-col-page { display: none; }
+}

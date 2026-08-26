@@ -61,7 +61,14 @@ export const registry = [
     //
     // Строка стоит ПОСЛЕДНЕЙ, и порядок плиток задаётся порядком строк. Раздел
     // «История изменений» (часть 8) встанет после неё восьмым.
-    { key: 'calls',      title: 'Звонки',     subtitle: 'смена и разговоры',       icon: 'calls',      module: '/js/modules/callsApp.js', template: '/calls-section.html', styles: '/css/calls-light.css', skeleton: 'table' }
+    { key: 'calls',      title: 'Звонки',     subtitle: 'смена и разговоры',       icon: 'calls',      module: '/js/modules/callsApp.js', template: '/calls-section.html', styles: '/css/calls-light.css', skeleton: 'table' },
+    // ВОСЬМОЙ РАЗДЕЛ, второй без legacyUrl: старой страницы у журнала не было
+    // никогда — до этой части его читали только запросами к базе.
+    //
+    // Подпись плитки в формате соседей, строчными. Паспортная фраза «Кто,
+    // когда и что поменял» с заглавной стоит подписью раздела внутри панели —
+    // то же правило, что у «Звонков» (ответ куратора И171).
+    { key: 'history',    title: 'История изменений', subtitle: 'кто, когда и что поменял', icon: 'history', module: '/js/modules/historyApp.js', template: '/history-section.html', styles: '/css/history-light.css', skeleton: 'table' }
 ];
 
 const STORAGE_KEY = 'shellDesktopState';
