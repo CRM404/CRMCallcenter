@@ -132,10 +132,6 @@
    не своим классом. */
 .leads-wrap .ui-field--error .pick-empty { display: none; }
 .leads-wrap .lead-script-add + .ui-note { margin-top: var(--ui-space-4); }
-/* Подсказка раздела прижата к заголовку: у шапки со счётчиком свой отступ
-   снизу, и без этого подсказка отходила бы от заголовка дальше, чем от
-   наборов, к которым относится. */
-.leads-wrap .form-section-head + .section-hint { margin-top: -6px; }
 
 /* Офферы: первый + счётчик остальных */
 .leads-wrap .offer-more { display: inline-block; margin-left: 6px; font-size: 11px; font-weight: 700; color: var(--ink-soft); background: rgba(96, 112, 148, .14); padding: 2px 7px; border-radius: 20px; cursor: default; }

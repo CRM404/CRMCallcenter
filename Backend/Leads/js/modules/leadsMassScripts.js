@@ -24,18 +24,18 @@ function el(tag, className, text) {
     return node;
 }
 
-// Русское склонение только там, где оно на экране: «1 лида» читается как ошибка
-// системы, а не как число.
+// Склонение в РОДИТЕЛЬНОМ падеже, и это не придирка: оба места, где оно нужно,
+// стоят после предлога — «Скрипты ДЛЯ 24 лидов» и «У 9 лидов из 24». Предлог
+// тянет за собой всё числительное («для двадцати четырёх», «у девяти»), и
+// существительное при нём всегда множественное: «для 2 лида» — ошибка, хотя
+// само по себе «2 лида» верно.
+//
+// Единственное число остаётся у единицы, кроме одиннадцати: «для 21 лида», но
+// «для 11 лидов».
 function leadsWord(count) {
     const tail = count % 100;
-    if (tail >= 11 && tail <= 14) return 'лидов';
-    switch (count % 10) {
-        case 1: return 'лид';
-        case 2:
-        case 3:
-        case 4: return 'лида';
-        default: return 'лидов';
-    }
+    if (count % 10 === 1 && tail !== 11) return 'лида';
+    return 'лидов';
 }
 
 /**
@@ -65,8 +65,14 @@ export async function openMassScriptPairs({ scope, ids, scripts, statuses, stora
         const note = el('div', 'ui-note ui-note--warn');
         note.innerHTML = icon('warn', 'sm', 'ui-note__icon');
         const noteBody = el('div', 'ui-note__body');
-        noteBody.append(el('div', 'ui-note__text',
-            `У ${preview.withPairs} ${leadsWord(preview.withPairs)} из ${preview.total} скрипты уже назначены. Они будут заменены целиком, а не дополнены.`));
+        // ЧИСЛО — ЖИРНЫМ (К194): «9 лидов из 24» — единственное, ради чего эта
+        // плашка вообще есть. Остальное в ней — объяснение к нему.
+        const noteText = el('div', 'ui-note__text');
+        noteText.append(
+            document.createTextNode('У '),
+            el('b', '', `${preview.withPairs} ${leadsWord(preview.withPairs)} из ${preview.total}`),
+            document.createTextNode(' скрипты уже назначены. Они будут заменены целиком, а не дополнены.'));
+        noteBody.append(noteText);
         note.appendChild(noteBody);
         body.appendChild(note);
     }

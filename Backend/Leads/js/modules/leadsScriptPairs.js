@@ -252,13 +252,19 @@ export function createScriptPairs(root, { createPickList, onCountChange = null }
         // черты — «Автоответчик / голосовая почта», — и перечисление через
         // запятую распалось бы на девять кусков вместо пяти.
         const names = missing.map((s) => s.statusName).join(' · ');
+        // ПЕРЕЧЕНЬ — ЖИРНЫМ, и это не украшение (К194). Вся работа плашки —
+        // назвать, КАКИЕ именно статусы не покрыты; без выделения пять названий
+        // тонут в абзаце из четырёх строк, и человек читает «что-то не
+        // покрыто» вместо списка.
         const head = missing.length === 1
-            ? `Ни один скрипт не открывается на статусе ${names}.`
-            : `Ни один скрипт не открывается на статусах: ${names}.`;
+            ? 'Ни один скрипт не открывается на статусе '
+            : 'Ни один скрипт не открывается на статусах: ';
         missNote.innerHTML = icon('warn', 'sm', 'ui-note__icon');
         const body = el('div', 'ui-note__body');
-        body.append(el('div', 'ui-note__title', TEXTS.missTitle),
-            el('div', 'ui-note__text', `${head} ${TEXTS.missTail}`));
+        const text = el('div', 'ui-note__text');
+        text.append(document.createTextNode(head), el('b', '', names),
+            document.createTextNode(`. ${TEXTS.missTail}`));
+        body.append(el('div', 'ui-note__title', TEXTS.missTitle), text);
         missNote.appendChild(body);
         missNote.hidden = false;
     }
