@@ -38,6 +38,19 @@ const OPS = ['insert', 'update', 'delete', 'export'];
 // умолчание — как раз сегодня.
 const DEFAULT_PERIOD_DAYS = 7;
 
+// ПРЕСЕТЫ ПЕРИОДА ТУЛБАРА ПЕРЕВОДЯТСЯ В ДАТЫ ЗДЕСЬ, А НЕ В БРАУЗЕРЕ (К204).
+//
+// Первая редакция считала даты на экране, а «сегодня» брала из ответа сервера —
+// из того самого поля, которое обработчик списка обнулял строкой выше. Ветка
+// была мертва целиком: ни один пресет до сервера не доходил, и «Сегодня»
+// показывало ровно то же, что «За 30 дней».
+//
+// Считать там, где «сегодня» известно, не только надёжнее — это единственное
+// место, где оно известно верно: часы у руководителя могут стоять в другом
+// поясе. Список закрытый: принимать от браузера произвольное число дней значит
+// принимать и его представление о том, где кончается сегодня.
+const PERIOD_PRESETS = [1, 7, 30];
+
 // РАЗДЕЛЫ, У КОТОРЫХ ЕСТЬ КАРТОЧКА (ответ куратора И209). Ссылка ведёт в
 // карточку записи, а карточка есть у двоих; остальные разделы правят записи,
 // которые открываются иначе или не открываются вовсе. Вести «в раздел вообще»
@@ -61,6 +74,23 @@ router.get('/', async (req, res) => {
         const collapse = !filters.batchId && !filters.recordId;
 
         const counts = await countAll(whereSql, params, collapse);
+
+        // ПОТОЛОК ВЫГРУЗКИ ПРОВЕРЯЕТСЯ ДО СБОРКИ, А НЕ ПОСЛЕ (К205, пункт В4.6).
+        //
+        // Отказ отдаётся обычным ответом, а не кодом ошибки, и это не мелочь:
+        // оболочка вешает полосу «Данные не загрузились» на ЛЮБОЙ неудавшийся
+        // запрос панели. Отказ по потолку — не отказ чтения: список на экране
+        // цел, не собрался только файл. Сказать про это полосой значило бы
+        // соврать про сам список.
+        if (filters.forExport && counts.total > EXPORT_LIMIT) {
+            return res.json({
+                ...emptyAnswer(filters),
+                tooMany: true,
+                total: counts.total,
+                limit: EXPORT_LIMIT
+            });
+        }
+
         const list = await selectPage(whereSql, params, filters, collapse);
 
         const rows = list.map(toRow);
@@ -77,8 +107,14 @@ router.get('/', async (req, res) => {
             cursor: rows.length
                 ? { at: list[list.length - 1].sort_at_key, id: Number(list[list.length - 1].sort_id) }
                 : null,
-            hasMore: rows.length === PAGE_SIZE,
-            filters: { from: filters.from, to: filters.to, periodIsDefault: filters.periodIsDefault },
+            // Выгрузка берёт всю выборку одним куском, и догружать ей нечего.
+            hasMore: !filters.forExport && rows.length === PAGE_SIZE,
+            filters: {
+                from: filters.from,
+                to: filters.to,
+                periodIsDefault: filters.periodIsDefault,
+                sort: filters.sort
+            },
             auditStartedAt: filters.auditStartedAt
         });
     } catch (err) {
@@ -128,21 +164,36 @@ router.get('/batch/:id', async (req, res) => {
         const id = String(req.params.id || '');
         if (!/^[0-9a-fA-F-]{36}$/.test(id)) return res.status(400).json({ error: 'Неверный номер партии' });
 
-        const batch = await pool.query(
-            `SELECT b.id, b.kind, b.title, b.file_name, b.started_at, b.actor_kind, b.actor_name, b.page
-               FROM audit_batches b WHERE b.id = $1`,
-            [id]
-        );
-        if (!batch.rows.length) return res.status(404).json({ error: 'Партия не найдена' });
-
+        // СВОДКА СОБИРАЕТСЯ ИЗ ЖУРНАЛА, А СТРОКА ПАРТИИ ЕЁ УТОЧНЯЕТ (К212).
+        //
+        // Порядок был обратным: не нашли строку в `audit_batches` — 404, и
+        // разворот упирался в «Сводку партии получить не удалось». А строки
+        // этой может не быть: в живой базе такова каждая третья партия — следы
+        // старого кода, заводившего партию не полностью. Записи в журнале от
+        // этого никуда не делись, и человек про них спрашивает.
+        //
+        // Журнал знает почти всё сам: сколько строк, сколько записей, какие
+        // таблицы, какие поля, когда началась. Из строки партии нужны ровно две
+        // вещи, которых в журнале нет, — вид операции и имя файла.
+        //
         // СВОДКА, А НЕ ЗАПИСИ. Пять тысяч строк внутрь разворота не помещаются
         // никогда: разворот отвечает на «что это было», а сами записи
         // открываются отбором.
         const summary = await pool.query(
             `SELECT count(*)::int AS rows,
                     count(DISTINCT (table_name || '#' || COALESCE(record_id, '')))::int AS records,
-                    array_agg(DISTINCT table_name) AS tables
+                    array_agg(DISTINCT table_name) AS tables,
+                    min(changed_at) AS started_at
                FROM audit_log WHERE batch_id = $1`,
+            [id]
+        );
+
+        // Пусто в САМОМ ЖУРНАЛЕ — вот это и есть «партии не существует».
+        if (!summary.rows[0].rows) return res.status(404).json({ error: 'Партия не найдена' });
+
+        const batch = await pool.query(
+            `SELECT b.id, b.kind, b.title, b.file_name, b.started_at, b.actor_kind, b.actor_name, b.page
+               FROM audit_batches b WHERE b.id = $1`,
             [id]
         );
 
@@ -157,15 +208,17 @@ router.get('/batch/:id', async (req, res) => {
             [id]
         );
 
-        const row = batch.rows[0];
+        const row = batch.rows[0] || null;
         res.json({
-            id: row.id,
-            kind: row.kind,
-            title: row.title,
-            fileName: row.file_name,
-            startedAt: row.started_at,
-            actor: { kind: row.actor_kind, name: row.actor_name },
-            page: row.page,
+            id,
+            kind: row ? row.kind : null,
+            title: row ? row.title : null,
+            fileName: row ? row.file_name : null,
+            // Время начала — из строки партии, а нет её — из первой строки
+            // журнала этой партии: она и есть момент, когда партия пошла.
+            startedAt: row ? row.started_at : summary.rows[0].started_at,
+            actor: row ? { kind: row.actor_kind, name: row.actor_name } : { kind: 'service', name: null },
+            page: row ? row.page : null,
             rows: summary.rows[0].rows,
             records: summary.rows[0].records,
             tables: summary.rows[0].tables || [],
@@ -291,13 +344,17 @@ router.post('/export', async (req, res) => {
 async function readFilters(query) {
     const today = todayIso();
     const defaultFrom = shiftIso(today, -(DEFAULT_PERIOD_DAYS - 1));
-    const asDate = (value, fallback) => {
-        const text = String(value || '').trim();
-        return /^\d{4}-\d{2}-\d{2}$/.test(text) ? text : fallback;
-    };
+    const isDate = (value) => /^\d{4}-\d{2}-\d{2}$/.test(String(value || '').trim());
+    const asDate = (value, fallback) => (isDate(value) ? String(value).trim() : fallback);
 
-    const from = asDate(query.from, defaultFrom);
-    const to = asDate(query.to, today);
+    // Пресет тулбара считается только тогда, когда дат не прислали. Даты
+    // старше пресета: их выбрали руками в окне отбора, а вкладка карточки
+    // просит журнал записи целиком и шлёт `from` явно.
+    const days = PERIOD_PRESETS.includes(Number(query.days)) ? Number(query.days) : null;
+    const explicit = isDate(query.from) || isDate(query.to);
+
+    const from = !explicit && days ? shiftIso(today, -(days - 1)) : asDate(query.from, defaultFrom);
+    const to = !explicit && days ? today : asDate(query.to, today);
 
     return {
         from,
@@ -318,6 +375,13 @@ async function readFilters(query) {
         recordTable: String(query.recordTable || '').trim().slice(0, 64) || null,
         recordId: String(query.recordId || '').trim().slice(0, 64) || null,
         search: String(query.search || '').trim().slice(0, 64),
+        // ПОРЯДОК — ОДИН НА СПИСОК, и колонка у него одна: «Когда». В остальных
+        // колонках лежат разнородные значения, и сортировка по ним ничего не
+        // значит (паспорт Р5). Умолчание — свежие сверху.
+        sort: query.sort === 'asc' ? 'asc' : 'desc',
+        // Признак выгрузки читается ЗДЕСЬ, а не в маршруте: он меняет и потолок
+        // строк, и постраничность, и то и другое живёт в сборке запроса.
+        forExport: query.export === '1',
         cursorAt: String(query.cursorAt || '').trim() || null,
         cursorId: intOrNull(query.cursorId),
         auditStartedAt: await appSettings.get(pool, 'audit_started_at', null)
@@ -429,32 +493,53 @@ async function countAll(whereSql, params, collapse) {
                 count(DISTINCT l.batch_id)::int AS batches,
                 count(*)::int AS raw,
                 count(DISTINCT (l.table_name || '#' || COALESCE(l.record_id, '')))
-                    FILTER (WHERE l.batch_id IS NULL)::int AS records
+                    FILTER (WHERE l.batch_id IS NULL)::int AS records_singles,
+                count(DISTINCT (l.table_name || '#' || COALESCE(l.record_id, '')))::int AS records_all
            FROM audit_log l WHERE ${whereSql}`,
         params
     );
     const r = q.rows[0];
     return {
         total: collapse ? r.singles + r.batches : r.raw,
-        records: r.records,
+        // «ЗАТРОНУТО ЗАПИСЕЙ» СЧИТАЕТСЯ ПО ТЕМ ЖЕ СТРОКАМ, ЧТО ПОКАЗАНЫ (К206).
+        //
+        // Пока партии свёрнуты, строки партий из этого числа исключаются
+        // намеренно: за одной строкой стоят тысячи записей, и складывать их с
+        // одиночными правками значило бы отнять смысл у чипа «Массовых
+        // операций», который об этих тысячах и предупреждает.
+        //
+        // Но там, где одиночных правок в отборе НЕТ ВОВСЕ, исключать нечего:
+        // прежний счёт давал ноль при сорока шести строках на экране. Случаев
+        // таких три — отбор по партии, вкладка карточки и «только массовые
+        // операции», — и правило написано по данным, а не по этим трём именам:
+        // отбор по периоду, в который попали одни лишь партии, дал бы тот же
+        // ноль, а имени у такого случая нет.
+        records: collapse && r.singles ? r.records_singles : r.records_all,
         batches: r.batches
     };
 }
 
 async function selectPage(whereSql, params, filters, collapse) {
     const p = params.slice();
+    // ПОРЯДОК ЗАДАЁТ И СРАВНЕНИЕ КУРСОРА. Курсор — это «строго дальше по тому
+    // же порядку»; развернув порядок и оставив «меньше», мы бы догружали не
+    // следующую порцию, а первую же снова.
+    const asc = filters.sort === 'asc';
+    const dir = asc ? 'ASC' : 'DESC';
     // КЛЮЧ КУРСОРА — СТРОКА ИЗ САМОЙ БАЗЫ. Колонка типа timestamp приезжает в
     // узел объектом Date в поясе машины, и, вернувшись параметром, сдвинулась бы
     // на смещение пояса. Тот же урок, что в «Звонках».
     const KEY = `to_char(%s, 'YYYY-MM-DD"T"HH24:MI:SS.US')`;
 
     let cursorSql = '';
-    if (filters.cursorId && filters.cursorAt) {
+    // У ВЫГРУЗКИ КУРСОРА НЕТ: она берёт всю выборку разом, с начала и до
+    // потолка. Догружать файл нечем и незачем.
+    if (!filters.forExport && filters.cursorId && filters.cursorAt) {
         p.push(filters.cursorAt);
         const atIdx = p.length;
         p.push(filters.cursorId);
         const idIdx = p.length;
-        cursorSql = ` AND (sort_at, sort_id) < ($${atIdx}::timestamp, $${idIdx}::bigint)`;
+        cursorSql = ` AND (sort_at, sort_id) ${asc ? '>' : '<'} ($${atIdx}::timestamp, $${idIdx}::bigint)`;
     }
 
     const single = `
@@ -482,11 +567,16 @@ async function selectPage(whereSql, params, filters, collapse) {
          WHERE ${whereSql} AND l.batch_id IS NOT NULL
          GROUP BY l.batch_id`;
 
+    // ПОТОЛОК ВЫГРУЗКИ — 50 000, И ОН НАКОНЕЦ СТОИТ В ЗАПРОСЕ (К205). Прежде
+    // число было объявлено и не использовано ни разу: выгрузка уходила с той же
+    // порцией в тридцать строк, что и экран, и файл врал про полноту молча.
+    const limit = filters.forExport ? EXPORT_LIMIT : PAGE_SIZE;
+
     const sql = `
         SELECT * FROM (${collapse ? `${single} UNION ALL ${batched}` : single}) t
          WHERE true${cursorSql}
-         ORDER BY sort_at DESC, sort_id DESC
-         LIMIT ${PAGE_SIZE}`;
+         ORDER BY sort_at ${dir}, sort_id ${dir}
+         LIMIT ${limit}`;
 
     const result = await pool.query(sql, p);
     return result.rows;
@@ -628,7 +718,12 @@ function emptyAnswer(filters) {
         counts: { changes: 0, records: 0, batches: 0 },
         cursor: null,
         hasMore: false,
-        filters: { from: filters.from, to: filters.to, periodIsDefault: filters.periodIsDefault },
+        filters: {
+            from: filters.from,
+            to: filters.to,
+            periodIsDefault: filters.periodIsDefault,
+            sort: filters.sort
+        },
         auditStartedAt: filters.auditStartedAt
     };
 }
