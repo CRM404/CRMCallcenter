@@ -77,8 +77,21 @@ export function setRoute(keys, replace = false) {
 
 /** Разбор адреса. Неизвестные ключи не выбрасываются молча — их возвращаем. */
 export function parseHash(hash) {
-    const raw = String(hash || '').replace(/^#/, '').replace(/^\//, '');
-    if (!raw) return { keys: [], unknown: [] };
+    const full = String(hash || '').replace(/^#/, '').replace(/^\//, '');
+    // ХВОСТ ПОСЛЕ «?» — ОДНОРАЗОВОЕ УКАЗАНИЕ РАЗДЕЛУ, а не часть маршрута.
+    // Сегодня он один: `#/leads?record=1042` — «открой карточку этой записи».
+    // Такие ссылки ставит раздел «Звонки» на телефон лида: переход в карточку и
+    // есть смысл колонки, а без параметра ссылка приводила бы в список, где
+    // нужную строку ещё надо найти.
+    //
+    // В АДРЕСЕ ОН НЕ ЗАДЕРЖИВАЕТСЯ. buildHash его не пишет: оболочка приведёт
+    // адрес к `#/leads` первой же перестановкой панелей — и это правильно.
+    // Указание исполняется один раз; ссылка, которую человек скопирует уже
+    // после открытия карточки, не должна открывать её снова у получателя.
+    const cut = full.indexOf('?');
+    const raw = cut === -1 ? full : full.slice(0, cut);
+    const params = cut === -1 ? {} : parseParams(full.slice(cut + 1));
+    if (!raw) return { keys: [], unknown: [], params };
 
     const parts = raw.split(SEPARATOR).map((p) => p.trim()).filter(Boolean);
     const keys = [];
@@ -98,7 +111,21 @@ export function parseHash(hash) {
     // как о неизвестном — молча урезать адрес нельзя, человек не поймёт,
     // почему открылось не то, что он вставил.
     const extra = keys.splice(2);
-    return { keys, unknown: unknown.concat(extra) };
+    return { keys, unknown: unknown.concat(extra), params };
+}
+
+// Разбор хвоста. Своего формата не выдумываем — это обычная строка запроса, и
+// URLSearchParams разбирает её так же, как её разберёт любой, кто будет читать
+// этот адрес глазами.
+function parseParams(text) {
+    const out = {};
+    try {
+        new URLSearchParams(text).forEach((value, key) => { out[key] = value; });
+    } catch (err) {
+        // Испорченный хвост — то же, что его отсутствие: раздел откроется, а
+        // указание не исполнится. Ронять маршрут из-за него нельзя.
+    }
+    return out;
 }
 
 export function buildHash(keys) {
@@ -112,6 +139,6 @@ function handleHashChange() {
 
 function emit(source) {
     if (!onRoute) return;
-    const { keys, unknown } = parseHash(window.location.hash);
-    onRoute({ keys, unknown, source });
+    const { keys, unknown, params } = parseHash(window.location.hash);
+    onRoute({ keys, unknown, params, source });
 }

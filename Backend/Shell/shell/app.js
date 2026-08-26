@@ -52,7 +52,16 @@ export const registry = [
     { key: 'leads',      title: 'Лиды',       subtitle: 'очередь и распределение',  icon: 'leads',      module: '/js/modules/leadsApp.js', template: '/leads-section.html', styles: '/css/leads-light.css', legacyUrl: '/leads.html' },
     { key: 'sources',    title: 'Источники',  subtitle: 'площадки и связи',         icon: 'sources',    module: '/js/modules/sourcesSection.js', template: '/sources-section.html', styles: '/css/sources-light.css', legacyUrl: '/sources.html' },
     { key: 'cpa',        title: 'CPA-сети',   subtitle: 'сети и офферы',            icon: 'cpa',        module: '/js/modules/cpaApp.js', template: '/cpa-networks-section.html', styles: '/css/cpa-networks-light.css', legacyUrl: '/cpa-networks.html' },
-    { key: 'scripts',    title: 'Скрипты',    subtitle: 'разговор и возражения',    icon: 'scripts',    module: '/js/modules/scriptsSection.js', template: '/scripts-admin-section.html', styles: '/css/scripts-admin-light.css', legacyUrl: '/scripts-admin.html' }
+    { key: 'scripts',    title: 'Скрипты',    subtitle: 'разговор и возражения',    icon: 'scripts',    module: '/js/modules/scriptsSection.js', template: '/scripts-admin-section.html', styles: '/css/scripts-admin-light.css', legacyUrl: '/scripts-admin.html' },
+    // СЕДЬМОЙ РАЗДЕЛ, и первый БЕЗ legacyUrl: старой страницы у «Звонков» не
+    // было никогда — он рождается сразу в оболочке. Подпись плитки в формате
+    // соседей («очередь и распределение», «площадки и связи»), а не паспортной
+    // фразой: та длиннее и с заглавной, она стоит подписью раздела внутри
+    // панели (ответ куратора И171).
+    //
+    // Строка стоит ПОСЛЕДНЕЙ, и порядок плиток задаётся порядком строк. Раздел
+    // «История изменений» (часть 8) встанет после неё восьмым.
+    { key: 'calls',      title: 'Звонки',     subtitle: 'смена и разговоры',       icon: 'calls',      module: '/js/modules/callsApp.js', template: '/calls-section.html', styles: '/css/calls-light.css', skeleton: 'table' }
 ];
 
 const STORAGE_KEY = 'shellDesktopState';
@@ -291,11 +300,17 @@ async function mountSection(panelId, key, container) {
         // появится «сменить раздел в той же панели», охрану придётся вернуть:
         // иначе устаревший монтаж запишет свой разборщик поверх нового.
         record.unmount = module.unmount;
+        // Необязательная часть контракта: раздел, умеющий исполнять указания из
+        // адреса, объявляет applyParams. Не объявил — указание просто не
+        // исполнится, и это не ошибка.
+        record.applyParams = module.applyParams;
 
         // mount каждого раздела завершается после первых данных — на этом
         // накладку и снимаем: раньше показали бы пустую таблицу, позже
         // держали бы скелет поверх готового раздела.
         await module.mount(container, ctx);
+        // ПОСЛЕ mount, а не до: раздел исполняет указание на готовых данных.
+        applyParamsTo(panelId, record);
         focusPanelHead(container);
     } catch (err) {
         renderFailure(container, section, err);
@@ -456,13 +471,47 @@ function updateTitle() {
 
 // ---------------------------------------------------------------- маршрут
 
-function handleRoute({ keys, unknown, source }) {
+function handleRoute({ keys, unknown, params, source }) {
     if (unknown.length) {
         showToast(`В адресе неизвестный раздел: ${unknown.join(', ')}`, 'error');
     }
     // Изменение адреса вручную или кнопкой «назад» — приводим панели к нему.
     if (source === 'address' || source === 'start') {
         syncToKeys(keys);
+    }
+    // ОДНОРАЗОВОЕ УКАЗАНИЕ ИЗ АДРЕСА достаётся ПЕРВОМУ разделу маршрута:
+    // `#/leads?record=1042` — «Лидам». Двусмысленности тут нет ровно потому, что
+    // такие ссылки ставит раздел на одну запись одного раздела; при двух
+    // панелях в адресе указание всё равно относится к тому, кого назвали
+    // первым, и это записано здесь, а не подразумевается.
+    if (params && Object.keys(params).length && keys.length) {
+        deliverParams(keys[0], params);
+    }
+}
+
+// Раздел может быть ещё не смонтирован: панель открывается, а модуль грузится.
+// Тогда указание ждёт своего монтирования — ждать умеет только тот, кто знает,
+// чего ждёт, поэтому храним его здесь, а не в разделе.
+const pendingParams = new Map();
+
+function deliverParams(key, params) {
+    pendingParams.set(key, params);
+    for (const [panelId, record] of mounted) {
+        if (record.key !== key) continue;
+        applyParamsTo(panelId, record);
+    }
+}
+
+function applyParamsTo(panelId, record) {
+    const params = pendingParams.get(record.key);
+    if (!params || typeof record.applyParams !== 'function') return;
+    pendingParams.delete(record.key);
+    try {
+        record.applyParams(params);
+    } catch (err) {
+        // Указание — не условие работы раздела. Не смогли исполнить — раздел
+        // остаётся открытым и рабочим, а человек видит список вместо карточки.
+        console.error('Указание из адреса не исполнено', err);
     }
 }
 

@@ -1,0 +1,129 @@
+<!-- Фрагмент раздела «Звонки». Грузится оболочкой при первом открытии панели
+     и кэшируется.
+
+     ВИД — ИЗ СЛОЯ. Шапка, вкладки, чипы, таблица, пилюли, кнопки, поле, пустое
+     состояние, подвал и полоса отказа взяты как есть: .ui-page-head, .ui-tabs,
+     .ui-chips, .ui-table, .ui-pill, .ui-btn, .ui-field__control, .ui-empty,
+     .ui-table-foot, .ui-load-error. Раздел объявляет только восемь своих
+     классов с приставкой zv- и пользуется ссылкой .ui-link, объявленной
+     паспортом Р5 и приехавшей этой же частью.
+
+     ID ЗДЕСЬ НЕТ НИ ОДНОГО. В одном документе живут две панели, и совпавший id
+     связал бы метку с чужим полем. Всё — через data-role и container.
+     querySelector; глобального document раздел не касается.
+
+     ДВЕ ВКЛАДКИ ЛЕЖАТ РЯДОМ, А НЕ ПОДМЕНЯЮТ ДРУГ ДРУГА РАЗМЕТКОЙ. Скрытая
+     прячется атрибутом hidden: перерисовывать половину раздела при каждом
+     переключении значит терять прокрутку, фокус и введённый поиск.
+-->
+
+<div class="zv-section">
+
+    <div class="ui-page-head">
+        <h2 class="ui-page-head__title">Звонки</h2>
+        <span class="ui-page-head__sub">Кто на смене и что происходило со звонками</span>
+        <!-- Действия шапки — ТОЛЬКО на «Завершённых» (паспорт Р1). На «Активных»
+             их нет ни одного: фильтровать там нечего, выгружать нечего, а
+             кнопки «Позвонить» в разделе нет вовсе — звонит оператор из своей
+             панели, руководителю набирать некому. -->
+        <span class="ui-page-head__acts" data-role="done-acts" hidden>
+            <button type="button" class="ui-btn ui-btn--ghost" data-role="filters-btn"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-filter"></use></svg>Фильтры</button>
+            <button type="button" class="ui-btn ui-btn--ghost" data-role="columns-btn"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-cols"></use></svg>Колонки</button>
+            <button type="button" class="ui-btn ui-btn--ghost" data-role="export-btn"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-download"></use></svg>Выгрузить</button>
+        </span>
+    </div>
+
+    <div class="ui-tabs" role="tablist" data-role="tabs">
+        <button type="button" class="ui-tabs__tab ui-tabs__tab--active" role="tab" aria-selected="true" data-role="tab-active">Активные <span class="ui-tabs__count ui-tabs__count--badge" data-role="count-active">0</span></button>
+        <button type="button" class="ui-tabs__tab" role="tab" aria-selected="false" data-role="tab-done">Завершённые <span class="ui-tabs__count ui-tabs__count--badge" data-role="count-done">0</span></button>
+    </div>
+
+    <!-- ================= ВКЛАДКА «АКТИВНЫЕ» — строка это оператор ========= -->
+    <div data-role="pane-active">
+        <div class="ui-table-wrap" data-role="active-wrap">
+            <table class="ui-table">
+                <thead>
+                    <tr>
+                        <th>Оператор</th>
+                        <th>Линия</th>
+                        <th>Статус</th>
+                        <th>Длительность</th>
+                        <th>Телефон лида</th>
+                        <th>Напр.</th>
+                        <th>Трубка</th>
+                    </tr>
+                </thead>
+                <tbody data-role="active-body"></tbody>
+            </table>
+        </div>
+
+        <!-- Пятая пустота паспорта: график на сегодня не заполнен. Ведёт туда,
+             где это чинится, а не только сообщает. -->
+        <div class="ui-empty" data-role="active-empty" hidden>
+            <span class="ui-empty__icon"><svg class="ui-ic ui-ic--lg" aria-hidden="true"><use href="#ui-ic-calls"></use></svg></span>
+            <div class="ui-empty__title">Сегодня на смене никого</div>
+            <div class="ui-empty__text" data-role="active-empty-text"></div>
+            <button type="button" class="ui-btn ui-btn--secondary ui-empty__action" data-role="active-empty-action">Открыть график работы</button>
+        </div>
+    </div>
+
+    <!-- ================ ВКЛАДКА «ЗАВЕРШЁННЫЕ» — строка это звонок ========= -->
+    <div data-role="pane-done" hidden>
+
+        <dl class="ui-chips ui-page-chips">
+            <div class="ui-chip"><dd class="ui-chip__value" data-role="stat-dialed">0</dd><dt class="ui-chip__label">Набрано</dt></div>
+            <div class="ui-chip ui-chip--ok"><dd class="ui-chip__value" data-role="stat-answered">0</dd><dt class="ui-chip__label">Дозвонились</dt></div>
+            <div class="ui-chip"><dd class="ui-chip__value" data-role="stat-rate">—</dd><dt class="ui-chip__label">Процент дозвона</dt></div>
+        </dl>
+
+        <!-- Поиск занимает свою строку целиком: поиск и вкладки не делят строку
+             (решение М31, принятое по «CPA-сетям»). -->
+        <div class="zv-toolbar">
+            <div class="zv-search">
+                <input type="search" class="ui-field__control" data-role="search"
+                       placeholder="Поиск по номеру" aria-label="Поиск по номеру">
+            </div>
+        </div>
+
+        <div class="ui-fchips" data-role="filter-chips" hidden></div>
+
+        <div class="ui-table-wrap" data-role="done-wrap">
+            <table class="ui-table ui-table--freeze-acts">
+                <thead>
+                    <tr>
+                        <th data-col="when">Когда</th>
+                        <th data-col="phone">Телефон лида</th>
+                        <th data-col="direction">Напр.</th>
+                        <th data-col="line">Линия</th>
+                        <th data-col="operator">Оператор</th>
+                        <th data-col="ourNumber">Наш номер</th>
+                        <th data-col="outcome">Исход</th>
+                        <th class="ui-table__num" data-col="wait">Ожидание</th>
+                        <th class="ui-table__num" data-col="talk">Разговор</th>
+                        <th data-col="funnelStatus">Статус воронки</th>
+                        <th data-col="notes">Комментарий</th>
+                        <th class="ui-table__acts" data-col="record">Запись</th>
+                    </tr>
+                </thead>
+                <tbody data-role="done-body"></tbody>
+            </table>
+        </div>
+
+        <!-- Подвала нет, когда не найдено ничего: строку «Показано 0 из 0» под
+             сообщением «Ничего не найдено» читать незачем (паспорт Р1). -->
+        <div class="ui-table-foot" data-role="done-foot" hidden>
+            <span data-role="done-shown"></span>
+            <button type="button" class="ui-btn ui-btn--ghost" data-role="done-more" hidden>Показать ещё</button>
+        </div>
+
+        <!-- Две разные пустоты и два разных текста. Один текст на оба случая
+             всегда врёт в одном из них. -->
+        <div class="ui-empty" data-role="done-empty" hidden>
+            <span class="ui-empty__icon"><svg class="ui-ic ui-ic--lg" aria-hidden="true"><use href="#ui-ic-calls"></use></svg></span>
+            <div class="ui-empty__title" data-role="done-empty-title"></div>
+            <div class="ui-empty__text" data-role="done-empty-text"></div>
+            <button type="button" class="ui-btn ui-btn--secondary ui-empty__action" data-role="done-empty-action"></button>
+        </div>
+    </div>
+
+</div>
