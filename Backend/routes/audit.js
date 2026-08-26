@@ -728,6 +728,9 @@ function emptyAnswer(filters) {
     };
 }
 
+// Отбор словами — для строки журнала о выгрузке. Читать её будут через год и
+// без экрана рядом, поэтому «весь журнал», а не «без отбора»: первое говорит,
+// что попало в файл, второе — чего человек не нажал.
 function describeFilters(filters) {
     const parts = [];
     if (filters.from || filters.to) parts.push(`период ${filters.from || '…'} — ${filters.to || '…'}`);
@@ -736,7 +739,7 @@ function describeFilters(filters) {
     if (filters.op) parts.push(`вид ${filters.op}`);
     if (filters.search) parts.push(`поиск «${filters.search}»`);
     if (filters.batchOnly) parts.push('только массовые');
-    return parts.length ? parts.join(', ') : 'без отбора';
+    return parts.length ? parts.join(', ') : 'весь журнал';
 }
 
 function quoteIdent(name) {
