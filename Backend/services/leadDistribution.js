@@ -62,11 +62,50 @@ function queueCondition(alias, statusParam) {
              AND ${alias}.archived_at IS NULL)`;
 }
 
+// ПОРЯДОК ОЧЕРЕДИ — ТРИ УРОВНЯ, и текст у них один на оба места, по той же
+// причине, что и у queueCondition: разошедшись, они дали бы лида, который в
+// общей раздаче идёт первым, а лично оператору выдаётся третьим.
+//
+// Пропущенные → наступившие перезвоны → новые (бриф части 7, решение владельца
+// 28). Внутри пропущенных — по времени звонка: кто раньше звонил, того раньше
+// отдаём. Именно ради этой сортировки признак «пропущенный» хранится временем,
+// а не булевым.
+//
+// `(alias.missed_at IS NULL)` даёт 0 у пропущенных и 1 у остальных — потому они
+// и выходят вперёд. Тот же приём, что уже стоял на next_call_at.
+function queueOrder(alias) {
+    return `(${alias}.missed_at IS NULL), ${alias}.missed_at ASC,
+             (${alias}.next_call_at IS NULL), ${alias}.next_call_at ASC,
+             ${alias}.created_at ASC, ${alias}.id ASC`;
+}
+
 // Дольше всех свободен — первый в очереди (ORDER BY on_line_since ASC).
 // lead — строка с полями id и line_type: кандидаты у каждого лида свои,
 // одного общего "следующего свободного оператора" не существует.
 async function findAvailableEmployee(db, lead, newStatusId) {
     if (!lead || !lead.line_type) return null;
+
+    // ПРОПУЩЕННЫЙ ОБХОДИТ ПРАВИЛО «НЕ ДАВАТЬ НОВОГО, ПОКА ЕСТЬ ЖДУЩИЙ», И
+    // ТОЛЬКО ЕГО (ответ куратора И167). Без обхода «вне очереди» не сработает
+    // никогда: у оператора почти всегда числится ждущий лид, и пропущенный
+    // встал бы в общий хвост — то есть решение владельца 27 осталось бы словами.
+    //
+    // Открытую карточку он НЕ обходит. Выдать лида поверх начатого разговора
+    // значит потерять работу, которую человек уже делает, а правило «не терять
+    // начатую работу» сильнее правила «вне очереди».
+    // ОБХОД НЕ ОТМЕНЯЕТ ПРАВИЛО, А СУЖАЕТ ЕГО. Пропущенный проходит мимо
+    // обычного ждущего лида — но не мимо ДРУГОГО пропущенного, который у этого
+    // оператора уже ждёт работы. Иначе один проход раздачи отдал бы одному
+    // человеку все пропущенные звонки разом: он всё равно говорит по одному, а
+    // остальные оказались бы заперты за ним вместо того, чтобы достаться
+    // свободным. Это поймал набор — я написал обход шире, чем следовало.
+    const isMissed = Boolean(lead.missed_at);
+    const waiting = queueCondition('w', '$3');
+    const busy = isMissed
+        ? `(w.opened_at IS NOT NULL OR (w.missed_at IS NOT NULL AND ${waiting}))`
+        : `(w.opened_at IS NOT NULL OR ${waiting})`;
+    const params = [lead.line_type, lead.id, newStatusId];
+
     const result = await db.query(
         `SELECT e.id
          FROM employees e
@@ -80,11 +119,11 @@ async function findAvailableEmployee(db, lead, newStatusId) {
            AND NOT EXISTS (
                 SELECT 1 FROM leads w
                 WHERE w.employee_id = e.id
-                  AND (w.opened_at IS NOT NULL OR ${queueCondition('w', '$3')})
+                  AND ${busy}
            )
          ORDER BY e.on_line_since ASC
          LIMIT 1`,
-        [lead.line_type, lead.id, newStatusId]
+        params
     );
     return result.rows[0] ? result.rows[0].id : null;
 }
@@ -157,12 +196,12 @@ async function distributePendingLeads(db) {
         await releaseHeldLeads(client, newStatusId);
 
         const pending = await client.query(
-            `SELECT id, line_type FROM leads l
+            `SELECT id, line_type, missed_at FROM leads l
              WHERE employee_id IS NULL
                AND line_type IS NOT NULL
                AND opened_at IS NULL
                AND ${queueCondition('l', '$1')}
-             ORDER BY (next_call_at IS NULL), next_call_at ASC, created_at ASC, id ASC
+             ORDER BY ${queueOrder('l')}
              FOR UPDATE SKIP LOCKED`,
             [newStatusId]
         );
@@ -230,7 +269,7 @@ async function assignNextLeadForEmployee(db, employeeId) {
                     NOT EXISTS (SELECT 1 FROM lead_distribution_pool p WHERE p.lead_id = l.id)
                     OR EXISTS (SELECT 1 FROM lead_distribution_pool p WHERE p.lead_id = l.id AND p.employee_id = $2)
                )
-             ORDER BY (l.next_call_at IS NULL), l.next_call_at ASC, l.created_at ASC, l.id ASC
+             ORDER BY ${queueOrder('l')}
              FOR UPDATE SKIP LOCKED
              LIMIT 1`,
             [employee.line_type, employeeId, newStatusId]
@@ -261,5 +300,8 @@ module.exports = {
     // условие значило завести две правды: они совпадут в день написания и
     // разойдутся в первый же день правки — а расхождение это будет выглядеть
     // как «окно соврало», и искать его пойдут в окне, а не здесь.
-    queueCondition
+    queueCondition,
+    // Порядок наружу по той же причине: части, которые захотят показать очередь
+    // человеку, обязаны показывать ТОТ ЖЕ порядок, в котором она раздаётся.
+    queueOrder
 };
