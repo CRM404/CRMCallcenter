@@ -34,6 +34,7 @@ const leadsAdminRouter = require('./routes/leadsAdmin');
 const scheduleRouter = require('./routes/schedule');
 const tunnelPageRouter = require('./routes/tunnelPage');
 const pbxEventsRouter = require('./routes/pbxEvents');
+const callsRouter = require('./routes/calls');
 
 const app = express();
 
@@ -98,6 +99,7 @@ app.use('/api/geo-suggest', geoSuggestRouter);
 app.use('/api/sources', sourcesRouter);
 app.use('/api/leads-admin', leadsAdminRouter);
 app.use('/api/schedule', scheduleRouter);
+app.use('/api/calls', callsRouter);
 
 // СТРАНИЦА ВЫДАЧИ НАСТРОЙКИ ТУННЕЛЯ — не под /api: её открывает человек в
 // браузере, и она отдаёт разметку, а не JSON. Стоит ДО express.static по той
@@ -155,6 +157,7 @@ const mainDir = path.join(__dirname, 'Main');
 const cpaNetworksDir = path.join(__dirname, 'CpaNetworks');
 const sourcesDir = path.join(__dirname, 'Sources');
 const leadsDir = path.join(__dirname, 'Leads');
+const callsDir = path.join(__dirname, 'Calls');
 app.use(express.static(shellDir));
 app.use(express.static(employeesDir));
 app.use(express.static(operatorDir));
@@ -163,6 +166,7 @@ app.use(express.static(mainDir));
 app.use(express.static(cpaNetworksDir));
 app.use(express.static(sourcesDir));
 app.use(express.static(leadsDir));
+app.use(express.static(callsDir));
 // Редиректа с «/» на /main.html больше нет: с этапа 1 корень отдаёт
 // Shell/index.html — единую точку входа. Строка не удалена «заодно», она
 // перестала работать в тот момент, когда появился Shell/index.html:
