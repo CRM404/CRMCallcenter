@@ -20,6 +20,7 @@
 // MAX_OPEN_INTERVAL_HOURS, и по таким числам нельзя никому ничего начислять.
 
 const { withTransaction } = require('./dbTx');
+const eventChannel = require('./eventChannel');
 const { MAX_OPEN_INTERVAL_HOURS, startOfDay } = require('./appTime');
 
 // off — не в системе (вышел или ещё не входил); в панели состояний не
@@ -142,6 +143,19 @@ async function setWorkState(db, employeeId, state) {
     });
 }
 
+// СОБЫТИЕ О СМЕНЕ СОСТОЯНИЯ ШЛЁТ СЕРВЕР, А НЕ БРАУЗЕР ОПЕРАТОРА (ответ куратора
+// И181). Панель оператора об этом не знает и не должна знать: она сообщила о
+// себе обычным запросом, а кому это интересно — забота сервера.
+//
+// ШЛЁТСЯ ПОСЛЕ ТРАНЗАКЦИИ, а не внутри неё. Внутри — значит пообещать
+// руководителю то, что ещё может откатиться: подписчик прочитал бы «разговор», а
+// в базе осталось бы «на линии».
+async function setWorkStateAndAnnounce(db, employeeId, state) {
+    const result = await setWorkState(db, employeeId, state);
+    if (result) eventChannel.publish('operator:state', result);
+    return result;
+}
+
 // Текущее состояние + суммы за сегодня.
 //
 // Суммы считаются пересечением интервалов с КАЛЕНДАРНЫМИ сутками в поясе
@@ -203,6 +217,7 @@ async function clearReleasedLeadNotice(db, employeeId) {
 }
 
 module.exports = {
+    setWorkStateAndAnnounce,
     WORK_STATES,
     SELECTABLE_STATES,
     isValidState,

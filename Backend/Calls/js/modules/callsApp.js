@@ -18,6 +18,7 @@
 import { openModal } from '/ui/modal.js';
 import { isAbort } from '/api.js';
 import { readHiddenColumns, hasHiddenColumns, writeHiddenColumns } from '/viewPrefs.js';
+import { showLoadError, clearLoadError } from '/ui/load-error.js';
 import {
     fetchActive, fetchMeta, fetchCalls, fetchCallsForExport, fetchChain, fetchRecording
 } from './callsStorage.js';
@@ -266,6 +267,28 @@ function createInstance(container, ctx) {
         state.active = data.rows;
         state.clockSkewMs = Date.now() - new Date(data.serverNow).getTime();
         $('[data-role="count-active"]').textContent = String(data.count);
+        showPbxState(data.pbx);
+    }
+
+    // ТРЕТЬЕ СОСТОЯНИЕ ОТКАЗА: «Нет связи с телефонией» (матрица паспорта, № 3).
+    //
+    // Полоса положена ТОЛЬКО тогда, когда связь была настроена и пропала. Пока
+    // ключей Телфина нет вовсе — а это весь срок до этапа Е, — полосы нет: она
+    // висела бы круглосуточно и за неделю стала бы частью фона, а в день, когда
+    // связь оборвётся по-настоящему, её никто бы не заметил.
+    //
+    // ЗАГОЛОВОК ЗДЕСЬ СВОЙ, И РАДИ ЭТОГО ПРАВИЛСЯ СЛОЙ. Умолчание полосы —
+    // «Данные не загрузились», а здесь данные как раз загрузились: молчит
+    // телефония, и полоса с таким заголовком солгала бы.
+    function showPbxState(pbx) {
+        if (!pbx || !pbx.configured || pbx.available) {
+            clearLoadError(container);
+            return;
+        }
+        const known = pbx.lastKnownAt
+            ? `Показано последнее, что мы знали в ${timeLabel(pbx.lastKnownAt)}.`
+            : 'Показано то, что записано у нас.';
+        showLoadError(container, known, () => scheduleRefresh(), 'Нет связи с телефонией');
     }
 
     function renderActive(changedIds) {

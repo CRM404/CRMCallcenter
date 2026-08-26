@@ -4,7 +4,7 @@ const express = require('express');
 const { pool } = require('../db');
 const { distributePendingLeads } = require('../services/leadDistribution');
 const {
-    SELECTABLE_STATES, isRequestableState, setWorkState, getWorkState, clearReleasedLeadNotice
+    SELECTABLE_STATES, isRequestableState, setWorkStateAndAnnounce, getWorkState, clearReleasedLeadNotice
 } = require('../services/operatorState');
 const {
     isBlank, parseWorkDays, parseTimeOfDay, parseShiftTimes, DAYS_FORMAT_ERROR
@@ -904,7 +904,7 @@ router.put('/:id/work-state', async (req, res) => {
         if (!isRequestableState(state)) {
             return res.status(400).json({ error: 'Недопустимое состояние оператора' });
         }
-        const updated = await setWorkState(pool, req.params.id, state);
+        const updated = await setWorkStateAndAnnounce(pool, req.params.id, state);
         if (!updated) {
             return res.status(404).json({ error: 'Сотрудник не найден' });
         }
@@ -930,7 +930,7 @@ router.put('/:id/on-line', async (req, res) => {
         if (typeof onLine !== 'boolean') {
             return res.status(400).json({ error: 'Не передан onLine' });
         }
-        const updated = await setWorkState(pool, req.params.id, onLine ? 'on_line' : 'off');
+        const updated = await setWorkStateAndAnnounce(pool, req.params.id, onLine ? 'on_line' : 'off');
         if (!updated) {
             return res.status(404).json({ error: 'Сотрудник не найден' });
         }
