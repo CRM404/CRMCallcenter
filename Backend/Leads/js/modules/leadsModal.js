@@ -409,9 +409,6 @@ export function createLeadModal(root, deps) {
         // Источник лидов, а не корневой: см. правку данных 25.08.2026 —
         // в корневом у всех записей одно слово, выбирать по нему нельзя.
         fillSelectFromList($('#ldSource'), sources.map((s) => ({ id: s.id, name: s.leadSource || s.rootSource })), '— не выбран —');
-        // Список скриптов уходит в блок наборов: своих полей «Скрипт» и
-        // «Скрипт для повторных» у карточки больше нет.
-        scriptPairs.setScripts(scripts);
         fillFunnelStatusSelect($('#ldFunnelStatus'), funnelStatuses, true);
 
         fillPlainSelect($('#ldDecisionMaker'), paramLists.decisionMaker || [], '— не выбран —');
@@ -434,7 +431,12 @@ export function createLeadModal(root, deps) {
             createPickList,
             onCountChange: (count, max) => { pairsCount.textContent = `${count} из ${max}`; }
         });
+        // Справочники ставятся ПОСЛЕ сборки блока, и порядок здесь не
+        // косметика: обращение к нему раньше валит init целиком, а вместе с
+        // ним и всю карточку — окно просто не открывается, а ошибка уходит
+        // тостом, не в консоль. Поймано визуальной проверкой.
         scriptPairs.setStatuses(funnelStatuses);
+        scriptPairs.setScripts(scripts);
 
         offerPicker = createOfferTabPicker({
             rootSelect: $('#ofltRoot'), platSelect: $('#ofltPlat'),

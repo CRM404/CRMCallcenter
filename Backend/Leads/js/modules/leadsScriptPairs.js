@@ -215,8 +215,13 @@ export function createScriptPairs(root, { createPickList, onCountChange = null }
             // случилось, читается как поломка.
             row.hintEl.hidden = taken.size === 0;
 
+            // Плашка повтора висит ТОЛЬКО НА ПОЗДНЕМ наборе, а не на обоих.
+            // Заголовок говорит «уже выбран выше», и на первом из двух это
+            // читалось бы как обвинение в том, чего он не делал: повтор завёл
+            // тот, кто выбрал скрипт вторым.
             const scriptId = row.select.value;
-            const twin = scriptId && rows.some((other) => other !== row && other.select.value === scriptId);
+            const index = rows.indexOf(row);
+            const twin = scriptId && rows.some((other, i) => i < index && other.select.value === scriptId);
             row.dupNote.hidden = !twin;
 
             row.delBtn.disabled = rows.length <= 1;

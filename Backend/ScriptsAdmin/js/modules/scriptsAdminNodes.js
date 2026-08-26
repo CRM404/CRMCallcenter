@@ -649,7 +649,12 @@ function renderObjectionsBlock(objections, uiState) {
 //              onEditObjectionStart(id), onEditObjectionCancel, onSaveObjection(node, {label, content}),
 //              onDeleteObjection(id) }
 export function renderNodesPanel(container, nodes, uiState, handlers) {
-    const root = nodes.find((n) => n.parentId === null) || null;
+    // КОРЕНЬ — ЭТО ОСНОВНОЙ ТЕКСТ, а не «любой узел без родителя». Отбор по
+    // одному родителю пережил появление третьего вида ровно до первого скрипта,
+    // где фраза для перевода лежит без родителя: она вставала на место
+    // основного текста, и раздел показывал её содержимое под чужим заголовком.
+    // Так же считает и сервер, когда отдаёт has_main_text (scriptsAdmin.js:178).
+    const root = nodes.find((n) => n.parentId === null && n.nodeType === 'statement') || null;
     // ВИД, А НЕ РОДИТЕЛЬ. Пока видов было два, «дети корня» и «возражения»
     // значили одно и то же. С появлением фразы для перевода — уже нет: она
     // тоже висит на корне, и прежний отбор молча показал бы её в списке

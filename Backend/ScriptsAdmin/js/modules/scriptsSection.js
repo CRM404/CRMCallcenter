@@ -62,6 +62,12 @@ export async function mount(container, ctx) {
 
     bindEvents(state);
     await reloadScripts(state);
+    // Справочник статусов грузится сразу, но НЕ рисуется: счётчик на вкладке
+    // обязан показывать пятьдесят с первого взгляда. Прочерк в счётчике
+    // означает «неизвестно», а размер справочника известен всегда — он и
+    // закреплён схемой. Отрисовка при этом остаётся ленивой: рисовать
+    // пятьдесят строк тому, кто на них не смотрит, незачем.
+    await loadFunnelStatuses(state);
 }
 
 // Состояние наполнения: что сейчас открыто на правку. rootCreating — редактор
@@ -442,6 +448,18 @@ function statusesWord(count) {
     }
 }
 
+async function loadFunnelStatuses(state) {
+    if (state.funnelStatuses !== null) return;
+    try {
+        const list = await state.storage.fetchFunnelStatuses();
+        if (state.destroyed) return;
+        state.funnelStatuses = list;
+        $(state, 'tab-statuses-count').textContent = list.length;
+    } catch (err) {
+        if (!isAbort(err)) state.ctx.toast(err.message, 'error');
+    }
+}
+
 function renderStatuses(state) {
     const box = $(state, 'statuses-stages');
     const list = state.funnelStatuses || [];
@@ -498,17 +516,11 @@ async function switchTab(state, tab) {
     // на первую вкладку, человек застаёт его там же, где оставил.
     $(state, 'opened').hidden = !onScripts || !state.selectedScript;
 
-    if (!onScripts && state.funnelStatuses === null) {
-        try {
-            const list = await state.storage.fetchFunnelStatuses();
-            if (state.destroyed) return;
-            state.funnelStatuses = list;
-        } catch (err) {
-            if (!isAbort(err)) state.ctx.toast(err.message, 'error');
-            return;
-        }
+    if (!onScripts) {
+        await loadFunnelStatuses(state);
+        if (state.destroyed || state.funnelStatuses === null) return;
+        renderStatuses(state);
     }
-    if (!onScripts) renderStatuses(state);
 }
 
 function bindEvents(state) {

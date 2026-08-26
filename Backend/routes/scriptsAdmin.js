@@ -371,7 +371,11 @@ router.post('/scripts/:id/nodes', async (req, res) => {
 
         if (normalizedParentId === null) {
             const rootExists = await pool.query(
-                'SELECT id FROM script_nodes WHERE script_id = $1 AND parent_id IS NULL',
+                // Корень — основной текст. Фраза для перевода тоже может лежать
+                // без родителя, и без вида она занимала бы место корня: второй
+                // основной текст после неё уже не завести. Тот же вид проверяет
+                // has_main_text выше.
+                "SELECT id FROM script_nodes WHERE script_id = $1 AND parent_id IS NULL AND node_type = 'statement'",
                 [req.params.id]
             );
             if (rootExists.rows.length > 0) {
@@ -431,7 +435,7 @@ router.put('/script-nodes/:id', async (req, res) => {
         if (normalizedParentId === null) {
             if (current.parent_id !== null) {
                 const rootExists = await pool.query(
-                    'SELECT id FROM script_nodes WHERE script_id = $1 AND parent_id IS NULL AND id <> $2',
+                    "SELECT id FROM script_nodes WHERE script_id = $1 AND parent_id IS NULL AND node_type = 'statement' AND id <> $2",
                     [current.script_id, nodeId]
                 );
                 if (rootExists.rows.length > 0) {
