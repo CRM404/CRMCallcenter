@@ -4,7 +4,7 @@ const express = require('express');
 const { pool } = require('../db');
 const { distributePendingLeads } = require('../services/leadDistribution');
 const {
-    SELECTABLE_STATES, isValidState, setWorkState, getWorkState, clearReleasedLeadNotice
+    SELECTABLE_STATES, isRequestableState, setWorkState, getWorkState, clearReleasedLeadNotice
 } = require('../services/operatorState');
 const {
     isBlank, parseWorkDays, parseTimeOfDay, parseShiftTimes, DAYS_FORMAT_ERROR
@@ -892,10 +892,16 @@ router.get('/:id/work-state', async (req, res) => {
 // PUT /api/employees/:id/work-state { state } — смена состояния. Заменяет собой
 // прежний переключатель «на линии» (да/нет). При выходе на линию сразу пробует
 // разобрать очередь зависших лидов (services/leadDistribution).
+//
+// СИСТЕМНЫЕ СОСТОЯНИЯ ЧЕРЕЗ ЭТОТ АДРЕС НЕ СТАВЯТСЯ (К195). Сюда приходит
+// нажатие человека, а «разговор» и «пост-обработка» ставит станция. Отсутствие
+// кнопки останавливает того, кто пользуется панелью, и не останавливает больше
+// никого — адрес открыт. Проверка при этом не по списку кнопок: выход из
+// системы идёт сюда же и шлёт `off`, которого среди кнопок нет.
 router.put('/:id/work-state', async (req, res) => {
     try {
         const { state } = req.body || {};
-        if (!isValidState(state)) {
+        if (!isRequestableState(state)) {
             return res.status(400).json({ error: 'Недопустимое состояние оператора' });
         }
         const updated = await setWorkState(pool, req.params.id, state);
