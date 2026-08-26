@@ -225,8 +225,14 @@ function createInstance(container, ctx) {
         $('[data-role="export-btn"]').addEventListener('click', exportCalls);
 
         $('[data-role="active-empty-action"]').addEventListener('click', () => {
-            // Пустое состояние обязано вести туда, где проблема чинится.
-            ctx.api && window.location.assign('/#/employees');
+            // Пустое состояние обязано вести туда, где проблема чинится, —
+            // график живёт в «Сотрудниках».
+            //
+            // ТОЛЬКО ХВОСТ АДРЕСА, а не переход по ссылке: location.assign
+            // перезагрузил бы страницу целиком и снёс бы вторую открытую панель
+            // вместе с её несохранённой работой. Оболочка слушает hashchange и
+            // откроет раздел сама.
+            window.location.hash = '#/employees';
         });
 
         // Разворот перевода и кнопка записи — одним слушателем на тело таблицы:
