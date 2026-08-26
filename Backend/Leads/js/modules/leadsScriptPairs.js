@@ -41,7 +41,13 @@ const TEXTS = {
     delBtn: 'Убрать скрипт',
     delBtnOnly: 'Хотя бы один скрипт обязателен',
     dupTitle: 'Этот скрипт уже выбран выше',
-    dupText: 'Так можно: один текст читают на разных статусах. Если это не то, что вы хотели, выберите другой скрипт.',
+    // Текст редакции 2 паспорта (решение владельца 91). Начинается с того,
+    // чего человек НЕ ожидает — наборы объединятся, — а не с разрешения:
+    // разрешение он и так подразумевал, раз выбрал. «Ничего не потеряется» —
+    // не утешение, а факт: пропадает не работа, а разделение, которого в
+    // хранении и не было.
+    dupLead: 'При сохранении оба станут одним',
+    dupText: ' — статусы сложатся в общий список. Ничего не потеряется: текст один и тот же. Нужен другой текст на эти статусы — выберите другой скрипт.',
     errNoStatuses: 'Выберите статусы или уберите этот скрипт',
     errNoScript: 'Выберите скрипт или снимите выбранные статусы',
     missTitle: 'Недозвон останется без скрипта',
@@ -108,7 +114,11 @@ export function createScriptPairs(root, { createPickList, onCountChange = null }
         const dupNote = el('div', 'ui-note ui-note--warn ui-field--wide');
         dupNote.innerHTML = icon('warn', 'sm', 'ui-note__icon');
         const dupBody = el('div', 'ui-note__body');
-        dupBody.append(el('div', 'ui-note__title', TEXTS.dupTitle), el('div', 'ui-note__text', TEXTS.dupText));
+        // Первая часть текста — жирным: слой это умеет (.ui-note__text b), и
+        // собирается она узлами, а не строкой разметки.
+        const dupText = el('div', 'ui-note__text');
+        dupText.append(el('b', '', TEXTS.dupLead), document.createTextNode(TEXTS.dupText));
+        dupBody.append(el('div', 'ui-note__title', TEXTS.dupTitle), dupText);
         dupNote.appendChild(dupBody);
         dupNote.hidden = true;
 
