@@ -281,6 +281,13 @@ export function createLeadModal(root, deps) {
                 recordTable: 'leads',
                 recordId: () => editingLeadId,
                 noteText: 'Показаны изменения самой записи лида.',
+                // Уходя в журнал, карточку закрываем: два ответа на один вопрос
+                // на одном экране — это не «подробнее», это спор.
+                onLeave: async () => {
+                    if (!(await confirmDiscard())) return false;
+                    close();
+                    return true;
+                },
                 isAlive,
                 isAbort
             });

@@ -46,6 +46,16 @@ export function unmount() {
     while (instances.length) instances.pop().destroy();
 }
 
+/**
+ * Указание из адреса передаётся живому разделу. Панель у раздела одна: держать
+ * список экземпляров всё равно приходится ради unmount, и брать из него
+ * последний — то же самое, что брать единственный.
+ */
+export function applyParams(params) {
+    const self = instances[instances.length - 1];
+    if (self) self.applyParams(params);
+}
+
 function createInstance(container, ctx) {
     const $ = (sel) => container.querySelector(sel);
 
@@ -53,11 +63,15 @@ function createInstance(container, ctx) {
         filters: {
             from: null, to: null, page: null, table: null, op: null,
             actorId: null, actorKind: null, actorName: null,
-            batchOnly: false, batchId: null, search: ''
+            batchOnly: false, batchId: null, search: '',
+            recordTable: null, recordId: null
         },
         // Ярлык партии для чипа: сервер отдаёт сводку, а подпись собирается
         // здесь — «Партия: Импорт 24.08, 15:04».
         batchLabel: null,
+        // Ярлык записи для чипа. Пока строки не пришли — техническое имя;
+        // после первой порции берётся снимок имени из самой строки.
+        recordLabel: null,
         // Пресет периода тулбара. 'custom' — когда даты выбраны в окне.
         period: '7',
         // Порядок списка. Свежие сверху — умолчание паспорта.
@@ -76,6 +90,7 @@ function createInstance(container, ctx) {
 
     const self = {
         start,
+        applyParams,
         destroy() {
             alive = false;
             if (searchTimer) clearTimeout(searchTimer);
@@ -163,6 +178,40 @@ function createInstance(container, ctx) {
         $('[data-role="export-btn"]').addEventListener('click', doExport);
     }
 
+    /**
+     * УКАЗАНИЕ ИЗ АДРЕСА: `#/history?recordTable=leads&recordId=42` — показать
+     * журнал одной записи.
+     *
+     * Ставит такие ссылки вкладка «История» в карточке: подвал говорит
+     * «Показаны последние 30 из N», и кнопка рядом ведёт сюда. Догрузки в
+     * карточке нет намеренно (паспорт Р5, редакция 6) — разбор живёт в разделе,
+     * и приводить человека в общий список, где нужную запись ещё надо найти,
+     * значило бы не выполнить обещание кнопки.
+     *
+     * ПЕРИОД РАЗДВИГАЕТСЯ НА ВЕСЬ ЖУРНАЛ. Умолчание — семь дней, а карточка
+     * показывала всё; прийти по кнопке и увидеть меньше, чем было видно до
+     * нажатия, — худший из возможных переходов. Дальше начала журнала двигать
+     * незачем: раньше него записей не существует.
+     */
+    function applyParams(params) {
+        const table = String((params && params.recordTable) || '').trim();
+        const id = String((params && params.recordId) || '').trim();
+        if (!table || !id) return;
+
+        state.filters.recordTable = table;
+        state.filters.recordId = id;
+        state.recordLabel = `${table} #${id}`;
+
+        const started = state.auditStartedAt ? String(state.auditStartedAt).slice(0, 10) : null;
+        if (started) {
+            state.period = 'custom';
+            state.filters.from = started;
+            state.filters.to = null;
+            $('[data-role="period"]').value = 'custom';
+        }
+        load();
+    }
+
     // ------------------------------------------------------------ данные
 
     async function load(more) {
@@ -208,6 +257,11 @@ function createInstance(container, ctx) {
         if (!more) {
             state.filters.from = data.filters.from;
             state.filters.to = data.filters.to;
+        }
+        // Снимок имени — из самой строки: техническое «leads #42» человек
+        // читать не обязан, а имя в журнале уже есть.
+        if (state.filters.recordId && !more && data.rows.length && data.rows[0].recordTitle) {
+            state.recordLabel = data.rows[0].recordTitle;
         }
         $('[data-role="stat-changes"]').textContent = String(data.counts.changes);
         $('[data-role="stat-records"]').textContent = String(data.counts.records);
@@ -318,13 +372,14 @@ function createInstance(container, ctx) {
      */
     function hasAnyFilter() {
         const f = state.filters;
-        return Boolean(f.page || f.table || f.op || f.actorId
-            || f.actorKind || f.actorName || f.batchOnly || f.batchId || f.search);
+        return Boolean(f.page || f.table || f.op || f.actorId || f.actorKind
+            || f.actorName || f.batchOnly || f.batchId || f.recordId || f.search);
     }
 
     function activeFilterLabels() {
         const f = state.filters;
         const out = [];
+        if (f.recordId) out.push({ key: 'record', label: 'Запись', value: state.recordLabel || `#${f.recordId}` });
         if (f.batchId) out.push({ key: 'batchId', label: 'Партия', value: state.batchLabel || 'выбранная' });
         if (!state.periodIsDefault) {
             out.push({
@@ -385,6 +440,10 @@ function createInstance(container, ctx) {
             $('[data-role="period"]').value = '7';
             state.filters.from = null;
             state.filters.to = null;
+        } else if (key === 'record') {
+            state.filters.recordTable = null;
+            state.filters.recordId = null;
+            state.recordLabel = null;
         } else if (key === 'batchOnly') {
             state.filters.batchOnly = false;
         } else if (key === 'batchId') {
@@ -406,9 +465,11 @@ function createInstance(container, ctx) {
         state.filters = {
             from: null, to: null, page: null, table: null, op: null,
             actorId: null, actorKind: null, actorName: null,
-            batchOnly: false, batchId: null, search: ''
+            batchOnly: false, batchId: null, search: '',
+            recordTable: null, recordId: null
         };
         state.batchLabel = null;
+        state.recordLabel = null;
         state.period = '7';
         $('[data-role="period"]').value = '7';
         $('[data-role="page"]').value = '';

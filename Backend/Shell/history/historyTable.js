@@ -281,7 +281,11 @@ function changeLine(table, item, op) {
     // взяться неоткуда. Первая редакция печатала «Фамилия: пусто → Никитина» —
     // а «пусто» здесь не прежнее значение, а отсутствие прошлого: записи ещё не
     // существовало. Макет показывает ровно имя и значение, без стрелки.
-    if (op === 'insert') {
+    //
+    // У ВЫГРУЗКИ ПРЕЖНЕГО ЗНАЧЕНИЯ НЕТ ПО ТОЙ ЖЕ ПРИЧИНЕ (паспорт Р5, редакция
+    // 6). Строка «Строк в файле: пусто → 5» читалась как «было пусто», а не
+    // было ничего: выгрузка ничего не меняла, она случилась.
+    if (op === 'insert' || op === 'export') {
         parts.push(span('hi-new', valueText(item, 'after')));
         return change(parts);
     }
@@ -483,17 +487,24 @@ async function fillBatch(td, row, opts) {
 // расходятся такие копии на первой же правке. Модуль общий уже по своему
 // назначению; сюда и переезжает.
 //
-// ВКЛАДКА БОЛЬШЕ НЕ ОБРЕЗАЕТ МОЛЧА (К210). Прежде она слала один запрос без
-// курсора и рисовала что пришло: у лида с сорока одним изменением показывались
-// тридцать строк и ни слова о том, что их больше. Это ровно то, за что
-// исправлена «запись удалена», — экран не вправе изображать полноту.
+// ВКЛАДКА БОЛЬШЕ НЕ ОБРЕЗАЕТ МОЛЧА (К210). Прежде она слала один запрос и
+// рисовала что пришло: у лида с сорока одним изменением показывались тридцать
+// строк и ни слова о том, что их больше. Это ровно то, за что исправлена
+// «запись удалена», — экран не вправе изображать полноту.
 //
-// ПОДВАЛ — ТОТ ЖЕ, ЧТО У РАЗДЕЛА: «Показано 30 из N» и «Показать ещё»
-// (паспорт Р5, таблица текстов). Своего текста вкладка не заводит.
+// ДОГРУЗКИ ЗДЕСЬ НЕТ, И ЭТО РЕШЕНИЕ, А НЕ ЭКОНОМИЯ (паспорт Р5, редакция 6).
+// Вкладка отвечает на «что с записью происходило», раздел — на «разберись».
+// Кнопка догрузки превратила бы карточку во второй журнал, а два места с одной
+// работой расходятся на первой же правке. Вместо неё — «Показаны последние 30
+// из N» и кнопка, открывающая раздел с уже поставленным отбором по этой записи.
+//
+// СОРТИРОВКИ ЗДЕСЬ ТОЖЕ НЕТ, и по той же причине. Слово «последние» в подвале
+// говорит о порядке прямо, а признак сортируемого заголовка при нём означал бы
+// «порядок можно перевернуть» — то есть сделать подпись подвала неправдой.
+// Разбор порядка — работа раздела.
 //
 // РАЗМЕТКУ ДАЁТ КАРТОЧКА, а имена ролей — этот модуль: hi-wrap, hi-body,
-// hi-sort-when, hi-sort-icon, hi-foot, hi-shown, hi-more, hi-empty,
-// hi-empty-text, hi-note.
+// hi-foot, hi-shown, hi-more, hi-empty, hi-empty-text, hi-note.
 
 const CARD_PERIOD_FROM = '2000-01-01';
 
@@ -504,6 +515,8 @@ const CARD_PERIOD_FROM = '2000-01-01';
  * @param {string} opts.recordTable  таблица записи: 'leads' | 'employees'
  * @param {Function} opts.recordId   () => number — номер записи
  * @param {string} opts.noteText     подпись под таблицей, первая половина
+ * @param {Function} [opts.onLeave]  закрыть карточку перед уходом в раздел;
+ *                                    вернуть false, если закрыть отказались
  * @param {Function} [opts.isAlive]  жива ли панель
  * @param {Function} [opts.isAbort]  оборван ли запрос
  */
@@ -514,12 +527,30 @@ export function createHistoryPane(pane, opts) {
     const isAlive = opts.isAlive || (() => true);
     const isAbort = opts.isAbort || (() => false);
 
-    const state = { rows: [], total: 0, cursor: null, sort: 'desc', started: null, loaded: false };
+    const state = { rows: [], total: 0, started: null, loaded: false };
 
-    const sortHead = $('hi-sort-when');
-    if (sortHead) sortHead.addEventListener('click', toggleSort);
     const moreBtn = $('hi-more');
-    if (moreBtn) moreBtn.addEventListener('click', () => load(true));
+    if (moreBtn) moreBtn.addEventListener('click', openInJournal);
+
+    /**
+     * Уйти в раздел с отбором по этой записи.
+     *
+     * Механизм тот же, что у «Показать записи партии»: экран не заводит своего
+     * способа показать подмножество журнала — он ставит отбор. Карточка при
+     * этом закрывается: оставить её открытой поверх раздела значило бы показать
+     * два ответа на один вопрос.
+     */
+    async function openInJournal() {
+        const id = opts.recordId();
+        if (!id) return;
+        // ВВЕДЁННОЕ НЕ ТЕРЯЕТСЯ МОЛЧА. Уход в раздел закрывает карточку, а
+        // закрытие карточки с набранными полями спрашивает — тем же вопросом,
+        // что «Отмена», Esc и крестик. Отказались закрывать — остаёмся на месте:
+        // адрес меняется только после согласия.
+        if (typeof opts.onLeave === 'function' && !(await opts.onLeave())) return;
+        window.location.hash = `#/history?recordTable=${encodeURIComponent(opts.recordTable)}`
+            + `&recordId=${encodeURIComponent(String(id))}`;
+    }
 
     /** Загрузить один раз — при первом заходе на вкладку. */
     function ensure() {
@@ -532,27 +563,10 @@ export function createHistoryPane(pane, opts) {
     function reset() {
         state.rows = [];
         state.total = 0;
-        state.cursor = null;
-        state.sort = 'desc';
         state.loaded = false;
-        applySortIcon();
     }
 
-    function toggleSort() {
-        state.sort = state.sort === 'desc' ? 'asc' : 'desc';
-        applySortIcon();
-        // Порядок сменился — курсор от прежнего порядка недействителен.
-        state.cursor = null;
-        state.loaded = true;
-        load(false);
-    }
-
-    function applySortIcon() {
-        const use = $('hi-sort-icon');
-        if (use) use.setAttribute('href', state.sort === 'asc' ? '#ui-ic-sort-asc' : '#ui-ic-sort-desc');
-    }
-
-    async function load(more) {
+    async function load() {
         const id = opts.recordId();
         if (!id) return;
         try {
@@ -561,29 +575,25 @@ export function createHistoryPane(pane, opts) {
                 recordId: String(id),
                 // Период вкладки — весь журнал, а не последние семь дней:
                 // человек открыл карточку, чтобы увидеть её прошлое целиком.
-                from: CARD_PERIOD_FROM,
-                sort: state.sort,
-                cursorAt: more && state.cursor ? state.cursor.at : undefined,
-                cursorId: more && state.cursor ? state.cursor.id : undefined
+                from: CARD_PERIOD_FROM
             });
             if (!isAlive() || !pane.isConnected) return;
             clearLoadError(pane);
-            state.rows = more ? state.rows.concat(data.rows) : data.rows;
+            state.rows = data.rows;
             state.total = data.total;
-            state.cursor = data.cursor;
             state.started = data.auditStartedAt;
-            render(data.hasMore);
+            render();
         } catch (err) {
             if (isAbort(err) || !isAlive() || !pane.isConnected) return;
             // ОТКАЗ ПОКАЗЫВАЕТСЯ ПОЛОСОЙ СЛОЯ, А НЕ ТОСТОМ И НЕ ПУСТОТОЙ.
             // Пустое состояние здесь читается как «запись никто не трогал» —
             // самая дорогая неправда, какую эта вкладка может сказать.
             state.loaded = false;
-            showLoadError(pane, err.message, () => { state.loaded = true; load(false); });
+            showLoadError(pane, err.message, () => { state.loaded = true; load(); });
         }
     }
 
-    function render(hasMore) {
+    function render() {
         const body = $('hi-body');
         const wrap = $('hi-wrap');
         const empty = $('hi-empty');
@@ -616,9 +626,14 @@ export function createHistoryPane(pane, opts) {
             renderRow(row, { columns: ['when', 'who'] }).forEach((tr) => body.appendChild(tr));
         });
 
-        foot.hidden = false;
-        $('hi-shown').textContent = `Показано ${state.rows.length} из ${state.total}`;
-        $('hi-more').hidden = !hasMore;
+        // ПОДВАЛ ПОЯВЛЯЕТСЯ, ТОЛЬКО КОГДА ЧТО-ТО СКРЫТО. Пока помещается всё,
+        // говорить «показаны последние 12 из 12» не о чем: подвал существует
+        // ради того, чего не видно.
+        const hidden = state.total > state.rows.length;
+        foot.hidden = !hidden;
+        if (hidden) {
+            $('hi-shown').textContent = `Показаны последние ${state.rows.length} из ${state.total}`;
+        }
     }
 
     return { ensure, reset };

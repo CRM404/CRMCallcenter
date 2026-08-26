@@ -690,6 +690,11 @@ export function createCard(root, deps) {
             recordTable: 'employees',
             recordId: () => editingId,
             noteText: 'Показаны изменения самой записи сотрудника.',
+            onLeave: async () => {
+                if (!(await confirmDiscard())) return false;
+                await close(true);
+                return true;
+            },
             isAlive,
             isAbort
         });
@@ -818,7 +823,7 @@ export function createCard(root, deps) {
                 <div class="ui-table-wrap" data-role="hi-wrap">
                     <table class="ui-table">
                         <thead><tr>
-                            <th class="ui-table__sortable" data-role="hi-sort-when" tabindex="0" role="button" aria-label="Сортировать по времени">Когда <svg class="ui-ic ui-ic--xs ui-table__sort-icon" aria-hidden="true"><use href="#ui-ic-sort-desc" data-role="hi-sort-icon"></use></svg></th>
+                            <th>Когда</th>
                             <th>Кто</th>
                             <th>Что изменилось</th>
                         </tr></thead>
@@ -827,7 +832,7 @@ export function createCard(root, deps) {
                 </div>
                 <div class="ui-table-foot" data-role="hi-foot" hidden>
                     <span data-role="hi-shown"></span>
-                    <button type="button" class="ui-btn ui-btn--ghost" data-role="hi-more" hidden>Показать ещё</button>
+                    <button type="button" class="ui-btn ui-btn--ghost" data-role="hi-more">Открыть в журнале</button>
                 </div>
                 <div class="ui-empty ui-empty--inline" data-role="hi-empty" hidden>
                     <div class="ui-empty__title">Изменений не записано</div>
@@ -844,10 +849,14 @@ export function createCard(root, deps) {
      * ВВЕДЁННОЕ НЕ ТЕРЯЕТСЯ: скрывается блок полей, а не сохраняется форма.
      * Переключение вкладки — не сохранение и не отмена.
      *
-     * На «Истории» подпись окна — имя записи, а не «Шаг 1 из 2», и кнопки шага
-     * и сохранения скрыты: остаётся «Закрыть». Возврат на «Карточку» возвращает
-     * подпись и кнопки в том же состоянии, в каком их оставили, — состояние это
-     * задаёт goToStep, и он же зовётся при возврате.
+     * ПОДПИСЬ ОКНА НА «ИСТОРИИ» НЕ МЕНЯЕТСЯ (паспорт Р5, редакция 6): она
+     * принадлежит карточке, а не вкладке, и меняющаяся вместе со вкладкой была
+     * бы вторым заголовком при живом первом. Всё, что нужно сказать про журнал,
+     * говорит подпись под таблицей — та же, что в карточке лида.
+     *
+     * Кнопки шага и сохранения скрыты: остаётся «Закрыть». Возврат на
+     * «Карточку» возвращает кнопки в том же состоянии, в каком их оставили, —
+     * задаёт его goToStep, и он же зовётся при возврате.
      */
     function switchCardTab(tab) {
         if (!modal) return;
@@ -874,8 +883,6 @@ export function createCard(root, deps) {
         } else {
             if (fields) fields.hidden = true;
             if (fields2) fields2.hidden = true;
-            const sub = modal.box.querySelector('.ui-modal__sub');
-            if (sub) sub.textContent = 'История изменений записи';
             ['prev-step', 'next-step', 'employee-save'].forEach((role) => {
                 const btn = modal.box.querySelector(`[data-role="${role}"]`);
                 if (btn) btn.hidden = true;
