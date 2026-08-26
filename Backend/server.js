@@ -35,6 +35,7 @@ const scheduleRouter = require('./routes/schedule');
 const tunnelPageRouter = require('./routes/tunnelPage');
 const pbxEventsRouter = require('./routes/pbxEvents');
 const callsRouter = require('./routes/calls');
+const auditRouter = require('./routes/audit');
 
 const app = express();
 
@@ -100,6 +101,7 @@ app.use('/api/sources', sourcesRouter);
 app.use('/api/leads-admin', leadsAdminRouter);
 app.use('/api/schedule', scheduleRouter);
 app.use('/api/calls', callsRouter);
+app.use('/api/audit', auditRouter);
 
 // СТРАНИЦА ВЫДАЧИ НАСТРОЙКИ ТУННЕЛЯ — не под /api: её открывает человек в
 // браузере, и она отдаёт разметку, а не JSON. Стоит ДО express.static по той
@@ -158,6 +160,7 @@ const cpaNetworksDir = path.join(__dirname, 'CpaNetworks');
 const sourcesDir = path.join(__dirname, 'Sources');
 const leadsDir = path.join(__dirname, 'Leads');
 const callsDir = path.join(__dirname, 'Calls');
+const historyDir = path.join(__dirname, 'History');
 app.use(express.static(shellDir));
 app.use(express.static(employeesDir));
 app.use(express.static(operatorDir));
@@ -167,6 +170,7 @@ app.use(express.static(cpaNetworksDir));
 app.use(express.static(sourcesDir));
 app.use(express.static(leadsDir));
 app.use(express.static(callsDir));
+app.use(express.static(historyDir));
 // Редиректа с «/» на /main.html больше нет: с этапа 1 корень отдаёт
 // Shell/index.html — единую точку входа. Строка не удалена «заодно», она
 // перестала работать в тот момент, когда появился Shell/index.html:
