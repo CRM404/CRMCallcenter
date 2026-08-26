@@ -402,25 +402,36 @@
     <!-- Вкладка «История»: изменения САМОЙ записи лида. Правки связанных
          записей (офферов, привязок скриптов) сюда не входят — они видны в
          разделе отдельными строками. Строку рисует общий модуль журнала. -->
+    <!-- ИМЕНА РОЛЕЙ ЗАДАЁТ ОБЩИЙ МОДУЛЬ ЖУРНАЛА, а не карточка: загрузку,
+         порядок, подвал и пустоту этой вкладки ведёт он же, и в карточке
+         сотрудника разметка ровно такая. Прежние имена были свои — и код под
+         них тоже был свой, вторым экземпляром. -->
     <div data-role="tab-panel-history" hidden>
         <div class="hi-section">
-            <div class="ui-table-wrap" data-role="lead-history-wrap">
+            <div class="ui-table-wrap" data-role="hi-wrap">
                 <table class="ui-table">
                     <thead>
                         <tr>
-                            <th class="ui-table__sortable">Когда <svg class="ui-ic ui-ic--xs ui-table__sort-icon" aria-hidden="true"><use href="#ui-ic-sort-desc"></use></svg></th>
+                            <th class="ui-table__sortable" data-role="hi-sort-when" tabindex="0" role="button" aria-label="Сортировать по времени">Когда <svg class="ui-ic ui-ic--xs ui-table__sort-icon" aria-hidden="true"><use href="#ui-ic-sort-desc" data-role="hi-sort-icon"></use></svg></th>
                             <th>Кто</th>
                             <th>Что изменилось</th>
                         </tr>
                     </thead>
-                    <tbody data-role="lead-history-body"></tbody>
+                    <tbody data-role="hi-body"></tbody>
                 </table>
             </div>
-            <div class="ui-empty ui-empty--inline" data-role="lead-history-empty" hidden>
-                <div class="ui-empty__title">Изменений не записано</div>
-                <div class="ui-empty__text" data-role="lead-history-empty-text"></div>
+            <!-- ПОДВАЛ ТОТ ЖЕ, ЧТО У РАЗДЕЛА. Без него вкладка обрывалась на
+                 тридцатой строке молча: у лида с сорока одним изменением было
+                 видно тридцать и ни слова о том, что их больше. -->
+            <div class="ui-table-foot" data-role="hi-foot" hidden>
+                <span data-role="hi-shown"></span>
+                <button type="button" class="ui-btn ui-btn--ghost" data-role="hi-more" hidden>Показать ещё</button>
             </div>
-            <p class="ui-table-note" data-role="lead-history-note"></p>
+            <div class="ui-empty ui-empty--inline" data-role="hi-empty" hidden>
+                <div class="ui-empty__title">Изменений не записано</div>
+                <div class="ui-empty__text" data-role="hi-empty-text"></div>
+            </div>
+            <p class="ui-table-note" data-role="hi-note"></p>
         </div>
     </div>
 

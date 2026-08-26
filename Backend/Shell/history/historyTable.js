@@ -15,6 +15,7 @@
 // только видимость.
 
 import { fieldLabel } from './historyFields.js';
+import { showLoadError, clearLoadError } from '../ui/load-error.js';
 
 // СТИЛЬ ЖУРНАЛА ПОДТЯГИВАЕТСЯ САМИМ МОДУЛЕМ, и это не удобство, а условие
 // работы. Раскладку раздела оболочка грузит при открытии раздела — а две трети
@@ -58,6 +59,10 @@ const BATCH_KIND = {
     delete: 'Удаление',
     detach: 'Открепление',
     migration: 'Миграция',
+    // СКЛЕЙКА ЛИДОВ — ТОЖЕ ПАРТИЯ, и вид у неё свой (К211). Словарь её не знал,
+    // и настоящее слияние подписывалось общим «Массовая операция» — то есть
+    // ровно тем, чего строка партии как раз и не должна говорить.
+    merge: 'Слияние',
     browser: 'Массовое действие'
 };
 
@@ -317,20 +322,48 @@ function valueText(item, side) {
 // Приводится ТОЛЬКО то, что заведомо является меткой времени: остальное едет
 // как есть. Угадывать смысл значения экран не вправе — он показывает то, что
 // записано.
-const STAMP = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/;
+// СЕКУНДЫ ПОКАЗЫВАЮТСЯ, А НЕ ОТБРАСЫВАЮТСЯ. Первая редакция резала метку до
+// минут — и строка «Изменена: 24.08.2026 23:18 → 24.08.2026 23:18» читалась как
+// изменение, которого не было: значения различались секундами. Служебные метки
+// (`updated_at`, `merged_at`) правятся как раз внутри одной минуты, и на них
+// это выходило почти всегда.
+const STAMP = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2}))?/;
 
 function humanValue(text) {
     const m = STAMP.exec(text);
     if (!m) return text;
-    return `${m[3]}.${m[2]}.${m[1]} ${m[4]}:${m[5]}`;
+    return `${m[3]}.${m[2]}.${m[1]} ${m[4]}:${m[5]}${m[6] ? `:${m[6]}` : ''}`;
+}
+
+// РОД ПО МЯГКОМУ ЗНАКУ ИЗ ОКОНЧАНИЯ НЕ ВЫВОДИТСЯ — русский этого не позволяет:
+// «пароль» и «должность» кончаются одинаково и разного рода (К203). Первая
+// редакция считала «ь» женским с двумя исключениями и давала «Пароль изменена»
+// — а пароль как раз самое частое поле уровня «только факт»: пароль сотрудника
+// и пароль АТС, и видно это будет всегда.
+//
+// Поэтому «а» и «я» решаются окончанием — там правило работает, — а мягкий знак
+// решается списком: надёжный суффикс «-сть/-сь» женского рода всегда, и
+// поимённо те слова, что стоят подписями в словаре полей. Неизвестное слово на
+// «ь» считается мужским: это же умолчание у функции и для всех прочих окончаний.
+const FEM_SOFT = ['сеть', 'роль', 'связь', 'часть', 'ссылка'];
+
+function isFeminineSoft(word) {
+    // «-сть» и «-сь» женские всегда: должность, комнатность, область, подпись.
+    if (/(сть|сь)$/.test(word)) return true;
+    // СЛОВО СВЕРЯЕТСЯ ЦЕЛИКОМ, А НЕ ХВОСТОМ. Первая попытка правки сверяла
+    // концом строки — и «пароль» попал в список через «роль», то есть ровно то
+    // слово, ради которого правка и делается, осталось женского рода.
+    // У составного берётся последняя часть: «CPA-сеть» — это сеть.
+    const head = word.split('-').pop();
+    return FEM_SOFT.includes(head);
 }
 
 // «изменён» или «изменена» — по роду имени поля. Согласование делается здесь, а
 // не в базе: это свойство подписи, а не данных.
 function factWording(label) {
     const word = String(label).trim().split(' ')[0].toLowerCase();
-    if (/(а|ь|я)$/.test(word) && !/(тель|атор)$/.test(word)) return 'изменена, значение не записано';
-    return 'изменён, значение не записано';
+    const feminine = /(а|я)$/.test(word) || (/ь$/.test(word) && isFeminineSoft(word));
+    return feminine ? 'изменена, значение не записано' : 'изменён, значение не записано';
 }
 
 function levelIcon(name, title) {
@@ -437,6 +470,168 @@ async function fillBatch(td, row, opts) {
         btn.addEventListener('click', () => opts.onBatch(row.batchId, data));
         box.appendChild(btn);
     }
+}
+
+
+// ======================================================================
+// ПАНЕЛЬ ИСТОРИИ В КАРТОЧКЕ — ОДНА НА ОБЕ КАРТОЧКИ
+// ======================================================================
+//
+// Вкладка «История» стоит в карточке лида и в карточке сотрудника, и до этой
+// правки в каждой лежала своя почти одинаковая копия загрузки и отрисовки.
+// Копий стало бы три, как только у вкладки появился подвал и порядок, — а
+// расходятся такие копии на первой же правке. Модуль общий уже по своему
+// назначению; сюда и переезжает.
+//
+// ВКЛАДКА БОЛЬШЕ НЕ ОБРЕЗАЕТ МОЛЧА (К210). Прежде она слала один запрос без
+// курсора и рисовала что пришло: у лида с сорока одним изменением показывались
+// тридцать строк и ни слова о том, что их больше. Это ровно то, за что
+// исправлена «запись удалена», — экран не вправе изображать полноту.
+//
+// ПОДВАЛ — ТОТ ЖЕ, ЧТО У РАЗДЕЛА: «Показано 30 из N» и «Показать ещё»
+// (паспорт Р5, таблица текстов). Своего текста вкладка не заводит.
+//
+// РАЗМЕТКУ ДАЁТ КАРТОЧКА, а имена ролей — этот модуль: hi-wrap, hi-body,
+// hi-sort-when, hi-sort-icon, hi-foot, hi-shown, hi-more, hi-empty,
+// hi-empty-text, hi-note.
+
+const CARD_PERIOD_FROM = '2000-01-01';
+
+/**
+ * @param {HTMLElement} pane  панель вкладки
+ * @param {Object} opts
+ * @param {Object} opts.api          транспорт панели (ctx.api)
+ * @param {string} opts.recordTable  таблица записи: 'leads' | 'employees'
+ * @param {Function} opts.recordId   () => number — номер записи
+ * @param {string} opts.noteText     подпись под таблицей, первая половина
+ * @param {Function} [opts.isAlive]  жива ли панель
+ * @param {Function} [opts.isAbort]  оборван ли запрос
+ */
+export function createHistoryPane(pane, opts) {
+    ensureStyles();
+
+    const $ = (role) => pane.querySelector(`[data-role="${role}"]`);
+    const isAlive = opts.isAlive || (() => true);
+    const isAbort = opts.isAbort || (() => false);
+
+    const state = { rows: [], total: 0, cursor: null, sort: 'desc', started: null, loaded: false };
+
+    const sortHead = $('hi-sort-when');
+    if (sortHead) sortHead.addEventListener('click', toggleSort);
+    const moreBtn = $('hi-more');
+    if (moreBtn) moreBtn.addEventListener('click', () => load(true));
+
+    /** Загрузить один раз — при первом заходе на вкладку. */
+    function ensure() {
+        if (state.loaded) return;
+        state.loaded = true;
+        load(false);
+    }
+
+    /** Забыть загруженное: окно закрыли, следующая запись будет другой. */
+    function reset() {
+        state.rows = [];
+        state.total = 0;
+        state.cursor = null;
+        state.sort = 'desc';
+        state.loaded = false;
+        applySortIcon();
+    }
+
+    function toggleSort() {
+        state.sort = state.sort === 'desc' ? 'asc' : 'desc';
+        applySortIcon();
+        // Порядок сменился — курсор от прежнего порядка недействителен.
+        state.cursor = null;
+        state.loaded = true;
+        load(false);
+    }
+
+    function applySortIcon() {
+        const use = $('hi-sort-icon');
+        if (use) use.setAttribute('href', state.sort === 'asc' ? '#ui-ic-sort-asc' : '#ui-ic-sort-desc');
+    }
+
+    async function load(more) {
+        const id = opts.recordId();
+        if (!id) return;
+        try {
+            const data = await opts.api.get('/audit', {
+                recordTable: opts.recordTable,
+                recordId: String(id),
+                // Период вкладки — весь журнал, а не последние семь дней:
+                // человек открыл карточку, чтобы увидеть её прошлое целиком.
+                from: CARD_PERIOD_FROM,
+                sort: state.sort,
+                cursorAt: more && state.cursor ? state.cursor.at : undefined,
+                cursorId: more && state.cursor ? state.cursor.id : undefined
+            });
+            if (!isAlive() || !pane.isConnected) return;
+            clearLoadError(pane);
+            state.rows = more ? state.rows.concat(data.rows) : data.rows;
+            state.total = data.total;
+            state.cursor = data.cursor;
+            state.started = data.auditStartedAt;
+            render(data.hasMore);
+        } catch (err) {
+            if (isAbort(err) || !isAlive() || !pane.isConnected) return;
+            // ОТКАЗ ПОКАЗЫВАЕТСЯ ПОЛОСОЙ СЛОЯ, А НЕ ТОСТОМ И НЕ ПУСТОТОЙ.
+            // Пустое состояние здесь читается как «запись никто не трогал» —
+            // самая дорогая неправда, какую эта вкладка может сказать.
+            state.loaded = false;
+            showLoadError(pane, err.message, () => { state.loaded = true; load(false); });
+        }
+    }
+
+    function render(hasMore) {
+        const body = $('hi-body');
+        const wrap = $('hi-wrap');
+        const empty = $('hi-empty');
+        const foot = $('hi-foot');
+        const started = state.started ? humanDate(state.started) : null;
+
+        // ДАТА ВКЛЮЧЕНИЯ ЖУРНАЛА НАЗЫВАЕТСЯ ОБЯЗАТЕЛЬНО. Без неё пустая вкладка
+        // читается как «запись никто не трогал», и журнал начинает врать в
+        // самом чувствительном месте — там, где по нему судят о человеке.
+        $('hi-note').textContent = started
+            ? `${opts.noteText} Журнал ведётся с ${started}.`
+            : opts.noteText;
+
+        if (!state.rows.length) {
+            body.innerHTML = '';
+            wrap.hidden = true;
+            foot.hidden = true;
+            empty.hidden = false;
+            $('hi-empty-text').textContent = started
+                ? `С ${started}, когда включён журнал, эту запись не меняли. Что было раньше, в журнал не попало.`
+                : 'Эту запись не меняли с тех пор, как включён журнал.';
+            return;
+        }
+
+        wrap.hidden = false;
+        empty.hidden = true;
+        body.innerHTML = '';
+        state.rows.forEach((row) => {
+            // Колонок три: «Раздел» и «Запись» не нужны — запись одна и известна.
+            renderRow(row, { columns: ['when', 'who'] }).forEach((tr) => body.appendChild(tr));
+        });
+
+        foot.hidden = false;
+        $('hi-shown').textContent = `Показано ${state.rows.length} из ${state.total}`;
+        $('hi-more').hidden = !hasMore;
+    }
+
+    return { ensure, reset };
+}
+
+// «24 августа 2026», без «г.» на конце: точку в конце фразы ставит сам текст, и
+// вместе они давали «…2026 г..». Хвост снимается здесь, а не правкой текста:
+// текст паспортный, а «г.» — свойство браузерного формата.
+export function humanDate(value) {
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return String(value);
+    return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })
+        .replace(/\s*г\.?$/, '');
 }
 
 // ---------------------------------------------------------------- мелочи

@@ -134,7 +134,7 @@ function employeeName(employee) {
  *                               createScriptPairs, createOfferTabPicker, createGeo,
  *                               onSaved }
  */
-import { renderRow } from '/history/historyTable.js';
+import { createHistoryPane } from '/history/historyTable.js';
 
 export function createLeadModal(root, deps) {
     const {
@@ -265,66 +265,27 @@ export function createLeadModal(root, deps) {
     }
 
     // ------------------------------------------------------------ история записи
+    //
+    // ЗАГРУЗКУ, ПОРЯДОК, ПОДВАЛ И ПУСТОТУ ВЕДЁТ ОБЩИЙ МОДУЛЬ ЖУРНАЛА. Здесь
+    // лежала своя копия всего этого, и такая же вторая — в карточке сотрудника.
+    // Как только у вкладки появился подвал и порядок, копий стало бы три; они
+    // расходятся на первой же правке, а показывают одно и то же.
 
-    let historyLoaded = false;
+    let historyPane = null;
 
-    async function loadHistory() {
-        if (historyLoaded || !editingLeadId) return;
-        historyLoaded = true;
-        try {
-            const data = await api.get('/audit', {
+    function loadHistory() {
+        if (!editingLeadId) return;
+        if (!historyPane) {
+            historyPane = createHistoryPane($('[data-role="tab-panel-history"]'), {
+                api,
                 recordTable: 'leads',
-                recordId: String(editingLeadId),
-                // Период вкладки — весь журнал, а не последние семь дней:
-                // человек открыл карточку, чтобы увидеть её прошлое целиком.
-                from: '2000-01-01'
+                recordId: () => editingLeadId,
+                noteText: 'Показаны изменения самой записи лида.',
+                isAlive,
+                isAbort
             });
-            if (!isAlive()) return;
-            renderHistory(data);
-        } catch (err) {
-            if (isAbort(err)) return;
-            historyLoaded = false;
-            toast(err.message, 'error');
         }
-    }
-
-    function renderHistory(data) {
-        const body = $('[data-role="lead-history-body"]');
-        const wrapNode = $('[data-role="lead-history-wrap"]');
-        const empty = $('[data-role="lead-history-empty"]');
-        const started = data.auditStartedAt ? humanDate(data.auditStartedAt) : null;
-
-        // ДАТА ВКЛЮЧЕНИЯ ЖУРНАЛА НАЗЫВАЕТСЯ ОБЯЗАТЕЛЬНО. Без неё пустая вкладка
-        // читается как «запись никто не трогал», и журнал начинает врать в самом
-        // чувствительном месте — там, где по нему судят о человеке.
-        $('[data-role="lead-history-note"]').textContent = started
-            ? `Показаны изменения самой записи лида. Журнал ведётся с ${started}.`
-            : 'Показаны изменения самой записи лида.';
-
-        if (!data.rows.length) {
-            body.innerHTML = '';
-            wrapNode.hidden = true;
-            empty.hidden = false;
-            $('[data-role="lead-history-empty-text"]').textContent = started
-                ? `С ${started}, когда включён журнал, эту запись не меняли. Что было раньше, в журнал не попало.`
-                : 'Эту запись не меняли с тех пор, как включён журнал.';
-            return;
-        }
-
-        wrapNode.hidden = false;
-        empty.hidden = true;
-        body.innerHTML = '';
-        data.rows.forEach((row) => {
-            // Колонок три: «Раздел» и «Запись» не нужны — запись одна и известна.
-            renderRow(row, { columns: ['when', 'who'] }).forEach((tr) => body.appendChild(tr));
-        });
-    }
-
-    function humanDate(value) {
-        const d = new Date(value);
-        if (Number.isNaN(d.getTime())) return String(value);
-        return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })
-            .replace(/\s*г\.?$/, '');
+        historyPane.ensure();
     }
 
     async function handlePhoneBlur() {
@@ -556,7 +517,7 @@ export function createLeadModal(root, deps) {
         if (modal) return;
         editingLeadId = lead ? lead.id : null;
         openedSnapshot = null;
-        historyLoaded = false;
+        if (historyPane) historyPane.reset();
         geo.reset();
         // У НОВОЙ ЗАПИСИ ВКЛАДКИ «ИСТОРИЯ» НЕТ ВОВСЕ: читать нечего, а
         // неактивная вкладка была бы обещанием, которого никто не давал.
