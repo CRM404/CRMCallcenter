@@ -137,6 +137,12 @@ function createInstance(container, ctx) {
         done: [],
         doneTotal: 0,
         doneLoaded: false,
+        // Точка отсчёта следующей порции. Отдаёт её сервер: кто задаёт порядок,
+        // тот и говорит, где остановились.
+        cursor: null,
+        // Период — тоже отбор, и «умолчание ли это» решает сервер: «сегодня» в
+        // проекте берётся только с него (К198).
+        periodIsDefault: true,
         // Расхождение часов браузера и сервера. Длительность считается от
         // серверного момента, и без поправки она врала бы ровно на эту разницу.
         clockSkewMs: 0,
@@ -178,12 +184,12 @@ function createInstance(container, ctx) {
         const [meta, active, done] = await Promise.all([
             fetchMeta(ctx.api).catch(metaFallback),
             fetchActive(ctx.api),
-            fetchCalls(ctx.api, state.filters, 0)
+            fetchCalls(ctx.api, state.filters, null)
         ]);
         if (!alive) return;
         state.meta = meta;
         applyActive(active);
-        applyDone(done, 0);
+        applyDone(done, false);
         renderActive();
         openLiveChannel();
         // Тик длительностей — раз в секунду, и только пока раздел открыт.
@@ -219,7 +225,7 @@ function createInstance(container, ctx) {
             }, SEARCH_DEBOUNCE_MS);
         });
 
-        $('[data-role="done-more"]').addEventListener('click', () => loadDone(state.done.length));
+        $('[data-role="done-more"]').addEventListener('click', () => loadDone(true));
         $('[data-role="filters-btn"]').addEventListener('click', openFiltersModal);
         $('[data-role="columns-btn"]').addEventListener('click', openColumnsModal);
         $('[data-role="export-btn"]').addEventListener('click', exportCalls);
@@ -352,9 +358,18 @@ function createInstance(container, ctx) {
         // «давно ли он пропал».
         const dur = document.createElement('td');
         if (row.state === 'off') {
-            dur.className = 'ui-table__muted';
-            dur.textContent = row.lastActiveAt ? `был активен в ${timeLabel(row.lastActiveAt)}` : '';
-            if (!row.lastActiveAt) dur.appendChild(dash());
+            // ПРИГЛУШЕНИЕ СТОИТ НА СОДЕРЖИМОМ, А НЕ НА САМОЙ ЯЧЕЙКЕ (К199).
+            //
+            // `.ui-table td` объявляет цвет, и по специфичности (0,1,1 против
+            // 0,1,0) он молча отменяет класс, повешенный на `<td>`: приглушённое
+            // выходило полной чернотой. Замер: шесть ячеек шли rgb(26,36,51)
+            // вместо #8894a8.
+            //
+            // Ошибка в проекте уже случалась и уже разобрана — в самом коде
+            // (`Sources/js/modules/sourcesSection.js:336-347`), и там же сказано,
+            // что до правки три колонки выглядели правильно СЛУЧАЙНО.
+            if (row.lastActiveAt) dur.appendChild(span('ui-table__muted', `был активен в ${timeLabel(row.lastActiveAt)}`));
+            else dur.appendChild(dash());
         } else {
             dur.className = 'zv-dur';
             dur.dataset.since = row.stateSince || '';
@@ -375,8 +390,11 @@ function createInstance(container, ctx) {
         // кричат одинаково, не сообщает ничего.
         const handset = document.createElement('td');
         if (row.handset === 'connected') {
-            handset.className = 'ui-table__muted';
-            handset.textContent = 'подключена';
+            // Тихая норма — и она обязана быть тихой на самом деле: класс идёт
+            // на содержимое, иначе цвет `.ui-table td` его перебивает (К199).
+            // Колонка, в которой норма кричит вровень с исключением, не
+            // сообщает ничего — ради этого различия она и придумана.
+            handset.appendChild(span('ui-table__muted', 'подключена'));
         } else {
             handset.appendChild(span('ui-pill ui-pill--bad', 'не подключена'));
         }
@@ -428,11 +446,35 @@ function createInstance(container, ctx) {
                 const data = await fetchActive(ctx.api);
                 if (!alive) return;
                 applyActive(data);
+                // ПОДСВЕЧИВАЕТСЯ ТОЛЬКО СМЕНА СОСТОЯНИЯ, А НЕ ПОЯВЛЕНИЕ СТРОКИ
+                // (К200). У человека, которого в прошлом составе не было,
+                // прежнее состояние — `undefined`, и оно «не равно» любому:
+                // просто приехавшая строка светилась наравне с изменившейся.
+                //
+                // Цена не косметическая. Подсветка значит ровно одно — «здесь
+                // только что изменилось состояние». Сигнал с двумя смыслами
+                // читать перестают.
+                //
+                // Появление строки и без того редкое событие: состав вкладки
+                // меняется со сменой графика, а не по ходу дня.
                 const changed = new Set();
-                state.active.forEach((r) => { if (before.get(r.employeeId) !== r.state) changed.add(r.employeeId); });
+                state.active.forEach((r) => {
+                    if (!before.has(r.employeeId)) return;
+                    if (before.get(r.employeeId) !== r.state) changed.add(r.employeeId);
+                });
                 renderActive(changed);
             } catch (err) {
-                if (!isAbort(err)) ctx.toast(err.message, 'error');
+                // ТОСТА ЗДЕСЬ НЕТ, И ЭТО ПРАВИЛО, А НЕ ЭКОНОМИЯ (К201).
+                //
+                // Обновление запускает событие живого канала, а не человек:
+                // никто не нажимал кнопку и никто не ждёт ответа. Тост
+                // оставлен за отказом действия, которое человек запросил сам.
+                //
+                // Про отказ и так сказано — полосой, которую ставит оболочка на
+                // отказавшее чтение. Полоса живёт, пока живёт причина; тост
+                // уходит через три секунды и уносит объяснение с собой. Показать
+                // оба значит показать одно и то же дважды и убрать половину.
+                if (!isAbort(err)) console.error('Живое обновление «Активных» не прошло', err);
             }
         }, 250);
     }
@@ -457,11 +499,11 @@ function createInstance(container, ctx) {
 
     // ------------------------------------------------------------ «Завершённые»
 
-    async function loadDone(offset) {
+    async function loadDone(more) {
         try {
-            const data = await fetchCalls(ctx.api, state.filters, offset || 0);
+            const data = await fetchCalls(ctx.api, state.filters, more ? state.cursor : null);
             if (!alive) return;
-            applyDone(data, offset || 0);
+            applyDone(data, Boolean(more));
             renderDone(data.hasMore);
         } catch (err) {
             if (!isAbort(err)) ctx.toast(err.message, 'error');
@@ -471,10 +513,18 @@ function createInstance(container, ctx) {
     // Числа шапки и состав строк ставятся ОДНИМ действием, из одного ответа.
     // Развести их — значит однажды показать счётчик от одного отбора рядом со
     // строками от другого; ровно за это снималась К183.
-    function applyDone(data, offset) {
+    function applyDone(data, more) {
         state.doneLoaded = true;
-        state.done = offset ? state.done.concat(data.rows) : data.rows;
+        state.done = more ? state.done.concat(data.rows) : data.rows;
         state.doneTotal = data.total;
+        state.cursor = data.cursor || null;
+        // Отбор, который сервер на самом деле применил: период он подставляет
+        // сам, и знать о нём экран может только отсюда.
+        if (data.filters) {
+            state.filters.from = data.filters.from;
+            state.filters.to = data.filters.to;
+            state.periodIsDefault = data.filters.periodIsDefault;
+        }
         $('[data-role="count-done"]').textContent = String(data.total);
         $('[data-role="stat-dialed"]').textContent = String(data.counts.dialed);
         $('[data-role="stat-answered"]').textContent = String(data.counts.answered);
@@ -694,15 +744,32 @@ function createInstance(container, ctx) {
 
     // ------------------------------------------------------------ отбор
 
+    // ПЕРИОД — ТОЖЕ ОТБОР, И САМЫЙ ЧАСТЫЙ (К198).
+    //
+    // Его здесь не было, и пустой экран при своём периоде говорил «Сегодня ещё
+    // не звонили… поменяйте период в фильтрах» — человеку, который период
+    // только что и поменял. Экран отсылал его сделать то, что он уже сделал.
+    //
+    // «Отличается ли период от умолчания» решает сервер: «сегодня» в проекте
+    // берётся только с него.
     function hasAnyFilter() {
         const f = state.filters;
-        return Boolean(f.employeeId || f.outcome || f.direction || f.lineType
-            || f.sourceId || f.withRecord || f.search);
+        return Boolean(!state.periodIsDefault || f.employeeId || f.outcome || f.direction
+            || f.lineType || f.sourceId || f.withRecord || f.search);
     }
 
     function activeFilterLabels() {
         const f = state.filters;
         const out = [];
+        // Раз период считается отбором, он и в чипах стоит наравне с прочими:
+        // короткий список без объяснения — ровно то, от чего чипы и спасают.
+        if (!state.periodIsDefault) {
+            out.push({
+                key: 'period',
+                label: 'Период',
+                value: f.from === f.to ? dayLabelIso(f.from) : dayLabelIso(f.from) + ' — ' + dayLabelIso(f.to)
+            });
+        }
         if (f.search) out.push({ key: 'search', label: 'Поиск', value: f.search });
         if (f.employeeId) {
             const op = state.meta.operators.find((o) => o.id === f.employeeId);
@@ -752,18 +819,20 @@ function createInstance(container, ctx) {
     }
 
     function dropFilter(key) {
-        if (key === 'withRecord') state.filters.withRecord = false;
+        if (key === 'period') { state.filters.from = null; state.filters.to = null; }
+        else if (key === 'withRecord') state.filters.withRecord = false;
         else if (key === 'search') { state.filters.search = ''; $('[data-role="search"]').value = ''; }
         else state.filters[key] = null;
         loadDone();
     }
 
     function resetFilters() {
-        // Период НЕ сбрасывается вместе с остальным: он есть всегда, и «сброс»
-        // до пустого периода означал бы запрос всей истории разом.
-        const period = { from: state.filters.from, to: state.filters.to };
-        state.filters = { ...period, employeeId: null, outcome: null, direction: null,
-            lineType: null, sourceId: null, withRecord: false, search: '' };
+        // ПЕРИОД СБРАСЫВАЕТСЯ ВМЕСТЕ СО ВСЕМ ОСТАЛЬНЫМ (К198). Раз он считается
+        // отбором, кнопка «Сбросить фильтры» обязана вернуть и его — то есть
+        // вернуть человека к сегодняшнему дню. Пустой период при этом не значит
+        // «вся история»: сервер подставит умолчание, и это тот же сегодня.
+        state.filters = { from: null, to: null, employeeId: null, outcome: null,
+            direction: null, lineType: null, sourceId: null, withRecord: false, search: '' };
         $('[data-role="search"]').value = '';
         loadDone();
     }
@@ -1037,6 +1106,14 @@ function createInstance(container, ctx) {
         if (!iso) return '';
         const d = new Date(iso);
         return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    }
+
+    // «26.08» из «2026-08-26». Строка разбирается сама: new Date('2026-08-26')
+    // читается как UTC-полночь и в минусовых поясах отдаёт предыдущий день.
+    function dayLabelIso(iso) {
+        if (!iso) return '';
+        const parts = String(iso).split('-');
+        return parts[2] + '.' + parts[1];
     }
 
     function dayLabel(iso) {

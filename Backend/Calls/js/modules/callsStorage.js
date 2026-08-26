@@ -22,8 +22,15 @@ export function fetchMeta(api) {
  * Пустые значения в строку запроса не попадают — этим занимается buildQuery
  * транспорта: «фильтр не задан» и «фильтр задан пустым» на сервере разные вещи.
  */
-export function fetchCalls(api, filters, offset) {
-    return api.get('/calls', { ...toQuery(filters), offset: offset || undefined });
+export function fetchCalls(api, filters, cursor) {
+    return api.get('/calls', {
+        ...toQuery(filters),
+        // КУРСОР, А НЕ СМЕЩЕНИЕ (К197). Журнал пополняется во время чтения:
+        // новый звонок встаёт наверх и сдвигает окно, а на смещении это значит
+        // повтор уже показанной строки на следующей странице.
+        cursorAt: cursor ? cursor.at || undefined : undefined,
+        cursorId: cursor ? cursor.id : undefined
+    });
 }
 
 /**

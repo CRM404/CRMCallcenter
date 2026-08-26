@@ -30,7 +30,13 @@ const PAGE_SIZE = 30;
 // которые собираются в браузере той же библиотекой, что у «Лидов». Молча
 // отдать половину нельзя, тихо повесить браузер — тоже: сверх потолка приходит
 // отказ с числом и предложением сузить период.
-const EXPORT_LIMIT = 20000;
+//
+// ЧИСЛО ОДНО НА ПРОЕКТ, И ЭТО СВЕДЕНО НАМЕРЕННО. В первой редакции здесь стояло
+// 20 000, а для журнала изменений куратор назвал 50 000 (ответ И207) — два
+// потолка без причины это будущий вопрос «а почему там можно больше». Причины
+// нет: библиотека одна, браузер один, файл собирается одинаково. Взято большее
+// из двух — меньшее пришлось бы объяснять.
+const EXPORT_LIMIT = 50000;
 
 // Исходы нашего перечня. Служебный `lost` ставит сторож зависших, остальные
 // приводятся на входе из строки станции (часть 7А, `calls.outcome`).
@@ -152,10 +158,21 @@ router.get('/active', async (req, res) => {
 router.get('/meta', async (req, res) => {
     try {
         const [operators, sources] = await Promise.all([
+            // СПИСОК ЦЕЛИКОМ, БЕЗ ОТБОРА, И ЭТО НАРОЧНО (К196).
+            //
+            // Здесь стояло `WHERE status <> 'Архив'`, и это было условие,
+            // которое ДЕЛАЛО ВИД, ЧТО ОТБИРАЕТ. «Архив» — статус ИСТОЧНИКОВ, у
+            // них он закрыт ограничением; у сотрудника архив помечается
+            // `archive_kind`, а `status` остаётся `active` (routes/employees.js:343).
+            // Уволенный сотрудник условие проходил, и в справочнике был виден —
+            // то есть поведение совпадало с задуманным СЛУЧАЙНО.
+            //
+            // Отбирать здесь нечего и не надо: отбор по оператору, у которого
+            // сегодня звонков нет, — законный вопрос («почему у него пусто?»), а
+            // по уволенному — тем более: его звонки никуда не делись.
             pool.query(
                 `SELECT id, last_name, first_name, middle_name, pbx_extension
                    FROM employees
-                  WHERE status <> 'Архив' OR status IS NULL
                   ORDER BY last_name, first_name`
             ),
             pool.query(
@@ -191,6 +208,12 @@ router.get('/', async (req, res) => {
     try {
         const filters = readFilters(req.query);
         const wantExport = req.query.export === '1';
+        // ПЕРИОД — ТОЖЕ ОТБОР, и решает это сервер, а не браузер (К198). Экран
+        // по этому признаку выбирает, какую из двух пустот показать, а «сегодня»
+        // в проекте берётся только с сервера: часы у руководителя могут стоять в
+        // другом поясе (правило Ф7).
+        const day = todayIso();
+        const periodIsDefault = filters.from === day && filters.to === day;
 
         const where = [];
         const params = [];
@@ -258,19 +281,65 @@ router.get('/', async (req, res) => {
         }
 
         const limit = wantExport ? EXPORT_LIMIT : PAGE_SIZE;
-        const offset = wantExport ? 0 : Math.max(0, Number(req.query.offset) || 0);
+
+        // ПОСТРАНИЧНОСТЬ КУРСОРОМ, А НЕ OFFSET (К197).
+        //
+        // Список идёт свежими сверху, а журнал пополняется во время чтения —
+        // ежеминутно, как только заработает телефония. Новый звонок встаёт
+        // наверх и СДВИГАЕТ ОКНО: строка, показанная последней на первой
+        // странице, приходит второй раз на второй. Доказано данными: сорок
+        // звонков, страница 1 из тридцати, приходит один свежий — и на
+        // offset=30 повторяется уже показанная строка.
+        //
+        // Стенд этого показать не мог: двадцать четыре звонка при порции
+        // тридцать — второй страницы не существует, и «повторов нет» означало
+        // «повторяться негде».
+        //
+        // Курсор — пара (started_at, id) последней показанной строки. Порядок и
+        // порция те же, меняется только точка отсчёта.
+        //
+        // NULL В `started_at` УЧТЁН, хотя сегодня таких строк не бывает:
+        // колонка допускает пустоту, порядок ставит такие строки в конец
+        // (NULLS LAST), и курсор обязан пройти по ним так же, как по остальным.
+        // Пустой курсор при заданном номере как раз и значит «мы уже в хвосте
+        // из пустых».
+        if (!wantExport && req.query.cursorId) {
+            const cursorId = Number(req.query.cursorId);
+            const cursorAt = String(req.query.cursorAt || '').trim() || null;
+            if (Number.isInteger(cursorId) && cursorId > 0) {
+                params.push(cursorAt);
+                const atIdx = params.length;
+                params.push(cursorId);
+                const idIdx = params.length;
+                where.push(
+                    `( ($${atIdx}::timestamp IS NOT NULL AND (`
+                    + `(c.started_at IS NOT NULL AND (c.started_at, c.id) < ($${atIdx}::timestamp, $${idIdx}::int))`
+                    + ` OR c.started_at IS NULL))`
+                    + ` OR ($${atIdx}::timestamp IS NULL AND c.started_at IS NULL AND c.id < $${idIdx}::int) )`
+                );
+            }
+        }
+
+        const listWhere = where.join(' AND ');
 
         const list = await pool.query(
             `SELECT c.id, c.started_at, c.direction, c.client_phone, c.lead_id,
+                    -- КЛЮЧ КУРСОРА — СТРОКА ИЗ САМОЙ БАЗЫ, а не время, прогнанное
+                    -- через JS-дату и обратно. Колонка типа timestamp приезжает в
+                    -- узел объектом Date, привязанным к поясу МАШИНЫ, и
+                    -- toISOString переводит его в UTC: вернувшись параметром с
+                    -- приведением к timestamp, он сдвинулся бы ровно на смещение
+                    -- пояса, и курсор пропускал бы три часа строк на порции.
+                    to_char(c.started_at, 'YYYY-MM-DD"T"HH24:MI:SS.US') AS started_at_key,
                     c.our_number, c.outcome, c.outcome_raw, c.answered, c.transferred,
                     c.is_internal, c.wait_seconds, c.talk_seconds, c.record_id,
                     c.funnel_status_name, c.notes_snapshot, c.attempt_no,
                     c.operator_extension,
                     e.last_name, e.first_name, e.middle_name, e.line_type
              ${from}
-              WHERE ${whereSql}
+              WHERE ${listWhere}
               ORDER BY c.started_at DESC NULLS LAST, c.id DESC
-              LIMIT ${limit} OFFSET ${offset}`,
+              LIMIT ${limit}`,
             params
         );
 
@@ -310,7 +379,21 @@ router.get('/', async (req, res) => {
                 // место, а не каждый экран по-своему.
                 rate: dialed > 0 ? Math.round((answered / dialed) * 100) : null
             },
-            hasMore: !wantExport && offset + rows.length < total,
+            // «ЕСТЬ ЕЩЁ» СЧИТАЕТСЯ ПО ПОРЦИИ, А НЕ ПО СУММЕ ПОКАЗАННОГО.
+            // При курсоре складывать нечего: полная порция означает, что за ней
+            // почти наверняка есть строки, неполная — что это конец. Сравнивать
+            // с `total` нельзя вовсе: счётчик считается по всему отбору, а
+            // курсор уже отрезал прочитанное.
+            // Отбор, который сервер на самом деле применил. Экран не
+            // пересчитывает его у себя: «сегодня» знает одна сторона.
+            filters: { from: filters.from, to: filters.to, periodIsDefault },
+            hasMore: !wantExport && rows.length === limit,
+            // Точка отсчёта следующей порции. Отдаётся сервером, а не собирается
+            // браузером из последней строки: кто задаёт порядок, тот и говорит,
+            // где остановились.
+            cursor: rows.length
+                ? { at: list.rows[list.rows.length - 1].started_at_key, id: list.rows[list.rows.length - 1].id }
+                : null,
             serverNow: new Date().toISOString(),
             pbx: pbxState()
         });
