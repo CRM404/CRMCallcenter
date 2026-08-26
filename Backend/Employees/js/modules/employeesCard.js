@@ -21,6 +21,7 @@
 // фамилией закрывалось молча — именно той дверью, которую нажимают не глядя.
 
 import { openModal } from '/ui/modal.js';
+import { renderRow } from '/history/historyTable.js';
 import { iconNode } from '/ui/icons.js';
 import { DOCUMENT_TYPE_MAP } from './employeesStorage.js';
 import { validatePhone, validateEmail, formatPhone } from './employeesValidation.js';
@@ -77,7 +78,7 @@ function readFileAsDataUrl(file) {
  * @param {Object}      deps  { storage, toast, confirm, isAlive, isAbort, onSaved }
  */
 export function createCard(root, deps) {
-    const { storage, toast, confirm, confirmDanger, isAlive, isAbort, onSaved } = deps;
+    const { storage, toast, confirm, confirmDanger, isAlive, isAbort, onSaved, api } = deps;
 
     const $ = (sel) => root.querySelector(sel);
     const tpl = $('[data-role="employee-tpl"]');
@@ -671,7 +672,20 @@ export function createCard(root, deps) {
         const body = document.createElement('div');
         body.appendChild(tpl.content.cloneNode(true));
 
+        // ОКНО С ШАГАМИ ПОЛУЧАЕТ ПОЛОСУ ВКЛАДОК, а шаги живут внутри первой.
+        //
+        // Историю НЕЛЬЗЯ ставить третьим шагом: шаг — часть заполнения, и
+        // человек, идущий по шагам, наткнулся бы на чтение вместо ввода.
+        //
+        // Полоса уходит в слот `toolbar` слоя — тот же, что у карточки лида:
+        // она остаётся на месте, пока тело едет под ней. Своего способа для
+        // этого раздел не заводит (ответ куратора И212).
+        const tabsNode = buildTabs();
+        const historyPane = buildHistoryPane();
+        body.appendChild(historyPane);
+
         modal = openModal({
+            toolbar: tabsNode,
             title: employee
                 ? `${title} (ID: ${String(employee.id).padStart(4, '0')})`
                 : title,
@@ -708,9 +722,13 @@ export function createCard(root, deps) {
                 }
             ]
         });
-        modal.result.then(() => { modal = null; editingId = null; });
+        modal.result.then(() => { modal = null; editingId = null; historyLoaded = false; });
 
         bindFormEvents(body);
+        // У НОВОЙ ЗАПИСИ ВКЛАДКИ «ИСТОРИЯ» НЕТ ВОВСЕ: читать нечего, а
+        // неактивная вкладка была бы обещанием, которого никто не давал.
+        tabsNode.hidden = !employee;
+        switchCardTab('card');
         goToStep(1);
 
         // Выбор файла с прошлого открытия сюда не переносится: поля клонируются
@@ -742,6 +760,171 @@ export function createCard(root, deps) {
         // она стоит выше по разметке.
         const first = $('#empLastName');
         if (first) first.focus();
+    }
+
+    // ------------------------------------------------------------ вкладки окна
+
+    // Какая вкладка открыта и загружена ли история. Обе живут в экземпляре
+    // модуля, а не в разметке: разметка окна клонируется из шаблона заново на
+    // каждое открытие.
+    let cardTab = 'card';
+    let historyLoaded = false;
+
+    function buildTabs() {
+        const box = document.createElement('div');
+        box.className = 'ui-tabs';
+        box.setAttribute('role', 'tablist');
+        box.dataset.role = 'employee-tabs';
+
+        const make = (key, label) => {
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.className = 'ui-tabs__tab' + (key === 'card' ? ' ui-tabs__tab--active' : '');
+            b.setAttribute('role', 'tab');
+            b.setAttribute('aria-selected', String(key === 'card'));
+            b.dataset.role = `employee-tab-${key}`;
+            b.textContent = label;
+            b.addEventListener('click', () => switchCardTab(key));
+            return b;
+        };
+
+        box.appendChild(make('card', 'Карточка'));
+        // СЧЁТЧИКА У «ИСТОРИИ» НЕТ — по той же причине, что и в карточке лида.
+        box.appendChild(make('history', 'История'));
+        return box;
+    }
+
+    function buildHistoryPane() {
+        const pane = document.createElement('div');
+        pane.dataset.role = 'employee-history-pane';
+        pane.hidden = true;
+        pane.innerHTML = `
+            <div class="hi-section">
+                <div class="ui-table-wrap" data-role="employee-history-wrap">
+                    <table class="ui-table">
+                        <thead><tr>
+                            <th class="ui-table__sortable">Когда <svg class="ui-ic ui-ic--xs ui-table__sort-icon" aria-hidden="true"><use href="#ui-ic-sort-desc"></use></svg></th>
+                            <th>Кто</th>
+                            <th>Что изменилось</th>
+                        </tr></thead>
+                        <tbody data-role="employee-history-body"></tbody>
+                    </table>
+                </div>
+                <div class="ui-empty ui-empty--inline" data-role="employee-history-empty" hidden>
+                    <div class="ui-empty__title">Изменений не записано</div>
+                    <div class="ui-empty__text" data-role="employee-history-empty-text"></div>
+                </div>
+                <p class="ui-table-note" data-role="employee-history-note"></p>
+            </div>`;
+        return pane;
+    }
+
+    /**
+     * Переключение вкладки окна.
+     *
+     * ВВЕДЁННОЕ НЕ ТЕРЯЕТСЯ: скрывается блок полей, а не сохраняется форма.
+     * Переключение вкладки — не сохранение и не отмена.
+     *
+     * На «Истории» подпись окна — имя записи, а не «Шаг 1 из 2», и кнопки шага
+     * и сохранения скрыты: остаётся «Закрыть». Возврат на «Карточку» возвращает
+     * подпись и кнопки в том же состоянии, в каком их оставили, — состояние это
+     * задаёт goToStep, и он же зовётся при возврате.
+     */
+    function switchCardTab(tab) {
+        if (!modal) return;
+        cardTab = tab;
+        const onCard = tab === 'card';
+
+        const tabs = modal.box.querySelector('[data-role="employee-tabs"]');
+        if (tabs) {
+            ['card', 'history'].forEach((key) => {
+                const btn = tabs.querySelector(`[data-role="employee-tab-${key}"]`);
+                if (!btn) return;
+                btn.classList.toggle('ui-tabs__tab--active', key === tab);
+                btn.setAttribute('aria-selected', String(key === tab));
+            });
+        }
+
+        const fields = modal.box.querySelector('[data-role="step-1-fields"]');
+        const fields2 = modal.box.querySelector('[data-role="step-2-fields"]');
+        const pane = modal.box.querySelector('[data-role="employee-history-pane"]');
+        if (pane) pane.hidden = onCard;
+
+        if (onCard) {
+            goToStep(currentStep);
+        } else {
+            if (fields) fields.hidden = true;
+            if (fields2) fields2.hidden = true;
+            const sub = modal.box.querySelector('.ui-modal__sub');
+            if (sub) sub.textContent = 'История изменений записи';
+            ['prev-step', 'next-step', 'employee-save'].forEach((role) => {
+                const btn = modal.box.querySelector(`[data-role="${role}"]`);
+                if (btn) btn.hidden = true;
+            });
+            const cancel = modal.box.querySelector('[data-role="employee-cancel"]');
+            if (cancel) cancel.textContent = 'Закрыть';
+            loadCardHistory();
+        }
+
+        if (onCard) {
+            const cancel = modal.box.querySelector('[data-role="employee-cancel"]');
+            if (cancel) cancel.textContent = 'Отмена';
+        }
+    }
+
+    async function loadCardHistory() {
+        if (historyLoaded || !editingId) return;
+        historyLoaded = true;
+        try {
+            const data = await api.get('/audit', {
+                recordTable: 'employees',
+                recordId: String(editingId),
+                // Весь журнал, а не последние семь дней: карточку открыли, чтобы
+                // увидеть её прошлое целиком.
+                from: '2000-01-01'
+            });
+            if (!isAlive() || !modal) return;
+            renderCardHistory(data);
+        } catch (err) {
+            if (isAbort(err)) return;
+            historyLoaded = false;
+            toast(err.message, 'error');
+        }
+    }
+
+    function renderCardHistory(data) {
+        const body = modal.box.querySelector('[data-role="employee-history-body"]');
+        const wrapNode = modal.box.querySelector('[data-role="employee-history-wrap"]');
+        const empty = modal.box.querySelector('[data-role="employee-history-empty"]');
+        const started = data.auditStartedAt ? humanCardDate(data.auditStartedAt) : null;
+
+        modal.box.querySelector('[data-role="employee-history-note"]').textContent = started
+            ? `Показаны изменения самой записи сотрудника. Журнал ведётся с ${started}.`
+            : 'Показаны изменения самой записи сотрудника.';
+
+        if (!data.rows.length) {
+            body.innerHTML = '';
+            wrapNode.hidden = true;
+            empty.hidden = false;
+            modal.box.querySelector('[data-role="employee-history-empty-text"]').textContent = started
+                ? `С ${started}, когда включён журнал, эту запись не меняли. Что было раньше, в журнал не попало.`
+                : 'Эту запись не меняли с тех пор, как включён журнал.';
+            return;
+        }
+
+        wrapNode.hidden = false;
+        empty.hidden = true;
+        body.innerHTML = '';
+        data.rows.forEach((row) => {
+            renderRow(row, { columns: ['when', 'who'] }).forEach((tr) => body.appendChild(tr));
+        });
+    }
+
+    function humanCardDate(value) {
+        const d = new Date(value);
+        if (Number.isNaN(d.getTime())) return String(value);
+        return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })
+            .replace(/\s*г\.?$/, '');
     }
 
     /** Закрыть окно. skipConfirm — после сохранения, вопрос там неуместен. */

@@ -134,9 +134,11 @@ function employeeName(employee) {
  *                               createScriptPairs, createOfferTabPicker, createGeo,
  *                               onSaved }
  */
+import { renderRow } from '/history/historyTable.js';
+
 export function createLeadModal(root, deps) {
     const {
-        wrap, confirm, storage, toast, isAlive, isAbort,
+        wrap, confirm, storage, toast, isAlive, isAbort, api,
         createPickList, createScriptPairs, createOfferTabPicker, createGeo, onSaved
     } = deps;
 
@@ -237,14 +239,92 @@ export function createLeadModal(root, deps) {
         syncPurchaseCascades(false);
     }
 
+    // ТРИ ВКЛАДКИ. Переключение прячет БЛОК ПОЛЕЙ, а не сохраняет и не отменяет
+    // форму: введённое на «Данных лида» остаётся в окне, пока окно открыто.
+    // Переключение вкладки — не сохранение и не отмена.
     function switchTab(tab) {
-        const isMain = tab === 'main';
-        $('[data-role="tab-main"]').classList.toggle('ui-tabs__tab--active', isMain);
-        $('[data-role="tab-offers"]').classList.toggle('ui-tabs__tab--active', !isMain);
-        $('[data-role="tab-main"]').setAttribute('aria-selected', String(isMain));
-        $('[data-role="tab-offers"]').setAttribute('aria-selected', String(!isMain));
-        $('[data-role="tab-panel-main"]').hidden = !isMain;
-        $('[data-role="tab-panel-offers"]').hidden = isMain;
+        ['main', 'offers', 'history'].forEach((name) => {
+            const btn = $(`[data-role="tab-${name}"]`);
+            const panel = $(`[data-role="tab-panel-${name}"]`);
+            const on = name === tab;
+            btn.classList.toggle('ui-tabs__tab--active', on);
+            btn.setAttribute('aria-selected', String(on));
+            panel.hidden = !on;
+        });
+
+        // ПОДВАЛ НА «ИСТОРИИ» — ОДНА КНОПКА «ЗАКРЫТЬ». «Сохранить» на вкладке,
+        // где нечего сохранять, читается как «сохранить историю».
+        if (modal) {
+            const save = modal.box.querySelector('[data-role="lead-save"]');
+            const cancel = modal.box.querySelector('[data-role="lead-cancel"]');
+            if (save) save.hidden = tab === 'history';
+            if (cancel) cancel.textContent = tab === 'history' ? 'Закрыть' : 'Отмена';
+        }
+
+        if (tab === 'history') loadHistory();
+    }
+
+    // ------------------------------------------------------------ история записи
+
+    let historyLoaded = false;
+
+    async function loadHistory() {
+        if (historyLoaded || !editingLeadId) return;
+        historyLoaded = true;
+        try {
+            const data = await api.get('/audit', {
+                recordTable: 'leads',
+                recordId: String(editingLeadId),
+                // Период вкладки — весь журнал, а не последние семь дней:
+                // человек открыл карточку, чтобы увидеть её прошлое целиком.
+                from: '2000-01-01'
+            });
+            if (!isAlive()) return;
+            renderHistory(data);
+        } catch (err) {
+            if (isAbort(err)) return;
+            historyLoaded = false;
+            toast(err.message, 'error');
+        }
+    }
+
+    function renderHistory(data) {
+        const body = $('[data-role="lead-history-body"]');
+        const wrapNode = $('[data-role="lead-history-wrap"]');
+        const empty = $('[data-role="lead-history-empty"]');
+        const started = data.auditStartedAt ? humanDate(data.auditStartedAt) : null;
+
+        // ДАТА ВКЛЮЧЕНИЯ ЖУРНАЛА НАЗЫВАЕТСЯ ОБЯЗАТЕЛЬНО. Без неё пустая вкладка
+        // читается как «запись никто не трогал», и журнал начинает врать в самом
+        // чувствительном месте — там, где по нему судят о человеке.
+        $('[data-role="lead-history-note"]').textContent = started
+            ? `Показаны изменения самой записи лида. Журнал ведётся с ${started}.`
+            : 'Показаны изменения самой записи лида.';
+
+        if (!data.rows.length) {
+            body.innerHTML = '';
+            wrapNode.hidden = true;
+            empty.hidden = false;
+            $('[data-role="lead-history-empty-text"]').textContent = started
+                ? `С ${started}, когда включён журнал, эту запись не меняли. Что было раньше, в журнал не попало.`
+                : 'Эту запись не меняли с тех пор, как включён журнал.';
+            return;
+        }
+
+        wrapNode.hidden = false;
+        empty.hidden = true;
+        body.innerHTML = '';
+        data.rows.forEach((row) => {
+            // Колонок три: «Раздел» и «Запись» не нужны — запись одна и известна.
+            renderRow(row, { columns: ['when', 'who'] }).forEach((tr) => body.appendChild(tr));
+        });
+    }
+
+    function humanDate(value) {
+        const d = new Date(value);
+        if (Number.isNaN(d.getTime())) return String(value);
+        return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })
+            .replace(/\s*г\.?$/, '');
     }
 
     async function handlePhoneBlur() {
@@ -454,6 +534,7 @@ export function createLeadModal(root, deps) {
 
         $('[data-role="tab-main"]').addEventListener('click', () => switchTab('main'));
         $('[data-role="tab-offers"]').addEventListener('click', () => switchTab('offers'));
+        $('[data-role="tab-history"]').addEventListener('click', () => switchTab('history'));
         $('#ldLine').addEventListener('change', syncEmployeesByLine);
         $('#ldPurchaseMethod').addEventListener('change', handleCascadeChange);
         $('#ldClientType').addEventListener('change', handleCascadeChange);
@@ -475,7 +556,11 @@ export function createLeadModal(root, deps) {
         if (modal) return;
         editingLeadId = lead ? lead.id : null;
         openedSnapshot = null;
+        historyLoaded = false;
         geo.reset();
+        // У НОВОЙ ЗАПИСИ ВКЛАДКИ «ИСТОРИЯ» НЕТ ВОВСЕ: читать нечего, а
+        // неактивная вкладка была бы обещанием, которого никто не давал.
+        $('[data-role="tab-history"]').hidden = !editingLeadId;
         switchTab('main');
         $('[data-role="dup-warning"]').hidden = true;
 
@@ -523,8 +608,11 @@ export function createLeadModal(root, deps) {
             actions: [
                 // Уход тихий, как всякий уход в проекте. Возврат false
                 // оставляет окно открытым: человек передумал уходить.
-                { label: 'Отмена', variant: 'ghost', onClick: () => confirmDiscard() },
-                { label: 'Сохранить', onClick: () => handleSave() }
+                //
+                // РОЛИ НУЖНЫ ВКЛАДКЕ «ИСТОРИЯ»: там подвал — одна кнопка
+                // «Закрыть», и раздел находит обе по роли, а не по подписи.
+                { label: 'Отмена', variant: 'ghost', role: 'lead-cancel', onClick: () => confirmDiscard() },
+                { label: 'Сохранить', role: 'lead-save', onClick: () => handleSave() }
             ]
         });
         modal.result.then(() => {

@@ -52,6 +52,8 @@ const BY_TABLE = {
         opened_at: 'Взят в работу',
         archived_at: 'В архиве с',
         archived_by: 'В архив отправил',
+        archived_actor_kind: 'В архив отправил, вид автора',
+        archived_actor_name: 'В архив отправил, имя',
         archive_reason: 'Причина архива',
         missed_at: 'Пропущенный звонок',
         origin: 'Происхождение',

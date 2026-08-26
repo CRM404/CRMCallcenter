@@ -1161,6 +1161,9 @@ export async function mount(container, ctx) {
         wrap,
         confirm: ctx.confirm,
         storage,
+        // Вкладке «История» нужен журнал, а он живёт не в storage «Лидов»:
+        // это чужой раздел, и его запрос идёт общим транспортом панели.
+        api: ctx.api,
         toast: ctx.toast,
         isAlive,
         isAbort,

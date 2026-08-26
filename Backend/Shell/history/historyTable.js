@@ -16,6 +16,24 @@
 
 import { fieldLabel } from './historyFields.js';
 
+// СТИЛЬ ЖУРНАЛА ПОДТЯГИВАЕТСЯ САМИМ МОДУЛЕМ, и это не удобство, а условие
+// работы. Раскладку раздела оболочка грузит при открытии раздела — а две трети
+// применений этой строки живут в ЧУЖИХ карточках: в «Лидах» и «Сотрудниках».
+// Открыв карточку лида, человек не открывал «Историю изменений», и её файл в
+// документ не попадал: строки рисовались бы без единого правила.
+//
+// Файл один на все три места — тот самый, что объявляет пятнадцать классов
+// раздела. Второй копии не заводится: разошлись бы на первой правке.
+const STYLES_HREF = '/css/history-light.css';
+
+function ensureStyles() {
+    if (document.querySelector(`link[href="${STYLES_HREF}"]`)) return;
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = STYLES_HREF;
+    document.head.appendChild(link);
+}
+
 // Первые три поля видны без нажатия (паспорт Р5). Обычная правка — одно-три
 // поля; прятать её под кнопку значит заставить нажимать на каждой строке.
 const VISIBLE_FIELDS = 3;
@@ -69,6 +87,7 @@ const PAGE_LABEL = {
  * @returns {HTMLElement[]} одна или две строки
  */
 export function renderRow(row, opts) {
+    ensureStyles();
     const columns = opts.columns;
     const tr = document.createElement('tr');
     const detailId = `hi-detail-${row.kind}-${row.kind === 'batch' ? row.batchId : row.id}`;
@@ -287,9 +306,23 @@ function valueText(item, side) {
     const title = item[`${side}Title`];
     if (title) return title;
     const raw = item[side];
-    if (raw === null || raw === undefined) return side === 'before' ? 'пусто' : 'пусто';
-    if (raw === '') return 'пусто';
-    return String(raw);
+    if (raw === null || raw === undefined || raw === '') return 'пусто';
+    return humanValue(String(raw));
+}
+
+// ВРЕМЯ ПОКАЗЫВАЕТСЯ ЧЕЛОВЕКУ, А НЕ МАШИНЕ. В журнале значение лежит так, как
+// его отдала база — «2026-08-25T16:41:22.763606»; строка верная, но читать её
+// глазами нельзя, а колонок с временем у записи по три-четыре.
+//
+// Приводится ТОЛЬКО то, что заведомо является меткой времени: остальное едет
+// как есть. Угадывать смысл значения экран не вправе — он показывает то, что
+// записано.
+const STAMP = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/;
+
+function humanValue(text) {
+    const m = STAMP.exec(text);
+    if (!m) return text;
+    return `${m[3]}.${m[2]}.${m[1]} ${m[4]}:${m[5]}`;
 }
 
 // «изменён» или «изменена» — по роду имени поля. Согласование делается здесь, а

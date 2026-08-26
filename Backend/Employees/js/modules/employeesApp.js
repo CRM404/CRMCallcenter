@@ -57,7 +57,10 @@ export async function mount(container, ctx) {
     storage = createStorage(ctx.api);
 
     const isAlive = () => alive(my);
-    const deps = { storage, toast: ctx.toast, isAlive, isAbort };
+    // `api` нужен вкладке «История» в карточке: журнал живёт не в storage
+    // «Сотрудников» — это чужой раздел, и его запрос идёт общим транспортом
+    // панели.
+    const deps = { storage, toast: ctx.toast, isAlive, isAbort, api: ctx.api };
 
     // Колонкам сервер больше не нужен: настройки общие и лежат в
     // sessionStorage до появления входа (см. шапку employeesColumns.js), —
