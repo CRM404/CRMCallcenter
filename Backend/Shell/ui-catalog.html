@@ -24,6 +24,7 @@
     <link rel="stylesheet" href="/ui/chip.css">
     <link rel="stylesheet" href="/ui/tabs.css">
     <link rel="stylesheet" href="/ui/note.css">
+    <link rel="stylesheet" href="/ui/link.css">
 
     <!-- 3. Составные элементы -->
     <link rel="stylesheet" href="/ui/modal.css">
@@ -143,6 +144,13 @@
         </div>
         <div class="cat-rule"><b>Вид <code>--warn</code> пришёл с паспортом Р10 («Звонки», часть 4).</b> <span>Он для значка, стоящего <b>одиноко</b> — без плашки и без пилюли, рядом с номером лида, который не приведён к единому виду. Там, где предупреждение занимает целый блок, берётся <code>.ui-note--warn</code>, а не голый значок.</span></div>
 
+        <div class="cat-cap" style="margin: var(--ui-space-5) 0 var(--ui-space-2)">два значка раздела «Звонки» (часть 7Б): набор проекта — 58</div>
+        <div class="cat-row">
+            <span class="cat-item"><span class="cat-cap">calls · плитка стола, пустые состояния</span><svg class="ui-ic ui-ic--lg" aria-hidden="true"><use href="#ui-ic-calls"></use></svg></span>
+            <span class="cat-item"><span class="cat-cap">play · кнопка записи в строке</span><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-play"></use></svg></span>
+        </div>
+        <div class="cat-rule"><b><code>calls</code> — гарнитура, а не трубка.</b> <span>Трубка в наборе уже есть (<code>phone</code>) и рисует трубку в руке: рядом с ней на плитке стола два похожих силуэта путались бы. Гарнитура говорит «рабочее место оператора», а не «позвонить», — раздел показывает смену и разговоры, а звонит оператор из своей панели.</span></div>
+
         <div class="cat-cap" style="margin: var(--ui-space-5) 0 var(--ui-space-2)">радиусы, тени, отступы — тоже токены, и раздел их не объявляет</div>
         <div class="cat-row" data-role="tokens-shape">
             <span class="cat-item"><span class="cat-cap">radius-sm</span><span class="tok-box" style="border-radius: var(--ui-radius-sm)"></span></span>
@@ -177,6 +185,20 @@
         <div class="type-row"><span style="font-size: var(--ui-text-sm); color: var(--ui-color-ink-soft)">Вторичный текст: подпись под значением.</span><span>--ui-text-sm / ink-soft</span></div>
         <div class="type-row"><span style="font-size: var(--ui-text-xs); color: var(--ui-color-ink-faint)">Третьестепенное: подсказка, единицы, «показано 6 из 14».</span><span>--ui-text-xs / ink-faint</span></div>
         <div class="cat-rule" style="margin-top: var(--ui-space-4)"><b>Правило.</b> <span>Уровней три: значение, подпись к нему и третьестепенное. Четвёртого размера «чуть меньше» в разделе не появляется — если текст нужно приглушить, меняется цвет, а не кегль.</span></div>
+    </section>
+
+    <!-- ========================== ССЫЛКА ========================== -->
+    <section class="cat-sec" data-role="sec-link">
+        <h2>Ссылка</h2>
+        <p class="cat-note">Объявлена паспортом Р5, приезжает с разделом «Звонки» (часть 7Б) — первым, кому понадобилась. До неё в проекте не было ни одной собственной ссылки: во всей разметке <code>Backend</code> не встречалось ни одного тега <code>&lt;a&gt;</code>, кроме сторонней библиотеки выгрузки. В «Звонках» ссылкой стоит телефон лида и ведёт в его карточку; в журнале изменений ею будет имя записи.</p>
+        <div class="cat-row">
+            <span class="cat-item"><span class="cat-cap">покой</span><a class="ui-link" href="#">+7 916 220-14-08</a></span>
+            <span class="cat-item"><span class="cat-cap">в строке таблицы, с подстрокой</span><span><a class="ui-link" href="#">+7 903 771-55-19</a><span class="ui-table__sub">попытка 3</span></span></span>
+            <span class="cat-item"><span class="cat-cap">вести некуда — ссылки нет вовсе</span><span><span class="ui-dash">—</span></span></span>
+        </div>
+        <div class="cat-rule"><b>В покое ссылка не синяя.</b> <span>Акцент по правилу оболочки — цвет интерактивных состояний, а не покоя: в журнале ссылка стоит в каждой строке, и синий столбец читался бы как разметка страницы. Покой несёт тихое подчёркивание, наведение — акцент.</span></div>
+        <div class="cat-rule"><b>Посещённая не отличается от непосещённой.</b> <span>Иначе журнал менял бы вид по мере чтения, а «я это уже открывал» есть свойство читателя, а не записи.</span></div>
+        <div class="cat-rule"><b>Неактивной ссылки не бывает.</b> <span>Вести некуда — значит ссылки нет вовсе: в «Звонках» на её месте стоит <code>.ui-dash</code>, в журнале изменений останется текст с причиной. Серая ссылка, которая не ведёт, обещает переход и не даёт его.</span></div>
     </section>
 
     <!-- ========================== КНОПКИ ========================== -->
