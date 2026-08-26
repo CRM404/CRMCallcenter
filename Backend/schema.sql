@@ -2389,6 +2389,368 @@ BEGIN
     END IF;
 END $$;
 
+-- ===== ЧАСТЬ 9 · СОБЫТИЯ ПЛАНИРОВЩИКА · ХРАНИЛИЩЕ ============================
+-- Наряд куратора от 26.08.2026, заход 1 «База». Паспорта: Р12 ред. 3 (события),
+-- Р11 ред. 5 (пометка статуса), Р1 ред. 8 (третья вкладка).
+--
+-- ЧТО ЗДЕСЬ ПРОИСХОДИТ. Числа, зашитые сегодня в код — перезвон через час,
+-- двадцать попыток, окно 9–21 (`services/appTime.js:31-36`), — становятся
+-- четырьмя событиями руководителя. ЭТОТ ЗАХОД НИЧЕГО НЕ МЕНЯЕТ В ПОВЕДЕНИИ:
+-- таблицы заводятся и засеваются сегодняшними значениями, а читать их начнёт
+-- заход 2. Сегодня их не читает никто.
+--
+-- ПОЧЕМУ БЛОК СТОИТ ЗДЕСЬ, А НЕ В КОНЦЕ ФАЙЛА. Ниже идёт перебор, который
+-- вешает триггер аудита на все таблицы схемы. Таблица, заведённая ПОСЛЕ него,
+-- получила бы триггер только со второго старта сервера — то есть первая правка
+-- события прошла бы мимо журнала и никто бы этого не заметил. Ни одна таблица
+-- проекта после этого перебора не заводится, и эта не будет.
+
+-- ----- Сами события ----------------------------------------------------------
+-- ЧЕТЫРЕ ВИДА, И ПЯТОГО НЕ БЫВАЕТ. Каждый отвечает за своё место в коде, а
+-- «добавить событие» означало бы «добавить поведение» (паспорт Р12). Поэтому
+-- перечень закрыт ограничением, а вид уникален: второго «Перевода» не бывает.
+--
+-- ИМЯ ТАБЛИЦЫ. Не путать с `pbx_events` ниже: там СЫРЫЕ СООБЩЕНИЯ СТАНЦИИ, по
+-- полтора десятка на звонок, которые человек не правит вовсе. Здесь — четыре
+-- строки настройки, которые правит руководитель. Слово «событие» взято из
+-- паспорта и с экрана; оно же стоит на вкладке.
+--
+-- ДВЕ КОЛОНКИ ПРИНАДЛЕЖАТ ОДНОМУ ВИДУ КАЖДАЯ, и это осознанно. Окно обзвона
+-- одно на весь автоперезвон (интервал и предел — свои у каждого статуса, они
+-- ниже строками), а ожидание перевода — единственное поле своего события.
+-- Складывать их в JSONB нельзя: журнал изменений показал бы правку одного числа
+-- как замену всего блока, и подпись поля взять было бы неоткуда. Ограничения
+-- ниже не дают заполнить чужую колонку.
+CREATE TABLE IF NOT EXISTS call_events (
+    id SERIAL PRIMARY KEY,
+    kind VARCHAR NOT NULL UNIQUE,
+    enabled BOOLEAN NOT NULL DEFAULT false,
+    -- Рабочее окно автоперезвона. Сегодня это константы CALL_WINDOW_START_HOUR
+    -- и CALL_WINDOW_END_HOUR (`services/appTime.js:31-32`).
+    window_from TIME,
+    window_to TIME,
+    -- Сколько секунд ждать соединения при переводе внутрь. Своё только у вида
+    -- transfer_wait; у переводов партнёру ожидание живёт в строке оффера.
+    wait_seconds INTEGER,
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'call_events_kind_check') THEN
+        ALTER TABLE call_events ADD CONSTRAINT call_events_kind_check
+            CHECK (kind IN ('auto_recall', 'transfer', 'wrapup', 'transfer_wait'));
+    END IF;
+    -- Окно — только у автоперезвона, ожидание — только у «Времени перевода».
+    -- Ограничение здесь не педантизм: без него заполненная не тем видом колонка
+    -- молча ничего не делала бы, и разбираться пошли бы в код.
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'call_events_window_check') THEN
+        ALTER TABLE call_events ADD CONSTRAINT call_events_window_check
+            CHECK ((window_from IS NULL AND window_to IS NULL) OR kind = 'auto_recall');
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'call_events_wait_check') THEN
+        ALTER TABLE call_events ADD CONSTRAINT call_events_wait_check
+            CHECK (wait_seconds IS NULL OR kind = 'transfer_wait');
+    END IF;
+END $$;
+
+-- ----- Строки «Автоперезвона» ------------------------------------------------
+-- Список статусов, по которым система перезванивает, задаёт руководитель
+-- (решение владельца 8), и у КАЖДОГО статуса свой интервал, свой предел и свой
+-- статус после предела (решения 9, 10, 12, 14). Списком через запятую в одной
+-- строке это не ложится.
+--
+-- ОДНА СТРОКА НА СТАТУС. Двух правил для одного статуса не бывает: система не
+-- знала бы, какое из них исполнять.
+--
+-- ЗАПРЕТ, А НЕ КАСКАД, у обеих ссылок на справочник. Молча исчезнувшее правило
+-- автоперезвона — это выключенный обзвон без единой записи о том, кто и когда
+-- его выключил. Отказ при удалении статуса громче и разбирается за минуту.
+-- ⚠ Помех при удалении статуса паспорт Р11 называет ДВЕ — лиды и наборы
+-- «скрипт + статус»; эта третья. Вопрос куратору задан (dialog.md, вопросы по
+-- части 9); до ответа стоит запрет, потому что он не теряет данные.
+CREATE TABLE IF NOT EXISTS call_recall_rules (
+    id SERIAL PRIMARY KEY,
+    funnel_status_id INTEGER NOT NULL UNIQUE REFERENCES lead_funnel_statuses(id) ON DELETE RESTRICT,
+    interval_minutes INTEGER NOT NULL,
+    max_attempts INTEGER NOT NULL,
+    after_limit_status_id INTEGER NOT NULL REFERENCES lead_funnel_statuses(id) ON DELETE RESTRICT
+);
+
+-- ----- Строки «Пост-обработки» -----------------------------------------------
+-- Условие — ПАРА «линия + скрипт» (решение 18), длительность своя у каждой пары
+-- (решение 19). Внутри события перечень пар, а не одна пара: иначе фраза «если
+-- для линии и скрипта события нет» лишена смысла. Чтение подтверждено куратором.
+--
+-- ЛИНИЯ — СТРОКОЙ, как везде в проекте: `employees.line_type` и `leads.line_type`
+-- объявлены VARCHAR и хранят «Входящая» / «Исходящая» (`schema.sql:638`, `666`,
+-- нормализация 726–731). Второго представления линии здесь не заводится.
+CREATE TABLE IF NOT EXISTS call_wrapup_rules (
+    id SERIAL PRIMARY KEY,
+    line_type VARCHAR NOT NULL,
+    script_id INTEGER NOT NULL REFERENCES scripts(id) ON DELETE RESTRICT,
+    duration_seconds INTEGER NOT NULL,
+    UNIQUE (line_type, script_id)
+);
+
+-- ----- Перечень «Перевода»: офферы -------------------------------------------
+-- Перевод партнёру на внешний номер. ОДНА СТРОКА НА ОФФЕР, второй быть не может
+-- (паспорт Р12): порядок строк берётся из приоритета оффера, и две строки на
+-- один оффер сделали бы порядок неопределённым.
+--
+-- КАСКАД, А НЕ ЗАПРЕТ, и это разница по существу с автоперезвоном выше. Строка
+-- перевода — принадлежность оффера, ровно как его сегменты, его география и его
+-- способы оплаты: все три уходят вместе с оффером и запретом не защищены.
+--
+-- ⚠ СТРОКА `CREATE TABLE` ПРО ЭТУ СВЯЗЬ ВРЁТ, и проверять надо не её. В
+-- объявлении `real_estate_offers.network_id` стоит ON DELETE CASCADE (строка
+-- 376) — а часть 5 перевела эту связь в ЗАПРЕТ перебором ниже (строка 1991):
+-- одно нажатие сносило сеть, все её объекты и всё, что под ними, на три уровня
+-- вглубь. Значит сеть офферы за собой больше не уносит, и каскад здесь — только
+-- про удаление самого оффера. Часть 5 разбирала и такие связи тоже: в запрет
+-- пошло то, чья потеря невосполнима (сканы документов, отработанные дни);
+-- пять полей, которые вводятся заново за полминуты, остались каскадом.
+--
+-- НОМЕР — ЕДИНЫЙ ФОРМАТ ПРОЕКТА, `services/phoneFormat.js` (часть 4): хранение
+-- +7XXXXXXXXXX. Второго формата не заводится. Один и тот же номер у двух
+-- офферов допустим — уникальности здесь нет намеренно.
+--
+-- ДНИ НЕДЕЛИ — МАССИВОМ ISO: 1 понедельник … 7 воскресенье, ровно как их отдаёт
+-- EXTRACT(ISODOW). Массив, а не семь колонок и не битовая маска: массивы в
+-- проекте уже есть (`obj_types`, `finishes`, `rooms`), маску пришлось бы
+-- расшифровывать и в коде, и в журнале изменений.
+CREATE TABLE IF NOT EXISTS call_transfer_offers (
+    id SERIAL PRIMARY KEY,
+    offer_id INTEGER NOT NULL UNIQUE REFERENCES real_estate_offers(id) ON DELETE CASCADE,
+    transfer_phone VARCHAR NOT NULL,
+    weekdays SMALLINT[] NOT NULL,
+    time_from TIME NOT NULL,
+    time_to TIME NOT NULL,
+    wait_seconds INTEGER NOT NULL,
+    enabled BOOLEAN NOT NULL DEFAULT true
+);
+
+-- ----- Перечень «Перевода»: сотрудники ---------------------------------------
+-- Перевод внутрь, на внутренний номер. СЕКУНД ОЖИДАНИЯ ЗДЕСЬ НЕТ ВОВСЕ: для
+-- переводов на своих действует четвёртое событие «Время перевода» (паспорт Р12).
+--
+-- ⚠ Одна строка на сотрудника. Паспорт запрещает вторую строку явно только для
+-- оффера, про сотрудника молчит; беру симметрично и спрашиваю куратора. Снять
+-- уникальность дешевле, чем потом разбирать, какая из двух строк главная.
+CREATE TABLE IF NOT EXISTS call_transfer_employees (
+    id SERIAL PRIMARY KEY,
+    employee_id INTEGER NOT NULL UNIQUE REFERENCES employees(id) ON DELETE CASCADE,
+    weekdays SMALLINT[] NOT NULL,
+    time_from TIME NOT NULL,
+    time_to TIME NOT NULL,
+    enabled BOOLEAN NOT NULL DEFAULT true
+);
+
+-- Дни недели проверяются в базе, а не только на форме: «Отметьте хотя бы один
+-- день — иначе перевод не работает никогда» (текст Р12) — это правило данных, а
+-- пустой набор дней означает строку, которая не сработает ни разу и молча.
+--
+-- COALESCE ЗДЕСЬ ОБЯЗАТЕЛЕН, И ЭТО НЕ ПЕРЕСТРАХОВКА. У ПУСТОГО массива
+-- array_length возвращает не ноль, а NULL; NULL BETWEEN 1 AND 7 даёт NULL, а
+-- ограничение считает нарушением только явное FALSE — то есть без COALESCE
+-- пустой набор дней проходил бы насквозь. Ровно тот случай, ради которого
+-- проверка и заведена. Поймано набором, а не чтением.
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'call_transfer_offers_weekdays_check') THEN
+        ALTER TABLE call_transfer_offers ADD CONSTRAINT call_transfer_offers_weekdays_check
+            CHECK (COALESCE(array_length(weekdays, 1), 0) BETWEEN 1 AND 7
+                   AND weekdays <@ ARRAY[1,2,3,4,5,6,7]::smallint[]);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'call_transfer_employees_weekdays_check') THEN
+        ALTER TABLE call_transfer_employees ADD CONSTRAINT call_transfer_employees_weekdays_check
+            CHECK (COALESCE(array_length(weekdays, 1), 0) BETWEEN 1 AND 7
+                   AND weekdays <@ ARRAY[1,2,3,4,5,6,7]::smallint[]);
+    END IF;
+END $$;
+
+-- Отбор строк перевода идёт по адресату: «есть ли строка у этого оффера» —
+-- первый вопрос при попытке перевода. По сотруднику — то же самое.
+CREATE INDEX IF NOT EXISTS idx_call_transfer_offers_offer ON call_transfer_offers (offer_id);
+CREATE INDEX IF NOT EXISTS idx_call_transfer_employees_employee ON call_transfer_employees (employee_id);
+
+-- ----- Пометка статуса: окончательный / промежуточный ------------------------
+-- Решение владельца 100, оно отменяет решение 99. Признак говорит, КОНЧЕНА ЛИ
+-- по статусу работа: автоперезвон смотрит на него после предела попыток —
+-- окончательный отправляет лида в архив сам, промежуточный оставляет в работе.
+--
+-- ТРИ РАЗЛИЧИМЫХ СОСТОЯНИЯ, ТРЕТЬЕ — ПУСТОЕ. Узор трёх соседних колонок
+-- (`auto_recall`, `requires_call_time`, `releases_lead` — BOOLEAN NOT NULL
+-- DEFAULT false, строки 872–874) здесь повторять НЕЛЬЗЯ: умолчание молча
+-- объявило бы все пятьдесят статусов промежуточными — утверждение, которого
+-- никто не делал, а цена ошибки здесь — архивированный лид, с которым работают.
+-- Разметка это разовая работа владельца, и до неё поле обязано быть пустым.
+--
+-- СТРОКОЙ, А НЕ ЛОГИЧЕСКИМ ЗНАЧЕНИЕМ, и слова русские. Журнал изменений пишет
+-- значение как текст (`audit_row_change`, `to_json(NEW) ->> колонка`), а
+-- расшифровка `audit_ref_map` умеет только справочники по идентификатору.
+-- Логическое дало бы в журнале «true → false», а требование наряда — «читаемым
+-- словом, а не числом». Перечень пришпилен ограничением, поэтому разойтись
+-- значения не могут; тот же приём уже стоит на `employees.line_type`.
+ALTER TABLE lead_funnel_statuses ADD COLUMN IF NOT EXISTS mark VARCHAR;
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'lead_funnel_statuses_mark_check') THEN
+        ALTER TABLE lead_funnel_statuses ADD CONSTRAINT lead_funnel_statuses_mark_check
+            CHECK (mark IS NULL OR mark IN ('окончательный', 'промежуточный'));
+    END IF;
+END $$;
+
+-- ----- Лид: карточка заполнена частично --------------------------------------
+-- ОТДЕЛЬНЫМ ПОЛЕМ, А НЕ ВЫВОДОМ ИЗ ПУСТОТЫ ДРУГИХ (паспорт Р12): пустой
+-- комментарий бывает и у полностью заполненной карточки, и вывести одно из
+-- другого нельзя. Ставит признак система, когда пост-обработка закрыла карточку
+-- по времени; это не ошибка и не черновик, а законченная запись с пометкой.
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS partially_filled BOOLEAN NOT NULL DEFAULT false;
+
+-- ----- Лид: кем назначено время перезвона ------------------------------------
+-- Ловушка 7 из разбора куратора: смена интервала в событии обязана пересчитать
+-- перезвоны, назначенные АВТОМАТИЧЕСКИ, и не тронуть назначенные РУКАМИ —
+-- время, о котором оператор договорился с клиентом, наша настройка менять не
+-- вправе. Отличить их постфактум нельзя ничем: в `next_call_at` лежит просто
+-- момент. Значит принадлежность хранится у лида.
+--
+-- ПУСТО — ЗАКОННОЕ ТРЕТЬЕ СОСТОЯНИЕ: перезвон не назначен вовсе. Умолчания нет
+-- по той же причине, что у пометки статуса.
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS next_call_source VARCHAR;
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'leads_next_call_source_check') THEN
+        ALTER TABLE leads ADD CONSTRAINT leads_next_call_source_check
+            CHECK (next_call_source IS NULL OR next_call_source IN ('auto', 'manual'));
+    END IF;
+END $$;
+
+-- ----- Пары «скрипт + статус»: каскад становится запретом ---------------------
+-- `lead_script_statuses.funnel_status_id` объявлен ON DELETE CASCADE (строка
+-- 684). Пока справочник статусов не правился, это ничего не значило; со следующим
+-- заходом статус можно будет удалить — и пары ушли бы МОЛЧА, вместе с настройкой
+-- скриптов у лидов. Отказ удаления в паспорте Р11 считает эти пары второй
+-- помехой и называет их число, а посчитать нечего, если база уже их убрала.
+--
+-- ⚠ ТОЛЬКО ЭТА СВЯЗЬ. `lead_id` (строка 683) и `script_id` (миграция ниже, 2449)
+-- остаются каскадом НАМЕРЕННО: перевести все три «заодно» значит сломать
+-- удаление лида и удаление скрипта, у которых своё правило.
+--
+-- Замок внешний: имя ограничения у связи задаётся Postgres автоматически, и
+-- различить «связь уже переведена» и «связь переведена и вручную возвращена»
+-- изнутри каталога нельзя.
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM applied_migrations WHERE id = '2026-08-26-lss-status-restrict') THEN
+
+    ALTER TABLE lead_script_statuses
+        DROP CONSTRAINT IF EXISTS lead_script_statuses_funnel_status_id_fkey;
+    ALTER TABLE lead_script_statuses
+        ADD CONSTRAINT lead_script_statuses_funnel_status_id_fkey
+        FOREIGN KEY (funnel_status_id) REFERENCES lead_funnel_statuses(id) ON DELETE RESTRICT;
+
+    INSERT INTO applied_migrations (id) VALUES ('2026-08-26-lss-status-restrict');
+    END IF;
+END $$;
+
+-- ----- Сегодняшние числа переезжают в события --------------------------------
+-- ЧТОБЫ В ДЕНЬ ВЫКАТКИ НЕ ИЗМЕНИЛОСЬ НИЧЕГО. Требование наряда, раздел 8:
+-- умолчания равны сегодняшним числам. Пустое событие «Автоперезвон» означало бы,
+-- что обзвон выключился в день выкатки, — а заход 2 только учится читать эти
+-- строки вместо констант, и прочитать он должен ровно то, что стоит в коде.
+--
+-- ЧЕТЫРЕ СТАТУСА — те же, что проставила миграция флагов 15.08.2026 (строка 887),
+-- и берутся они ИЗ САМИХ ФЛАГОВ, а не переписыванием списка названий: список,
+-- переписанный второй раз, разойдётся с первым на первой же правке.
+--
+-- ОСТАЛЬНЫЕ ТРИ СОБЫТИЯ ЗАВОДЯТСЯ ВЫКЛЮЧЕННЫМИ И ПУСТЫМИ, и это тоже
+-- сегодняшнее поведение: переводов система сегодня не делает вовсе,
+-- пост-обработка не кончается сама, ожидание соединения не ограничено ничем.
+-- Строка-итог на вкладке скажет об этом словами.
+DO $$
+DECLARE
+    v_no_answer integer;
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM applied_migrations WHERE id = '2026-08-26-call-events-seed') THEN
+
+    INSERT INTO call_events (kind, enabled, window_from, window_to, wait_seconds) VALUES
+        ('auto_recall',   true,  TIME '09:00', TIME '21:00', NULL),
+        ('transfer',      false, NULL,         NULL,         NULL),
+        ('wrapup',        false, NULL,         NULL,         NULL),
+        ('transfer_wait', false, NULL,         NULL,         NULL)
+    ON CONFLICT (kind) DO NOTHING;
+
+    -- Статус после предела сегодня один на всех — константа
+    -- NO_ANSWER_STATUS_NAME (`services/leadCallRules.js:22`). Ищется он ровно
+    -- так же, как её ищет код: по этапу 1 и точному имени.
+    SELECT id INTO v_no_answer
+      FROM lead_funnel_statuses
+     WHERE stage_number = 1 AND status_name = 'Не ответил после N перезвонов'
+     LIMIT 1;
+
+    -- Строки не заводятся вовсе, если целевого статуса в справочнике нет:
+    -- правило без статуса после предела неполно, а выдумывать ему замену
+    -- значит решить за владельца, куда уходит лид. Код в этом случае и сегодня
+    -- пишет ошибку в лог и оставляет лида на месте.
+    IF v_no_answer IS NOT NULL THEN
+        INSERT INTO call_recall_rules (funnel_status_id, interval_minutes, max_attempts, after_limit_status_id)
+        SELECT s.id, 60, 20, v_no_answer
+          FROM lead_funnel_statuses s
+         WHERE s.auto_recall
+        ON CONFLICT (funnel_status_id) DO NOTHING;
+    ELSE
+        RAISE WARNING '[события] Статуса «Не ответил после N перезвонов» нет — строки автоперезвона не засеяны';
+    END IF;
+
+    INSERT INTO applied_migrations (id) VALUES ('2026-08-26-call-events-seed');
+    END IF;
+END $$;
+
+-- ----- Правила аудита для новых таблиц ---------------------------------------
+-- УРОК ЧАСТИ 7А: без правил журнал показывает правку события как «изменилось
+-- поле у чего-то» — без имени записи и без ссылки.
+--
+-- КАРТОЧКИ У СОБЫТИЯ НЕТ, и это не пропуск. Событие живёт строкой на вкладке
+-- «Звонки → События»; открывать по ссылке нечего. Тот же случай, что у участка
+-- звонка (`call_segments`, строка 2608): имя есть, ссылки нет.
+--
+-- ЧЕМ НАЗВАТЬ ЗАПИСЬ. Событие — своим видом: строк всего четыре, и вид у них
+-- уникален. Строки перечней — тем адресатом, о котором они: правило
+-- автоперезвона своего имени не имеет вовсе (в нём одни ссылки), поэтому
+-- называется номером записи, а расшифровка ниже дописывает имя статуса.
+INSERT INTO audit_rules (table_name, column_name, title_columns, key_column, card_table, card_column) VALUES
+    ('call_events',              '*', 'kind',           'id', NULL, NULL),
+    ('call_recall_rules',        '*', NULL,             'id', NULL, NULL),
+    ('call_wrapup_rules',        '*', 'line_type',      'id', NULL, NULL),
+    ('call_transfer_offers',     '*', 'transfer_phone', 'id', NULL, NULL),
+    ('call_transfer_employees',  '*', NULL,             'id', NULL, NULL)
+ON CONFLICT (table_name, column_name) DO NOTHING;
+
+-- РАСШИФРОВКА ССЫЛОК. «Статус: 3 → 7» не говорит ничего.
+INSERT INTO audit_ref_map (table_name, column_name, ref_table, ref_title_columns) VALUES
+    ('call_recall_rules',       'funnel_status_id',      'lead_funnel_statuses', 'status_name'),
+    ('call_recall_rules',       'after_limit_status_id', 'lead_funnel_statuses', 'status_name'),
+    ('call_wrapup_rules',       'script_id',             'scripts',              'title'),
+    ('call_transfer_offers',    'offer_id',              'real_estate_offers',   'name'),
+    ('call_transfer_employees', 'employee_id',           'employees',            'last_name first_name')
+ON CONFLICT (table_name, column_name) DO NOTHING;
+
+-- `updated_at` события в журнал не пишется — решение владельца 101. Замок свой:
+-- прежний ('2026-08-26-audit-skip-updated-at', конец файла) на боевой базе уже
+-- сработал, и дописанное в него не доедет туда никогда.
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM applied_migrations WHERE id = '2026-08-26-audit-skip-call-events') THEN
+
+    INSERT INTO audit_rules (table_name, column_name, level) VALUES
+        ('call_events', 'updated_at', 'skip')
+    ON CONFLICT (table_name, column_name) DO NOTHING;
+
+    INSERT INTO applied_migrations (id) VALUES ('2026-08-26-audit-skip-call-events');
+    END IF;
+END $$;
+
 -- ----- Подключение триггера ко всем таблицам --------------------------------
 -- Перебором, а не списком: новая таблица подключается САМА, при первом же
 -- старте сервера после её появления. Иначе про аудит пришлось бы помнить при

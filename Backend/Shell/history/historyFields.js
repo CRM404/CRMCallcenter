@@ -56,6 +56,8 @@ const BY_TABLE = {
         archived_actor_name: 'В архив отправил, имя',
         archive_reason: 'Причина архива',
         missed_at: 'Пропущенный звонок',
+        partially_filled: 'Заполнена частично',
+        next_call_source: 'Перезвон назначен',
         origin: 'Происхождение',
         property_type: 'Тип объекта',
         property_class: 'Класс объекта',
@@ -162,7 +164,8 @@ const BY_TABLE = {
         status_name: 'Статус',
         auto_recall: 'Автоперезвон',
         requires_call_time: 'Спросит время перезвона',
-        releases_lead: 'Освобождает лида'
+        releases_lead: 'Освобождает лида',
+        mark: 'Пометка'
     },
     lead_script_statuses: { lead_id: 'Лид', script_id: 'Скрипт', funnel_status_id: 'Статус показа' },
     lead_offers: { lead_id: 'Лид', offer_id: 'Оффер' },
@@ -203,7 +206,41 @@ const BY_TABLE = {
     employee_schedule_days: { day: 'День', state: 'Состояние дня', shift_start: 'Смена с', shift_end: 'Смена до', is_extra: 'Сверх графика' },
     employee_state_intervals: { state: 'Состояние', started_at: 'Начало', ended_at: 'Конец' },
     employee_documents: { file_name: 'Имя файла', file_data: 'Файл', doc_type: 'Вид документа' },
-    tunnel_key_tokens: { employee_id: 'Сотрудник', used_at: 'Открыта', expires_at: 'Годна до', created_by: 'Выдал' }
+    tunnel_key_tokens: { employee_id: 'Сотрудник', used_at: 'Открыта', expires_at: 'Годна до', created_by: 'Выдал' },
+
+    // Четыре события руководителя и строки их перечней (часть 9). Подписи —
+    // те же слова, что стоят на вкладке: журнал и экран обязаны называть одно
+    // и то же одинаково, иначе искать правку приходится переводом.
+    call_events: {
+        kind: 'Событие',
+        enabled: 'Включено',
+        window_from: 'Обзвон с',
+        window_to: 'Обзвон до',
+        wait_seconds: 'Ждать соединения, сек'
+    },
+    call_recall_rules: {
+        funnel_status_id: 'Статус',
+        interval_minutes: 'Интервал, мин',
+        max_attempts: 'Предел попыток',
+        after_limit_status_id: 'Статус после предела'
+    },
+    call_wrapup_rules: { line_type: 'Линия', script_id: 'Скрипт', duration_seconds: 'Длительность, сек' },
+    call_transfer_offers: {
+        offer_id: 'Оффер',
+        transfer_phone: 'Номер для перевода',
+        weekdays: 'Дни недели',
+        time_from: 'Разрешён с',
+        time_to: 'Разрешён до',
+        wait_seconds: 'Ожидание, сек',
+        enabled: 'Включена'
+    },
+    call_transfer_employees: {
+        employee_id: 'Сотрудник',
+        weekdays: 'Дни недели',
+        time_from: 'Разрешён с',
+        time_to: 'Разрешён до',
+        enabled: 'Включена'
+    }
 };
 
 /**
