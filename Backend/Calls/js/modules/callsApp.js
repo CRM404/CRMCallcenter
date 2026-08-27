@@ -643,6 +643,10 @@ function createInstance(container, ctx) {
 
         const notes = cell(row.notes, 'notes');
         if (row.notes) notes.title = row.notes;
+        // ПОМЕТКА СТОИТ ПОД КОММЕНТАРИЕМ, а не своей колонкой: она его и
+        // объясняет — почему у долгого разговора две строчки текста (паспорт
+        // Р12). Своя колонка пустовала бы почти во всех строках.
+        if (row.partiallyFilled) notes.appendChild(span('ui-table__sub', 'карточка заполнена частично'));
         tr.appendChild(notes);
 
         const rec = document.createElement('td');
@@ -716,8 +720,17 @@ function createInstance(container, ctx) {
                 }
                 const li = document.createElement('li');
                 const who = document.createElement('b');
-                who.textContent = part.name || 'неизвестно кто';
+                // ЗВЕНО ПЕРЕВОДА ПАРТНЁРУ НАЗЫВАЕТСЯ ОФФЕРОМ, а не фамилией:
+                // сотрудника у него нет вовсе (часть 9, заход 5, паспорт Р1
+                // ред. 8). Имя берётся СНИМКОМ из самого звена — оффер могли
+                // удалить, а запись о разговоре меняться не должна.
+                who.textContent = part.transferOfferName || part.name || 'неизвестно кто';
                 li.appendChild(who);
+                // Сеть — подстрокой: одноимённые офферы у разных сетей бывают, и
+                // имя без сети их не различает.
+                if (part.transferOfferName && part.transferNetworkName) {
+                    li.appendChild(span('ui-table__sub', part.transferNetworkName));
+                }
                 // «1:20», а не «01:20»: в цепочке это ДЛИТЕЛЬНОСТЬ УЧАСТКА, и
                 // пишется она так же, как ожидание и разговор в колонках рядом.
                 // Ведущий ноль остаётся только у длительности состояния на

@@ -334,7 +334,14 @@ router.get('/', async (req, res) => {
                     c.our_number, c.outcome, c.outcome_raw, c.answered, c.transferred,
                     c.is_internal, c.wait_seconds, c.talk_seconds, c.record_id,
                     c.funnel_status_name, c.notes_snapshot, c.attempt_no,
-                    c.operator_extension,
+                    c.operator_extension, c.partially_filled,
+                    -- ОФФЕРЫ ПЕРЕВОДА ОДНОЙ СТРОКОЙ — для выгрузки. На экране их
+                    -- показывает разворот, отдельным запросом; в файле развернуть
+                    -- нечего, и колонка обязана назвать ВСЕ, а не последний:
+                    -- переводов у звонка бывает несколько (паспорт Р1 ред. 8).
+                    (SELECT string_agg(sg.transfer_offer_name, ', ' ORDER BY sg.position)
+                       FROM call_segments sg
+                      WHERE sg.call_id = c.id AND sg.transfer_offer_name IS NOT NULL) AS transfer_offers,
                     e.last_name, e.first_name, e.middle_name, e.line_type
              ${from}
               WHERE ${listWhere}
@@ -365,6 +372,12 @@ router.get('/', async (req, res) => {
             talkSeconds: r.talk_seconds,
             funnelStatus: r.funnel_status_name,
             notes: r.notes_snapshot,
+            // Пометка — СНИМОК звонка, а не сегодняшнее состояние лида. Иначе
+            // запись о прошлом разговоре меняла бы смысл каждый раз, когда
+            // карточку дописывают: тот же приём, что у статуса и комментария
+            // двумя строками выше.
+            partiallyFilled: r.partially_filled,
+            transferOffers: r.transfer_offers,
             hasRecord: Boolean(r.record_id)
         }));
 
@@ -416,7 +429,12 @@ router.get('/:id/chain', async (req, res) => {
 
         const result = await pool.query(
             `SELECT s.position, s.talk_seconds, s.operator_extension,
-                    e.last_name, e.first_name, e.middle_name
+                    e.last_name, e.first_name, e.middle_name,
+                    -- ОФФЕР ПЕРЕВОДА — СНИМКАМИ, а не через связь (часть 9,
+                    -- заход 5). Офферы удаляются по-настоящему, и джойн вернул
+                    -- бы пусто там, где перевод точно был. Ссылка рядом живёт
+                    -- для тех, кто пойдёт от звонка к живому офферу.
+                    s.transfer_offer_id, s.transfer_offer_name, s.transfer_network_name
                FROM call_segments s
                LEFT JOIN employees e ON e.id = s.employee_id
               WHERE s.call_id = $1
@@ -429,7 +447,13 @@ router.get('/:id/chain', async (req, res) => {
                 position: r.position,
                 name: r.last_name ? shortName(r) : null,
                 extension: r.operator_extension || null,
-                talkSeconds: r.talk_seconds
+                talkSeconds: r.talk_seconds,
+                // Звено перевода партнёру: сотрудника у него нет вовсе, вместо
+                // фамилии — имя оффера, а сеть подстрокой. Все звенья, а не
+                // последнее: переводов у звонка бывает несколько (паспорт Р1).
+                transferOfferId: r.transfer_offer_id,
+                transferOfferName: r.transfer_offer_name,
+                transferNetworkName: r.transfer_network_name
             }))
         });
     } catch (err) {

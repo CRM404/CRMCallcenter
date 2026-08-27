@@ -553,6 +553,10 @@ export function createLeadModal(root, deps) {
         syncEmployeesByLine();
         $('#ldEmployee').value = lead && lead.employeeId ? lead.employeeId : '';
         $('#ldFunnelStatus').value = lead && lead.funnelStatusId ? lead.funnelStatusId : '';
+        // Пометка «заполнена частично» — только у существующего лида и только
+        // когда она стоит. Снимается пометка сохранением, поэтому плашка исчезнет
+        // сама при следующем открытии карточки, а не гасится здесь руками.
+        $('[data-role="lead-partial"]').hidden = !(lead && lead.partiallyFilled);
         // «Новый» предвыбран у нового лида (требование куратора): иначе легко
         // создать лида, у которого оператор сразу не увидит скрипта. Правило
         // пережило переделку на наборы — оно про первый набор.

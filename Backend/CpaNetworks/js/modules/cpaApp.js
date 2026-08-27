@@ -747,8 +747,6 @@ async function openOfferModal(state, offer, opts = {}) {
         <div class="ui-form-grid">
             ${fieldBlock({ label: 'Приоритет', name: 'priority', wide: false, hint: 'Число от 1 до 5, где 1 — высший.',
                 control: inputControl('priority', 'number', value.priority, '1') })}
-            ${fieldBlock({ label: 'Время для перевода', name: 'transferTime', wide: false,
-                control: inputControl('transferTime', 'text', value.transferTime, 'до 15 минут') })}
             ${fieldBlock({ label: 'Лимит лидов', name: 'leadLimit', wide: false, hint: 'На весь срок оффера; пусто — без лимита.',
                 control: inputControl('leadLimit', 'number', value.leadLimit, '300') })}
         </div>`;
@@ -922,7 +920,6 @@ async function openOfferModal(state, offer, opts = {}) {
             paymentMethods: chosen('paymentMethods'),
             mortgageTypes: chosen('mortgageTypes'),
             priority: field('priority').value,
-            transferTime: field('transferTime').value,
             leadLimit: field('leadLimit').value,
             segments,
             objGeo,

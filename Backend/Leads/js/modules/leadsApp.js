@@ -234,9 +234,14 @@ const RICH_CELLS = {
             return `<span class="ui-pill ui-pill--mute"${was}>В архиве</span>`
                 + (since ? `<span class="arc-since">с ${since}${who}</span>` : '');
         }
-        return l.funnelStatusId
-            ? `<span class="ui-pill ui-pill--mute">${escapeHtml(l.statusName)}</span>`
-            : null;
+        // ПОМЕТКА — ПОДСТРОКОЙ ПОД СТАТУСОМ, а не своей колонкой (паспорт Р12):
+        // колонка пустовала бы почти во всех строках — то же соображение, по
+        // которому у статусов воронки нет колонки свойств.
+        const partial = l.partiallyFilled
+            ? '<span class="ui-table__sub">заполнена частично</span>'
+            : '';
+        if (!l.funnelStatusId) return partial || null;
+        return `<span class="ui-pill ui-pill--mute">${escapeHtml(l.statusName)}</span>${partial}`;
     },
     // Линия — обычный текст со значком направления, без рамки-пилюли (М23).
     lineType: (l) => (l.lineType

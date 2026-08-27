@@ -201,6 +201,11 @@ function rowToLead(row) {
         employeeName: row.employee_name,
         funnelStatusId: row.funnel_status_id,
         statusName: row.status_name,
+        // Пометка «заполнена частично» (часть 9, заход 5). Ставит её система,
+        // когда пост-обработка закрыла карточку по времени: работа сделана,
+        // просто не вся. Своей колонки в списке у неё нет — подстрокой под
+        // статусом: колонка пустовала бы почти во всех строках.
+        partiallyFilled: row.partially_filled,
         stageName: row.stage_name,
         stageNumber: row.stage_number,
         // scriptId/repeatScriptId наружу больше не отдаются: пары называют

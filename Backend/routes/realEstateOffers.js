@@ -36,7 +36,6 @@ const FIELD_COLUMNS = [
     ['purchaseTerm', 'purchase_term'],
     ['downPaymentPercent', 'down_payment_percent'],
     ['priority', 'priority'],
-    ['transferTime', 'transfer_time'],
     ['leadLimit', 'lead_limit']
 ];
 
@@ -176,7 +175,6 @@ function rowToOffer(row, segments, objGeo, clientGeo, paymentMethods, mortgageTy
         purchaseTerm: row.purchase_term,
         downPaymentPercent: row.down_payment_percent,
         priority: row.priority,
-        transferTime: row.transfer_time,
         leadLimit: row.lead_limit,
         segments: (segments || []).map(rowToSegment),
         objGeo: (objGeo || []).map(rowToGeo),
