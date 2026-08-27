@@ -2444,9 +2444,22 @@ BEGIN
     -- Окно — только у автоперезвона, ожидание — только у «Времени перевода».
     -- Ограничение здесь не педантизм: без него заполненная не тем видом колонка
     -- молча ничего не делала бы, и разбираться пошли бы в код.
-    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'call_events_window_check') THEN
-        ALTER TABLE call_events ADD CONSTRAINT call_events_window_check
-            CHECK ((window_from IS NULL AND window_to IS NULL) OR kind = 'auto_recall');
+    --
+    -- К225: ОКНО — ПАРА, И ПОЛОВИНЫ ОКНА НЕ БЫВАЕТ. Первая редакция проверки
+    -- сторожила только чужие виды, а своему разрешала всё — в том числе
+    -- «с 09:00 и до никогда». Дыра ровно того же вида, ради которого проверка и
+    -- заведена, только на своём виде. Теперь: обе колонки заполнены либо обе
+    -- пусты, и заполнены они могут быть только у автоперезвона.
+    --
+    -- ИМЯ ОГРАНИЧЕНИЯ НОВОЕ, И СТАРОЕ СНИМАЕТСЯ ЯВНО. Сохрани прежнее имя — и
+    -- на базе, где первая редакция уже сработала, guard увидел бы ограничение с
+    -- этим именем и молча пропустил правку: снаружи «проверка есть», внутри
+    -- дыра. DROP IF EXISTS идемпотентен и на чистой базе не делает ничего.
+    ALTER TABLE call_events DROP CONSTRAINT IF EXISTS call_events_window_check;
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'call_events_window_pair_check') THEN
+        ALTER TABLE call_events ADD CONSTRAINT call_events_window_pair_check
+            CHECK ((window_from IS NULL) = (window_to IS NULL)
+                   AND (window_from IS NULL OR kind = 'auto_recall'));
     END IF;
     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'call_events_wait_check') THEN
         ALTER TABLE call_events ADD CONSTRAINT call_events_wait_check
@@ -2591,7 +2604,16 @@ CREATE INDEX IF NOT EXISTS idx_call_transfer_employees_employee ON call_transfer
 -- расшифровка `audit_ref_map` умеет только справочники по идентификатору.
 -- Логическое дало бы в журнале «true → false», а требование наряда — «читаемым
 -- словом, а не числом». Перечень пришпилен ограничением, поэтому разойтись
--- значения не могут; тот же приём уже стоит на `employees.line_type`.
+-- значения не могут; тот же приём стоит на `real_estate_offers.status`
+-- (строка 379).
+--
+-- К226: ПРИЁМОВ В ПРОЕКТЕ ДВА, И ОБА ЗАКОННЫЕ. Здесь стоит первый — перечень
+-- в CHECK. Второй — перечень на стороне API без CHECK: так живут
+-- `employees.line_type` (строка 664 говорит это прямо), `ad_platforms.status` и
+-- `sources.lead_source`. По второму сделан и `call_wrapup_rules.line_type`
+-- ниже: он повторяет ту самую колонку линии и обязан жить её правилами, а не
+-- своими. Выбор здесь — первый, потому что значение читает журнал, а не только
+-- экран: слово в базе и есть слово на экране.
 ALTER TABLE lead_funnel_statuses ADD COLUMN IF NOT EXISTS mark VARCHAR;
 DO $$
 BEGIN
