@@ -19,6 +19,7 @@ const { pool } = require('../db');
 const { withTransaction } = require('../services/dbTx');
 const { normalizePhone } = require('../services/phoneFormat');
 const { zonedParts } = require('../services/appTime');
+const { offerStatusLabel } = require('../services/offerStatus');
 
 const router = express.Router();
 
@@ -125,12 +126,15 @@ function todayInAppZone() {
     return `${p.year}-${String(p.month).padStart(2, '0')}-${String(p.day).padStart(2, '0')}`;
 }
 
-// Дата из драйвера приходит объектом Date; сравниваем строками одного вида.
+// DATE ПРИЕЗЖАЕТ СТРОКОЙ, И ЭТО НЕ СЛУЧАЙНОСТЬ ЭТОГО МАРШРУТА: `db.js:7`
+// объявляет разбор типа 1082 как `val => val` на весь проект. Здесь остаётся
+// только отрезать возможное время — сравнение идёт строками одного вида.
+//
+// Первая редакция держала ещё ветку с `zonedParts` на случай объекта Date. Ветка
+// была мёртвой с самого начала, и в отчёте это было названо «пятым добавлением
+// сервера» — неверно. Замер куратора: тип `string`, значение `"2026-08-27"`.
 function isoDate(value) {
-    if (!value) return null;
-    if (typeof value === 'string') return value.slice(0, 10);
-    const p = zonedParts(value);
-    return `${p.year}-${String(p.month).padStart(2, '0')}-${String(p.day).padStart(2, '0')}`;
+    return value ? String(value).slice(0, 10) : null;
 }
 
 async function readEvents(db) {
@@ -214,6 +218,11 @@ async function readEvents(db) {
                 // состояния оффера.
                 blockedReason: offerBlock(r, today),
                 offerStatus: r.offer_status,
+                // ПОДПИСЬ, А НЕ КЛЮЧ (К229). Плашка отправляет человека чинить
+                // оффер в «CPA-сети» и обязана назвать состояние тем же словом,
+                // которым его называют там: он придёт искать «paused», а увидит
+                // «На паузе».
+                offerStatusLabel: offerStatusLabel(r.offer_status),
                 dateEnd: isoDate(r.date_end),
                 transferPhone: r.transfer_phone,
                 weekdays: r.weekdays,

@@ -554,18 +554,25 @@ export function createEventsTab({ pane, api, scope }) {
         const windowGrid = el('div', 'ui-form-grid');
         const fromInput = input('time', data.windowFrom || DEFAULT_WINDOW.from, 'Обзвон с');
         const toInput = input('time', data.windowTo || DEFAULT_WINDOW.to, 'Обзвон до');
-        windowGrid.appendChild(fieldBox('Обзвон с', fromInput, {
-            required: true,
-            hint: 'Время московское — для всех, включая тех, кто работает не из Москвы.'
-        }));
+        // ПОДСКАЗКИ У ЭТИХ ДВУХ ПОЛЕЙ НЕТ, И ЭТО К232. `.ui-form-grid` равняет
+        // поля по низу, а подсказка стоит ПОД органом управления — поле с
+        // подсказкой поднимало свой ввод над соседним на 37 px, и две половины
+        // одного окна стояли на разных строках. Часовой пояс — свойство окна, а
+        // не поля: он сказан в плашке под таблицей.
+        windowGrid.appendChild(fieldBox('Обзвон с', fromInput, { required: true }));
         windowGrid.appendChild(fieldBox('до', toInput, { required: true }));
         body.appendChild(windowGrid);
 
+        // ШИРИНЫ КОЛОНОК ЗАДАЁТ РАЗДЕЛ, А НЕ БРАУЗЕР (К231). Без них браузер
+        // раздал ширины по содержимому: поле на три цифры стало самой широкой
+        // колонкой окна, имя целевого статуса обрезалось, а пилюля с
+        // последствием ломалась пополам. «Статус» забирает остаток.
         const wrap = el('div', 'ui-table-wrap');
-        const table = el('table', 'ui-table');
+        const table = el('table', 'ui-table zv-fixed');
         table.innerHTML = '<thead><tr>'
-            + '<th>Статус</th><th>Интервал</th><th>Предел</th><th>Статус после предела</th>'
-            + '<th class="ui-table__acts"></th></tr></thead>';
+            + '<th>Статус</th><th style="width:132px">Интервал</th>'
+            + '<th style="width:118px">Предел</th><th style="width:266px">Статус после предела</th>'
+            + '<th class="ui-table__acts" style="width:54px"></th></tr></thead>';
         const tbody = el('tbody');
         table.appendChild(tbody);
         wrap.appendChild(table);
@@ -588,11 +595,16 @@ export function createEventsTab({ pane, api, scope }) {
         body.appendChild(note(
             'Счёт попыток — нарастающим итогом за всё время, а не за день. Звонок, не состоявшийся '
             + 'по нашей вине, попыткой не считается. Оператор интервалы не меняет. Окно обзвона '
-            + 'ограничивает все перезвоны события: интервал досчитал до 22:40 — звонок уедет на утро.'));
+            + 'ограничивает все перезвоны события: интервал досчитал до 22:40 — звонок уедет на утро. '
+            + 'Время московское — для всех, включая тех, кто работает не из Москвы.'));
 
         function renderRows(focusLast) {
             tbody.innerHTML = '';
             rows.forEach((row, index) => tbody.appendChild(ruleRow(row, index)));
+            // ПУСТОЙ ПЕРЕЧЕНЬ ПРЯЧЕТ ТАБЛИЦУ ЦЕЛИКОМ, А НЕ ПОКАЗЫВАЕТ ГОЛУЮ
+            // ШАПКУ (К233). Шапка над пустотой обещает перечень, которого нет:
+            // видна должна быть только кнопка «Добавить статус».
+            wrap.hidden = rows.length === 0;
             const free = statuses.filter((s) => !rows.some((r) => Number(r.funnelStatusId) === s.id));
             addBtn.disabled = !free.length;
             addBtn.title = free.length ? '' : 'Все статусы справочника уже названы';
@@ -656,9 +668,17 @@ export function createEventsTab({ pane, api, scope }) {
             const paintConsequence = () => {
                 consequence.innerHTML = '';
                 const chosen = statuses.find((s) => String(s.id) === afterControl.value);
-                if (!chosen || !chosen.mark) return;
-                consequence.appendChild(el('span', 'ui-pill ui-pill--mute', chosen.mark));
-                consequence.appendChild(document.createTextNode(` — ${MARK_TAIL[chosen.mark]}`));
+                if (chosen && chosen.mark) {
+                    consequence.appendChild(el('span', 'ui-pill ui-pill--mute', chosen.mark));
+                    consequence.appendChild(document.createTextNode(` — ${MARK_TAIL[chosen.mark]}`));
+                    return;
+                }
+                // ПОКА ЦЕЛЕВОЙ НЕ ВЫБРАН, ЯЧЕЙКА ОБЪЯСНЯЕТ, ПОЧЕМУ ПОЛОВИНА
+                // СПИСКА ВЫКЛЮЧЕНА (К234). Плашка под таблицей закрывает только
+                // случай «не размечен НИ ОДИН»; при половинной разметке новая
+                // строка молчала бы, и выключенные пункты выглядели бы поломкой.
+                consequence.textContent =
+                    'пока статус не размечен, система не знает, кончена ли по нему работа';
             };
             afterControl.addEventListener('change', paintConsequence);
             paintConsequence();
@@ -835,7 +855,12 @@ export function createEventsTab({ pane, api, scope }) {
                         + 'Настройки сохранены — продлите оффер в «CPA-сетях», и перевод заработает снова.',
                     { kind: 'warn' });
                 }
-                return note(`Строка не работает: оффер не активен — ${row.offerStatus}. `
+                // ПОДПИСЬ, А НЕ КЛЮЧ КОЛОНКИ (К229). Плашка отправляет человека
+                // в «CPA-сети», а там это состояние называется «На паузе», а не
+                // «paused»: он придёт искать слово, которого там нет. Подпись
+                // считает сервер по общему перечню — второй список подписей на
+                // экране был бы ровно К36.
+                return note(`Строка не работает: оффер не активен — ${row.offerStatusLabel}. `
                     + 'Настройки сохранены — включите оффер в «CPA-сетях», и перевод заработает снова.',
                 { kind: 'warn' });
             }
@@ -903,14 +928,23 @@ export function createEventsTab({ pane, api, scope }) {
             const grid = el('div', 'ui-form-grid');
             const phone = input('text', row.transferPhone || '', 'Номер для перевода');
             phone.dataset.role = 'phone';
+            // ПОЛЕ С ПОДСКАЗКОЙ ЗАНИМАЕТ СТРОКУ СЕТКИ ЦЕЛИКОМ (К232) — то же
+            // правило, что в «CPA-сетях» (`cpaApp.js`, `wide` по умолчанию).
+            // Сетка равняет поля по низу, а подсказка стоит под органом
+            // управления: без `--wide` соседнее «Разрешён с» уезжало на 54 px
+            // ниже. Заодно пара «Разрешён с … до» встаёт в одну строку.
+            //
+            // Про московское время здесь больше не сказано: фраза повторялась
+            // столько раз, сколько заведено офферов. Часовой пояс — свойство
+            // окна, и живёт он теперь подписью под заголовком.
             grid.appendChild(fieldBox('Номер для перевода', phone, {
                 required: true,
-                // Подсказка описывает то, что здесь на самом деле вводят.
+                wide: true,
                 // Дословный текст паспорта («внутренний номер конкретного
                 // оператора») остался от редакции 1, когда перевод был только
-                // внутренним, и противоречит телу того же паспорта.
-                hint: 'Внешний номер партнёра — городской или мобильный. '
-                    + 'Время московское — для всех, включая тех, кто работает не из Москвы.'
+                // внутренним, и противоречит телу того же паспорта. Дизайн-сессия
+                // приняла эту замену и переиздаёт таблицу текстов (К230).
+                hint: 'Внешний номер партнёра — городской или мобильный.'
             }));
             const from = input('time', row.timeFrom || '', 'Разрешён с');
             from.dataset.role = 'from';
@@ -1097,7 +1131,10 @@ export function createEventsTab({ pane, api, scope }) {
 
         modal({
             title: 'Перевод',
-            sub: 'Кому оператор может передать лида и в какое время',
+            // Часовой пояс сказан ОДИН РАЗ НА ОКНО (К232), а не в каждой строке
+            // перечня: это свойство всего времени в окне, а не отдельного поля.
+            sub: 'Кому оператор может передать лида и в какое время. '
+                + 'Время московское — для всех, включая тех, кто работает не из Москвы',
             body,
             size: 'wide',
             onSave: save
@@ -1112,9 +1149,13 @@ export function createEventsTab({ pane, api, scope }) {
 
         const body = el('div', 'zv-recall');
         const wrap = el('div', 'ui-table-wrap');
-        const table = el('table', 'ui-table');
-        table.innerHTML = '<thead><tr><th>Линия</th><th>Скрипт</th><th>Длительность</th>'
-            + '<th class="ui-table__acts"></th></tr></thead>';
+        const table = el('table', 'ui-table zv-fixed');
+        // Ширины — та же К231. «Скрипт» забирает остаток: он единственное место
+        // строки, где лежит длинный текст, а без правила ему доставалось ровно
+        // столько же, сколько полю на две цифры.
+        table.innerHTML = '<thead><tr><th style="width:190px">Линия</th><th>Скрипт</th>'
+            + '<th style="width:150px">Длительность</th>'
+            + '<th class="ui-table__acts" style="width:54px"></th></tr></thead>';
         const tbody = el('tbody');
         table.appendChild(tbody);
         wrap.appendChild(table);
@@ -1184,6 +1225,9 @@ export function createEventsTab({ pane, api, scope }) {
         function renderRows(focusLast) {
             tbody.innerHTML = '';
             rows.forEach((row, index) => tbody.appendChild(pairRow(row, index)));
+            // Та же К233: пустой перечень показывает одну кнопку, а не шапку
+            // «Линия · Скрипт · Длительность» над пустотой.
+            wrap.hidden = rows.length === 0;
             addBtn.disabled = !state.dirs.scripts.length;
             addBtn.title = state.dirs.scripts.length ? '' : 'Скриптов в справочнике нет';
             if (focusLast) {

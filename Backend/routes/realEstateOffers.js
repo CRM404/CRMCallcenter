@@ -14,8 +14,11 @@ const router = express.Router();
 // Ключ живёт в базе, ПОДПИСЬ — на экране. Сообщение об ошибке называет
 // подписи (К86): внутренних active/paused/disabled/draft человек не видел
 // нигде и сопоставить их с тем, что выбрал, не может.
-const STATUS_VALUES = ['active', 'paused', 'disabled', 'draft'];
-const STATUS_LABELS = ['Активен', 'На паузе', 'Отключён', 'Черновик'];
+//
+// Перечень уехал в `services/offerStatus.js` (К229): подписи понадобились
+// второму месту — плашке «строка не работает» на вкладке «События», — а второй
+// список подписей в проекте был бы ровно К36.
+const { STATUS_VALUES, STATUS_LABELS } = require('../services/offerStatus');
 
 const FIELD_COLUMNS = [
     ['networkId', 'network_id'],
