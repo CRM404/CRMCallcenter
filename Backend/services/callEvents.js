@@ -19,6 +19,28 @@
 const AUTO_RECALL = 'auto_recall';
 
 /**
+ * Годно ли событие автоперезвона к работе, и если да — с каким окном.
+ *
+ * ОДНО МЕСТО НА ВСЕХ ЧИТАТЕЛЕЙ. Условий четыре — события нет, выключено, окно не
+ * заполнено, окно нулевой длины, — и написанные порознь у каждого читателя они
+ * разойдутся: кто-то забудет про нулевое окно, и экран оператора обещал бы
+ * перезвон, которого сервер не назначит. Возвращает окно или null.
+ */
+function usableWindow(row) {
+    if (!row) return null;
+    if (!row.enabled) return null;
+    // Окно — пара, и половины окна не бывает: это стережёт и база
+    // (`call_events_window_pair_check`). Здесь проверяется другое: «обе пусты» —
+    // законное состояние и означает «окно не настроено».
+    if (!row.window_from || !row.window_to) return null;
+    // Окно нулевой длины — это «никогда», а не «круглые сутки» (ответ куратора
+    // 32). Такую пару отбивает сервер при сохранении; здесь она читается как
+    // ненастроенная.
+    if (row.window_from === row.window_to) return null;
+    return { from: row.window_from, to: row.window_to };
+}
+
+/**
  * Настройка автоперезвона для КОНКРЕТНОГО статуса — того, который сейчас
  * ставят. Так это работает и в коде до захода 2: признаки берутся у статуса,
  * который проставляют, а не у того, на котором лид стоял (ответ куратора 14).
@@ -44,18 +66,8 @@ async function fetchAutoRecall(db, statusId) {
         [statusId, AUTO_RECALL]
     );
     const row = result.rows[0];
-    if (!row) return null;
-    if (!row.enabled) return null;
-    // Окно — пара, и половины окна не бывает: это стережёт и база
-    // (`call_events_window_pair_check`). Проверка здесь не дублирует её, а
-    // отвечает на другой вопрос: «обе пусты» — законное состояние базы и
-    // означает «окно не настроено».
-    if (!row.window_from || !row.window_to) return null;
-    // Окно нулевой длины — это «никогда», а не «круглые сутки» (ответ куратора
-    // 32). Такую пару отбивает сервер при сохранении; здесь она читается как
-    // ненастроенная, чтобы старая база с таким значением не заставляла считать
-    // время в окне, которого нет.
-    if (row.window_from === row.window_to) return null;
+    const window = usableWindow(row);
+    if (!window) return null;
     // Правила для этого статуса нет — автоперезвона по нему нет. Подставлять
     // чужое правило или общее умолчание нельзя: это решение за владельца, куда
     // уходит лид (ответ куратора 16).
@@ -65,8 +77,38 @@ async function fetchAutoRecall(db, statusId) {
         intervalMinutes: row.interval_minutes,
         maxAttempts: row.max_attempts,
         afterStatusId: row.after_limit_status_id,
-        window: { from: row.window_from, to: row.window_to }
+        window
     };
+}
+
+/**
+ * Все строки автоперезвона разом — для справочника статусов, который читает
+ * экран оператора. Пустой массив, когда событие к работе не годно: тогда
+ * перезвона нет ни по одному статусу, и экран не должен обещать его ни у одного.
+ *
+ * ИМЯ ЦЕЛЕВОГО СТАТУСА ПРИХОДИТ СЮДА ЖЕ. Оператор читает «после N-й лид уйдёт в
+ * статус …», и статус этот теперь свой у каждой строки. Собирать имя на клиенте
+ * из второго списка значило бы держать ту же связь в двух местах.
+ */
+async function fetchAutoRecallRules(db) {
+    const event = await db.query(
+        'SELECT enabled, window_from, window_to FROM call_events WHERE kind = $1', [AUTO_RECALL]);
+    if (!usableWindow(event.rows[0])) return [];
+
+    const result = await db.query(
+        `SELECT r.funnel_status_id, r.interval_minutes, r.max_attempts,
+                r.after_limit_status_id, a.status_name AS after_status_name
+           FROM call_recall_rules r
+           JOIN lead_funnel_statuses a ON a.id = r.after_limit_status_id
+          ORDER BY r.funnel_status_id`
+    );
+    return result.rows.map((r) => ({
+        funnelStatusId: r.funnel_status_id,
+        intervalMinutes: r.interval_minutes,
+        maxAttempts: r.max_attempts,
+        afterStatusId: r.after_limit_status_id,
+        afterStatusName: r.after_status_name
+    }));
 }
 
 /**
@@ -92,5 +134,6 @@ async function fetchAutoRecallState(db) {
 module.exports = {
     AUTO_RECALL,
     fetchAutoRecall,
+    fetchAutoRecallRules,
     fetchAutoRecallState
 };

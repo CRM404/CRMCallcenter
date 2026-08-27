@@ -34,9 +34,13 @@ function formatDateTime(iso) {
     });
 }
 
-// Пометка «— автоперезвон» берётся из ФЛАГА статуса, а не из его названия:
-// сравнение строк вида «Недоступен» сломалось бы молча от одного пробела.
-// Оператор должен видеть, что после такого статуса лид вернётся в очередь сам.
+// Пометка «— автоперезвон» берётся из НАСТРОЙКИ, а не из названия статуса и уже
+// не из флага колонки. Сравнение строк вида «Недоступен» сломалось бы молча от
+// одного пробела; а колонка `auto_recall` заморожена заходом 2 и соврала бы в
+// обе стороны — у статуса с флагом правила может не быть вовсе, а у нового
+// статуса флага не будет никогда, хотя правило ему заведут. Оператор должен
+// видеть, что после такого статуса лид вернётся в очередь сам, — и видит он это
+// тогда и только тогда, когда система действительно перезвонит.
 function buildFunnelStatusOptions(statuses, selectedId) {
     const byStage = new Map();
     statuses.forEach((s) => {
@@ -47,7 +51,7 @@ function buildFunnelStatusOptions(statuses, selectedId) {
     const groups = stageNumbers.map((num) => {
         const { stageName, items } = byStage.get(num);
         const options = items.map((s) => `
-            <option value="${s.id}" data-call-time="${s.requiresCallTime ? '1' : ''}" ${s.id === selectedId ? 'selected' : ''}>${escapeHtml(s.statusName)}${s.autoRecall ? ' — автоперезвон' : ''}</option>
+            <option value="${s.id}" data-call-time="${s.requiresCallTime ? '1' : ''}" ${s.id === selectedId ? 'selected' : ''}>${escapeHtml(s.statusName)}${s.recallMaxAttempts !== null && s.recallMaxAttempts !== undefined ? ' — автоперезвон' : ''}</option>
         `).join('');
         return `<optgroup label="${escapeHtml(`${num}. ${stageName}`)}">${options}</optgroup>`;
     }).join('');
@@ -230,8 +234,42 @@ function hasAnyValue(container, keys) {
 // Порог, с которого бейдж попыток становится жёлтым: оператор, взявший лида на
 // последних попытках, обязан понимать, что это последний шанс, иначе потратит
 // на него столько же усилий, сколько на свежий.
-const ATTEMPTS_WARN_FROM = 15;
-const MAX_CALL_ATTEMPTS = 20;
+//
+// ПОРОГ ПРОИЗВОДНЫЙ ОТ ПРЕДЕЛА, А НЕ СВОЁ ЧИСЛО (часть 9, заход 3, ловушка 2
+// наряда). Раньше здесь стояли двадцать и пятнадцать, и предел был копией
+// серверного: поставил бы руководитель семь — сервер переключил бы статус на
+// седьмой попытке, а оператор читал бы «из 20». Предел теперь приезжает со
+// статусом, а порог считается от него.
+//
+// ТРИ ЧЕТВЕРТИ, А НЕ «ПРЕДЕЛ МИНУС ПЯТЬ». На двадцати обе формулы дают
+// пятнадцать — то есть день выкатки не меняется ни на единицу. Дальше они
+// расходятся, и «минус пять» рассыпается: при пределе пять оно даёт ноль, то
+// есть жёлтый с первой попытки, а при пределе три — минус два.
+const ATTEMPTS_WARN_SHARE = 0.75;
+
+export function warnFrom(limit) {
+    return Math.ceil(limit * ATTEMPTS_WARN_SHARE);
+}
+
+/**
+ * Предел попыток у выбранного статуса — или null, если система по нему не
+ * перезванивает: правила нет либо событие целиком не годно к работе.
+ *
+ * ПУСТО ПРОВЕРЯЕТСЯ ОТДЕЛЬНО, А НЕ ЧЕРЕЗ Number(). `Number(null)` — это ноль, и
+ * `Number.isFinite` его пропускает: экран показывал «Попытка 5 из 0» и «после
+ * 0-й лид уйдёт в статус «null»» на любом статусе без правила. Поймано на живом
+ * экране; чтением кода не нашлось.
+ *
+ * Вынесена наружу ради проверки: ошибка тихая, и мерить её надо набором, а не
+ * глазами.
+ */
+export function recallLimitOf(status) {
+    if (!status) return null;
+    const raw = status.recallMaxAttempts;
+    if (raw === null || raw === undefined) return null;
+    const n = Number(raw);
+    return Number.isFinite(n) && n > 0 ? n : null;
+}
 
 // options.flash = true — карточку только что подменили после сохранения:
 // над ней на две секунды появляется полоса «Новый лид № …». Смена собеседника
@@ -255,10 +293,10 @@ export function renderLeadForm(container, lead, statuses, paramLists, onSave, op
         <div class="op-lead-phone">
             <i class="fas fa-phone" aria-hidden="true"></i>
             <input id="op-field-phone" name="phone" type="tel" value="${escapeHtml(lead.phone)}" aria-label="Телефон">
-            ${attempts ? `<span class="op-attempt${attempts >= ATTEMPTS_WARN_FROM ? ' warn' : ''}">Попытка ${attempts} из ${MAX_CALL_ATTEMPTS}</span>` : ''}
+            ${attempts ? '<span class="op-attempt" id="opAttemptBadge"></span>' : ''}
         </div>
         ${phoneNote(lead)}
-        ${attempts ? `<div class="op-attempt-note">Предыдущая попытка: ${escapeHtml(formatDateTime(lead.lastCallAt)) || '—'}. Счётчик общий по всем операторам линии; после ${MAX_CALL_ATTEMPTS}-й лид уйдёт в статус «Не ответил после N перезвонов».</div>` : ''}
+        ${attempts ? '<div class="op-attempt-note" id="opAttemptNote"></div>' : ''}
 
         <div class="op-form-section">
             <div class="op-section-label">Клиент</div>
@@ -490,8 +528,45 @@ export function renderLeadForm(container, lead, statuses, paramLists, onSave, op
         });
     }
 
-    statusSelect.addEventListener('change', renderCallbackBox);
+    // --- Счётчик попыток ---------------------------------------------------
+    // ПРЕДЕЛ ЗАВИСИТ ОТ ВЫБРАННОГО СТАТУСА, а не от лида: своё число у каждой
+    // строки события (решение владельца 12), и решает то, которое оператор
+    // сейчас ставит (ответ куратора 14). Поэтому счётчик перерисовывается вместе
+    // с выбором — там же, где раскрывается выбор времени перезвона.
+    //
+    // ПРЕДЕЛА НЕТ — НЕТ И «ИЗ N». По статусу без правила система не перезванивает
+    // вовсе, и «Попытка 3 из 20» обещала бы то, чего не случится. Остаётся
+    // «Попытка 3»: число попыток — факт, он был и остаётся верным.
+    const attemptBadge = container.querySelector('#opAttemptBadge');
+    const attemptNote = container.querySelector('#opAttemptNote');
+
+    function renderAttempts() {
+        if (!attemptBadge && !attemptNote) return;
+        const status = selectedStatus();
+        const limit = recallLimitOf(status);
+        const previous = formatDateTime(lead.lastCallAt) || '—';
+
+        if (attemptBadge) {
+            attemptBadge.textContent = limit === null
+                ? `Попытка ${attempts}`
+                : `Попытка ${attempts} из ${limit}`;
+            attemptBadge.classList.toggle('warn', limit !== null && attempts >= warnFrom(limit));
+        }
+        if (attemptNote) {
+            const tail = limit === null
+                ? ''
+                : ` После ${limit}-й лид уйдёт в статус «${status.recallAfterStatusName}».`;
+            attemptNote.textContent =
+                `Предыдущая попытка: ${previous}. Счётчик общий по всем операторам линии.${tail}`;
+        }
+    }
+
+    statusSelect.addEventListener('change', () => {
+        renderCallbackBox();
+        renderAttempts();
+    });
     renderCallbackBox();
+    renderAttempts();
 
     // --- Сохранение --------------------------------------------------------
     container.querySelector('#opSaveLeadBtn').addEventListener('click', () => {
