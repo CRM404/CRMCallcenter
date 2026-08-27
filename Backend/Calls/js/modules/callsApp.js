@@ -4,9 +4,17 @@
 //     export async function mount(container, ctx)
 //     export function unmount()
 //
-// ДВЕ ВКЛАДКИ, И ОНИ РАЗНЫЕ ПО ПРИРОДЕ. «Активные» — строка это ОПЕРАТОР,
+// ТРИ ВКЛАДКИ, И ОНИ РАЗНЫЕ ПО ПРИРОДЕ. «Активные» — строка это ОПЕРАТОР,
 // картина живая и обновляется сама. «Завершённые» — строка это ЗВОНОК, журнал
-// за период, свежие сверху. Общего у них только шапка и полоса вкладок.
+// за период, свежие сверху. «События» — строка это НАСТРОЙКА планировщика, и
+// живёт она своим модулем (`callsEvents.js`). Общего у всех трёх только шапка и
+// полоса вкладок.
+//
+// ТРЕТЬЯ ГРУЗИТСЯ ПРИ ПЕРВОМ ОТКРЫТИИ, а не при монтировании, и это не
+// противоречит правилу двух первых. Журнал грузится сразу потому, что у его
+// вкладки СЧЁТЧИК, и он обязан быть верным с первого кадра. У «Событий»
+// счётчика нет: строк там всегда четыре, и число, которое никогда не меняется,
+// — украшение, а не счётчик (паспорт Р12). Значит и торопиться не с чем.
 //
 // СОСТОЯНИЕ ЖИВЁТ В ЭКЗЕМПЛЯРЕ, а не в модуле. ES-модуль — синглтон: при двух
 // открытых панелях модульные переменные были бы общими, и два раздела начали бы
@@ -19,11 +27,20 @@ import { openModal } from '/ui/modal.js';
 import { isAbort } from '/api.js';
 import { readHiddenColumns, hasHiddenColumns, writeHiddenColumns } from '/viewPrefs.js';
 import { showLoadError, clearLoadError } from '/ui/load-error.js';
+import { createSkeleton } from '/ui/skeleton.js';
 import {
     fetchActive, fetchMeta, fetchCalls, fetchCallsForExport, fetchChain, fetchRecording
 } from './callsStorage.js';
+import { createEventsTab } from './callsEvents.js';
 
 const COLUMNS_SECTION = 'calls';
+
+// Три вкладки в том порядке, в каком они стоят в полосе. Список нужен целиком,
+// а не парой имён: по нему ходят стрелки и по нему же переключаются панели —
+// два разных перечисления одного порядка разошлись бы на четвёртой вкладке.
+// Порядок не случаен: первые две — работа, третья — настройка, а настройка не
+// идёт первой (паспорт Р12).
+const TABS = ['active', 'done', 'events'];
 
 // Порция догрузки — та же, что в «Лидах» (контрольное число паспорта).
 const PAGE_SIZE = 30;
@@ -158,6 +175,10 @@ function createInstance(container, ctx) {
     let searchTimer = null;
     let filtersModal = null;
     let columnsModal = null;
+    // Вкладка «События» — свой модуль со своим состоянием. Создаётся при первом
+    // открытии вкладки: настройку планировщика открывают редко, а два запроса
+    // справочников при каждом входе в раздел платились бы всегда.
+    let eventsTab = null;
 
     const self = {
         start,
@@ -169,6 +190,7 @@ function createInstance(container, ctx) {
             if (events) events.close();
             if (filtersModal) filtersModal.close();
             if (columnsModal) columnsModal.close();
+            if (eventsTab) eventsTab.destroy();
         }
     };
 
@@ -205,15 +227,19 @@ function createInstance(container, ctx) {
     // ------------------------------------------------------------ вкладки
 
     function bindEvents() {
-        $('[data-role="tab-active"]').addEventListener('click', () => switchTab('active'));
-        $('[data-role="tab-done"]').addEventListener('click', () => switchTab('done'));
+        TABS.forEach((tab) => {
+            $(`[data-role="tab-${tab}"]`).addEventListener('click', () => switchTab(tab));
+        });
 
-        // ← → между вкладками — поведение role="tablist".
+        // ← → между вкладками — поведение role="tablist". Кольцом: с последней
+        // стрелка вправо ведёт на первую, как это делает сама роль.
         $('[data-role="tabs"]').addEventListener('keydown', (e) => {
             if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
             e.preventDefault();
-            switchTab(state.tab === 'active' ? 'done' : 'active');
-            $(state.tab === 'active' ? '[data-role="tab-active"]' : '[data-role="tab-done"]').focus();
+            const step = e.key === 'ArrowRight' ? 1 : -1;
+            const next = TABS[(TABS.indexOf(state.tab) + step + TABS.length) % TABS.length];
+            switchTab(next);
+            $(`[data-role="tab-${next}"]`).focus();
         });
 
         $('[data-role="search"]').addEventListener('input', (e) => {
@@ -255,22 +281,50 @@ function createInstance(container, ctx) {
     function switchTab(tab) {
         if (state.tab === tab) return;
         state.tab = tab;
-        const isActive = tab === 'active';
 
-        $('[data-role="tab-active"]').classList.toggle('ui-tabs__tab--active', isActive);
-        $('[data-role="tab-active"]').setAttribute('aria-selected', String(isActive));
-        $('[data-role="tab-done"]').classList.toggle('ui-tabs__tab--active', !isActive);
-        $('[data-role="tab-done"]').setAttribute('aria-selected', String(!isActive));
+        TABS.forEach((name) => {
+            const on = name === tab;
+            const btn = $(`[data-role="tab-${name}"]`);
+            btn.classList.toggle('ui-tabs__tab--active', on);
+            btn.setAttribute('aria-selected', String(on));
+            $(`[data-role="pane-${name}"]`).hidden = !on;
+        });
 
-        $('[data-role="pane-active"]').hidden = !isActive;
-        $('[data-role="pane-done"]').hidden = isActive;
         // Действия шапки принадлежат «Завершённым»: на «Активных» фильтровать
-        // нечего и выгружать нечего.
-        $('[data-role="done-acts"]').hidden = isActive;
+        // нечего и выгружать нечего, а «События» — настройка, и выгружать её
+        // некуда тем более.
+        $('[data-role="done-acts"]').hidden = tab !== 'done';
 
         // Строки журнала рисуются при первом показе вкладки: данные уже здесь с
         // монтирования, но строить двенадцать колонок в скрытую панель незачем.
-        if (!isActive) renderDone(state.done.length < state.doneTotal);
+        if (tab === 'done') renderDone(state.done.length < state.doneTotal);
+        if (tab === 'events') openEventsTab();
+    }
+
+    /**
+     * Первое открытие вкладки «События»: скелет, загрузка, модуль.
+     *
+     * СКЕЛЕТ РАЗДЕЛА, А НЕ СВОЙ (паспорт Р12, матрица состояний, № 1). Своя
+     * заглушка на четыре строки выглядела бы точнее, но это ещё один способ
+     * показывать загрузку в проекте, где он уже есть.
+     */
+    async function openEventsTab() {
+        if (eventsTab) return;
+        const pane = $('[data-role="pane-events"]');
+        eventsTab = createEventsTab({ pane, api: ctx.api, scope: container });
+        const skeleton = createSkeleton('table', 'События');
+        pane.appendChild(skeleton);
+        try {
+            await eventsTab.load();
+        } catch (err) {
+            // Полосу «данные не загрузились» ставит оболочка на любом неудавшемся
+            // запросе панели — раздел про неё не знает и своей не рисует. Здесь
+            // остаётся снять недоделанный модуль, чтобы следующее открытие
+            // вкладки попробовало снова, а не показало пустой столбик навсегда.
+            if (!isAbort(err)) eventsTab = null;
+        } finally {
+            skeleton.remove();
+        }
     }
 
     // ------------------------------------------------------------ «Активные»

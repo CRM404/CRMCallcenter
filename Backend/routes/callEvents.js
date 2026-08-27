@@ -17,6 +17,8 @@
 const express = require('express');
 const { pool } = require('../db');
 const { withTransaction } = require('../services/dbTx');
+const { normalizePhone } = require('../services/phoneFormat');
+const { zonedParts } = require('../services/appTime');
 
 const router = express.Router();
 
@@ -67,14 +69,77 @@ function bad(res, error) {
     return res.status(400).json({ error });
 }
 
+/**
+ * Человеческий текст причины, по которой номер не разобрался.
+ *
+ * ИЗ СПРАВОЧНИКА `phone_fix_reasons`, а не из константы рядом: ровно этот текст
+ * человек видит на экране разбора номеров, и вторая формулировка того же отказа
+ * означала бы, что один и тот же номер отвергается «по разным причинам».
+ *
+ * ОТКАЗ САМ ПО СЕБЕ НЕ ПАДАЕТ ИЗ-ЗА СПРАВОЧНИКА. Не доехало имя — отказ всё
+ * равно состоится, просто текст будет беднее: сохранять неразобранный номер
+ * нельзя в любом случае, а падение здесь превратило бы отказ проверки в
+ * пятисотую ошибку.
+ */
+async function reasonTitle(code) {
+    try {
+        const result = await pool.query('SELECT title FROM phone_fix_reasons WHERE code = $1', [code]);
+        if (result.rows[0]) return result.rows[0].title;
+    } catch (err) {
+        console.error(err);
+    }
+    return 'Номер не разобрался — проверьте, что это городской или мобильный номер';
+}
+
 // ---------------------------------------------------------------- чтение
+
+/**
+ * Почему строка перевода видна и не работает — ИЛИ null, если работает.
+ *
+ * СЧИТАЕТ СЕРВЕР, А НЕ ЭКРАН. Причины две из трёх завязаны на «сегодня», а
+ * «сегодня» в проекте берётся только с сервера (К198): часы у руководителя
+ * могут стоять в другом поясе, и оффер, закончившийся вчера, выглядел бы у него
+ * живым. Браузер здесь не решает ничего.
+ *
+ * ПОРЯДОК ПРИЧИН НЕ АЛФАВИТНЫЙ. Выключенный оффер остаётся выключенным и после
+ * продления, поэтому «не активен» называется раньше «закончился»: иначе человек
+ * пойдёт продлевать оффер, а перевод всё равно не заработает.
+ */
+function offerBlock(row, today) {
+    if (row.offer_status !== 'active') return 'inactive';
+    if (row.date_end && isoDate(row.date_end) < today) return 'expired';
+    return null;
+}
+
+function employeeBlock(row) {
+    if (row.employee_status !== 'active') return 'inactive';
+    if (!row.pbx_extension || !String(row.pbx_extension).trim()) return 'no_extension';
+    return null;
+}
+
+// «Сегодня» в поясе приложения, «ГГГГ-ММ-ДД». База живёт в UTC (паспорт
+// установки), и CURRENT_DATE в ней с 21:00 до полуночи по Москве показывает
+// вчерашний день.
+function todayInAppZone() {
+    const p = zonedParts(new Date());
+    return `${p.year}-${String(p.month).padStart(2, '0')}-${String(p.day).padStart(2, '0')}`;
+}
+
+// Дата из драйвера приходит объектом Date; сравниваем строками одного вида.
+function isoDate(value) {
+    if (!value) return null;
+    if (typeof value === 'string') return value.slice(0, 10);
+    const p = zonedParts(value);
+    return `${p.year}-${String(p.month).padStart(2, '0')}-${String(p.day).padStart(2, '0')}`;
+}
 
 async function readEvents(db) {
     const [events, rules, pairs, offers, employees] = await Promise.all([
         db.query('SELECT kind, enabled, window_from, window_to, wait_seconds FROM call_events ORDER BY kind'),
         db.query(
             `SELECT r.id, r.funnel_status_id, r.interval_minutes, r.max_attempts, r.after_limit_status_id,
-                    s.status_name, s.stage_number, s.stage_name, a.status_name AS after_status_name
+                    s.status_name, s.stage_number, s.stage_name,
+                    a.status_name AS after_status_name, a.mark AS after_status_mark
                FROM call_recall_rules r
                JOIN lead_funnel_statuses s ON s.id = r.funnel_status_id
                JOIN lead_funnel_statuses a ON a.id = r.after_limit_status_id
@@ -110,6 +175,7 @@ async function readEvents(db) {
 
     const recall = one('auto_recall');
     const wait = one('transfer_wait');
+    const today = todayInAppZone();
 
     return {
         autoRecall: {
@@ -125,7 +191,13 @@ async function readEvents(db) {
                 intervalMinutes: r.interval_minutes,
                 maxAttempts: r.max_attempts,
                 afterLimitStatusId: r.after_limit_status_id,
-                afterStatusName: r.after_status_name
+                afterStatusName: r.after_status_name,
+                // Пометка целевого статуса едет вместе с именем: строка-итог
+                // события называет не только «куда», но и «что из этого
+                // выйдет» — «лид уходит в архив сам». Считать это на экране по
+                // второму справочнику значило бы держать два ответа на один
+                // вопрос.
+                afterStatusMark: r.after_status_mark
             }))
         },
         transfer: {
@@ -136,10 +208,13 @@ async function readEvents(db) {
                 offerName: r.offer_name,
                 networkName: r.network_name,
                 priority: r.priority,
-                // Три причины, по которым строка видна и не работает (паспорт
-                // Р12). Считает их сервер — экран не решает, что живо.
+                // Причины, по которым строка видна и не работает (паспорт Р12).
+                // Считает их сервер — экран не решает, что живо; сами значения
+                // едут рядом, потому что текст плашки называет и дату, и вид
+                // состояния оффера.
+                blockedReason: offerBlock(r, today),
                 offerStatus: r.offer_status,
-                dateEnd: r.date_end,
+                dateEnd: isoDate(r.date_end),
                 transferPhone: r.transfer_phone,
                 weekdays: r.weekdays,
                 timeFrom: shortTime(r.time_from),
@@ -155,6 +230,7 @@ async function readEvents(db) {
                 // «занят разговором» протухнет через минуту после открытия окна.
                 // Серым показывается только постоянное — снят внутренний номер
                 // или выведен из работы.
+                blockedReason: employeeBlock(r),
                 extension: r.pbx_extension,
                 employeeStatus: r.employee_status,
                 weekdays: r.weekdays,
@@ -187,6 +263,74 @@ router.get('/', async (req, res) => {
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: 'Не удалось получить события' });
+    }
+});
+
+// GET /api/call-events/directories — справочники ЧЕТЫРЁХ окон одним ответом.
+//
+// ОДИН ЗАПРОС, А НЕ ЧЕТЫРЕ ЧУЖИХ. Окна события выбирают статус, скрипт, оффер и
+// сотрудника; три из четырёх справочников живут в чужих разделах, и брать их
+// оттуда значило бы связать вкладку с чужими маршрутами ради выпадающих списков.
+// Здесь они собраны в том виде, в каком их показывает паспорт Р12, — и только в
+// том: полных карточек ни у оффера, ни у сотрудника вкладке не нужно.
+//
+// ⚠ ОФФЕРЫ ОТДАЮТСЯ ЦЕЛИКОМ, И ЭТО ВЕРНО ПОКА ИХ ДЕСЯТКИ. Замер боевой базы
+// 27.08.2026 — 39 офферов; паспорт говорит «офферов десятки» и рисует обычный
+// список. Комментарий в `realEstateOffers.js:301` называет число ≈38 000 —
+// это замер другого времени, и если оно вернётся, здесь появится поиск с
+// пределом, как у «Лидов» (`GET /real-estate-offers/search`). Молча отдавать
+// первые N нельзя: список, потерявший строки без единого слова, читается как
+// «такого оффера у нас нет», и человек заведёт второй.
+router.get('/directories', async (req, res) => {
+    try {
+        const [statuses, scripts, offers, employees] = await Promise.all([
+            pool.query(
+                `SELECT id, stage_number, stage_name, status_name, mark
+                   FROM lead_funnel_statuses ORDER BY stage_number, sort_order`),
+            pool.query('SELECT id, title FROM scripts ORDER BY title, id'),
+            pool.query(
+                `SELECT o.id, o.name, o.priority, n.name AS network_name
+                   FROM real_estate_offers o
+                   JOIN cpa_networks n ON n.id = o.network_id
+                  ORDER BY o.priority NULLS LAST, o.id`),
+            // ТОЛЬКО ТЕ, У КОГО ЗАПОЛНЕН ВНУТРЕННИЙ НОМЕР, и только работающие
+            // (паспорт Р12). Переводить на сотрудника без добавочного некуда, а
+            // выведенный из работы не возьмёт трубку никогда. Уже заведённые
+            // строки при этом остаются видимыми и объясняют себя сами — их
+            // отдаёт `GET /` вместе с состоянием сотрудника.
+            pool.query(
+                `SELECT id, last_name, first_name, pbx_extension
+                   FROM employees
+                  WHERE status = 'active' AND pbx_extension IS NOT NULL AND btrim(pbx_extension) <> ''
+                  ORDER BY last_name, first_name`)
+        ]);
+        res.json({
+            statuses: statuses.rows.map((r) => ({
+                id: r.id,
+                stageNumber: r.stage_number,
+                stageName: r.stage_name,
+                statusName: r.status_name,
+                // null — не размечен: целевым такой статус выбрать нельзя, но в
+                // списке он виден выключенным. Спрятанный читался бы как «такого
+                // статуса нет», и человек пошёл бы искать ошибку не туда.
+                mark: r.mark
+            })),
+            scripts: scripts.rows.map((r) => ({ id: r.id, title: r.title })),
+            offers: offers.rows.map((r) => ({
+                id: r.id,
+                name: r.name,
+                networkName: r.network_name,
+                priority: r.priority
+            })),
+            employees: employees.rows.map((r) => ({
+                id: r.id,
+                fullName: `${r.last_name} ${r.first_name}`,
+                extension: r.pbx_extension
+            }))
+        });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Не удалось получить справочники событий' });
     }
 });
 
@@ -372,11 +516,23 @@ router.put('/transfer', async (req, res) => {
     const offers = [];
     for (const row of offerRows) {
         const offerId = wholeNumber(row.offerId, 1, 2147483647);
-        const phone = String(row.transferPhone || '').trim();
+        // НОМЕР ПАРТНЁРА ПРИВОДИТСЯ К ЕДИНОМУ ФОРМАТУ ПРОЕКТА, а не кладётся
+        // строкой как её набрали (паспорт Р12). Хранится `+7XXXXXXXXXX` — тот
+        // же вид, что у номера лида и у номера сотрудника: набирать по нему
+        // будет телефония, а «8 (495) 120-45-67» и «+74951204567» для неё
+        // разные строки.
+        const parsed = normalizePhone(row.transferPhone);
+        const phone = parsed.phone;
         const days = weekdays(row.weekdays);
         const wait = wholeNumber(row.waitSeconds, 1, 3600);
         if (offerId === null) return bad(res, 'В строке перевода не выбран оффер');
-        if (!phone) return bad(res, 'Выберите внутренний номер: без него перевод не сработает');
+        if (parsed.reason === 'empty') {
+            return bad(res, 'Укажите номер для перевода: без него перевод не сработает');
+        }
+        // ОТКАЗ ПО НОМЕРУ БЕРЁТСЯ ИЗ СПРАВОЧНИКА, А НЕ СОЧИНЯЕТСЯ (наряд,
+        // раздел «Тексты»). Тот же текст стоит на экране разбора номеров: двух
+        // формулировок одного отказа быть не должно.
+        if (parsed.reason) return bad(res, await reasonTitle(parsed.reason));
         if (!days) return bad(res, 'Отметьте хотя бы один день — иначе перевод не работает никогда');
         if (!isTime(row.timeFrom) || !isTime(row.timeTo)) return bad(res, 'Укажите время «с» и «до»');
         if (String(row.timeFrom).trim() === String(row.timeTo).trim()) {

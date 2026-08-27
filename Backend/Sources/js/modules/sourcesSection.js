@@ -778,7 +778,7 @@ function openSourceModal(state, source) {
             </div>
             <div class="ui-field ui-field--wide">
                 <label class="ui-field__label ui-field__label--required">CPA-сети (минимум одна)</label>
-                <div class="src-networks" data-field="networks">
+                <div class="ui-choices" data-field="networks">
                     ${state.cpaNetworks.map((n) => {
                         const checked = source && (source.cpaNetworkIds || []).includes(n.id);
                         return `<label class="ui-choice${checked ? ' ui-choice--on' : ''}">

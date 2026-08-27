@@ -74,7 +74,7 @@ export function createScriptPairs(root, { createPickList, onCountChange = null }
     root.innerHTML = '';
     const rowsEl = el('div', 'lead-script-rows');
 
-    const addBtn = el('button', 'ui-btn ui-btn--ghost lead-script-add');
+    const addBtn = el('button', 'ui-btn ui-btn--ghost ui-btn--add lead-script-add');
     addBtn.type = 'button';
     addBtn.innerHTML = `${icon('plus', 'sm')}<span>${TEXTS.addBtn}</span>`;
 

@@ -595,7 +595,7 @@ function choiceControl(name, values, selected) {
                     <input type="checkbox" value="${escapeHtml(value)}"${on ? ' checked' : ''}>${escapeHtml(value)}
                 </label>`;
     }).join('');
-    return `<div class="cpa-choices" data-field="${name}">${items || '<span class="ui-field__hint">Список пуст — заполните его в «Настройке списков».</span>'}</div>`;
+    return `<div class="ui-choices" data-field="${name}">${items || '<span class="ui-field__hint">Список пуст — заполните его в «Настройке списков».</span>'}</div>`;
 }
 
 function sectionHead(icon, title, sub) {
@@ -704,13 +704,13 @@ async function openOfferModal(state, offer, opts = {}) {
             ${fieldBlock({ label: 'Цена и площадь по сегментам', name: 'segments',
                 hint: 'Класс объекта и комнатность задаются внутри сегмента: у разных диапазонов цены они разные.',
                 control: `<div class="cpa-repeat-rows" data-role="segments"></div>
-                    <button type="button" class="ui-btn ui-btn--ghost cpa-add-row" data-role="add-segment">
+                    <button type="button" class="ui-btn ui-btn--ghost ui-btn--add" data-role="add-segment">
                         <svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-plus"></use></svg>Добавить сегмент
                     </button>` })}
             ${fieldBlock({ label: 'География объекта', name: 'objGeo',
                 hint: 'Регион, город, район, населённый пункт. Пустой уровень значит «любой»; подсказка приходит для того уровня, в котором печатают.',
                 control: `<div class="cpa-repeat-rows" data-role="obj-geo"></div>
-                    <button type="button" class="ui-btn ui-btn--ghost cpa-add-row" data-role="add-obj-geo">
+                    <button type="button" class="ui-btn ui-btn--ghost ui-btn--add" data-role="add-obj-geo">
                         <svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-plus"></use></svg>Добавить географию
                     </button>` })}
         </div>
@@ -738,7 +738,7 @@ async function openOfferModal(state, offer, opts = {}) {
             ${fieldBlock({ label: 'География клиента', name: 'clientGeo',
                 hint: 'Тот же принцип, что у объекта, но про самого покупателя.',
                 control: `<div class="cpa-repeat-rows" data-role="client-geo"></div>
-                    <button type="button" class="ui-btn ui-btn--ghost cpa-add-row" data-role="add-client-geo">
+                    <button type="button" class="ui-btn ui-btn--ghost ui-btn--add" data-role="add-client-geo">
                         <svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-plus"></use></svg>Добавить географию
                     </button>` })}
         </div>
