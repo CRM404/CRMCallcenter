@@ -43,8 +43,15 @@ const { withTransaction } = require('./dbTx');
 const { HELD_LEAD_RELEASE_HOURS } = require('./appTime');
 const auditContext = require('./auditContext');
 
+// ПОРЯДОК ОБЯЗАТЕЛЕН, И С ЧАСТИ 9 ЭТО НЕ ПЕДАНТИЗМ. Пока справочник был
+// закреплён схемой, на нулевом этапе стояла ровно одна строка, и `LIMIT 1` без
+// порядка возвращал её всегда. Заход 4 сделал справочник правимым: второй
+// статус на нулевом этапе теперь завести можно, и без явного порядка одна и та
+// же выборка отдавала бы разное между запросами — то есть новые лиды заводились
+// бы то с одним статусом, то с другим.
 async function findNewFunnelStatusId(db) {
-    const result = await db.query("SELECT id FROM lead_funnel_statuses WHERE stage_number = 0 LIMIT 1");
+    const result = await db.query(
+        'SELECT id FROM lead_funnel_statuses WHERE stage_number = 0 ORDER BY sort_order, id LIMIT 1');
     return result.rows[0] ? result.rows[0].id : null;
 }
 

@@ -9,7 +9,7 @@ const cors = require('cors');
 const { runMigrations } = require('./migrate');
 const auditContext = require('./services/auditContext');
 const { pool } = require('./db');
-const { checkStatusFlagsConfigured } = require('./services/leadCallRules');
+const { checkAutoRecallConfigured } = require('./services/leadCallRules');
 const { runPhoneNormalization } = require('./services/phoneMigration');
 const scheduler = require('./services/scheduler');
 const eventChannel = require('./services/eventChannel');
@@ -190,13 +190,16 @@ const PORT = process.env.PORT || 3000;
 //
 // СМОТРИТ НА СОБЫТИЕ, А НЕ НА ФЛАГ (часть 9, заход 2). Список статусов для
 // обзвона задаёт руководитель на вкладке «Звонки → События», и погасить обзвон
-// целиком стало легче, чем было: достаточно снять галочку. Вторая половина
-// сторожа ещё про флаг — `requires_call_time` до захода 4 ставит одна миграция
-// по названиям, и один лишний пробел в названии по-прежнему ломает выбор
-// времени перезвона молча.
+// целиком стало легче, чем было: достаточно снять галочку. Причины называются
+// порознь — события нет, выключено, без окна, без строк, — потому что чинятся
+// они в разных местах.
+//
+// Половина про `requires_call_time` снята заходом 4 вместе с тем, что делало
+// её осмысленной: признак ставит владелец в окне статуса, и «ровно у одного»
+// перестало быть утверждением о правильности.
 runMigrations()
-    .then(() => checkStatusFlagsConfigured(pool).catch((err) => {
-        console.error('Не удалось проверить флаги статусов воронки:', err);
+    .then(() => checkAutoRecallConfigured(pool).catch((err) => {
+        console.error('Не удалось проверить настройку автоперезвона:', err);
     }))
     // Приведение номеров к единому формату (часть 4, Б1.2). Идёт ПОСЛЕ схемы, а
     // не внутри неё: правила приведения обязаны быть в проекте одни, и живут они

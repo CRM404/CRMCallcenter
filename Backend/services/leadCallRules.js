@@ -118,12 +118,16 @@ async function resolveCallStatusEffects(db, { currentAttempts, statusId, statusF
 // целиком стало ЛЕГЧЕ, чем было: достаточно снять галочку на вкладке. Причины
 // названы порознь, потому что чинятся в разных местах.
 //
-// ВТОРАЯ ПОЛОВИНА ОСТАЁТСЯ ДО ЗАХОДА 4. Пока вкладка «Статусы воронки» только
-// на чтение, `requires_call_time` ставит одна миграция по названиям, и
-// утверждение «ровно у одного» ещё верно. Заход 4 делает признак правимым —
-// владелец вправе поставить его хоть трём статусам, и сторож начнёт ругаться на
-// законную настройку; тогда эта половина снимается совсем, а не смягчается.
-async function checkStatusFlagsConfigured(db) {
+// ВТОРАЯ ПОЛОВИНА СНЯТА ЗАХОДОМ 4, А НЕ СМЯГЧЕНА (ответ куратора 19). Она
+// ругалась, когда `requires_call_time` стоял не ровно у одного статуса, — и
+// была права, пока признак ставила одна миграция по названиям. Теперь его
+// ставит владелец в окне статуса: он вправе пометить хоть три, хоть ни одного,
+// и сторож кричал бы на законную настройку. Сторож, кричащий на разрешённое, за
+// неделю становится частью фона — и тогда он не охраняет и то, ради чего заведён.
+// «Хотя бы у одного» не спасает: ноль — тоже законный выбор.
+//
+// Имя функции сменилось вместе с предметом: она больше не про флаги статусов.
+async function checkAutoRecallConfigured(db) {
     const recall = await fetchAutoRecallState(db);
     if (!recall) {
         console.error('[события] Строки события «Автоперезвон» нет в базе — система не перезванивает никому. Засев не отработал.');
@@ -134,21 +138,11 @@ async function checkStatusFlagsConfigured(db) {
     } else if (recall.rules === 0) {
         console.error('[события] В событии «Автоперезвон» нет ни одной строки — перезванивать не по каким статусам.');
     }
-
-    const result = await db.query(
-        `SELECT count(*) FILTER (WHERE requires_call_time)::int AS requires_call_time,
-                count(*) FILTER (WHERE releases_lead)::int AS releases_lead
-         FROM lead_funnel_statuses`
-    );
-    const counts = result.rows[0];
-    if (counts.requires_call_time !== 1) {
-        console.error(`[статусы] requires_call_time стоит у ${counts.requires_call_time} статусов вместо одного — выбор времени перезвона показывается неверно.`);
-    }
-    return { ...counts, recall };
+    return { recall };
 }
 
 module.exports = {
     fetchStatusFlags,
     resolveCallStatusEffects,
-    checkStatusFlagsConfigured
+    checkAutoRecallConfigured
 };

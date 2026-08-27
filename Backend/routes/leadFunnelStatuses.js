@@ -3,8 +3,49 @@
 const express = require('express');
 const { pool } = require('../db');
 const { fetchAutoRecallRules } = require('../services/callEvents');
+const { countBlocker, orderBlockers, refuse } = require('../services/deleteGuards');
 
 const router = express.Router();
+
+// Пометка статуса — три состояния, третье пустое (решение владельца 100).
+// Значения русские и пришпилены ограничением базы: журнал изменений пишет
+// значение как текст, и «true → false» человек не прочитает.
+const MARKS = ['окончательный', 'промежуточный'];
+
+// Подпись этапа в отказах — та же, что на экране: «1 · Первичный контакт».
+function stageLabel(stageNumber, stageName) {
+    return `${stageNumber} · ${stageName}`;
+}
+
+/**
+ * Этап существует? Перечень берётся ИЗ ДАННЫХ, а не из зашитого списка семи:
+ * разбивка живёт в схеме, и второй список этапов разошёлся бы с ней молча. Тот
+ * же довод, по которому экран собирает коробки этапов из самих статусов.
+ */
+async function findStage(db, stageNumber) {
+    const result = await db.query(
+        `SELECT stage_number, stage_name FROM lead_funnel_statuses
+          WHERE stage_number = $1 LIMIT 1`, [stageNumber]);
+    return result.rows[0] || null;
+}
+
+/**
+ * Имя занято внутри этапа? Сравнение БЕЗ учёта регистра — строже, чем
+ * `UNIQUE (stage_number, status_name)` в базе, и тот же приём, что в «Настройке
+ * списков» (`routes/paramLists.js:61`): «Перезвон» и «перезвон» в одном этапе —
+ * это не два статуса, а один и опечатка.
+ *
+ * `exceptId` нужен переименованию: смена регистра собственного имени отказом не
+ * считается.
+ */
+async function nameTaken(db, stageNumber, name, exceptId) {
+    const result = await db.query(
+        `SELECT id FROM lead_funnel_statuses
+          WHERE stage_number = $1 AND lower(btrim(status_name)) = lower(btrim($2))
+            AND ($3::int IS NULL OR id <> $3)`,
+        [stageNumber, name, exceptId === undefined ? null : exceptId]);
+    return result.rows.length > 0;
+}
 
 // GET /api/lead-funnel-statuses — полный список, для группировки по этапу на фронте.
 // С 15.08.2026 отдаются и признаки поведения статуса: по requiresCallTime форма
@@ -30,7 +71,7 @@ router.get('/', async (req, res) => {
         const [result, recallRules] = await Promise.all([
             pool.query(
                 `SELECT id, stage_number, stage_name, status_name, sort_order,
-                        auto_recall, requires_call_time, releases_lead
+                        auto_recall, requires_call_time, releases_lead, mark
                  FROM lead_funnel_statuses ORDER BY stage_number, sort_order`
             ),
             fetchAutoRecallRules(pool)
@@ -47,6 +88,10 @@ router.get('/', async (req, res) => {
                 autoRecall: r.auto_recall,
                 requiresCallTime: r.requires_call_time,
                 releasesLead: r.releases_lead,
+                // Пометка «окончательный / промежуточный»; null — не размечен.
+                // Заведена заходом 1, а отдавать её понадобилось только сейчас:
+                // до захода 4 её никто не показывал и не правил.
+                mark: r.mark,
                 // null — по этому статусу система не перезванивает: правила нет
                 // либо событие целиком не годно к работе.
                 recallMaxAttempts: rule ? rule.maxAttempts : null,
@@ -57,6 +102,204 @@ router.get('/', async (req, res) => {
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: 'Не удалось получить список статусов воронки' });
+    }
+});
+
+// POST /api/lead-funnel-statuses { stageNumber, statusName } — завести статус
+//
+// В КОНЕЦ СВОЕГО ЭТАПА: `max(sort_order) + 1` внутри этапа (ответ куратора 23).
+// Дыры от удалённых не заполняем и соседей не перенумеровываем — перенумерация
+// правит ЧУЖИЕ строки ради красоты, и каждая такая правка пошла бы в журнал
+// изменений отдельной записью. Человек, открывший историю статуса, увидел бы
+// десяток правок, которых никто не делал; `sort_order` при этом не показывается
+// вовсе и дыр в себе не выдаёт.
+//
+// ЭТАП НЕ ЗАВОДИТСЯ. Этапы — структура воронки, а не список значений: они
+// пришли из документа воронки CPA-сети, и восьмого экран завести не даёт.
+router.post('/', async (req, res) => {
+    const stageNumber = Number(req.body && req.body.stageNumber);
+    const name = String((req.body && req.body.statusName) || '').trim();
+    if (!Number.isInteger(stageNumber)) {
+        return res.status(400).json({ error: 'Не указан этап' });
+    }
+    if (!name) {
+        return res.status(400).json({ error: 'Укажите название' });
+    }
+    try {
+        const stage = await findStage(pool, stageNumber);
+        if (!stage) {
+            return res.status(400).json({ error: 'Такого этапа нет' });
+        }
+        if (await nameTaken(pool, stageNumber, name)) {
+            return res.status(400).json({
+                error: `В этапе «${stageLabel(stage.stage_number, stage.stage_name)}» такой статус уже есть`
+            });
+        }
+        const max = await pool.query(
+            'SELECT COALESCE(MAX(sort_order), 0) AS max_order FROM lead_funnel_statuses WHERE stage_number = $1',
+            [stageNumber]);
+        const created = await pool.query(
+            `INSERT INTO lead_funnel_statuses (stage_number, stage_name, status_name, sort_order)
+             VALUES ($1, $2, $3, $4) RETURNING id`,
+            [stageNumber, stage.stage_name, name, Number(max.rows[0].max_order) + 1]);
+        res.status(201).json({ id: created.rows[0].id });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Не удалось завести статус' });
+    }
+});
+
+// PUT /api/lead-funnel-statuses/:id { statusName, requiresCallTime, releasesLead }
+//
+// Имя и два признака — то, что правится в окне статуса. ЭТАП НЕ МЕНЯЕТСЯ:
+// перенести статус между этапами экран не даёт, и маршрут тоже.
+//
+// ⚠ ТРЕТЬЕГО ПРИЗНАКА ЗДЕСЬ НЕТ. `auto_recall` заморожена заходом 2: список
+// статусов для обзвона задаёт событие «Автоперезвон», и колонка доживает до
+// отдельного слова владельца о снятии. Писать в неё отсюда значило бы завести
+// второй источник правды у того, что уже переехало.
+router.put('/:id', async (req, res) => {
+    const id = Number(req.params.id);
+    const name = String((req.body && req.body.statusName) || '').trim();
+    if (!Number.isInteger(id) || id <= 0) {
+        return res.status(400).json({ error: 'Неверный номер статуса' });
+    }
+    if (!name) {
+        return res.status(400).json({ error: 'Укажите название' });
+    }
+    try {
+        const existing = await pool.query(
+            'SELECT id, stage_number, stage_name FROM lead_funnel_statuses WHERE id = $1', [id]);
+        if (existing.rows.length === 0) {
+            return res.status(404).json({ error: 'Статус не найден' });
+        }
+        const row = existing.rows[0];
+        if (await nameTaken(pool, row.stage_number, name, id)) {
+            return res.status(400).json({
+                error: `В этапе «${stageLabel(row.stage_number, row.stage_name)}» такой статус уже есть`
+            });
+        }
+        await pool.query(
+            `UPDATE lead_funnel_statuses
+                SET status_name = $1, requires_call_time = $2, releases_lead = $3
+              WHERE id = $4`,
+            [name, Boolean(req.body.requiresCallTime), Boolean(req.body.releasesLead), id]);
+        res.json({ id });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Не удалось сохранить статус' });
+    }
+});
+
+// PUT /api/lead-funnel-statuses/:id/mark { mark } — пометка «окончательный /
+// промежуточный», и пусто — законное третье значение.
+//
+// СВОЙ МАРШРУТ, А НЕ ЧАСТЬ ПРЕДЫДУЩЕГО. Пометку ставят списком прямо в строке
+// справочника, пятьдесят раз подряд, и сохраняется она сразу по выбору —
+// кнопки «Сохранить» у вкладки нет. Слать сюда заодно имя и два признака
+// значило бы отправлять на сервер всю строку ради одного значения и рисковать
+// затереть чужую правку, сделанную в окне между чтением списка и выбором.
+router.put('/:id/mark', async (req, res) => {
+    const id = Number(req.params.id);
+    const raw = req.body ? req.body.mark : undefined;
+    const mark = raw === null || raw === undefined || String(raw).trim() === '' ? null : String(raw).trim();
+    if (!Number.isInteger(id) || id <= 0) {
+        return res.status(400).json({ error: 'Неверный номер статуса' });
+    }
+    if (mark !== null && !MARKS.includes(mark)) {
+        return res.status(400).json({ error: 'Неизвестная пометка статуса' });
+    }
+    try {
+        const result = await pool.query(
+            'UPDATE lead_funnel_statuses SET mark = $1 WHERE id = $2 RETURNING id', [mark, id]);
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Статус не найден' });
+        }
+        res.json({ id, mark });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Не удалось сохранить пометку' });
+    }
+});
+
+// DELETE /api/lead-funnel-statuses/:id
+//
+// ЧЕТЫРЕ ПОМЕХИ, А НЕ ДВЕ. Паспорт Р11 знал про лидов и наборы «скрипт +
+// статус»; заход 1 завёл правила автоперезвона, а у них ДВЕ ссылки на
+// справочник — сам статус и статус после предела, — и обе запрещающие. Чинятся
+// они в разных местах, поэтому и называются разными словами (ответ куратора 25).
+//
+// Помеха одна — строка одна, ноль не пишется: `countBlocker` возвращает null,
+// когда считать нечего, а `orderBlockers` такие отсеивает.
+//
+// ГОЛАЯ ОШИБКА БАЗЫ НАРУЖУ НЕ ВЫХОДИТ. Запреты стоят и в схеме — 23503 дошёл бы
+// до человека как «Произошла ошибка на сервере»; здесь он не наступает вовсе,
+// потому что до `DELETE` дело не доходит.
+//
+// ПАРТИЕЙ ЭТО НЕ ОФОРМЛЯЕТСЯ. Партия нужна каскаду — одно нажатие, десятки
+// строк журнала; здесь каскада нет ни одного: все четыре связи запрещающие, и
+// удаление даёт ровно одну запись.
+router.delete('/:id', async (req, res) => {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+        return res.status(400).json({ error: 'Неверный номер статуса' });
+    }
+    try {
+        const existing = await pool.query(
+            'SELECT id, stage_number, stage_name, status_name FROM lead_funnel_statuses WHERE id = $1', [id]);
+        if (existing.rows.length === 0) {
+            return res.status(404).json({ error: 'Статус не найден' });
+        }
+        const row = existing.rows[0];
+
+        // ⚠ ПОСЛЕДНИЙ СТАТУС ЭТАПА НЕ УДАЛЯЕТСЯ, и это не помеха, а запрет.
+        //
+        // Этапы закреплены: восьмого экран завести не даёт, и седьмого обратно —
+        // тоже. Перечень этапов берётся из самих статусов, другого места он не
+        // имеет вовсе. Значит удаление последней строки этапа СНОСИТ ЭТАП
+        // НАВСЕГДА — действием, которое называется «удалить статус», и вернуть
+        // его будет нечем.
+        //
+        // У нулевого этапа цена выше: с него начинается каждый лид, очередь
+        // ищет статус по НОМЕРУ этапа (`leadDistribution.js:47`), и раздача,
+        // загрузка базы и возврат из архива берут его оттуда. Опустеет — всё
+        // это перестанет работать молча.
+        //
+        // Ни паспорт, ни наряд этого случая не называют: дыра открылась ровно
+        // тем, что справочник стал правимым.
+        const left = await pool.query(
+            'SELECT count(*)::int AS n FROM lead_funnel_statuses WHERE stage_number = $1',
+            [row.stage_number]);
+        if (left.rows[0].n <= 1) {
+            const tail = row.stage_number === 0
+                ? ' С этого этапа начинается каждый лид.'
+                : '';
+            return res.status(400).json({
+                error: `Статус «${row.status_name}» удалить нельзя: он последний в этапе `
+                    + `«${stageLabel(row.stage_number, row.stage_name)}», а этапы закреплены — `
+                    + `завести этап заново экран не даёт.${tail}`
+            });
+        }
+
+        const blockers = orderBlockers(await Promise.all([
+            countBlocker(pool, 'leads', 'FROM leads WHERE funnel_status_id = $1 ORDER BY id', [id]),
+            // У таблицы пар своего `id` нет вовсе — ключ составной. Считаем по
+            // лидам, которых это заденет: именно их человек и пойдёт искать.
+            countBlocker(pool, 'script_pairs',
+                'FROM (SELECT DISTINCT lead_id AS id FROM lead_script_statuses WHERE funnel_status_id = $1) p ORDER BY id',
+                [id]),
+            countBlocker(pool, 'recall_rules',
+                'FROM call_recall_rules WHERE funnel_status_id = $1 ORDER BY id', [id]),
+            countBlocker(pool, 'recall_targets',
+                'FROM call_recall_rules WHERE after_limit_status_id = $1 ORDER BY id', [id])
+        ]));
+        if (blockers.length) return refuse(res, blockers);
+
+        await pool.query('DELETE FROM lead_funnel_statuses WHERE id = $1', [id]);
+        res.status(204).send();
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Не удалось удалить статус' });
     }
 });
 
