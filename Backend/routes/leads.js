@@ -9,6 +9,7 @@ const express = require('express');
 const { pool } = require('../db');
 const { assignNextLeadForEmployee } = require('../services/leadDistribution');
 const { fetchStatusFlags, resolveCallStatusEffects } = require('../services/leadCallRules');
+const { resolveWrapupSeconds } = require('../services/callWrapup');
 const { withTransaction } = require('../services/dbTx');
 const { phoneColumnsFor, findLeadByPhone } = require('../services/phoneFix');
 
@@ -191,7 +192,18 @@ const CARD_FIELD_COLUMNS = EDITABLE_FIELD_COLUMNS.filter(([key]) => key !== 'fun
 
 async function fetchLeadCard(db, leadId) {
     const result = await db.query(`${LEAD_CARD_SELECT} WHERE l.id = $1`, [leadId]);
-    return result.rows[0] ? rowToLead(result.rows[0]) : null;
+    if (!result.rows[0]) return null;
+    const lead = rowToLead(result.rows[0]);
+    // ПРЕДЕЛ ПОСТ-ОБРАБОТКИ ЕДЕТ ВМЕСТЕ С КАРТОЧКОЙ (часть 9, заход 5). Считает
+    // его сервер: длительность задана парой «линия + скрипт», и собирать её на
+    // экране значило бы завести там второй экземпляр правила. `null` — законное
+    // значение: пары нет, пост-обработка не кончается сама.
+    lead.wrapupSeconds = await resolveWrapupSeconds(db, {
+        leadId,
+        funnelStatusId: result.rows[0].funnel_status_id,
+        lineType: result.rows[0].line_type
+    });
+    return lead;
 }
 
 // Серверное «сейчас» уходит клиенту вместе с карточкой: счётчик пост-обработки
@@ -295,6 +307,12 @@ router.post('/:id/complete', async (req, res) => {
                 setClauses.push(clause.replace('$?', `$${values.length}`));
             };
             push('funnel_status_id = $?', effects.funnel_status_id);
+            // ПОМЕТКА СНИМАЕТСЯ ЛЮБЫМ СОХРАНЕНИЕМ, а не «когда дописано
+            // недостающее»: списка обязательных полей в проекте нет вовсе,
+            // маршрут требует ровно статус, и придумать такой список сейчас
+            // значило бы завести правило, которого никто не принимал, — и оно
+            // немедленно начало бы отбивать сохранения на бою (ответ куратора 12).
+            push('partially_filled = $?::boolean', false);
             push('opened_at = $?::timestamptz', effects.opened_at);
             push('next_call_at = $?::timestamptz', effects.next_call_at);
             // Кем назначен перезвон — вместе со временем и только вместе с ним
@@ -341,6 +359,68 @@ router.post('/:id/complete', async (req, res) => {
     }
 });
 
+// POST /api/leads/:id/wrapup-timeout — пост-обработка кончилась по времени.
+//
+// ЧЕМ ЭТО ОТЛИЧАЕТСЯ ОТ «Сохранить». `/complete` требует статус: без него лид не
+// вернётся в очередь, и один щелчок по «— не выбран —» терял бы его навсегда.
+// Здесь статуса нет и быть не может — время вышло, оператор его не поставил, — и
+// требовать его значило бы не закрыть карточку вовсе.
+//
+// ЧТО ВСЁ-ТАКИ СОХРАНЯЕТСЯ: набранные поля карточки. Пометка «заполнена
+// частично» говорит «работа сделана, просто не вся»; выбросить набранное и
+// поставить эту пометку значило бы соврать — работы не осталось бы никакой.
+//
+// ⚠ СТАТУС И ПРАВИЛА ЗВОНКА НЕ ПРИМЕНЯЮТСЯ. Счётчик попыток не растёт, перезвон
+// не назначается, оператор не отцепляется правилом статуса: ничего этого не
+// произошло — разговор не закончен решением, он оборван временем.
+router.post('/:id/wrapup-timeout', async (req, res) => {
+    const { employeeId } = req.body || {};
+    if (!employeeId) {
+        return res.status(400).json({ error: 'Не передан employeeId' });
+    }
+
+    let outcome;
+    try {
+        outcome = await withTransaction(pool, async (client) => {
+            const existing = await client.query(
+                'SELECT id, employee_id FROM leads WHERE id = $1 FOR UPDATE', [req.params.id]);
+            if (existing.rows.length === 0) return { code: 404, error: 'Лид не найден' };
+            if (String(existing.rows[0].employee_id) !== String(employeeId)) {
+                return { code: 409, error: 'Лид уже не закреплён за вами — введённые данные не сохранены' };
+            }
+
+            const values = CARD_FIELD_COLUMNS.map(([key]) => normalizeValue(key, req.body[key]));
+            const setClauses = CARD_FIELD_COLUMNS.map(([, col], i) => `${col} = $${i + 1}`);
+            values.push(req.params.id);
+            await client.query(
+                `UPDATE leads SET ${setClauses.join(', ')},
+                        opened_at = NULL, partially_filled = true, updated_at = NOW()
+                  WHERE id = $${values.length}`,
+                values
+            );
+            return { code: 200 };
+        });
+    } catch (err) {
+        console.error(err);
+        return res.status(500).json({ error: 'Не удалось закрыть карточку' });
+    }
+
+    if (outcome.code === 404) return res.status(404).json({ error: outcome.error });
+
+    try {
+        const { leadId } = await assignNextLeadForEmployee(pool, employeeId);
+        const next = leadId === null ? null : await fetchLeadCard(pool, leadId);
+        const now = await serverNow(pool);
+        if (outcome.code === 409) {
+            return res.status(409).json({ error: outcome.error, saved: false, next, now });
+        }
+        res.json({ saved: true, partiallyFilled: true, next, now });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Карточка закрыта, но следующего лида получить не удалось' });
+    }
+});
+
 // GET /api/leads/:id?employeeId=... — одна карточка (только своя)
 router.get('/:id', async (req, res) => {
     try {
@@ -348,15 +428,20 @@ router.get('/:id', async (req, res) => {
         if (!employeeId) {
             return res.status(400).json({ error: 'Не передан employeeId' });
         }
-        const result = await pool.query(`${LEAD_CARD_SELECT} WHERE l.id = $1`, [req.params.id]);
-        if (result.rows.length === 0) {
+        // ПРОВЕРКА ВЛАДЕЛЬЦА — своим запросом, карточка — ОБЩИМ СБОРЩИКОМ.
+        // Здесь стояла вторая сборка карточки, своя: `rowToLead` вызывался прямо
+        // отсюда, минуя `fetchLeadCard`. Из-за этого предел пост-обработки,
+        // добавленный в сборщик, до этого маршрута не доехал — и не выдал себя
+        // ничем: поле просто отсутствовало в ответе. Копий сборки карточки
+        // больше нет.
+        const owner = await pool.query('SELECT employee_id FROM leads WHERE id = $1', [req.params.id]);
+        if (owner.rows.length === 0) {
             return res.status(404).json({ error: 'Лид не найден' });
         }
-        const lead = result.rows[0];
-        if (String(lead.employee_id) !== String(employeeId)) {
+        if (String(owner.rows[0].employee_id) !== String(employeeId)) {
             return res.status(403).json({ error: 'Этот лид назначен другому оператору' });
         }
-        res.json(rowToLead(lead));
+        res.json(await fetchLeadCard(pool, req.params.id));
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: 'Не удалось получить лида' });

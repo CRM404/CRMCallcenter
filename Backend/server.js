@@ -36,6 +36,7 @@ const tunnelPageRouter = require('./routes/tunnelPage');
 const pbxEventsRouter = require('./routes/pbxEvents');
 const callsRouter = require('./routes/calls');
 const auditRouter = require('./routes/audit');
+const callEventsRouter = require('./routes/callEvents');
 
 const app = express();
 
@@ -102,6 +103,7 @@ app.use('/api/leads-admin', leadsAdminRouter);
 app.use('/api/schedule', scheduleRouter);
 app.use('/api/calls', callsRouter);
 app.use('/api/audit', auditRouter);
+app.use('/api/call-events', callEventsRouter);
 
 // СТРАНИЦА ВЫДАЧИ НАСТРОЙКИ ТУННЕЛЯ — не под /api: её открывает человек в
 // браузере, и она отдаёт разметку, а не JSON. Стоит ДО express.static по той
