@@ -3,12 +3,25 @@
 // Правила (бриф п.4). Статус с releases_lead = true:
 //   1. employee_id = NULL — оператор отцепляется сразу;
 //   2. last_call_at = NOW(), opened_at = NULL;
-//   3. auto_recall — call_attempts + 1 и next_call_at = «через час», сдвинутый в
-//      рабочее окно;
+//   3. есть строка автоперезвона для этого статуса — call_attempts + 1 и
+//      next_call_at = «через интервал строки», сдвинутый в окно события;
 //   4. requires_call_time («Перезвон») — next_call_at = выбранное оператором
 //      время, счётчик НЕ растёт: он про недозвоны, а не про договорённости;
-//   5. после MAX_CALL_ATTEMPTS попыток — статус «Не ответил после N перезвонов»,
+//   5. после предела попыток ЭТОЙ строки — статус, который в ней назван,
 //      next_call_at = NULL, лид выпадает из автоперезвона.
+//
+// ЧТО ИЗМЕНИЛОСЬ В ЗАХОДЕ 2. Пункты 3 и 5 читались из констант кода и из флага
+// `auto_recall` у статуса; теперь их задаёт руководитель строкой события. Флаг
+// колонки больше не решает ничего: решает наличие строки. Это не смена правила,
+// а смена источника — в день выкатки засев даёт ровно прежние числа, и четыре
+// строки заведены ровно тем статусам, у которых флаг стоял.
+//
+// ИНТЕРВАЛ И ПРЕДЕЛ БЕРУТСЯ У СТАТУСА, КОТОРЫЙ СТАВЯТ (ответ куратора 14, 15).
+// Так работал и прежний код: `fetchStatusFlags(client, statusId)` брал признаки
+// проставляемого статуса. Следствие названо вслух: счётчик попыток сквозной
+// (решение владельца 13), предел свой у каждого статуса (решение 12) — значит
+// лид с восемью попытками, которому поставили статус с пределом пять, уходит на
+// «статус после предела» немедленно. Это норма новой настройки, а не край.
 //
 // Оператор не закрепляется ни за автоматическим перезвоном, ни за назначенным
 // вручную: лид возвращается в ОБЩУЮ очередь (решение владельца). «Общая» значит
@@ -17,29 +30,8 @@
 // Ручной «Перезвон» вне рабочего окна оператор поставить может: клиент вправе
 // попросить любое время. Сдвигается только автоматический.
 
-const { nextAutoRecallAt, MAX_CALL_ATTEMPTS } = require('./appTime');
-
-const NO_ANSWER_STATUS_NAME = 'Не ответил после N перезвонов';
-
-// Ищем один раз и кешируем — как findNewFunnelStatusId для статуса «Новый».
-// undefined = ещё не искали, null = в справочнике такой строки нет.
-let noAnswerStatusIdCache;
-
-async function findNoAnswerStatusId(db) {
-    if (noAnswerStatusIdCache !== undefined) return noAnswerStatusIdCache;
-    const result = await db.query(
-        'SELECT id FROM lead_funnel_statuses WHERE stage_number = 1 AND status_name = $1 LIMIT 1',
-        [NO_ANSWER_STATUS_NAME]
-    );
-    noAnswerStatusIdCache = result.rows[0] ? result.rows[0].id : null;
-    if (noAnswerStatusIdCache === null) {
-        console.error(
-            `[статусы] В справочнике нет статуса «${NO_ANSWER_STATUS_NAME}». ` +
-            'Лиды, исчерпавшие попытки дозвона, останутся на текущем статусе без автоперезвона.'
-        );
-    }
-    return noAnswerStatusIdCache;
-}
+const { nextAutoRecallAt } = require('./appTime');
+const { fetchAutoRecall, fetchAutoRecallState } = require('./callEvents');
 
 async function fetchStatusFlags(db, statusId) {
     if (statusId === null || statusId === undefined) return null;
@@ -64,6 +56,11 @@ async function resolveCallStatusEffects(db, { currentAttempts, statusId, statusF
         funnel_status_id: statusId,
         opened_at: null,
         next_call_at: null,
+        // Кем назначен перезвон. Пусто, пока перезвона нет вовсе; ставится
+        // вместе с временем и только здесь — иначе признак и время разошлись бы
+        // (ловушка 7 наряда: смена интервала пересчитывает автоматические и не
+        // трогает назначенные руками).
+        next_call_source: null,
         call_attempts: currentAttempts,
         last_call_at: undefined,   // undefined = не трогаем колонку
         employee_id: undefined
@@ -76,25 +73,34 @@ async function resolveCallStatusEffects(db, { currentAttempts, statusId, statusF
     effects.employee_id = null;
     effects.last_call_at = now;
 
-    if (statusFlags.auto_recall) {
+    // Строка события вместо флага колонки. null — перезванивать не по чему, и
+    // причин у этого несколько (события нет, выключено, без окна, без строки на
+    // этот статус). Отсюда они неразличимы намеренно: лид в любом случае уходит
+    // из очереди без перезвона, ровно как уходил статус без флага.
+    const recall = await fetchAutoRecall(db, statusId);
+
+    if (recall) {
         effects.call_attempts = currentAttempts + 1;
-        if (effects.call_attempts >= MAX_CALL_ATTEMPTS) {
-            const noAnswerId = await findNoAnswerStatusId(db);
-            if (noAnswerId !== null) {
-                effects.funnel_status_id = noAnswerId;
-            }
-            // Строки нет — оставляем текущий статус и next_call_at = NULL:
-            // лид выпадает из автоперезвона. Молча крутить 21-ю попытку хуже
-            // (dialog.md A3), поэтому ошибка уже написана в лог.
+        // СРАВНЕНИЕ ОСТАВЛЕНО ДОСЛОВНО ПРЕЖНИМ: сначала +1, потом `>=`. При
+        // пределе двадцать переход даёт ДВАДЦАТАЯ попытка. Замена `>=` на `>`
+        // тихо добавила бы всем по одной попытке (предупреждение куратора).
+        if (effects.call_attempts >= recall.maxAttempts) {
+            // Статус после предела назван в самой строке и объявлен NOT NULL:
+            // «строки нет — правила нет» отработало выше, а строка без целевого
+            // статуса невозможна. Прежней подстановки статуса по имени здесь
+            // больше нет — она решала за владельца, куда уходит лид.
+            effects.funnel_status_id = recall.afterStatusId;
             effects.next_call_at = null;
         } else {
-            effects.next_call_at = nextAutoRecallAt(now);
+            effects.next_call_at = nextAutoRecallAt(now, recall.intervalMinutes, recall.window);
+            effects.next_call_source = 'auto';
         }
         return effects;
     }
 
     if (statusFlags.requires_call_time) {
         effects.next_call_at = nextCallAt;
+        effects.next_call_source = nextCallAt ? 'manual' : null;
         return effects;
     }
 
@@ -103,37 +109,46 @@ async function resolveCallStatusEffects(db, { currentAttempts, statusId, statusF
     return effects;
 }
 
-// Проверка при старте сервера (dialog.md A1). Флаги проставляются миграцией ПО
-// НАЗВАНИЮ статуса, и если на бою хоть один пробел отличается, флаг молча не
-// встанет: автоперезвон не заработает, а в логе не будет ни одной ошибки.
+// Проверка при старте сервера (dialog.md A1). Заведена не зря: флаги статусов
+// проставлялись миграцией ПО НАЗВАНИЮ, и один лишний пробел молча выключал
+// автоперезвон — без единой ошибки в логе.
+//
+// ПЕРВАЯ ПОЛОВИНА ПЕРЕНАЦЕЛЕНА, А НЕ УДАЛЕНА (наряд, ловушка 3). Сторожить флаг
+// `auto_recall` больше незачем — решает строка события; но погасить обзвон
+// целиком стало ЛЕГЧЕ, чем было: достаточно снять галочку на вкладке. Причины
+// названы порознь, потому что чинятся в разных местах.
+//
+// ВТОРАЯ ПОЛОВИНА ОСТАЁТСЯ ДО ЗАХОДА 4. Пока вкладка «Статусы воронки» только
+// на чтение, `requires_call_time` ставит одна миграция по названиям, и
+// утверждение «ровно у одного» ещё верно. Заход 4 делает признак правимым —
+// владелец вправе поставить его хоть трём статусам, и сторож начнёт ругаться на
+// законную настройку; тогда эта половина снимается совсем, а не смягчается.
 async function checkStatusFlagsConfigured(db) {
+    const recall = await fetchAutoRecallState(db);
+    if (!recall) {
+        console.error('[события] Строки события «Автоперезвон» нет в базе — система не перезванивает никому. Засев не отработал.');
+    } else if (!recall.enabled) {
+        console.error('[события] Событие «Автоперезвон» выключено — система не перезванивает никому.');
+    } else if (!recall.has_window) {
+        console.error('[события] У события «Автоперезвон» не задано рабочее окно — перезвоны не назначаются.');
+    } else if (recall.rules === 0) {
+        console.error('[события] В событии «Автоперезвон» нет ни одной строки — перезванивать не по каким статусам.');
+    }
+
     const result = await db.query(
-        `SELECT count(*) FILTER (WHERE auto_recall)::int AS auto_recall,
-                count(*) FILTER (WHERE requires_call_time)::int AS requires_call_time,
+        `SELECT count(*) FILTER (WHERE requires_call_time)::int AS requires_call_time,
                 count(*) FILTER (WHERE releases_lead)::int AS releases_lead
          FROM lead_funnel_statuses`
     );
     const counts = result.rows[0];
-    if (counts.auto_recall === 0) {
-        console.error('[статусы] Ни один статус не помечен auto_recall — автоперезвон не работает. Проверьте названия статусов на бою.');
-    }
     if (counts.requires_call_time !== 1) {
         console.error(`[статусы] requires_call_time стоит у ${counts.requires_call_time} статусов вместо одного — выбор времени перезвона показывается неверно.`);
     }
-    return counts;
-}
-
-// Только для тестов: сбросить кеш статуса «Не ответил…» между прогонами.
-function resetStatusCache() {
-    noAnswerStatusIdCache = undefined;
+    return { ...counts, recall };
 }
 
 module.exports = {
-    NO_ANSWER_STATUS_NAME,
-    MAX_CALL_ATTEMPTS,
-    findNoAnswerStatusId,
     fetchStatusFlags,
     resolveCallStatusEffects,
-    checkStatusFlagsConfigured,
-    resetStatusCache
+    checkStatusFlagsConfigured
 };

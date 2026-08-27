@@ -297,6 +297,10 @@ router.post('/:id/complete', async (req, res) => {
             push('funnel_status_id = $?', effects.funnel_status_id);
             push('opened_at = $?::timestamptz', effects.opened_at);
             push('next_call_at = $?::timestamptz', effects.next_call_at);
+            // Кем назначен перезвон — вместе со временем и только вместе с ним
+            // (ловушка 7 наряда, часть 9). Признак и время, записанные порознь,
+            // однажды разойдутся, а миграция пересчёта интервала верит признаку.
+            push('next_call_source = $?', effects.next_call_source);
             push('call_attempts = $?::int', effects.call_attempts);
             if (effects.last_call_at !== undefined) push('last_call_at = $?::timestamptz', effects.last_call_at);
             if (effects.employee_id !== undefined) push('employee_id = $?::int', effects.employee_id);

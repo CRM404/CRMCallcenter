@@ -26,14 +26,15 @@
 // Пояс приложения. Меняется одной строкой.
 const APP_TIMEZONE = 'Europe/Moscow';
 
-// Рабочее окно автоперезвона. Владелец не ответил, выкатывается со значениями по
-// умолчанию (регламент приёмки 15.08.2026) — правится одной строкой.
-const CALL_WINDOW_START_HOUR = 9;
-const CALL_WINDOW_END_HOUR = 21;
-
-// Через сколько автоперезвон повторяет попытку и сколько попыток всего.
-const AUTO_RECALL_INTERVAL_HOURS = 1;
-const MAX_CALL_ATTEMPTS = 20;
+// ЧЕТЫРЕ КОНСТАНТЫ ОТСЮДА УШЛИ В НАСТРОЙКУ (часть 9, заход 2). Рабочее окно
+// 9–21, интервал «через час» и предел двадцать попыток стояли здесь до коммита
+// `847b645`; теперь их задаёт руководитель на вкладке «Звонки → События», а
+// читает `services/callEvents.js`. Оставить их здесь копией значило бы завести
+// второй источник правды: при расхождении никто не знал бы, который настоящий.
+//
+// ЗНАЧЕНИЯ ПРИХОДЯТ ПАРАМЕТРОМ, А МОДУЛЬ ОСТАЁТСЯ СИНХРОННЫМ. Чтение настройки
+// — запрос к базе, а этот модуль зовут места, которые ждать не умеют. Достаёт
+// значения тот, кто и так асинхронный, — `resolveCallStatusEffects`.
 
 // Сколько оператор может быть вне линии, прежде чем удержанный за ним лид
 // вернётся в общую очередь. Тоже значение по умолчанию, ждёт владельца.
@@ -92,50 +93,82 @@ function startOfNextDay(date) {
     return new Date(startOfDay(date).getTime() + 24 * 3600 * 1000);
 }
 
-// Попадает ли момент в рабочее окно обзвона.
-function isInsideCallWindow(date) {
-    const hour = zonedParts(date).hour;
-    return hour >= CALL_WINDOW_START_HOUR && hour < CALL_WINDOW_END_HOUR;
+// Минуты от полуночи из «HH:MM» или «HH:MM:SS». Колонки окна объявлены TIME, и
+// драйвер отдаёт их строкой.
+//
+// ПОЧЕМУ НЕ ВЗЯТЬ ГОТОВЫЙ `parseTimeOfDay` ИЗ `scheduleFormat.js`. Тот модуль
+// уже требует этот (`scheduleFormat.js:12`), и обратная ссылка замкнула бы
+// круг. Разбор здесь свой на четыре строки, а общее правило — «конец меньше
+// начала значит через полночь» — соблюдается ниже дословно.
+function minutesOfDay(time) {
+    const m = /^\s*(\d{1,2}):(\d{2})(?::\d{2})?\s*$/.exec(String(time));
+    if (!m) return null;
+    const hours = Number(m[1]);
+    const minutes = Number(m[2]);
+    if (hours > 23 || minutes > 59) return null;
+    return hours * 60 + minutes;
 }
 
 // Сдвиг АВТОМАТИЧЕСКОГО перезвона в рабочее окно. Ручной «Перезвон» этим не
 // трогается: клиент вправе попросить любое время, и обещание оператора важнее
 // нашего окна (бриф п.4).
 //
-// Раньше окна — сегодняшнее открытие; позже — открытие следующего дня.
-// Граничный случай ровно 21:00 попадает во вторую ветку: окно полуоткрытое.
-function shiftIntoCallWindow(date) {
+// Границы окна — из события, параметром: `{ from: '09:00:00', to: '21:00:00' }`.
+//
+// ОКНО ЧЕРЕЗ ПОЛНОЧЬ ЧИТАЕТСЯ КАК НОЧНАЯ СМЕНА В ГРАФИКЕ: конец меньше начала —
+// значит окно переваливает за полночь (`services/scheduleFormat.js:57`, ответ
+// куратора 32). Двух разных прочтений одной пары времён в проекте быть не
+// должно.
+//
+// Окно полуоткрытое: ровно `to` — уже снаружи. Так вело себя и прежнее правило
+// с константами 9 и 21.
+//
+// БРОСАЕТ, А НЕ ПОДСТАВЛЯЕТ УМОЛЧАНИЕ. Неразобранное окно значит, что настройка
+// пришла битой; подставить сюда 9–21 значило бы звонить по числу, которого
+// никто не задавал, и молча. Настоящий вызов сюда с битым окном не доходит:
+// `fetchAutoRecall` не отдаёт правило, пока окно не пара и не осмысленно.
+function shiftIntoCallWindow(date, window) {
+    const from = minutesOfDay(window && window.from);
+    const to = minutesOfDay(window && window.to);
+    if (from === null || to === null) {
+        throw new Error(`Рабочее окно обзвона не разобрано: ${JSON.stringify(window)}`);
+    }
+
     const p = zonedParts(date);
-    if (p.hour < CALL_WINDOW_START_HOUR) {
-        return instantFromZoned(p.year, p.month, p.day, CALL_WINDOW_START_HOUR, 0);
-    }
-    if (p.hour >= CALL_WINDOW_END_HOUR) {
-        const next = startOfNextDay(date);
-        const n = zonedParts(next);
-        return instantFromZoned(n.year, n.month, n.day, CALL_WINDOW_START_HOUR, 0);
-    }
-    return date;
+    const at = p.hour * 60 + p.minute;
+    const wraps = to < from;
+    const inside = wraps ? (at >= from || at < to) : (at >= from && at < to);
+    if (inside) return date;
+
+    // Снаружи окна — ближайшее открытие. У обычного окна оно сегодня, если ещё
+    // не наступило, и завтра, если день уже кончился. У окна через полночь
+    // снаружи можно оказаться только между концом и началом ОДНИХ суток —
+    // открытие всегда сегодня и всегда впереди.
+    const day = (wraps || at < from) ? p : zonedParts(startOfNextDay(date));
+    return instantFromZoned(day.year, day.month, day.day, Math.floor(from / 60), from % 60);
 }
 
-// Момент следующей автоматической попытки: «через час» и сдвиг в окно.
-function nextAutoRecallAt(now) {
-    const raw = new Date(now.getTime() + AUTO_RECALL_INTERVAL_HOURS * 3600 * 1000);
-    return shiftIntoCallWindow(raw);
+// Момент следующей автоматической попытки: интервал из строки события и сдвиг в
+// окно события. Интервал в МИНУТАХ — так его задаёт руководитель и так он лежит
+// в `call_recall_rules.interval_minutes`; часов здесь больше нет.
+function nextAutoRecallAt(now, intervalMinutes, window) {
+    const minutes = Number(intervalMinutes);
+    if (!Number.isFinite(minutes) || minutes <= 0) {
+        throw new Error(`Интервал автоперезвона не задан: ${intervalMinutes}`);
+    }
+    const raw = new Date(now.getTime() + minutes * 60 * 1000);
+    return shiftIntoCallWindow(raw, window);
 }
 
 module.exports = {
     APP_TIMEZONE,
-    CALL_WINDOW_START_HOUR,
-    CALL_WINDOW_END_HOUR,
-    AUTO_RECALL_INTERVAL_HOURS,
-    MAX_CALL_ATTEMPTS,
     HELD_LEAD_RELEASE_HOURS,
     MAX_OPEN_INTERVAL_HOURS,
     zonedParts,
     instantFromZoned,
+    minutesOfDay,
     startOfDay,
     startOfNextDay,
-    isInsideCallWindow,
     shiftIntoCallWindow,
     nextAutoRecallAt
 };
