@@ -14,7 +14,7 @@ const { pool } = require('../db');
 const auditContext = require('../services/auditContext');
 const eventChannel = require('../services/eventChannel');
 const { startOfDay, startOfNextDay, zonedParts } = require('../services/appTime');
-const { distributePendingLeads, findNewFunnelStatusId, queueCondition } = require('../services/leadDistribution');
+const { distributePendingLeads, findNewFunnelStatusId, queueCondition, notSystemStatus } = require('../services/leadDistribution');
 const { normalizePhone, normalizeForSearch } = require('../services/phoneFormat');
 const { phoneColumnsFor, findLeadByPhone, leadTitle } = require('../services/phoneFix');
 const guards = require('../services/deleteGuards');
@@ -262,6 +262,12 @@ function rowToLead(row) {
 // Куда попадёт лид, если снять с него архив. Три ответа, а не два (ответ
 // куратора И88 и правка Р7-5): «сразу», «позже» и «работы больше нет».
 //
+// «ПОЗЖЕ» СПРАШИВАЕТ ПРО СИСТЕМНЫЙ СТАТУС ТЕМ ЖЕ ТЕКСТОМ, ЧТО И ОЧЕРЕДЬ (К241).
+// Лид, выпавший из раздачи по системному статусу, ждёт руководителя, а не
+// времени: пообещать ему «вернётся позже» значило бы назвать сроком то, что
+// сроком не является. Такой лид уходит в «работы больше нет» — и это правда:
+// работы у ОПЕРАТОРА по нему действительно нет.
+//
 // Считается ПО ФАКТИЧЕСКОМУ УСЛОВИЮ ОЧЕРЕДИ, взятому из services/
 // leadDistribution.js, а не по флагу lead_funnel_statuses.releases_lead.
 // Флаг описывает, что делать ПОСЛЕ звонка, а не попадёт ли лид в раздачу: у
@@ -272,7 +278,8 @@ async function queuePlacement(db, leadId) {
     if (newStatusId === null) return 'none';
     const result = await db.query(
         `SELECT ${queueCondition('l', '$2')} AS in_queue,
-                (l.next_call_at IS NOT NULL AND l.next_call_at > NOW()) AS later
+                (l.next_call_at IS NOT NULL AND l.next_call_at > NOW()
+                 AND ${notSystemStatus('l')}) AS later
            FROM leads l WHERE l.id = $1`,
         [leadId, newStatusId]);
     const row = result.rows[0];

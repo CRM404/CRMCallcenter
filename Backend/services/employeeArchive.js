@@ -17,7 +17,7 @@
 // куратора И89).
 
 const auditContext = require('./auditContext');
-const { queueCondition, findNewFunnelStatusId } = require('./leadDistribution');
+const { queueCondition, notSystemStatus, findNewFunnelStatusId } = require('./leadDistribution');
 
 const ARCHIVE_KINDS = ['dismissed', 'frozen'];
 
@@ -123,6 +123,10 @@ async function queueBucketsFor(db, employeeIds) {
             'SELECT count(*)::int AS n FROM leads WHERE employee_id = ANY($1::int[])', [ids]);
         return { total: all.rows[0].n, now: 0, later: 0, none: all.rows[0].n };
     }
+    // «Позже» спрашивает про системный статус ТЕМ ЖЕ текстом, что и очередь
+    // (К241): лид, которого очередь не берёт из-за системного статуса, не
+    // вернётся ни позже, ни сам — его ждёт руководитель, а не время. Без этой
+    // половины окно обещало бы возврат, которого не будет.
     const cond = queueCondition('l', '$2');
     const result = await db.query(
         `SELECT count(*)::int AS total,
@@ -130,7 +134,8 @@ async function queueBucketsFor(db, employeeIds) {
                 count(*) FILTER (WHERE NOT (${cond})
                                    AND l.next_call_at IS NOT NULL AND l.next_call_at > NOW()
                                    AND l.merged_into_id IS NULL
-                                   AND l.archived_at IS NULL)::int AS later_count
+                                   AND l.archived_at IS NULL
+                                   AND ${notSystemStatus('l')})::int AS later_count
            FROM leads l WHERE l.employee_id = ANY($1::int[])`,
         [ids, newStatusId]);
     const row = result.rows[0];

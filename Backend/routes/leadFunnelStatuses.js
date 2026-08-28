@@ -30,6 +30,28 @@ async function findStage(db, stageNumber) {
 }
 
 /**
+ * «Этап системный» — ОДИН ТЕКСТ НА ТРИ МЕСТА (К242).
+ *
+ * Отдельного признака у этапа нет: системный — тот, в котором лежат системные
+ * статусы. Ответ на этот вопрос нужен перечню этапов, правке описания и запрету
+ * заводить статус; три написанных порознь условия совпали бы в день написания и
+ * разошлись бы в первый же день правки — а расхождение выглядело бы как «экран
+ * врёт», и искать его пошли бы на экране.
+ *
+ * Псевдоним `sys` намеренно не `s`: условие подставляется внутрь запросов, где
+ * `s` уже занято.
+ */
+function stageIsSystemSql(numberExpr) {
+    return `EXISTS (SELECT 1 FROM lead_funnel_statuses sys
+                     WHERE sys.stage_number = ${numberExpr} AND sys.is_system)`;
+}
+
+async function stageIsSystem(db, stageNumber) {
+    const result = await db.query(`SELECT ${stageIsSystemSql('$1')} AS is_system`, [stageNumber]);
+    return result.rows[0].is_system;
+}
+
+/**
  * Имя занято внутри этапа? Сравнение БЕЗ учёта регистра — строже, чем
  * `UNIQUE (stage_number, status_name)` в базе, и тот же приём, что в «Настройке
  * списков» (`routes/paramLists.js:61`): «Перезвон» и «перезвон» в одном этапе —
@@ -124,8 +146,7 @@ router.get('/stages', async (req, res) => {
             `SELECT g.stage_number, g.description,
                     (SELECT s.stage_name FROM lead_funnel_statuses s
                       WHERE s.stage_number = g.stage_number LIMIT 1) AS stage_name,
-                    EXISTS (SELECT 1 FROM lead_funnel_statuses s
-                             WHERE s.stage_number = g.stage_number AND s.is_system) AS is_system
+                    ${stageIsSystemSql('g.stage_number')} AS is_system
                FROM lead_funnel_stages g
               ORDER BY g.stage_number`);
         res.json(result.rows.map((r) => ({
@@ -168,9 +189,7 @@ router.put('/stages/:number', async (req, res) => {
     }
     try {
         const stage = await pool.query(
-            `SELECT g.stage_number,
-                    EXISTS (SELECT 1 FROM lead_funnel_statuses s
-                             WHERE s.stage_number = g.stage_number AND s.is_system) AS is_system
+            `SELECT g.stage_number, ${stageIsSystemSql('g.stage_number')} AS is_system
                FROM lead_funnel_stages g WHERE g.stage_number = $1`, [stageNumber]);
         if (stage.rows.length === 0) {
             return res.status(404).json({ error: 'Такого этапа нет' });
@@ -200,6 +219,17 @@ router.put('/stages/:number', async (req, res) => {
 //
 // ЭТАП НЕ ЗАВОДИТСЯ. Этапы — структура воронки, а не список значений: они
 // пришли из документа воронки CPA-сети, и восьмого экран завести не даёт.
+//
+// ⚠ В СИСТЕМНЫЙ ЭТАП СТАТУС НЕ ЗАВОДИТСЯ ВОВСЕ (К242, решение владельца 106:
+// «свой статус в этом этапе пока не заводит»). Запрет стоит НА СЕРВЕРЕ, а не в
+// разметке кнопки: проверка, живущая на экране, — это просьба, тот же адрес
+// доступен помимо него. Тот же довод, по которому правку описания этапа сторожит
+// `PUT /stages/:number`.
+//
+// ЦЕНА ПРОПУСКА НАЗВАНА ОТДЕЛЬНО, потому что она не в самом заведении. Такой
+// статус приехал бы БЕЗ признака `is_system` — то есть лёг бы среди системных,
+// выглядел бы как они, а вёл себя как обычный: оператору виден, лиду ставится,
+// из очереди не выпадает. Разобрать это потом было бы некому.
 router.post('/', async (req, res) => {
     const stageNumber = Number(req.body && req.body.stageNumber);
     const name = String((req.body && req.body.statusName) || '').trim();
@@ -213,6 +243,11 @@ router.post('/', async (req, res) => {
         const stage = await findStage(pool, stageNumber);
         if (!stage) {
             return res.status(400).json({ error: 'Такого этапа нет' });
+        }
+        if (await stageIsSystem(pool, stageNumber)) {
+            return res.status(400).json({
+                error: 'Статусы системного этапа заводит система: вручную сюда не добавляют'
+            });
         }
         if (await nameTaken(pool, stageNumber, name)) {
             return res.status(400).json({
@@ -308,10 +343,22 @@ router.put('/:id/mark', async (req, res) => {
 
 // DELETE /api/lead-funnel-statuses/:id
 //
-// ЧЕТЫРЕ ПОМЕХИ, А НЕ ДВЕ. Паспорт Р11 знал про лидов и наборы «скрипт +
-// статус»; заход 1 завёл правила автоперезвона, а у них ДВЕ ссылки на
-// справочник — сам статус и статус после предела, — и обе запрещающие. Чинятся
-// они в разных местах, поэтому и называются разными словами (ответ куратора 25).
+// ПЯТЬ ПОМЕХ, А НЕ ДВЕ. Паспорт Р11 знал про лидов и наборы «скрипт + статус»;
+// заход 1 завёл правила автоперезвона, а у них ДВЕ ссылки на справочник — сам
+// статус и статус после предела, — и обе запрещающие. Чинятся они в разных
+// местах, поэтому и называются разными словами (ответ куратора 25).
+//
+// ⚠ ПЯТАЯ ПРИЕХАЛА ЗАХОДОМ 6 И В ПЕРЕЧЕНЬ НЕ ПОПАЛА (К243): целевой статус
+// пост-обработки, `call_events.wrapup_status_id`. Связь запрещающая, база
+// удаление не давала — и человек получал ровно то, что абзац ниже обещает не
+// показывать: «Произошла ошибка на сервере» с кодом 500. Заведённая связь, не
+// названная в перечне помех, хуже отсутствующей: запрет работает, а объяснения
+// нет.
+//
+// ПОЧЕМУ ЭТО НЕ МЕЛОЧЬ. Запрет последнего-в-этапе здесь не спасает: системных
+// статусов два, и «Нет результата» удаляется как обычная строка. Не будь связи,
+// руководитель снёс бы целевой статус тайм-аута одним нажатием — и
+// пост-обработка молча перестала бы ставить статус вовсе.
 //
 // Помеха одна — строка одна, ноль не пишется: `countBlocker` возвращает null,
 // когда считать нечего, а `orderBlockers` такие отсеивает.
@@ -321,7 +368,7 @@ router.put('/:id/mark', async (req, res) => {
 // потому что до `DELETE` дело не доходит.
 //
 // ПАРТИЕЙ ЭТО НЕ ОФОРМЛЯЕТСЯ. Партия нужна каскаду — одно нажатие, десятки
-// строк журнала; здесь каскада нет ни одного: все четыре связи запрещающие, и
+// строк журнала; здесь каскада нет ни одного: все пять связей запрещающие, и
 // удаление даёт ровно одну запись.
 router.delete('/:id', async (req, res) => {
     const id = Number(req.params.id);
@@ -367,6 +414,13 @@ router.delete('/:id', async (req, res) => {
 
         const blockers = orderBlockers(await Promise.all([
             countBlocker(pool, 'leads', 'FROM leads WHERE funnel_status_id = $1 ORDER BY id', [id]),
+            // Целевой статус тайм-аута (К243). Стоит в перечне ПЕРВЫМ среди
+            // помех статуса — не по числу, а по тому же правилу, что и вся
+            // тройка ниже: от того, что чинится дальше от экрана, к тому, что
+            // рядом. Это чинится дальше всех — экраном не чинится вовсе, поле
+            // задаётся выкаткой (паспорт Р12 редакции 5).
+            countBlocker(pool, 'wrapup_target',
+                'FROM call_events WHERE wrapup_status_id = $1 ORDER BY id', [id]),
             // У таблицы пар своего `id` нет вовсе — ключ составной. Считаем по
             // лидам, которых это заденет: именно их человек и пойдёт искать.
             countBlocker(pool, 'script_pairs',
