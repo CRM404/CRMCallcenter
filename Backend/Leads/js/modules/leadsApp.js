@@ -234,9 +234,14 @@ const RICH_CELLS = {
             return `<span class="ui-pill ui-pill--mute"${was}>В архиве</span>`
                 + (since ? `<span class="arc-since">с ${since}${who}</span>` : '');
         }
-        return l.funnelStatusId
-            ? `<span class="ui-pill ui-pill--mute">${escapeHtml(l.statusName)}</span>`
-            : null;
+        // ПОМЕТКА — ПОДСТРОКОЙ ПОД СТАТУСОМ, а не своей колонкой (паспорт Р12):
+        // колонка пустовала бы почти во всех строках — то же соображение, по
+        // которому у статусов воронки нет колонки свойств.
+        const partial = l.partiallyFilled
+            ? '<span class="ui-table__sub">заполнена частично</span>'
+            : '';
+        if (!l.funnelStatusId) return partial || null;
+        return `<span class="ui-pill ui-pill--mute">${escapeHtml(l.statusName)}</span>${partial}`;
     },
     // Линия — обычный текст со значком направления, без рамки-пилюли (М23).
     lineType: (l) => (l.lineType
@@ -953,7 +958,10 @@ function fillFilterSelects() {
             + values.map((v) => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
     });
 
-    fillFunnelStatusSelect($('#fltStatus'), statuses, false);
+    // ОТБОР ИЩЕТ, А НЕ СТАВИТ — системные статусы в нём остаются. Красный статус
+    // придуман, чтобы такие лиды было видно; убрать их из отбора значило бы
+    // заставить искать красное глазами среди тысяч строк.
+    fillFunnelStatusSelect($('#fltStatus'), statuses, false, { purpose: 'filter' });
     $('#fltStatus').insertAdjacentHTML('afterbegin', '<option value="">Все статусы</option>');
     // insertAdjacentHTML не переизбирает select — без явного сброса он бы
     // остался на первом реальном статусе, выбранном браузером автоматически
@@ -963,7 +971,8 @@ function fillFilterSelects() {
     // Те же два списка в тулбаре. Наполняются из тех же справочников — иначе
     // «Все статусы» в строке и в окне однажды разойдутся по составу.
     const quickStatus = $('[data-role="quick-status"]');
-    fillFunnelStatusSelect(quickStatus, statuses, false);
+    // Быстрый отбор — тот же отбор, и роль у него та же.
+    fillFunnelStatusSelect(quickStatus, statuses, false, { purpose: 'filter' });
     quickStatus.insertAdjacentHTML('afterbegin', '<option value="">Все статусы</option>');
     quickStatus.value = '';
 
@@ -1191,7 +1200,9 @@ export async function mount(container, ctx) {
         // сети щель между вставкой разметки и ответом сервера меньше
         // человеческой реакции, на медленной — нет.
         bindHandlers();
-        fillFunnelStatusSelect($('[data-role="mass-status"]'), statuses, false);
+        // А массовая смена СТАВИТ статус, и сразу многим: системного среди
+        // предлагаемых быть не должно.
+        fillFunnelStatusSelect($('[data-role="mass-status"]'), statuses, false, { purpose: 'set' });
         // Список сотрудников для массового действия заполняется не здесь, а в
         // момент выбора действия: он зависит от линии выбранных лидов.
 

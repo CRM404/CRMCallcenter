@@ -427,13 +427,35 @@ function openCreateModal(state) {
 
 // Слова признаков взяты не по смыслу названия колонки, а по тому, что колонка
 // ДЕЛАЕТ (services/leadCallRules.js): releases_lead отцепляет оператора и
-// отпускает лида, auto_recall ставит перезвон через час, requires_call_time
-// ставит время, названное клиентом. Имена колонок человеку, который пишет
-// скрипты, не говорят ничего.
+// отпускает лида, requires_call_time ставит время, названное клиентом. Имена
+// колонок человеку, который пишет скрипты, не говорят ничего.
+//
+// ⚠ ПРИЗНАКОВ ДВА, А НЕ ТРИ (К220, паспорт Р11 редакции 5). Пилюля «перезвон
+// через час» снята вместе с тем, что её делало правдой: `auto_recall`
+// заморожена заходом 2, список статусов для обзвона задаёт событие
+// «Автоперезвон». Снята ИМЕННО ЭТИМ коммитом, не раньше и не позже: раньше
+// незачем, позже опасно — в тот момент, когда вкладку можно править, старая
+// пилюля начала бы показывать не то.
 const STATUS_PROPS = [
     { key: 'releasesLead', label: 'разговора не было' },
-    { key: 'autoRecall', label: 'перезвон через час' },
     { key: 'requiresCallTime', label: 'спросит время перезвона' }
+];
+
+// Последствие каждой галочки — словами, а не именем колонки. Условие паспорта
+// Р11: галочка без написанного последствия — это предложение угадать.
+const PROP_HINTS = {
+    releasesLead: 'Лид отцепляется от оператора и уходит из его персональной очереди: '
+        + 'разговор считается несостоявшимся.',
+    requiresCallTime: 'Оператор называет время, о котором договорился с клиентом. '
+        + 'Счётчик недозвонов при этом не растёт: он про недозвоны, а не про договорённости.'
+};
+
+// Пометка «окончательный / промежуточный» — три состояния, и первым стоит то,
+// чем поле заводится.
+const MARK_OPTIONS = [
+    { value: '', label: '— не размечен —' },
+    { value: 'окончательный', label: 'окончательный' },
+    { value: 'промежуточный', label: 'промежуточный' }
 ];
 
 function statusesWord(count) {
@@ -474,6 +496,18 @@ function renderStatuses(state) {
         stage.items.push(s);
     });
 
+    // ПЛАШКА СЧИТАЕТ НЕРАЗМЕЧЕННЫЕ. Пока они есть — она про разметку; кончились
+    // — остаётся одна фраза про то, что список правится. Отдельного места для
+    // этого числа не нужно: чипов-счётчиков на вкладке нет по решению редакции 3.
+    const unmarked = list.filter((s) => !s.mark).length;
+    const tail = `Список правится: статус можно завести в его этапе, переименовать и удалить `
+        + `— этапы при этом закреплены, их ${stages.length}.`;
+    $(state, 'statuses-note').textContent = unmarked
+        ? `Разметьте статусы: пока у статуса не сказано, окончательный он или промежуточный, `
+          + `система не знает, уходить ли лиду в архив после автоперезвона. `
+          + `Не размечено ${unmarked} из ${list.length}. ${tail}`
+        : tail;
+
     box.innerHTML = stages.map((stage) => {
         const rows = stage.items.map((item) => {
             // Свойство стоит СРАЗУ ЗА ИМЕНЕМ, а не отдельной колонкой: свойства
@@ -483,8 +517,41 @@ function renderStatuses(state) {
                 .filter((prop) => item[prop.key])
                 .map((prop) => `<span class="ui-pill ui-pill--mute">${prop.label}</span>`)
                 .join('');
-            return `<div class="scr-status"><span>${escapeHtml(item.statusName)}</span>${pills}</div>`;
+            // ПОМЕТКА — СПИСКОМ, А НЕ ПИЛЮЛЕЙ. Три остальных свойства ставит код,
+            // их показывает пилюля; пометку ставит человек, значит на её месте
+            // стоит орган управления. Значение и орган рядом — это одно и то же,
+            // сказанное дважды.
+            const options = MARK_OPTIONS.map((opt) => `<option value="${escapeHtml(opt.value)}"`
+                + `${(item.mark || '') === opt.value ? ' selected' : ''}>${escapeHtml(opt.label)}</option>`).join('');
+            return `
+                <div class="scr-status">
+                    <span class="scr-status__name">${escapeHtml(item.statusName)}${pills}</span>
+                    <select class="ui-field__control ui-field__control--sm scr-status__mark"
+                            data-action="status-mark" data-id="${item.id}"
+                            aria-label="Пометка статуса">${options}</select>
+                    <button type="button" class="ui-btn ui-btn--icon ui-btn--ghost"
+                            data-action="status-edit" data-id="${item.id}"
+                            aria-label="Настроить статус «${escapeHtml(item.statusName)}»">
+                        <svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-edit"></use></svg>
+                    </button>
+                </div>
+            `;
         }).join('');
+        // Строка заведения — ячейка той же сетки, последняя после статусов
+        // этапа: этап тогда не надо выбирать, человек добавляет туда, куда
+        // смотрит. Тот же приём, что в «Настройке списков».
+        const add = `
+            <div class="ui-field scr-add">
+                <div class="ui-field__row">
+                    <input type="text" class="ui-field__control" data-role="status-new-${stage.number}"
+                           placeholder="Новый статус этапа…"
+                           aria-label="Новый статус этапа ${stage.number} · ${escapeHtml(stage.name)}">
+                    <button type="button" class="ui-btn ui-btn--secondary"
+                            data-action="status-add" data-stage="${stage.number}">Добавить</button>
+                </div>
+                <div class="ui-field__error" data-role="status-add-error-${stage.number}" hidden></div>
+            </div>
+        `;
         return `
             <div class="scr-card">
                 <div class="scr-card__head">
@@ -492,9 +559,235 @@ function renderStatuses(state) {
                     <span class="scr-card__sub">${stage.items.length} ${statusesWord(stage.items.length)}</span>
                 </div>
                 <div class="scr-statuses">${rows}</div>
+                ${add}
             </div>
         `;
     }).join('');
+}
+
+// Перечитать справочник и перерисовать вкладку. Список держится в состоянии
+// раздела и раздаётся ещё и карточке лида — освежать его надо целиком, а не
+// правкой одной строки на месте: иначе после отказа сервера экран показывал бы
+// значение, которого в базе нет.
+async function reloadStatuses(state) {
+    state.funnelStatuses = null;
+    await loadFunnelStatuses(state);
+    if (state.destroyed || state.funnelStatuses === null) return;
+    renderStatuses(state);
+}
+
+/**
+ * Пометка сохраняется СРАЗУ ПО ВЫБОРУ, кнопки «Сохранить» у вкладки нет:
+ * вкладка не форма, а справочник с одним правимым полем.
+ *
+ * Тоста на успех нет намеренно: разметка пятидесяти статусов подряд дала бы
+ * пятьдесят тостов — это шум, а не подтверждение, и повторял бы он то, что и
+ * так на виду. Ошибка при этом обязана быть громкой: молча вернувшееся значение
+ * читается как «не нажалось», поэтому отказ возвращает список к прежнему
+ * значению И говорит причину тостом.
+ */
+async function setStatusMark(state, select) {
+    const id = Number(select.dataset.id);
+    const status = (state.funnelStatuses || []).find((s) => s.id === id);
+    const previous = status ? (status.mark || '') : '';
+    const value = select.value;
+    try {
+        await state.storage.setFunnelStatusMark(id, value === '' ? null : value);
+        if (state.destroyed) return;
+        if (status) status.mark = value === '' ? null : value;
+        renderStatuses(state);
+    } catch (err) {
+        if (state.destroyed) return;
+        select.value = previous;
+        if (!isAbort(err)) state.ctx.toast(err.message, 'error');
+    }
+}
+
+/**
+ * Завести статус полем в коробке своего этапа.
+ *
+ * ОШИБКА ПОД СВОИМ ПОЛЕМ, А НЕ ТОСТОМ: «такой статус уже есть» относится к
+ * набранному имени, и читать его надо там, где это имя стоит.
+ */
+async function addStatus(state, button) {
+    const stageNumber = Number(button.dataset.stage);
+    const input = $(state, `status-new-${stageNumber}`);
+    const error = $(state, `status-add-error-${stageNumber}`);
+    const name = input.value.trim();
+    error.hidden = true;
+    input.closest('.ui-field').classList.remove('ui-field--error');
+    if (!name) {
+        error.textContent = 'Укажите название';
+        error.hidden = false;
+        input.closest('.ui-field').classList.add('ui-field--error');
+        input.focus();
+        return;
+    }
+    try {
+        await state.storage.createFunnelStatus({ stageNumber, statusName: name });
+        if (state.destroyed) return;
+        await reloadStatuses(state);
+        if (state.destroyed) return;
+        // Курсор возвращается в поле того же этапа: статусы заводят пачками.
+        const again = $(state, `status-new-${stageNumber}`);
+        if (again) again.focus();
+    } catch (err) {
+        if (state.destroyed || isAbort(err)) return;
+        error.textContent = err.message;
+        error.hidden = false;
+        input.closest('.ui-field').classList.add('ui-field--error');
+        input.focus();
+    }
+}
+
+/**
+ * Окно статуса: имя и два признака. Пометки здесь нет — её ставят пятьдесят раз
+ * подряд в самом списке, и окно ради одного значения было бы полсотни лишних
+ * движений.
+ *
+ * ЭТАП — ПОДПИСЬ, А НЕ ПОЛЕ: перенести статус между этапами экран не даёт.
+ */
+function openStatusModal(state, status, stage) {
+    const isNew = !status;
+    const body = document.createElement('div');
+    body.className = 'ui-form-grid ui-form-grid--single';
+    body.innerHTML = `
+        <div class="ui-field" data-role="name-field">
+            <label class="ui-field__label" for="scrStatusName">Название</label>
+            <input type="text" class="ui-field__control" id="scrStatusName"
+                   value="${escapeHtml(isNew ? '' : status.statusName)}">
+            <div class="ui-field__error" data-role="name-error" hidden></div>
+            ${isNew ? '<div class="ui-field__hint">Статус встанет последним в этом этапе.'
+                + ' Перенести его в другой этап нельзя: этапы — структура воронки.</div>' : ''}
+        </div>
+        ${STATUS_PROPS.map((prop) => `
+            <div class="ui-field">
+                <label class="ui-choice${!isNew && status[prop.key] ? ' ui-choice--on' : ''}">
+                    <input type="checkbox" data-prop="${prop.key}"${!isNew && status[prop.key] ? ' checked' : ''}>${prop.label}
+                </label>
+                <div class="ui-field__hint">${PROP_HINTS[prop.key]}</div>
+            </div>
+        `).join('')}
+        ${isNew ? `
+            <div class="ui-note">
+                <svg class="ui-ic ui-ic--sm ui-note__icon" aria-hidden="true"><use href="#ui-ic-info"></use></svg>
+                <div class="ui-note__body">
+                    <div class="ui-note__text">Статус заводится неразмеченным: пока не разметите его
+                    окончательным или промежуточным, целевым в автоперезвоне выбрать его будет нельзя.
+                    Разметка — в самом списке, одним движением на строку.</div>
+                </div>
+            </div>` : ''}
+    `;
+
+    const input = body.querySelector('#scrStatusName');
+    const nameField = body.querySelector('[data-role="name-field"]');
+    const nameError = body.querySelector('[data-role="name-error"]');
+    const propValue = (key) => body.querySelector(`[data-prop="${key}"]`).checked;
+
+    // Чип подсвечивается вместе с галочкой — состояние живёт на чипе, как в
+    // «CPA-сетях».
+    body.querySelectorAll('.ui-choice input').forEach((box) => {
+        box.addEventListener('change', () => {
+            box.closest('.ui-choice').classList.toggle('ui-choice--on', box.checked);
+        });
+    });
+
+    const showError = (text) => {
+        nameError.textContent = text;
+        nameError.hidden = false;
+        nameField.classList.add('ui-field--error');
+        input.focus();
+        return false;
+    };
+
+    async function submit() {
+        const name = input.value.trim();
+        nameError.hidden = true;
+        nameField.classList.remove('ui-field--error');
+        if (!name) return showError('Укажите название');
+        const payload = {
+            statusName: name,
+            requiresCallTime: propValue('requiresCallTime'),
+            releasesLead: propValue('releasesLead')
+        };
+        try {
+            if (isNew) await state.storage.createFunnelStatus({ stageNumber: stage.number, ...payload });
+            else await state.storage.updateFunnelStatus(status.id, payload);
+            if (state.destroyed) return true;
+            await reloadStatuses(state);
+            return true;
+        } catch (err) {
+            if (state.destroyed || isAbort(err)) return true;
+            return showError(err.message);
+        }
+    }
+
+    const actions = [];
+    if (!isNew) {
+        actions.push({
+            label: 'Удалить статус',
+            variant: 'danger',
+            side: 'start',
+            icon: 'trash',
+            onClick: async () => {
+                const removed = await removeStatus(state, status, stage);
+                return removed ? undefined : false;
+            }
+        });
+    }
+    actions.push({ label: 'Отмена', variant: 'ghost', value: false });
+    actions.push({ label: isNew ? 'Завести' : 'Сохранить', onClick: submit });
+
+    const modal = openModal({
+        title: isNew ? 'Новый статус' : 'Статус воронки',
+        sub: `Этап ${stage.number} · ${stage.name}`,
+        body,
+        scope: state.panel,
+        size: 'narrow',
+        spread: !isNew,
+        actions
+    });
+    input.focus();
+    return modal;
+}
+
+/**
+ * Удаление статуса. Помех у него четыре, и считает их сервер: экран не решает,
+ * можно ли удалять, и не считает сам.
+ *
+ * Возвращает true, если статус удалён, — окно статуса по этому признаку решает,
+ * закрываться ему или остаться.
+ */
+async function removeStatus(state, status, stage) {
+    const ok = await state.ctx.confirmDanger({
+        title: `Удалить статус «${status.statusName}»?`,
+        message: `Статус исчезнет из справочника этапа «${stage.number} · ${stage.name}». `
+            + 'Записи о прошлых разговорах не изменятся: у звонка имя статуса хранится снимком '
+            + 'рядом с идентификатором.'
+    });
+    if (!ok || state.destroyed) return false;
+    try {
+        await state.storage.deleteFunnelStatus(status.id);
+        if (state.destroyed) return true;
+        state.ctx.toast('Статус удалён', 'success');
+        await reloadStatuses(state);
+        return true;
+    } catch (err) {
+        if (state.destroyed) return false;
+        if (isDeleteBlocked(err)) {
+            openDeleteBlocked({
+                scope: state.panel,
+                sub: `Статус «${status.statusName}»`,
+                lead: 'Статус держат:',
+                tail: 'Лидов переводят на другой статус в разделе «Лиды», наборы правят в карточке лида, '
+                    + 'автоперезвон — на вкладке «События». Пока цела хотя бы одна помеха, статус остаётся на месте.',
+                blockers: err.blockers
+            });
+            return false;
+        }
+        if (!isAbort(err)) state.ctx.toast(err.message, 'error');
+        return false;
+    }
 }
 
 // Кнопка «Новый скрипт» и три чипа уходят вместе со списком: кнопка заводит
@@ -541,6 +834,24 @@ function bindEvents(state) {
             return;
         }
 
+        // Вкладка «Статусы воронки». Действия читаются с самой кнопки, как и в
+        // списке скриптов: подниматься до строки не нужно.
+        const statusAdd = target.closest('[data-action="status-add"]');
+        if (statusAdd) {
+            await withBusy(statusAdd, () => addStatus(state, statusAdd));
+            return;
+        }
+        const statusEdit = target.closest('[data-action="status-edit"]');
+        if (statusEdit) {
+            const id = Number(statusEdit.dataset.id);
+            const status = (state.funnelStatuses || []).find((s) => s.id === id);
+            if (status) {
+                openStatusModal(state, status,
+                    { number: status.stageNumber, name: status.stageName });
+            }
+            return;
+        }
+
         const saveBtn = target.closest('[data-role="meta-save"]');
         if (saveBtn) {
             await withBusy(saveBtn, () => saveMeta(state));
@@ -570,6 +881,24 @@ function bindEvents(state) {
         } else if (rowBtn.dataset.action === 'delete') {
             await removeScript(state, script);
         }
+    });
+
+    // Пометка сохраняется по выбору, а не по кнопке: своё событие, и оно
+    // делегировано так же, как щелчки, — строки перерисовываются целиком.
+    container.addEventListener('change', async (event) => {
+        const mark = event.target.closest('[data-action="status-mark"]');
+        if (mark) await setStatusMark(state, mark);
+    });
+
+    // Enter в поле заведения — как в любой однопольной форме: искать кнопку
+    // мышью ради каждого статуса человек не должен.
+    container.addEventListener('keydown', (event) => {
+        if (event.key !== 'Enter') return;
+        const field = event.target.closest('[data-role^="status-new-"]');
+        if (!field) return;
+        event.preventDefault();
+        const button = field.closest('.ui-field__row').querySelector('[data-action="status-add"]');
+        if (button && !button.disabled) button.click();
     });
 }
 

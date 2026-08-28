@@ -16,10 +16,19 @@ export function createStorage(api) {
         updateScript: (id, data) => api.put(`/admin/scripts/${id}`, data),
         deleteScript: (id) => api.del(`/admin/scripts/${id}`),
 
-        // Справочник статусов воронки — только чтение: список закреплён
-        // схемой, эндпоинтов записи у него нет вовсе. Тот же маршрут читают
-        // «Лиды» и рабочее место оператора.
+        // Справочник статусов воронки. Читают его «Лиды» и рабочее место
+        // оператора, а правит — только эта вкладка (часть 9, заход 4).
+        //
+        // ПОМЕТКА СВОИМ МЕТОДОМ, А НЕ ЧАСТЬЮ ПРАВКИ. Её ставят списком прямо в
+        // строке, пятьдесят раз подряд и без кнопки «Сохранить»; слать вместе с
+        // ней имя и два признака значило бы отправлять всю строку ради одного
+        // значения — и затирать правку, сделанную в окне между чтением списка и
+        // выбором.
         fetchFunnelStatuses: () => api.get('/lead-funnel-statuses'),
+        createFunnelStatus: (data) => api.post('/lead-funnel-statuses', data),
+        updateFunnelStatus: (id, data) => api.put(`/lead-funnel-statuses/${id}`, data),
+        setFunnelStatusMark: (id, mark) => api.put(`/lead-funnel-statuses/${id}/mark`, { mark }),
+        deleteFunnelStatus: (id) => api.del(`/lead-funnel-statuses/${id}`),
 
         fetchScriptNodes: (scriptId) => api.get(`/admin/scripts/${scriptId}/nodes`),
         createScriptNode: (scriptId, data) => api.post(`/admin/scripts/${scriptId}/nodes`, data),

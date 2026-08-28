@@ -9,8 +9,9 @@ const cors = require('cors');
 const { runMigrations } = require('./migrate');
 const auditContext = require('./services/auditContext');
 const { pool } = require('./db');
-const { checkStatusFlagsConfigured } = require('./services/leadCallRules');
+const { checkAutoRecallConfigured } = require('./services/leadCallRules');
 const { runPhoneNormalization } = require('./services/phoneMigration');
+const { runRecallRecalc } = require('./services/recallMigration');
 const scheduler = require('./services/scheduler');
 const eventChannel = require('./services/eventChannel');
 const employeesRouter = require('./routes/employees');
@@ -36,6 +37,7 @@ const tunnelPageRouter = require('./routes/tunnelPage');
 const pbxEventsRouter = require('./routes/pbxEvents');
 const callsRouter = require('./routes/calls');
 const auditRouter = require('./routes/audit');
+const callEventsRouter = require('./routes/callEvents');
 
 const app = express();
 
@@ -102,6 +104,7 @@ app.use('/api/leads-admin', leadsAdminRouter);
 app.use('/api/schedule', scheduleRouter);
 app.use('/api/calls', callsRouter);
 app.use('/api/audit', auditRouter);
+app.use('/api/call-events', callEventsRouter);
 
 // СТРАНИЦА ВЫДАЧИ НАСТРОЙКИ ТУННЕЛЯ — не под /api: её открывает человек в
 // браузере, и она отдаёт разметку, а не JSON. Стоит ДО express.static по той
@@ -185,14 +188,21 @@ app.use((req, res) => {
 
 const PORT = process.env.PORT || 3000;
 
-// Флаги поведения статусов (auto_recall / requires_call_time) проставляются
-// миграцией ПО НАЗВАНИЮ статуса. Если на бою хоть одно название отличается
-// пробелом, флаг молча не встанет и автоперезвон не заработает — без единой
-// ошибки в логе. Поэтому проверка при старте: она не мешает серверу подняться,
-// но оставляет запись, по которой поломку видно сразу (dialog.md A1).
+// Сторож при старте: он не мешает серверу подняться, но оставляет в логе
+// запись, по которой поломку видно сразу (dialog.md A1).
+//
+// СМОТРИТ НА СОБЫТИЕ, А НЕ НА ФЛАГ (часть 9, заход 2). Список статусов для
+// обзвона задаёт руководитель на вкладке «Звонки → События», и погасить обзвон
+// целиком стало легче, чем было: достаточно снять галочку. Причины называются
+// порознь — события нет, выключено, без окна, без строк, — потому что чинятся
+// они в разных местах.
+//
+// Половина про `requires_call_time` снята заходом 4 вместе с тем, что делало
+// её осмысленной: признак ставит владелец в окне статуса, и «ровно у одного»
+// перестало быть утверждением о правильности.
 runMigrations()
-    .then(() => checkStatusFlagsConfigured(pool).catch((err) => {
-        console.error('Не удалось проверить флаги статусов воронки:', err);
+    .then(() => checkAutoRecallConfigured(pool).catch((err) => {
+        console.error('Не удалось проверить настройку автоперезвона:', err);
     }))
     // Приведение номеров к единому формату (часть 4, Б1.2). Идёт ПОСЛЕ схемы, а
     // не внутри неё: правила приведения обязаны быть в проекте одни, и живут они
@@ -201,6 +211,17 @@ runMigrations()
     // включить уникальность номера повторяется при каждом старте.
     .then(() => runPhoneNormalization(pool).catch((err) => {
         console.error('Не удалось привести номера к единому формату:', err);
+    }))
+    // Засев признака перезвона и пересчёт назначенных перезвонов (часть 9,
+    // заход 7; засев — К240). Здесь же и по той же причине, что приведение
+    // номеров: правило времени живёт в `services/appTime.js`, и вторым разом на
+    // plpgsql его не пишут. Замка два, по одному на проход, и порядок
+    // обязателен: пересчёт читает то, что записал засев. Если событие
+    // «Автоперезвон» ещё не настроено, замок ПЕРЕСЧЁТА не ставится — он
+    // дождётся настройки, а не отметится выполненным над пустотой; засев от
+    // настройки не зависит и проходит в любом случае.
+    .then(() => runRecallRecalc(pool).catch((err) => {
+        console.error('Не удалось пересчитать назначенные перезвоны:', err);
     }))
     .then(() => {
         const server = app.listen(PORT, () => {

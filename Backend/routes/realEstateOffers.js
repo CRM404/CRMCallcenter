@@ -14,8 +14,11 @@ const router = express.Router();
 // Ключ живёт в базе, ПОДПИСЬ — на экране. Сообщение об ошибке называет
 // подписи (К86): внутренних active/paused/disabled/draft человек не видел
 // нигде и сопоставить их с тем, что выбрал, не может.
-const STATUS_VALUES = ['active', 'paused', 'disabled', 'draft'];
-const STATUS_LABELS = ['Активен', 'На паузе', 'Отключён', 'Черновик'];
+//
+// Перечень уехал в `services/offerStatus.js` (К229): подписи понадобились
+// второму месту — плашке «строка не работает» на вкладке «События», — а второй
+// список подписей в проекте был бы ровно К36.
+const { STATUS_VALUES, STATUS_LABELS } = require('../services/offerStatus');
 
 const FIELD_COLUMNS = [
     ['networkId', 'network_id'],
@@ -36,7 +39,6 @@ const FIELD_COLUMNS = [
     ['purchaseTerm', 'purchase_term'],
     ['downPaymentPercent', 'down_payment_percent'],
     ['priority', 'priority'],
-    ['transferTime', 'transfer_time'],
     ['leadLimit', 'lead_limit']
 ];
 
@@ -98,6 +100,22 @@ function validateBody(body) {
     }
     if (body.networkId === undefined || body.networkId === null || String(body.networkId).trim() === '') {
         return 'Заполните обязательное поле: Сеть';
+    }
+    // ПРИОРИТЕТ ОБЯЗАТЕЛЕН (решение владельца 105, корректировка К228). Он
+    // решает, по какому офферу переводят лида, у которого офферов несколько:
+    // пустое значение означало бы «порядок как повезёт», и на вкладке
+    // «События» строки перевода вставали бы в случайном порядке.
+    //
+    // ⚠ ПРОВЕРКА ПРИЕХАЛА ВМЕСТЕ СО СВОЕЙ МИГРАЦИЕЙ, и порознь их выкатывать
+    // нельзя: обязательность без заполнения пустых — это тридцать девять
+    // карточек, которые перестают сохраняться. Миграция — в `schema.sql`,
+    // замок `2026-08-28-offer-priority-fill`.
+    //
+    // Отказ называет ПОЛЕ, а не «проверьте данные»: человек должен знать, куда
+    // смотреть. Диапазон проверяет `validateNumbers` ниже — здесь только
+    // «заполнено ли».
+    if (body.priority === undefined || body.priority === null || String(body.priority).trim() === '') {
+        return 'Заполните обязательное поле: Приоритет';
     }
     const status = normalizeValue('status', body.status);
     if (!STATUS_VALUES.includes(status)) {
@@ -176,7 +194,6 @@ function rowToOffer(row, segments, objGeo, clientGeo, paymentMethods, mortgageTy
         purchaseTerm: row.purchase_term,
         downPaymentPercent: row.down_payment_percent,
         priority: row.priority,
-        transferTime: row.transfer_time,
         leadLimit: row.lead_limit,
         segments: (segments || []).map(rowToSegment),
         objGeo: (objGeo || []).map(rowToGeo),

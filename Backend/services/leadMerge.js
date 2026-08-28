@@ -168,10 +168,20 @@ async function mergeLeads(db, idA, idB) {
         }
 
         // И63 — каждая дата по своему смыслу, а не общим правилом.
-        const nextCalls = [elder.next_call_at, junior.next_call_at].filter(Boolean);
         // Ближайший перезвон: назначенное время — обещание человеку, и более
         // раннее обещание терять нельзя.
-        set.next_call_at = nextCalls.length ? new Date(Math.min(...nextCalls.map((d) => d.getTime()))) : null;
+        //
+        // ПРИЗНАК «КЕМ НАЗНАЧЕН» ЕДЕТ ВМЕСТЕ С ПОБЕДИВШИМ ВРЕМЕНЕМ (часть 9).
+        // Оставить старшему его собственный признак значило бы приписать чужому
+        // времени чужое происхождение: перезвон уехал от младшего, а по бумагам
+        // он назначен руками у старшего. Миграция пересчёта интервала верит
+        // этому признаку, и разойтись им нельзя.
+        const withNextCall = [elder, junior].filter((l) => l.next_call_at);
+        const winner = withNextCall.length
+            ? withNextCall.reduce((a, b) => (a.next_call_at.getTime() <= b.next_call_at.getTime() ? a : b))
+            : null;
+        set.next_call_at = winner ? new Date(winner.next_call_at.getTime()) : null;
+        set.next_call_source = winner ? winner.next_call_source : null;
         const lastCalls = [elder.last_call_at, junior.last_call_at].filter(Boolean);
         // Последний звонок — факт: когда с человеком в последний раз говорили.
         set.last_call_at = lastCalls.length ? new Date(Math.max(...lastCalls.map((d) => d.getTime()))) : null;

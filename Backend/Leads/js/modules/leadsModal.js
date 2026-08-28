@@ -93,10 +93,35 @@ function setSelectValue(select, value) {
 // Тот же паттерн, что buildFunnelStatusOptions в Operator/js/modules/operatorLeadForm.js.
 // Экспортируется — переиспользуется в leadsApp.js для фильтра и массового
 // действия «Сменить статус» (те же ~59 значений, тот же паттерн optgroup).
-export function fillFunnelStatusSelect(select, statuses, includeEmpty) {
+//
+// ⚠ ЧЕТЫРЕ РОЛИ У ОДНОГО СПИСКА, И ОНИ РАЗНЫЕ ПО СМЫСЛУ. Заход 6 завёл системные
+// статусы — те, что ставит система, а не человек, — и граница между ролями стала
+// видимой: список либо СТАВИТ статус лиду, либо ИЩЕТ по нему.
+//
+//   'set'    — карточка лида и массовая смена: человек назначает статус, и
+//              системного среди предлагаемых быть не должно;
+//   'filter' — отбор и быстрый отбор: отбор ищет, а не ставит, и системные в нём
+//              нужны — красный статус придуман, чтобы такие лиды было ВИДНО.
+//              Убрать их из отбора значило бы заставить искать красное глазами
+//              среди тысяч строк.
+//
+// Роль называет ВЫЗЫВАЮЩИЙ, а не угадывает список: место вызова знает, что оно
+// делает, а функция — нет.
+//
+// ⚠ И ГЛАВНОЕ: ТЕКУЩИЙ СТАТУС ПОКАЗЫВАЕТСЯ ВСЕГДА, даже системный. Простое
+// «спрятать» открывает молчаливую дыру: у лида с «Нет результата» поле окажется
+// пустым, руководитель нажмёт «Сохранить» — и `|| null` обнулит статус без
+// единого слова. Поэтому системный текущий остаётся в списке; выбрать ДРУГОЙ
+// системный по-прежнему нельзя.
+export function fillFunnelStatusSelect(select, statuses, includeEmpty, options = {}) {
+    const { purpose = 'filter', currentId = null } = options;
+    const setting = purpose === 'set';
+    const keep = currentId === null || currentId === undefined ? null : String(currentId);
+
     let html = includeEmpty ? '<option value="">— не выбран —</option>' : '';
     const byStage = new Map();
     statuses.forEach((s) => {
+        if (setting && s.isSystem && String(s.id) !== keep) return;
         if (!byStage.has(s.stageNumber)) byStage.set(s.stageNumber, { stageName: s.stageName, items: [] });
         byStage.get(s.stageNumber).items.push(s);
     });
@@ -106,6 +131,12 @@ export function fillFunnelStatusSelect(select, statuses, includeEmpty) {
         html += `<optgroup label="${escapeHtml(`${num}. ${stageName}`)}">${options}</optgroup>`;
     });
     select.innerHTML = html;
+
+    // Системный статус в поле — красным (решение владельца: «просто красным
+    // отображается в поле статус»). Красит СЕЛЕКТ, а не пункт списка: цвет
+    // пункта браузеры красят по-разному, а поле выглядит одинаково везде.
+    const current = statuses.find((s) => String(s.id) === keep);
+    select.classList.toggle('ld-status--system', Boolean(current && current.isSystem));
 }
 
 // Живая маска «+7 (___) ___-__-__» — только российский формат (design-решение,
@@ -457,7 +488,7 @@ export function createLeadModal(root, deps) {
         // Источник лидов, а не корневой: см. правку данных 25.08.2026 —
         // в корневом у всех записей одно слово, выбирать по нему нельзя.
         fillSelectFromList($('#ldSource'), sources.map((s) => ({ id: s.id, name: s.leadSource || s.rootSource })), '— не выбран —');
-        fillFunnelStatusSelect($('#ldFunnelStatus'), funnelStatuses, true);
+        fillFunnelStatusSelect($('#ldFunnelStatus'), funnelStatuses, true, { purpose: 'set' });
 
         fillPlainSelect($('#ldDecisionMaker'), paramLists.decisionMaker || [], '— не выбран —');
         fillPlainSelect($('#ldCategory'), paramLists.category || [], '— не выбрана —');
@@ -552,7 +583,17 @@ export function createLeadModal(root, deps) {
         assignedEmployeeId = lead && lead.employeeId ? lead.employeeId : null;
         syncEmployeesByLine();
         $('#ldEmployee').value = lead && lead.employeeId ? lead.employeeId : '';
+        // СПИСОК СТАТУСОВ ПЕРЕСОБИРАЕТСЯ ПОД КОНКРЕТНОГО ЛИДА, а не один раз на
+        // окно: системный статус в нём есть ровно тогда, когда он у лида сейчас
+        // стоит. Без этого у лида с «Нет результата» поле осталось бы пустым, а
+        // «Сохранить» молча обнулило бы статус — `|| null` в сборке данных.
+        fillFunnelStatusSelect($('#ldFunnelStatus'), funnelStatuses, true,
+            { purpose: 'set', currentId: lead && lead.funnelStatusId });
         $('#ldFunnelStatus').value = lead && lead.funnelStatusId ? lead.funnelStatusId : '';
+        // Пометка «заполнена частично» — только у существующего лида и только
+        // когда она стоит. Снимается пометка сохранением, поэтому плашка исчезнет
+        // сама при следующем открытии карточки, а не гасится здесь руками.
+        $('[data-role="lead-partial"]').hidden = !(lead && lead.partiallyFilled);
         // «Новый» предвыбран у нового лида (требование куратора): иначе легко
         // создать лида, у которого оператор сразу не увидит скрипта. Правило
         // пережило переделку на наборы — оно про первый набор.

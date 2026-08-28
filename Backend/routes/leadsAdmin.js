@@ -14,7 +14,7 @@ const { pool } = require('../db');
 const auditContext = require('../services/auditContext');
 const eventChannel = require('../services/eventChannel');
 const { startOfDay, startOfNextDay, zonedParts } = require('../services/appTime');
-const { distributePendingLeads, findNewFunnelStatusId, queueCondition } = require('../services/leadDistribution');
+const { distributePendingLeads, findNewFunnelStatusId, queueCondition, notSystemStatus } = require('../services/leadDistribution');
 const { normalizePhone, normalizeForSearch } = require('../services/phoneFormat');
 const { phoneColumnsFor, findLeadByPhone, leadTitle } = require('../services/phoneFix');
 const guards = require('../services/deleteGuards');
@@ -201,6 +201,11 @@ function rowToLead(row) {
         employeeName: row.employee_name,
         funnelStatusId: row.funnel_status_id,
         statusName: row.status_name,
+        // Пометка «заполнена частично» (часть 9, заход 5). Ставит её система,
+        // когда пост-обработка закрыла карточку по времени: работа сделана,
+        // просто не вся. Своей колонки в списке у неё нет — подстрокой под
+        // статусом: колонка пустовала бы почти во всех строках.
+        partiallyFilled: row.partially_filled,
         stageName: row.stage_name,
         stageNumber: row.stage_number,
         // scriptId/repeatScriptId наружу больше не отдаются: пары называют
@@ -257,6 +262,12 @@ function rowToLead(row) {
 // Куда попадёт лид, если снять с него архив. Три ответа, а не два (ответ
 // куратора И88 и правка Р7-5): «сразу», «позже» и «работы больше нет».
 //
+// «ПОЗЖЕ» СПРАШИВАЕТ ПРО СИСТЕМНЫЙ СТАТУС ТЕМ ЖЕ ТЕКСТОМ, ЧТО И ОЧЕРЕДЬ (К241).
+// Лид, выпавший из раздачи по системному статусу, ждёт руководителя, а не
+// времени: пообещать ему «вернётся позже» значило бы назвать сроком то, что
+// сроком не является. Такой лид уходит в «работы больше нет» — и это правда:
+// работы у ОПЕРАТОРА по нему действительно нет.
+//
 // Считается ПО ФАКТИЧЕСКОМУ УСЛОВИЮ ОЧЕРЕДИ, взятому из services/
 // leadDistribution.js, а не по флагу lead_funnel_statuses.releases_lead.
 // Флаг описывает, что делать ПОСЛЕ звонка, а не попадёт ли лид в раздачу: у
@@ -267,7 +278,8 @@ async function queuePlacement(db, leadId) {
     if (newStatusId === null) return 'none';
     const result = await db.query(
         `SELECT ${queueCondition('l', '$2')} AS in_queue,
-                (l.next_call_at IS NOT NULL AND l.next_call_at > NOW()) AS later
+                (l.next_call_at IS NOT NULL AND l.next_call_at > NOW()
+                 AND ${notSystemStatus('l')}) AS later
            FROM leads l WHERE l.id = $1`,
         [leadId, newStatusId]);
     const row = result.rows[0];
@@ -998,8 +1010,19 @@ router.put('/:id', async (req, res) => {
             `phone_fix_verdict = $${values.length}`
         );
         values.push(req.params.id);
+        // ПОМЕТКА «заполнена частично» СНИМАЕТСЯ ЛЮБЫМ СОХРАНЕНИЕМ КАРТОЧКИ, и
+        // этот экран стал единственным путём к ней (заход 6). Раньше пометку
+        // снимал только оператор: лид оставался в очереди, оператор его брал и
+        // дописывал. Теперь лид уходит из очереди со статусом «Нет результата», и
+        // первым его открывает руководитель — поставит окончательный статус, и
+        // лид к оператору уже не вернётся, а пометка осталась бы на нём навсегда.
+        //
+        // Снимается БЕЗУСЛОВНО, а не «если что-то дописали»: человек открыл
+        // карточку, посмотрел и сохранил — он её и принял. Сравнивать поля до и
+        // после значило бы решать за него, достаточно ли он сделал.
         const result = await client.query(
-            `UPDATE leads SET ${setClauses.join(', ')}, updated_at = NOW() WHERE id = $${values.length} RETURNING id`,
+            `UPDATE leads SET ${setClauses.join(', ')}, partially_filled = false, updated_at = NOW()
+              WHERE id = $${values.length} RETURNING id`,
             values
         );
         if (result.rows.length === 0) {

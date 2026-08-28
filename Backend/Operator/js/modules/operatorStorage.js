@@ -87,6 +87,21 @@ export function completeLead(id, employeeId, data, nextCallAt) {
     });
 }
 
+/**
+ * Пост-обработка кончилась по времени: карточка закрывается со всем набранным.
+ *
+ * Отдельный адрес, а не `/complete` с пустым статусом: тот статуса требует и без
+ * него отвечает отказом — и правильно делает, иначе один щелчок по «— не
+ * выбран —» терял бы лида навсегда. Здесь статуса нет и быть не может: время
+ * вышло, оператор его не поставил.
+ */
+export function closeByWrapupTimeout(id, employeeId, data) {
+    return request(`/leads/${id}/wrapup-timeout`, {
+        method: 'POST',
+        body: JSON.stringify({ ...data, employeeId })
+    });
+}
+
 export function fetchFunnelStatuses() {
     return request('/lead-funnel-statuses');
 }

@@ -74,7 +74,7 @@ export function createScriptPairs(root, { createPickList, onCountChange = null }
     root.innerHTML = '';
     const rowsEl = el('div', 'lead-script-rows');
 
-    const addBtn = el('button', 'ui-btn ui-btn--ghost lead-script-add');
+    const addBtn = el('button', 'ui-btn ui-btn--ghost ui-btn--add lead-script-add');
     addBtn.type = 'button';
     addBtn.innerHTML = `${icon('plus', 'sm')}<span>${TEXTS.addBtn}</span>`;
 
@@ -295,7 +295,13 @@ export function createScriptPairs(root, { createPickList, onCountChange = null }
             rows.forEach(fillScriptSelect);
         },
         setStatuses(list) {
-            statuses = (list || []).map((s) => ({
+            // ⚠ СИСТЕМНЫЕ СТАТУСЫ СЮДА НЕ ПОПАДАЮТ (заход 6, граница куратора).
+            // Набор «скрипт + статус» отвечает на вопрос «какой скрипт открыть
+            // оператору при этом статусе»; по системному статусу оператор лида
+            // не получает вовсе — он выпал из очереди и ждёт руководителя.
+            // Предлагать для него скрипт значило бы предлагать настроить то,
+            // чего не случится.
+            statuses = (list || []).filter((s) => !s.isSystem).map((s) => ({
                 id: s.id,
                 statusName: s.statusName,
                 stageNumber: s.stageNumber,

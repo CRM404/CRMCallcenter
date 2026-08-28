@@ -12,9 +12,13 @@
      связал бы метку с чужим полем. Всё — через data-role и container.
      querySelector; глобального document раздел не касается.
 
-     ДВЕ ВКЛАДКИ ЛЕЖАТ РЯДОМ, А НЕ ПОДМЕНЯЮТ ДРУГ ДРУГА РАЗМЕТКОЙ. Скрытая
+     ТРИ ВКЛАДКИ ЛЕЖАТ РЯДОМ, А НЕ ПОДМЕНЯЮТ ДРУГ ДРУГА РАЗМЕТКОЙ. Скрытая
      прячется атрибутом hidden: перерисовывать половину раздела при каждом
      переключении значит терять прокрутку, фокус и введённый поиск.
+
+     ТРЕТЬЯ ВКЛАДКА — «События», и счётчика у неё нет (паспорт Р12). Счётчик у
+     вкладки в этом разделе означает «столько строк внутри»; строк здесь всегда
+     четыре, и число, которое никогда не меняется, — украшение, а не счётчик.
 -->
 
 <div class="zv-section">
@@ -36,6 +40,7 @@
     <div class="ui-tabs" role="tablist" data-role="tabs">
         <button type="button" class="ui-tabs__tab ui-tabs__tab--active" role="tab" aria-selected="true" data-role="tab-active">Активные <span class="ui-tabs__count ui-tabs__count--badge" data-role="count-active">0</span></button>
         <button type="button" class="ui-tabs__tab" role="tab" aria-selected="false" data-role="tab-done">Завершённые <span class="ui-tabs__count ui-tabs__count--badge" data-role="count-done">0</span></button>
+        <button type="button" class="ui-tabs__tab" role="tab" aria-selected="false" data-role="tab-events">События</button>
     </div>
 
     <!-- ================= ВКЛАДКА «АКТИВНЫЕ» — строка это оператор ========= -->
@@ -123,6 +128,37 @@
             <div class="ui-empty__title" data-role="done-empty-title"></div>
             <div class="ui-empty__text" data-role="done-empty-text"></div>
             <button type="button" class="ui-btn ui-btn--secondary ui-empty__action" data-role="done-empty-action"></button>
+        </div>
+    </div>
+
+    <!-- ================== ВКЛАДКА «СОБЫТИЯ» — строка это НАСТРОЙКА ========
+         Первые две вкладки — работа, третья — настройка, и настройка не идёт
+         первой (паспорт Р12).
+
+         ПУСТОГО СОСТОЯНИЯ .ui-empty ЗДЕСЬ НЕТ, И ЭТО РЕШЕНИЕ. События заданы
+         системой, их всегда четыре, и добавить пятое нельзя. Пунктирная рамка
+         со значком и кнопкой спрятала бы единственное, что человеку нужно
+         увидеть, — какие события вообще бывают. Вместо неё у каждого события
+         строка «Не настроено» с ПОСЛЕДСТВИЕМ: пустое поле говорит, чего нет,
+         экран обязан сказать, что из-за этого происходит.
+
+         СТРОКИ РИСУЕТ JS, а не разметка: событий четыре, но у каждого свой
+         предмет, и строка-итог считается по настройке. Здесь только столбик и
+         плашка, которая настройкой не является.
+    -->
+    <div data-role="pane-events" hidden>
+        <div class="zv-list" data-role="events-list"></div>
+
+        <!-- Плашка стоит ПОСЛЕДНИМ элементом столбика и объясняет одно событие,
+             а не раздел целиком. Обычная, а не жёлтая: пар «линия + скрипт» в
+             проекте десятки, названными будут единицы, и жёлтая висела бы
+             всегда. Жёлтым отмечается то, что человек сейчас сломал, а не то,
+             как система устроена. -->
+        <div class="ui-note" data-role="events-note" hidden>
+            <svg class="ui-ic ui-ic--sm ui-note__icon" aria-hidden="true"><use href="#ui-ic-info"></use></svg>
+            <div class="ui-note__body">
+                <div class="ui-note__text">Пост-обработка работает только для той пары «линия + скрипт», которая названа в событии. Для всех остальных пар она <b>не кончается сама</b>: оператор возвращается на линию, когда закончит.</div>
+            </div>
         </div>
     </div>
 
