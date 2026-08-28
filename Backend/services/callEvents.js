@@ -131,9 +131,24 @@ async function fetchAutoRecallState(db) {
     return result.rows[0] || null;
 }
 
+/**
+ * Рабочее окно события — или null, если событие не годно к работе.
+ *
+ * Тот же `usableWindow`, что и у всех читателей выше, только без привязки к
+ * конкретному статусу: разовому пересчёту перезвонов (заход 7) нужно именно
+ * окно, а правило «годно ли событие» должно остаться одним на всех. Своя копия
+ * условия у миграции разошлась бы с этой в первый же день правки.
+ */
+async function fetchRecallWindow(db) {
+    const result = await db.query(
+        'SELECT enabled, window_from, window_to FROM call_events WHERE kind = $1', [AUTO_RECALL]);
+    return usableWindow(result.rows[0]);
+}
+
 module.exports = {
     AUTO_RECALL,
     fetchAutoRecall,
     fetchAutoRecallRules,
-    fetchAutoRecallState
+    fetchAutoRecallState,
+    fetchRecallWindow
 };

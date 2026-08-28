@@ -11,6 +11,7 @@ const auditContext = require('./services/auditContext');
 const { pool } = require('./db');
 const { checkAutoRecallConfigured } = require('./services/leadCallRules');
 const { runPhoneNormalization } = require('./services/phoneMigration');
+const { runRecallRecalc } = require('./services/recallMigration');
 const scheduler = require('./services/scheduler');
 const eventChannel = require('./services/eventChannel');
 const employeesRouter = require('./routes/employees');
@@ -210,6 +211,15 @@ runMigrations()
     // включить уникальность номера повторяется при каждом старте.
     .then(() => runPhoneNormalization(pool).catch((err) => {
         console.error('Не удалось привести номера к единому формату:', err);
+    }))
+    // Пересчёт назначенных перезвонов (часть 9, заход 7). Здесь же и по той же
+    // причине, что приведение номеров: правило времени живёт в
+    // `services/appTime.js`, и вторым разом на plpgsql его не пишут. Свой замок
+    // в `applied_migrations`; если событие «Автоперезвон» ещё не настроено,
+    // замок НЕ ставится — пересчёт дождётся настройки, а не отметится
+    // выполненным над пустотой.
+    .then(() => runRecallRecalc(pool).catch((err) => {
+        console.error('Не удалось пересчитать назначенные перезвоны:', err);
     }))
     .then(() => {
         const server = app.listen(PORT, () => {

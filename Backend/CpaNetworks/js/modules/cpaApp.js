@@ -745,7 +745,13 @@ async function openOfferModal(state, offer, opts = {}) {
 
         ${sectionHead('shield', 'Настройки обработки', 'приоритет и лимиты передачи лида')}
         <div class="ui-form-grid">
-            ${fieldBlock({ label: 'Приоритет', name: 'priority', wide: false, hint: 'Число от 1 до 5, где 1 — высший.',
+            ${/* ЗВЁЗДОЧКА ПРИЕХАЛА ВМЕСТЕ С ОБЯЗАТЕЛЬНОСТЬЮ (наряд части 9,
+                  раздел 3: «приоритет получает звёздочку и отказ сохранения при
+                  пустом»). Отказ без метки означал бы поле, которое молча не
+                  сохраняется, — то же самое, что обещание без исполнения, только
+                  в обратную сторону. */''}
+            ${fieldBlock({ label: 'Приоритет', name: 'priority', wide: false, required: true,
+                hint: 'Число от 1 до 5, где 1 — высший. Решает, по какому офферу переводят лида.',
                 control: inputControl('priority', 'number', value.priority, '1') })}
             ${fieldBlock({ label: 'Лимит лидов', name: 'leadLimit', wide: false, hint: 'На весь срок оффера; пусто — без лимита.',
                 control: inputControl('leadLimit', 'number', value.leadLimit, '300') })}

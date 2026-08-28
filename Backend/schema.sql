@@ -2585,11 +2585,25 @@ BEGIN
     -- на базе, где первая редакция уже сработала, guard увидел бы ограничение с
     -- этим именем и молча пропустил правку: снаружи «проверка есть», внутри
     -- дыра. DROP IF EXISTS идемпотентен и на чистой базе не делает ничего.
+    --
+    -- ЗАХОД 7: ТРЕТЬЕ УСЛОВИЕ — ОКНО НУЛЕВОЙ ДЛИНЫ. `window_from = window_to`
+    -- означает «никогда», а не «круглые сутки»: `shiftIntoCallWindow` считает
+    -- вхождение как `at >= from && at < from`, то есть ложь при любом времени
+    -- (`services/appTime.js`). Экран это отбивал с захода 5, база — нет, и
+    -- правило данных обязано жить в данных.
+    --
+    -- ⚠ ОГРАНИЧЕНИЕ ДОПОЛНЯЕТСЯ ЗДЕСЬ ЖЕ, А НЕ ЗАВОДИТСЯ ВТОРЫМ. Второе
+    -- ограничение на ту же колонку означало бы два места, где написано одно
+    -- правило, и один и тот же отказ с двумя разными именами в логе. Отсюда и
+    -- третье имя: guard по имени иначе пропустил бы правку на базе, где уже
+    -- стоит парная редакция.
     ALTER TABLE call_events DROP CONSTRAINT IF EXISTS call_events_window_check;
-    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'call_events_window_pair_check') THEN
-        ALTER TABLE call_events ADD CONSTRAINT call_events_window_pair_check
+    ALTER TABLE call_events DROP CONSTRAINT IF EXISTS call_events_window_pair_check;
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'call_events_window_rule_check') THEN
+        ALTER TABLE call_events ADD CONSTRAINT call_events_window_rule_check
             CHECK ((window_from IS NULL) = (window_to IS NULL)
-                   AND (window_from IS NULL OR kind = 'auto_recall'));
+                   AND (window_from IS NULL OR kind = 'auto_recall')
+                   AND (window_from IS NULL OR window_from <> window_to));
     END IF;
     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'call_events_wait_check') THEN
         ALTER TABLE call_events ADD CONSTRAINT call_events_wait_check
@@ -3056,6 +3070,54 @@ END $$;
 INSERT INTO lead_funnel_stages (stage_number)
 SELECT DISTINCT stage_number FROM lead_funnel_statuses
 ON CONFLICT (stage_number) DO NOTHING;
+
+-- ============================================================================
+-- ЧАСТЬ 9, ЗАХОД 7: МИГРАЦИИ В ПОЛЁТЕ
+-- ============================================================================
+--
+-- Разовые правки того, что уже лежит в бою. Ни одного пикселя не меняют.
+-- Пересчёт назначенных перезвонов живёт НЕ ЗДЕСЬ, а в
+-- `services/recallMigration.js` — разбор в шапке того файла: правило времени в
+-- проекте одно, и на plpgsql его вторым разом не пишут.
+
+-- ----- Приоритет оффера: недостающим ставится 1 ------------------------------
+--
+-- Решение владельца 105. Замер до миграции снят на бою неизменяющим запросом
+-- 27.08.2026: приоритет пуст у 39 офферов из 39 — то есть она трогает всех до
+-- единого, а не хвост. Это то число, ради которого замер и заказывался: их
+-- владельцу размечать руками.
+--
+-- ОБЯЗАТЕЛЬНОСТЬ ЕДЕТ ТЕМ ЖЕ КОММИТОМ (К228), и порознь нельзя: обязательность
+-- без миграции — это тридцать девять заблокированных карточек. Проверка живёт в
+-- `routes/realEstateOffers.js`, здесь только заполнение пустого.
+--
+-- ⚠ МИГРАЦИЯ ПОДПИСЫВАЕТ СЕБЯ САМА. Триггер журнала читает автора из настроек
+-- соединения; без них семь записей выкатки части 5 остались с «автора нет» —
+-- по существу неправда, их сделала миграция. Решение владельца 98 говорит
+-- обратное. Третий параметр `true` — настройка живёт до конца транзакции и не
+-- течёт в соседние запросы соединения.
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM applied_migrations WHERE id = '2026-08-28-offer-priority-fill') THEN
+
+    PERFORM set_config('crm.audit_actor_kind', 'service', true);
+    PERFORM set_config('crm.audit_actor_name', 'Миграция', true);
+
+    UPDATE real_estate_offers SET priority = 1 WHERE priority IS NULL;
+
+    INSERT INTO applied_migrations (id) VALUES ('2026-08-28-offer-priority-fill');
+    END IF;
+END $$;
+
+-- ----- «Время для перевода»: переносить нечего ------------------------------
+--
+-- Наряд просил список «оффер → что стояло», чтобы окна перевода заводили по
+-- бумажке, а не вслепую. СПИСОК ПУСТ: замер на бою 27.08.2026 — `transfer_time`
+-- заполнен у 0 офферов из 39. Значит миграции здесь нет вовсе, и это сказано
+-- словами, а не пропущено молчанием: пропуск читался бы как «забыли».
+--
+-- Колонка остаётся: условие «удаление — отдельное слово владельца» написано у
+-- её объявления, и без слова оно не отменяется.
 
 -- ----- Правила аудита нового ------------------------------------------------
 -- Этап называется своим номером: имени у него в этой таблице нет (см. выше),
