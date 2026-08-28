@@ -20,7 +20,18 @@ import { showToast } from './operatorToast.js';
 // Пульсация пилюли: напоминание, а не блокировка. Забытый «обед» до конца смены
 // — реальный сценарий, поэтому мягкий сигнал есть, а запрета нет.
 const OFFLINE_NUDGE_SECONDS = 15 * 60;
-const POSTWORK_NUDGE_SECONDS = 5 * 60;
+
+// ПРЕДЕЛ ПОСТ-ОБРАБОТКИ ЗАДАЁТ СОБЫТИЕ, А ПОРОГ ПУЛЬСАЦИИ — ПРОИЗВОДНЫЙ ОТ НЕГО
+// (заход 6, тот же приём, что у порога предупреждения о попытках в заходе 3).
+// Пять минут были верны, пока длительность стояла константой; теперь её задаёт
+// руководитель парой «линия + скрипт», и зашитый порог при пределе в 90 секунд
+// не сработал бы ни разу, а при пределе в час загорелся бы на пятой минуте.
+//
+// Предела нет вовсе — пары в перечне события нет, и пост-обработка не кончается
+// сама. Это законное состояние: тогда порог остаётся прежним, пятиминутным,
+// потому что напоминать всё равно надо, а отсчитывать нечего.
+const POSTWORK_NUDGE_SHARE = 0.75;
+const POSTWORK_NUDGE_FALLBACK = 5 * 60;
 
 function escapeHtml(value) {
     if (value === null || value === undefined) return '';
@@ -54,7 +65,7 @@ function hhmm(totalSeconds) {
     return `${hours} ч ${minutes} мин`;
 }
 
-export function createWorkStatePanel({ employeeId, identity, onStateChange }) {
+export function createWorkStatePanel({ employeeId, identity, onStateChange, onWrapupExpired }) {
     const pill = document.getElementById('opStatePill');
     const pillName = document.getElementById('opStateName');
     const pillTimer = document.getElementById('opStateTimer');
@@ -66,6 +77,12 @@ export function createWorkStatePanel({ employeeId, identity, onStateChange }) {
     let current = { state: 'off', startedAt: null, totals: {}, states: [] };
     // Момент выдачи текущей карточки: от него идёт пост-обработка.
     let openedAt = null;
+    // Предел пост-обработки по ЭТОЙ карточке. Считает его сервер: длительность
+    // задана парой «линия + скрипт», и собирать её здесь значило бы завести
+    // второй экземпляр правила. null — пары нет, пост-обработка не кончается
+    // сама, и это законное состояние, а не поломка.
+    let wrapupLimit = null;
+    let expiredFired = false;
 
     const initials = [identity.lastName, identity.firstName]
         .filter(Boolean).map((s) => String(s).charAt(0).toUpperCase()).join('') || '—';
@@ -105,13 +122,39 @@ export function createWorkStatePanel({ employeeId, identity, onStateChange }) {
         return current.state === 'on_line' && !!openedAt;
     }
 
+    // Порог пульсации: три четверти предела, а без предела — прежние пять минут.
+    function postworkNudgeSeconds() {
+        return wrapupLimit ? Math.round(wrapupLimit * POSTWORK_NUDGE_SHARE) : POSTWORK_NUDGE_FALLBACK;
+    }
+
+    /**
+     * Предел истёк — сказать об этом ОДИН раз на карточку.
+     *
+     * Тик идёт раз в секунду, и без флага заявка на закрытие уходила бы каждую
+     * секунду, пока сервер отвечает. Флаг снимается вместе с карточкой, в
+     * `setOpenedAt`: новая карточка — новый отсчёт.
+     *
+     * ⚠ ФЛАГ ВЗВОДИТСЯ ТОЛЬКО ТОГДА, КОГДА ЗАКРЫТИЕ ДЕЙСТВИТЕЛЬНО НАЧАЛОСЬ.
+     * Первая редакция взводила его безусловно — и предел, истёкший раньше, чем
+     * карточка дорисовалась (а она собирается двумя запросами), закрывал
+     * заявку навсегда: экран досчитывал до предела, ничего не делал и молчал.
+     * Поймано браузерной проверкой с пределом в одну секунду; чтением такое не
+     * видно, потому что код выглядит правильным.
+     */
+    function checkWrapupExpired(seconds) {
+        if (!wrapupLimit || expiredFired || seconds < wrapupLimit) return;
+        if (!onWrapupExpired) return;
+        expiredFired = onWrapupExpired() !== false;
+    }
+
     function renderPill() {
         const post = isPostwork();
         const seconds = post ? postworkSeconds() : secondsInState();
         const classes = ['op-state-pill'];
         if (post) classes.push('post');
         else if (current.state === 'on_line') classes.push('online');
-        if (post && seconds > POSTWORK_NUDGE_SECONDS) classes.push('nudge');
+        if (post) checkWrapupExpired(seconds);
+        if (post && seconds > postworkNudgeSeconds()) classes.push('nudge');
         if (!post && current.state !== 'on_line' && secondsInState() > OFFLINE_NUDGE_SECONDS) classes.push('nudge');
         pill.className = classes.join(' ');
         pillName.textContent = post ? 'Пост-обработка' : stateLabel(current.state);
@@ -217,7 +260,15 @@ export function createWorkStatePanel({ employeeId, identity, onStateChange }) {
         getState() { return current.state; },
         isOnline() { return current.state === 'on_line'; },
         // Карточка выдана/закрыта — от этого зависит, показывать ли пост-обработку.
-        setOpenedAt(value) { openedAt = value || null; renderPill(); },
+        // Вместе с ней приезжает и её предел: он свой у каждой карточки, потому
+        // что задан парой «линия + скрипт» этого разговора.
+        setOpenedAt(value, limitSeconds) {
+            openedAt = value || null;
+            const limit = Number(limitSeconds);
+            wrapupLimit = Number.isFinite(limit) && limit > 0 ? limit : null;
+            expiredFired = false;
+            renderPill();
+        },
         serverNow
     };
 }

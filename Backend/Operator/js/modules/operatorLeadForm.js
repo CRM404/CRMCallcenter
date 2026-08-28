@@ -603,6 +603,18 @@ export function renderLeadForm(container, lead, statuses, paramLists, onSave, op
             nextCallAt = when.toISOString();
         }
 
+        onSave(collectCard(), nextCallAt);
+    });
+
+    /**
+     * Набранное в карточке — одной функцией на оба пути.
+     *
+     * Путей стало два: «Сохранить» и истёкшая пост-обработка (заход 6). Второй
+     * сохраняет ровно то же самое и обязан собирать поля тем же кодом — иначе
+     * закрытая по времени карточка теряла бы часть набранного, и понять, какую,
+     * было бы нельзя.
+     */
+    function collectCard() {
         const data = {};
         FIELD_KEYS.forEach((key) => {
             const el = container.querySelector(`#op-field-${key}`);
@@ -618,8 +630,10 @@ export function renderLeadForm(container, lead, statuses, paramLists, onSave, op
         } else {
             data.otherBorrower = cascadeTouched ? null : (lead.otherBorrower ?? null);
         }
-        onSave(data, nextCallAt);
-    });
+        return data;
+    }
+
+    return { collect: collectCard };
 }
 
 // Полоса «Новый лид № …» держится строго 2 секунды по таймеру, а не до первого

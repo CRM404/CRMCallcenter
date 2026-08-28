@@ -18,7 +18,7 @@ import { requireOperatorIdentity } from './operatorIdentity.js';
 import { initOperatorNav } from './operatorNav.js';
 import { showToast } from './operatorToast.js';
 import {
-    fetchNextLead, completeLead, fetchFunnelStatuses, fetchScript,
+    fetchNextLead, completeLead, closeByWrapupTimeout, fetchFunnelStatuses, fetchScript,
     fetchEmployee, fetchParamLists
 } from './operatorStorage.js';
 import { createScriptView } from './operatorScript.js';
@@ -59,6 +59,7 @@ document.addEventListener('DOMContentLoaded', async function () {
     let renderedLeadId = null;
     let pollTimer = null;
     let flashTimer = null;
+    let cardForm = null;
 
     let employee = {};
     try {
@@ -70,7 +71,15 @@ document.addEventListener('DOMContentLoaded', async function () {
     const workState = createWorkStatePanel({
         employeeId: identity.id,
         identity: { ...identity, lineType: employee.lineType },
-        onStateChange: () => { refreshQueue({ silent: true }); }
+        onStateChange: () => { refreshQueue({ silent: true }); },
+        // ПОСТ-ОБРАБОТКА КОНЧИЛАСЬ САМА (заход 6). До него маршрут был построен и
+        // не звался ниоткуда: включать его было нельзя, пока не появился статус
+        // «Нет результата», — иначе карточка закрывалась бы в никуда.
+        //
+        // Возвращает false, когда закрывать ещё нечего: карточка собирается
+        // двумя запросами, и предел может истечь раньше, чем она дорисована.
+        // Счётчик по этому ответу понимает, что заявку надо повторить.
+        onWrapupExpired: () => requestTimeoutClose()
     });
     const objections = createObjectionsPanel();
 
@@ -192,7 +201,10 @@ document.addEventListener('DOMContentLoaded', async function () {
         }
 
         renderedLeadId = lead.id;
-        renderLeadForm(cardPanel, lead, statuses, paramLists, (data, nextCallAt, validationError) => {
+        // Ссылка на форму нужна второму пути закрытия: истёкшая пост-обработка
+        // сохраняет ровно то же набранное, что и «Сохранить», и собирает его тем
+        // же кодом — иначе часть введённого терялась бы молча.
+        cardForm = renderLeadForm(cardPanel, lead, statuses, paramLists, (data, nextCallAt, validationError) => {
             if (validationError) {
                 showToast(validationError, 'error');
                 return;
@@ -210,7 +222,13 @@ document.addEventListener('DOMContentLoaded', async function () {
 
     async function showLead(lead, flash) {
         currentLead = lead;
-        workState.setOpenedAt(lead ? lead.openedAt : null);
+        // Предел пост-обработки приезжает ВМЕСТЕ С КАРТОЧКОЙ и свой у каждой:
+        // длительность задана парой «линия + скрипт» этого разговора. Считает
+        // его сервер (`resolveWrapupSeconds`); null — пары нет, пост-обработка не
+        // кончается сама, и это законное состояние.
+        workState.setOpenedAt(lead ? lead.openedAt : null, lead ? lead.wrapupSeconds : null);
+        // Карточка ушла — форма, с которой её собирали, больше не годится.
+        if (!lead) cardForm = null;
         // Кнопка возражений привязана к КАРТОЧКЕ НА ЭКРАНЕ, а не к закреплённому
         // лиду: на перерыве лид остаётся за оператором, но скрипта на экране нет
         // и искать в нём нечего.
@@ -267,6 +285,41 @@ document.addEventListener('DOMContentLoaded', async function () {
             }
             showToast(e.message, 'error');
             if (button) button.disabled = false;
+        }
+    }
+
+    /**
+     * Пост-обработка кончилась по времени — карточка закрывается сама.
+     *
+     * НАБРАННОЕ СОХРАНЯЕТСЯ, А НЕ ВЫБРАСЫВАЕТСЯ. Пометка «заполнена частично»
+     * говорит «работа сделана, просто не вся»; выбросить введённое и поставить
+     * эту пометку значило бы соврать — работы не осталось бы никакой.
+     *
+     * ОПЕРАТОР УЗНАЁТ ОБ ЭТОМ СЛОВАМИ. Карточка меняется у него на глазах, и
+     * молчаливая подмена читалась бы как сбой: он решил бы, что потерял работу.
+     */
+    /**
+     * Готовы ли закрывать прямо сейчас. Ответ синхронный, и это важно: по нему
+     * счётчик решает, взводить ли свой одноразовый флаг или повторить заявку на
+     * следующем тике.
+     */
+    function requestTimeoutClose() {
+        if (!currentLead || renderedLeadId !== currentLead.id || !cardForm) return false;
+        closeByTimeout();
+        return true;
+    }
+
+    async function closeByTimeout() {
+        const leadId = currentLead.id;
+        try {
+            const result = await closeByWrapupTimeout(leadId, identity.id, cardForm.collect());
+            await showLead(result.next || null, !!result.next);
+            showToast('Время пост-обработки вышло — карточка закрыта и помечена «заполнена частично»', 'info');
+        } catch (e) {
+            // Отказ здесь не должен ломать экран: карточка либо уже закрыта
+            // сторожем, либо ушла к другому. Обновляем очередь и говорим прямо.
+            showToast(e.message, 'error');
+            await refreshQueue({ silent: true });
         }
     }
 

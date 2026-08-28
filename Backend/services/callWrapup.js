@@ -59,44 +59,102 @@ async function resolveWrapupSeconds(db, { leadId, funnelStatusId, lineType }) {
 }
 
 /**
+ * Целевой статус тайм-аута — из самого события, а не поиском по имени.
+ *
+ * Пусто вернётся только на базе, где выкатка захода 6 ещё не прошла: засев
+ * ставит его вместе с самим статусом. Пустое значение НЕ отменяет закрытие
+ * карточки — иначе брошенный лид остался бы «открытым» навсегда, а это ровно
+ * то, ради чего сторож и написан; но молчать о нём нельзя.
+ */
+async function wrapupStatusId(db) {
+    const result = await db.query('SELECT wrapup_status_id FROM call_events WHERE kind = $1', [WRAPUP]);
+    const id = result.rows[0] ? result.rows[0].wrapup_status_id : null;
+    if (!id) {
+        console.error('[пост-обработка] Целевой статус тайм-аута не задан — карточка закроется со своим статусом');
+    }
+    return id;
+}
+
+/**
+ * ЧТО ЗНАЧИТ «ЗАКРЫТЬ КАРТОЧКУ ПО ВРЕМЕНИ» — ОДНИМ КУСКОМ КОДА НА ОБА ПУТИ.
+ *
+ * Путей ровно два: браузер оператора, у которого истёк счётчик, и сторож,
+ * подбирающий карточку за закрытой вкладкой. До захода 6 они делали РАЗНОЕ —
+ * сторож снимал `employee_id`, маршрут не снимал, — и закрытая по времени
+ * карточка оставалась закреплённой за оператором, то есть попадала обратно в
+ * его личную очередь. Половина того круга, из-за которого заход 6 и заведён.
+ *
+ * Действий четыре, и они обязаны происходить вместе:
+ *
+ *   1 · СТАТУС «Нет результата». Ставит его механизм закрытия, а не правило
+ *       статуса и не признаки: правило статуса вызывается, когда человек статус
+ *       ВЫБРАЛ, — а здесь он его как раз не выбрал.
+ *   2 · ОТКРЕПЛЕНИЕ. `employee_id` и `opened_at` снимаются вместе: лид,
+ *       оставшийся «открытым», в очередь не вернётся и никому не достанется —
+ *       проверка занятости оператора считает его работой.
+ *   3 · СЧЁТЧИК ПОПЫТОК И ВРЕМЯ ПОСЛЕДНЕГО ЗВОНКА. Разговор был — владелец
+ *       сказал это прямо: «попытка же была». Не записать время значило бы
+ *       показывать в карточке «последняя попытка: позавчера» после сегодняшнего
+ *       разговора, то есть врать данными, а не умалчивать.
+ *   4 · ПОМЕТКА «заполнена частично» — работа сделана, просто не вся.
+ *
+ * Чего здесь НЕТ намеренно: `next_call_at` не трогается. Перезвон, назначенный
+ * раньше — хоть автоматом, хоть руками, — этой карточки не касается, и молча
+ * снять его значило бы отменить договорённость с клиентом.
+ *
+ * `where` — «какие карточки», и он у путей разный. `SET` — «что значит
+ * закрыть», и он один. Нумерация чужих подстановок начинается с $2.
+ */
+async function closeByTimeout(db, where, params) {
+    const statusId = await wrapupStatusId(db);
+    const result = await db.query(
+        `UPDATE leads l
+            SET funnel_status_id = COALESCE($1, l.funnel_status_id),
+                employee_id = NULL,
+                opened_at = NULL,
+                partially_filled = true,
+                call_attempts = l.call_attempts + 1,
+                last_call_at = NOW(),
+                updated_at = NOW()
+          WHERE ${where}
+        RETURNING l.id`,
+        [statusId, ...params]
+    );
+    return result.rows.map((r) => r.id);
+}
+
+/**
  * Сторож брошенных карточек. Зовётся тиком планировщика.
  *
  * ПИШЕТ ОТ ИМЕНИ СИСТЕМЫ. Без служебного автора журнал показал бы «не указан» —
  * то есть правку из админки, которой никто не делал (решение владельца 98,
  * механизм `auditContext.runAsService`).
  *
- * `opened_at` снимается ЗДЕСЬ ЖЕ, вместе с пометкой: пост-обработка закрывает
- * карточку помимо трёх случаев, которые снимают признак сегодня (сохранение
- * статуса, архивация, вывод сотрудника), и не снять его значило бы оставить лида
- * «открытым» навсегда — в очередь он не вернётся и никому не достанется, потому
- * что проверка занятости оператора считает его работой.
+ * Отбор — «карточка открыта дольше своего предела с форой»; всё остальное, что
+ * значит закрытие, живёт в `closeByTimeout` и одинаково для обоих путей.
  */
 async function closeAbandonedWrapups(pool) {
-    return auditContext.runAsService('Система', async () => {
-        const result = await pool.query(
-            `UPDATE leads l
-                SET opened_at = NULL, partially_filled = true, employee_id = NULL, updated_at = NOW()
-              WHERE l.opened_at IS NOT NULL
-                AND EXISTS (SELECT 1 FROM call_events WHERE kind = $1 AND enabled)
-                AND EXISTS (
-                    SELECT 1
-                      FROM lead_script_statuses lss
-                      JOIN call_wrapup_rules w
-                        ON w.script_id = lss.script_id AND w.line_type = l.line_type
-                     WHERE lss.lead_id = l.id
-                       AND lss.funnel_status_id = l.funnel_status_id
-                       AND l.opened_at + make_interval(secs => w.duration_seconds + $2) <= NOW()
-                )
-              RETURNING l.id`,
-            [WRAPUP, GRACE_SECONDS]
-        );
-        return result.rows.map((r) => r.id);
-    });
+    return auditContext.runAsService('Система', () => closeByTimeout(
+        pool,
+        `l.opened_at IS NOT NULL
+         AND EXISTS (SELECT 1 FROM call_events WHERE kind = $2 AND enabled)
+         AND EXISTS (
+             SELECT 1
+               FROM lead_script_statuses lss
+               JOIN call_wrapup_rules w
+                 ON w.script_id = lss.script_id AND w.line_type = l.line_type
+              WHERE lss.lead_id = l.id
+                AND lss.funnel_status_id = l.funnel_status_id
+                AND l.opened_at + make_interval(secs => w.duration_seconds + $3) <= NOW()
+         )`,
+        [WRAPUP, GRACE_SECONDS]
+    ));
 }
 
 module.exports = {
     WRAPUP,
     GRACE_SECONDS,
     resolveWrapupSeconds,
+    closeByTimeout,
     closeAbandonedWrapups
 };

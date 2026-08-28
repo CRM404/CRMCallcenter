@@ -6,10 +6,11 @@
 // но страхует от случайных ошибок — по решению куратора (2026-08-05).
 
 const express = require('express');
-const { pool } = require('../db');
+const { pool, applyAuditSettings } = require('../db');
 const { assignNextLeadForEmployee } = require('../services/leadDistribution');
 const { fetchStatusFlags, resolveCallStatusEffects } = require('../services/leadCallRules');
-const { resolveWrapupSeconds } = require('../services/callWrapup');
+const { resolveWrapupSeconds, closeByTimeout } = require('../services/callWrapup');
+const auditContext = require('../services/auditContext');
 const { withTransaction } = require('../services/dbTx');
 const { phoneColumnsFor, findLeadByPhone } = require('../services/phoneFix');
 
@@ -370,9 +371,18 @@ router.post('/:id/complete', async (req, res) => {
 // частично» говорит «работа сделана, просто не вся»; выбросить набранное и
 // поставить эту пометку значило бы соврать — работы не осталось бы никакой.
 //
-// ⚠ СТАТУС И ПРАВИЛА ЗВОНКА НЕ ПРИМЕНЯЮТСЯ. Счётчик попыток не растёт, перезвон
-// не назначается, оператор не отцепляется правилом статуса: ничего этого не
-// произошло — разговор не закончен решением, он оборван временем.
+// ⚠ ПРАВИЛА ЗВОНКА НЕ ПРИМЕНЯЮТСЯ, А ЗАКРЫТИЕ — ПРИМЕНЯЕТСЯ (заход 6). Правило
+// статуса вызывается, когда человек статус ВЫБРАЛ; здесь он его как раз не
+// выбрал. Но карточка всё равно закрывается по времени, и что это значит —
+// статус «Нет результата», открепление, счёт попытки вместе со временем и
+// пометка — написано ОДНИМ куском в `services/callWrapup.js` и одинаково для
+// обоих путей: этого и не хватало, пока маршрут не снимал `employee_id`, а
+// сторож снимал.
+//
+// ДВА АВТОРА В ЖУРНАЛЕ, И ЭТО НЕ ПУТАНИЦА. Поля карточки правил оператор — он их
+// и набирал. Статус, открепление и счётчик поставила система: оператор ничего не
+// решал, у него кончилось время. Подписать одним именем значило бы соврать
+// дважды в одну сторону.
 router.post('/:id/wrapup-timeout', async (req, res) => {
     const { employeeId } = req.body || {};
     if (!employeeId) {
@@ -389,15 +399,28 @@ router.post('/:id/wrapup-timeout', async (req, res) => {
                 return { code: 409, error: 'Лид уже не закреплён за вами — введённые данные не сохранены' };
             }
 
+            // Набранное оператором — под его именем и его же правкой.
             const values = CARD_FIELD_COLUMNS.map(([key]) => normalizeValue(key, req.body[key]));
             const setClauses = CARD_FIELD_COLUMNS.map(([, col], i) => `${col} = $${i + 1}`);
             values.push(req.params.id);
             await client.query(
-                `UPDATE leads SET ${setClauses.join(', ')},
-                        opened_at = NULL, partially_filled = true, updated_at = NOW()
+                `UPDATE leads SET ${setClauses.join(', ')}, updated_at = NOW()
                   WHERE id = $${values.length}`,
                 values
             );
+            // А закрытие — под именем системы и общим на оба пути куском кода.
+            //
+            // ⚠ ОДНОГО `runAsService` ЗДЕСЬ МАЛО, и это не видно чтением. Триггер
+            // журнала читает настройки СОЕДИНЕНИЯ, а кладутся они при взятии
+            // соединения из пула — то есть до транзакции. Смена автора в памяти
+            // процесса на уже взятое соединение не действует, и закрытие ушло бы
+            // в журнал под именем оператора. Поэтому настройки переставляются
+            // явно, а после — возвращаются: соединение уйдёт обратно в пул.
+            await auditContext.runAsService('Система', async () => {
+                await applyAuditSettings(client);
+                await closeByTimeout(client, 'l.id = $2', [req.params.id]);
+            });
+            await applyAuditSettings(client);
             return { code: 200 };
         });
     } catch (err) {
