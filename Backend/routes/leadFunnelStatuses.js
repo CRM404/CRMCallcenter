@@ -71,7 +71,8 @@ router.get('/', async (req, res) => {
         const [result, recallRules] = await Promise.all([
             pool.query(
                 `SELECT id, stage_number, stage_name, status_name, sort_order,
-                        auto_recall, requires_call_time, releases_lead, mark
+                        auto_recall, requires_call_time, releases_lead, mark,
+                        is_system, awaits_manager
                  FROM lead_funnel_statuses ORDER BY stage_number, sort_order`
             ),
             fetchAutoRecallRules(pool)
@@ -92,6 +93,13 @@ router.get('/', async (req, res) => {
                 // Заведена заходом 1, а отдавать её понадобилось только сейчас:
                 // до захода 4 её никто не показывал и не правил.
                 mark: r.mark,
+                // Два признака захода 6, и оба про поведение, а не про вид.
+                // `isSystem` — статус ставит система, человек его выбрать не
+                // может. `awaitsManager` — по такому статусу лид дальше не
+                // двинется, пока руководитель не вмешается; именно этот смысл
+                // экран рисует красным, и решает это экран, а не колонка.
+                isSystem: r.is_system,
+                awaitsManager: r.awaits_manager,
                 // null — по этому статусу система не перезванивает: правила нет
                 // либо событие целиком не годно к работе.
                 recallMaxAttempts: rule ? rule.maxAttempts : null,
@@ -102,6 +110,82 @@ router.get('/', async (req, res) => {
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: 'Не удалось получить список статусов воронки' });
+    }
+});
+
+// GET /api/lead-funnel-statuses/stages — этапы с описаниями
+//
+// СТОИТ ВЫШЕ `PUT /:id` НАМЕРЕННО, и то же самое ниже: иначе слово «stages»
+// уедет в `:id` как идентификатор. Тот же образец, что у `/list-for-manager` в
+// маршруте сотрудников.
+router.get('/stages', async (req, res) => {
+    try {
+        const result = await pool.query(
+            `SELECT g.stage_number, g.description,
+                    (SELECT s.stage_name FROM lead_funnel_statuses s
+                      WHERE s.stage_number = g.stage_number LIMIT 1) AS stage_name,
+                    EXISTS (SELECT 1 FROM lead_funnel_statuses s
+                             WHERE s.stage_number = g.stage_number AND s.is_system) AS is_system
+               FROM lead_funnel_stages g
+              ORDER BY g.stage_number`);
+        res.json(result.rows.map((r) => ({
+            stageNumber: r.stage_number,
+            // Имя этапа по-прежнему живёт в строках статусов, а не здесь:
+            // разбор — в схеме, у объявления таблицы.
+            stageName: r.stage_name,
+            description: r.description,
+            // Системный этап — тот, в котором лежат системные статусы. Отдельного
+            // признака у этапа нет: два места, отвечающих на один вопрос,
+            // разошлись бы на первой же правке.
+            isSystem: r.is_system,
+            editable: r.is_system
+        })));
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Не удалось получить этапы воронки' });
+    }
+});
+
+// PUT /api/lead-funnel-statuses/stages/:number { description }
+//
+// ПРАВКУ РАЗРЕШАЕТ СЕРВЕР, А НЕ ТОЛЬКО ЭКРАН (требование куратора). Проверка,
+// живущая в разметке кнопки, — это не запрет, а просьба: тот же адрес доступен
+// из адресной строки, и «правится только у системного этапа» обязано держаться
+// при любом пути сюда.
+//
+// ОПИСАНИЕ ОБЯЗАТЕЛЬНО, ПРЕДЕЛА ДЛИНЫ НЕТ. Пустое описание означало бы этап без
+// объяснения, то есть поле без причины, — а `maxlength` в проекте нет ни в
+// одном разделе, и заводить его здесь ради единственного поля значит придумать
+// правило, которого не существует.
+router.put('/stages/:number', async (req, res) => {
+    const stageNumber = Number(req.params.number);
+    const description = String((req.body && req.body.description) || '').trim();
+    if (!Number.isInteger(stageNumber)) {
+        return res.status(400).json({ error: 'Не указан этап' });
+    }
+    if (!description) {
+        return res.status(400).json({ error: 'Опишите этап: без описания непонятно, что делают его статусы' });
+    }
+    try {
+        const stage = await pool.query(
+            `SELECT g.stage_number,
+                    EXISTS (SELECT 1 FROM lead_funnel_statuses s
+                             WHERE s.stage_number = g.stage_number AND s.is_system) AS is_system
+               FROM lead_funnel_stages g WHERE g.stage_number = $1`, [stageNumber]);
+        if (stage.rows.length === 0) {
+            return res.status(404).json({ error: 'Такого этапа нет' });
+        }
+        if (!stage.rows[0].is_system) {
+            return res.status(400).json({
+                error: 'Описание правится только у системного этапа: остальные объясняет их состав'
+            });
+        }
+        await pool.query('UPDATE lead_funnel_stages SET description = $1 WHERE stage_number = $2',
+            [description, stageNumber]);
+        res.json({ stageNumber, description });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Не удалось сохранить описание этапа' });
     }
 });
 

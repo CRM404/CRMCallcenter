@@ -139,7 +139,12 @@ function isoDate(value) {
 
 async function readEvents(db) {
     const [events, rules, pairs, offers, employees] = await Promise.all([
-        db.query('SELECT kind, enabled, window_from, window_to, wait_seconds FROM call_events ORDER BY kind'),
+        db.query(
+            `SELECT e.kind, e.enabled, e.window_from, e.window_to, e.wait_seconds,
+                    e.wrapup_status_id, s.status_name AS wrapup_status_name
+               FROM call_events e
+               LEFT JOIN lead_funnel_statuses s ON s.id = e.wrapup_status_id
+              ORDER BY e.kind`),
         db.query(
             `SELECT r.id, r.funnel_status_id, r.interval_minutes, r.max_attempts, r.after_limit_status_id,
                     s.status_name, s.stage_number, s.stage_name,
@@ -250,6 +255,12 @@ async function readEvents(db) {
         },
         wrapup: {
             enabled: one('wrapup').enabled,
+            // Целевой статус тайм-аута — ПОЛЕ СОБЫТИЯ, а не поиск по имени
+            // (решение куратора В-2). Показывается строкой: правку его владелец
+            // не заказывал, и открывать её «заодно» значило бы завести
+            // поведение, которого никто не просил.
+            statusId: one('wrapup').wrapup_status_id || null,
+            statusName: one('wrapup').wrapup_status_name || null,
             pairs: pairs.rows.map((r) => ({
                 id: r.id,
                 lineType: r.line_type,
