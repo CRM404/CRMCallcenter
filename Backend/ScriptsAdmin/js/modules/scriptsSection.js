@@ -441,6 +441,19 @@ const STATUS_PROPS = [
     { key: 'requiresCallTime', label: 'спросит время перезвона' }
 ];
 
+// ⚠ ДВА ПРИЗНАКА ЗАХОДА 6 — ТОЛЬКО ПИЛЮЛЯМИ, И ОТДЕЛЬНЫМ ПЕРЕЧНЕМ. Положи я их
+// в STATUS_PROPS, они приехали бы и в окно статуса галочками — а решение
+// владельца 106 говорит: «руководитель признак „системный" не переключает».
+// Показать и дать править — разные вещи, и разводит их именно этот второй
+// список, а не проверка внутри окна.
+//
+// СЛОВА ПРО ПОВЕДЕНИЕ, как у двух прежних. «Системный» — свойство, а не
+// последствие, поэтому «ставит система» (паспорт Р11 редакции 7).
+const SYSTEM_PILLS = [
+    { key: 'isSystem', label: 'ставит система' },
+    { key: 'awaitsManager', label: 'ждёт решения руководителя' }
+];
+
 // Последствие каждой галочки — словами, а не именем колонки. Условие паспорта
 // Р11: галочка без написанного последствия — это предложение угадать.
 const PROP_HINTS = {
@@ -473,9 +486,22 @@ function statusesWord(count) {
 async function loadFunnelStatuses(state) {
     if (state.funnelStatuses !== null) return;
     try {
-        const list = await state.storage.fetchFunnelStatuses();
+        // ДВА ЗАПРОСА ПАРАЛЛЕЛЬНО, А НЕ ДРУГ ЗА ДРУГОМ: они независимы, и
+        // последовательная пара удвоила бы ожидание на ровном месте.
+        //
+        // ⚠ ОПИСАНИЕ ЭТАПОВ — НЕ ПОВОД НЕ ПОКАЗАТЬ СПИСОК. Упади запрос этапов —
+        // вкладка обязана открыться и работать: правится описание у одного этапа
+        // из восьми, а читают здесь пятьдесят одну строку справочника.
+        const [list, stages] = await Promise.all([
+            state.storage.fetchFunnelStatuses(),
+            state.storage.fetchFunnelStages().catch((err) => {
+                if (!isAbort(err)) console.warn('[статусы] Этапы не прочитаны:', err.message);
+                return [];
+            })
+        ]);
         if (state.destroyed) return;
         state.funnelStatuses = list;
+        state.funnelStages = stages;
         $(state, 'tab-statuses-count').textContent = list.length;
     } catch (err) {
         if (!isAbort(err)) state.ctx.toast(err.message, 'error');
@@ -496,6 +522,17 @@ function renderStatuses(state) {
         stage.items.push(s);
     });
 
+    // Описание и право правки приезжают со своего маршрута и прикладываются к
+    // уже собранным этапам. Не приехали вовсе — коробки рисуются как прежде:
+    // описания нет, карандаша нет, поле заведения на месте.
+    (state.funnelStages || []).forEach((info) => {
+        const stage = stages.find((x) => x.number === info.stageNumber);
+        if (!stage) return;
+        stage.description = info.description;
+        stage.editable = info.editable;
+        stage.isSystem = info.isSystem;
+    });
+
     // ПЛАШКА СЧИТАЕТ НЕРАЗМЕЧЕННЫЕ. Пока они есть — она про разметку; кончились
     // — остаётся одна фраза про то, что список правится. Отдельного места для
     // этого числа не нужно: чипов-счётчиков на вкладке нет по решению редакции 3.
@@ -513,7 +550,7 @@ function renderStatuses(state) {
             // Свойство стоит СРАЗУ ЗА ИМЕНЕМ, а не отдельной колонкой: свойства
             // есть у пяти статусов из пятидесяти, и колонка пустовала бы в
             // сорока пяти строках из пятидесяти.
-            const pills = STATUS_PROPS
+            const pills = STATUS_PROPS.concat(SYSTEM_PILLS)
                 .filter((prop) => item[prop.key])
                 .map((prop) => `<span class="ui-pill ui-pill--mute">${prop.label}</span>`)
                 .join('');
@@ -552,14 +589,37 @@ function renderStatuses(state) {
                 <div class="ui-field__error" data-role="status-add-error-${stage.number}" hidden></div>
             </div>
         `;
+        // ⚠ СТРОКА СЛОВАМИ, А НЕ ПУСТОЕ МЕСТО. Поле заведения стоит в семи
+        // коробках из восьми; его молчаливое отсутствие в восьмой читается как
+        // поломка или как «мне не дали прав». То же правило, по которому в Р12
+        // каждая неработающая строка называет свою причину.
+        const systemNote = `
+            <p class="scr-card__text">Статусы этого этапа заводит система: вручную сюда не добавляют.</p>
+        `;
+        // Описание — МЕЖДУ шапкой и списком: оно объясняет, что делают статусы
+        // ниже. Под списком оно объясняло бы прочитанное задним числом.
+        const text = stage.description
+            ? `<p class="scr-card__text">${escapeHtml(stage.description)}</p>`
+            : '';
+        // Карандаш — только там, где сервер правку РАЗРЕШАЕТ. Кнопка, которая
+        // всегда отказывает, хуже отсутствующей.
+        const pencil = stage.editable
+            ? `<button type="button" class="ui-btn ui-btn--icon ui-btn--ghost"
+                       data-action="stage-edit" data-stage="${stage.number}"
+                       aria-label="Описание этапа ${stage.number} · ${escapeHtml(stage.name)}">
+                   <svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-edit"></use></svg>
+               </button>`
+            : '';
         return `
             <div class="scr-card">
                 <div class="scr-card__head">
                     <h3 class="scr-card__title">${stage.number} · ${escapeHtml(stage.name)}</h3>
                     <span class="scr-card__sub">${stage.items.length} ${statusesWord(stage.items.length)}</span>
+                    ${pencil}
                 </div>
+                ${text}
                 <div class="scr-statuses">${rows}</div>
-                ${add}
+                ${stage.isSystem ? systemNote : add}
             </div>
         `;
     }).join('');
@@ -571,6 +631,10 @@ function renderStatuses(state) {
 // значение, которого в базе нет.
 async function reloadStatuses(state) {
     state.funnelStatuses = null;
+    // Этапы обнуляются вместе со статусами: описание правится в том же окне,
+    // и оставь я старое значение — экран показал бы прежний текст после
+    // успешного сохранения.
+    state.funnelStages = null;
     await loadFunnelStatuses(state);
     if (state.destroyed || state.funnelStatuses === null) return;
     renderStatuses(state);
@@ -647,6 +711,79 @@ async function addStatus(state, button) {
  *
  * ЭТАП — ПОДПИСЬ, А НЕ ПОЛЕ: перенести статус между этапами экран не даёт.
  */
+/**
+ * Окно «Описание этапа» — правит один абзац у одного этапа из восьми.
+ *
+ * ПОЧЕМУ ОКНО, А НЕ ПОЛЕ, ОТКРЫТОЕ ВСЕГДА. На эту вкладку приходят ЧИТАТЬ:
+ * пятьдесят одна строка справочника против одного правимого абзаца. Открытое
+ * поле превратило бы справочник в форму и подставило бы описание под случайную
+ * правку. Раздел уже правит сущности окном и уже держит кнопку в шапке коробки —
+ * третьего приёма заводить незачем (паспорт Р11 редакции 7).
+ *
+ * ПОЧЕМУ КНОПКОЙ «Сохранить», А НЕ СРАЗУ. Пометка статуса сохраняется без
+ * кнопки, и это верно: там выбор из трёх значений. Текст в две-три фразы так
+ * сохранять нельзя — «сразу» у текста означает «на каждую букву» или «молча по
+ * уходу из поля».
+ */
+function openStageModal(state, stage) {
+    const body = document.createElement('div');
+    body.className = 'ui-form-grid ui-form-grid--single';
+    body.innerHTML = `
+        <div class="ui-field" data-role="text-field">
+            <label class="ui-field__label" for="scrStageText">Описание</label>
+            <textarea class="ui-field__control" id="scrStageText"
+                      rows="4">${escapeHtml(stage.description || '')}</textarea>
+            <div class="ui-field__error" data-role="text-error" hidden></div>
+            <div class="ui-field__hint">Кратко: что делает системный статус и в каком случае
+                проставляется.</div>
+        </div>
+    `;
+    const input = body.querySelector('#scrStageText');
+    const field = body.querySelector('[data-role="text-field"]');
+    const error = body.querySelector('[data-role="text-error"]');
+
+    const showError = (text) => {
+        error.textContent = text;
+        error.hidden = false;
+        field.classList.add('ui-field--error');
+        input.focus();
+        return false;
+    };
+
+    async function submit() {
+        const text = input.value.trim();
+        error.hidden = true;
+        field.classList.remove('ui-field--error');
+        // ПУСТОТУ ОТБИВАЕТ И СЕРВЕР — его отказ тоже проверен. Здесь она
+        // отбивается раньше только чтобы не гонять запрос ради заведомого «нет»;
+        // сам запрет живёт в маршруте, а не в этой строке.
+        if (!text) return showError('Опишите этап: без описания непонятно, что делают его статусы');
+        try {
+            await state.storage.updateStageDescription(stage.stageNumber, text);
+            if (state.destroyed) return true;
+            await reloadStatuses(state);
+            return true;
+        } catch (err) {
+            if (state.destroyed || isAbort(err)) return true;
+            return showError(err.message);
+        }
+    }
+
+    const modal = openModal({
+        title: 'Описание этапа',
+        sub: `${stage.stageNumber} · ${stage.stageName || ''}`.trim(),
+        body,
+        scope: state.panel,
+        size: 'narrow',
+        actions: [
+            { label: 'Отмена', variant: 'ghost', value: false },
+            { label: 'Сохранить', onClick: submit }
+        ]
+    });
+    input.focus();
+    return modal;
+}
+
 function openStatusModal(state, status, stage) {
     const isNew = !status;
     const body = document.createElement('div');
@@ -675,6 +812,14 @@ function openStatusModal(state, status, stage) {
                     <div class="ui-note__text">Статус заводится неразмеченным: пока не разметите его
                     окончательным или промежуточным, целевым в автоперезвоне выбрать его будет нельзя.
                     Разметка — в самом списке, одним движением на строку.</div>
+                </div>
+            </div>` : ''}
+        ${!isNew && status.isSystem ? `
+            <div class="ui-note">
+                <svg class="ui-ic ui-ic--sm ui-note__icon" aria-hidden="true"><use href="#ui-ic-info"></use></svg>
+                <div class="ui-note__body">
+                    <div class="ui-note__text">Этот статус ставит система. Переименовать его можно —
+                    код ищет статус по записи, а не по названию; но под новым именем его увидят все.</div>
                 </div>
             </div>` : ''}
     `;
@@ -779,8 +924,14 @@ async function removeStatus(state, status, stage) {
                 scope: state.panel,
                 sub: `Статус «${status.statusName}»`,
                 lead: 'Статус держат:',
+                // К244. ЧЕТВЁРТОЕ МЕСТО НАЗВАНО ОТДЕЛЬНО, И ЭТО НЕ ПОЛНОТА РАДИ
+                // ПОЛНОТЫ. Целевой статус пост-обработки — единственная помеха,
+                // которую нельзя убрать НИ С ОДНОГО экрана: поле задаётся
+                // выкаткой. Не сказав этого, мы отправляли человека искать
+                // место, которого нет, — и он искал бы его дольше всего.
                 tail: 'Лидов переводят на другой статус в разделе «Лиды», наборы правят в карточке лида, '
-                    + 'автоперезвон — на вкладке «События». Пока цела хотя бы одна помеха, статус остаётся на месте.',
+                    + 'автоперезвон — на вкладке «События». Целевой статус пост-обработки с экрана не '
+                    + 'меняется: он задаётся выкаткой. Пока цела хотя бы одна помеха, статус остаётся на месте.',
                 blockers: err.blockers
             });
             return false;
@@ -839,6 +990,14 @@ function bindEvents(state) {
         const statusAdd = target.closest('[data-action="status-add"]');
         if (statusAdd) {
             await withBusy(statusAdd, () => addStatus(state, statusAdd));
+            return;
+        }
+        const stageEdit = target.closest('[data-action="stage-edit"]');
+        if (stageEdit) {
+            const number = Number(stageEdit.dataset.stage);
+            const info = (state.funnelStages || []).find((s) => s.stageNumber === number);
+            const named = (state.funnelStatuses || []).find((s) => s.stageNumber === number);
+            if (info) openStageModal(state, { ...info, stageName: info.stageName || (named && named.stageName) });
             return;
         }
         const statusEdit = target.closest('[data-action="status-edit"]');

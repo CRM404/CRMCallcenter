@@ -30,6 +30,16 @@ export function createStorage(api) {
         setFunnelStatusMark: (id, mark) => api.put(`/lead-funnel-statuses/${id}/mark`, { mark }),
         deleteFunnelStatus: (id) => api.del(`/lead-funnel-statuses/${id}`),
 
+        // ЭТАПЫ — СВОИМ ЗАПРОСОМ, А НЕ ВЫВОДОМ ИЗ СПИСКА СТАТУСОВ. Разбивку по
+        // этапам вкладка и раньше собирала из самих статусов, и это верно: имя
+        // этапа живёт в их строках. Но описание живёт у ЭТАПА, и вывести его из
+        // статусов нельзя ничем — значит нужен второй запрос, а не догадка.
+        // Он же приносит `editable`: право правки решает сервер, экран его не
+        // вычисляет (`routes/leadFunnelStatuses.js:121`).
+        fetchFunnelStages: () => api.get('/lead-funnel-statuses/stages'),
+        updateStageDescription: (number, description) =>
+            api.put(`/lead-funnel-statuses/stages/${number}`, { description }),
+
         fetchScriptNodes: (scriptId) => api.get(`/admin/scripts/${scriptId}/nodes`),
         createScriptNode: (scriptId, data) => api.post(`/admin/scripts/${scriptId}/nodes`, data),
         updateScriptNode: (nodeId, data) => api.put(`/admin/script-nodes/${nodeId}`, data),
