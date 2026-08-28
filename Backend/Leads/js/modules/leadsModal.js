@@ -135,7 +135,28 @@ export function fillFunnelStatusSelect(select, statuses, includeEmpty, options =
     // Системный статус в поле — красным (решение владельца: «просто красным
     // отображается в поле статус»). Красит СЕЛЕКТ, а не пункт списка: цвет
     // пункта браузеры красят по-разному, а поле выглядит одинаково везде.
-    const current = statuses.find((s) => String(s.id) === keep);
+    // Значение передаётся ЯВНО: на этом шаге оно селекту ещё не присвоено —
+    // его ставит вызывающий, после наполнения. Первая редакция читала
+    // `select.value`, и поле открывалось некрашеным; поймано прогоном.
+    paintSystemStatus(select, statuses, keep);
+}
+
+/**
+ * К247 · Красное у поля статуса — ОДНИМ УСЛОВИЕМ НА ДВА МЕСТА.
+ *
+ * Прежде класс вешался только при наполнении списка, по значению на тот
+ * момент. Человек менял статус руками — поле оставалось красным до
+ * сохранения и переоткрытия: экран показывал состояние, которого в поле уже
+ * не было.
+ *
+ * Условие вынесено, а не переписано вторым разом: две редакции одного правила
+ * совпадают в день написания и расходятся в первый же день правки.
+ */
+function paintSystemStatus(select, statuses, id) {
+    // Без явного значения берётся то, что в поле сейчас, — это случай
+    // слушателя смены. С явным — случай наполнения списка.
+    const want = id === undefined || id === null ? select.value : String(id);
+    const current = (statuses || []).find((s) => String(s.id) === String(want));
     select.classList.toggle('ld-status--system', Boolean(current && current.isSystem));
 }
 
@@ -534,6 +555,10 @@ export function createLeadModal(root, deps) {
         $('[data-role="tab-main"]').addEventListener('click', () => switchTab('main'));
         $('[data-role="tab-offers"]').addEventListener('click', () => switchTab('offers'));
         $('[data-role="tab-history"]').addEventListener('click', () => switchTab('history'));
+        // К247 · Красное у поля статуса пересчитывается ПРИ СМЕНЕ, а не только
+        // при открытии карточки. Слушатель здесь, рядом с остальными: список
+        // статусов у окна один, и второго места, где он меняется, нет.
+        $('#ldFunnelStatus').addEventListener('change', (e) => paintSystemStatus(e.target, funnelStatuses));
         $('#ldLine').addEventListener('change', syncEmployeesByLine);
         $('#ldPurchaseMethod').addEventListener('change', handleCascadeChange);
         $('#ldClientType').addEventListener('change', handleCascadeChange);

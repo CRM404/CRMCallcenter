@@ -241,7 +241,17 @@ const RICH_CELLS = {
             ? '<span class="ui-table__sub">заполнена частично</span>'
             : '';
         if (!l.funnelStatusId) return partial || null;
-        return `<span class="ui-pill ui-pill--mute">${escapeHtml(l.statusName)}</span>${partial}`;
+        // К245 · СИСТЕМНЫЙ СТАТУС — КРАСНЫЙ, решение владельца 106: «красным
+        // показывается только „Нет результата" — в карточке лида, СПИСКЕ ЛИДОВ
+        // и журнале звонка». Из трёх мест было построено одно.
+        //
+        // ЦВЕТ БЕРЁТСЯ ГОТОВЫМ КЛАССОМ СЛОЯ, а не заводится своим правилом:
+        // `.ui-pill--bad` стоит на `--ui-color-off-ink` (chip.css:73) — том же
+        // токене, который корректировка К237 назначила красным этого смысла и
+        // которым красится поле статуса в карточке (leads-light.css:155).
+        // Своё правило здесь означало бы третью редакцию одного цвета.
+        const tone = l.statusIsSystem ? 'ui-pill--bad' : 'ui-pill--mute';
+        return `<span class="ui-pill ${tone}">${escapeHtml(l.statusName)}</span>${partial}`;
     },
     // Линия — обычный текст со значком направления, без рамки-пилюли (М23).
     lineType: (l) => (l.lineType

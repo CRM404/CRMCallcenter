@@ -138,6 +138,13 @@ const BASE_SELECT = `
            COALESCE(NULLIF(s.lead_source, ''), s.root_source) AS source_name,
            CASE WHEN e.id IS NOT NULL THEN e.last_name || ' ' || e.first_name ELSE NULL END AS employee_name,
            fs.status_name, fs.stage_name, fs.stage_number,
+           -- ПРИЗНАК СИСТЕМНОГО СТАТУСА ЕДЕТ ВМЕСТЕ С ИМЕНЕМ (К245). Решение
+           -- владельца 106 требует красного в списке лидов, а отличить
+           -- системный статус экрану было нечем: наружу уходило одно имя.
+           -- Признак, а не сравнение имени: имена статусов стали правимыми
+           -- заходом 4, и поиск по названию сломался бы первым же
+           -- переименованием.
+           fs.is_system AS status_is_system,
            -- Скрипт, который увидит оператор ПРЯМО СЕЙЧАС: тот, чья пара
            -- содержит текущий статус лида. Не leads.script_id — в неё сервер
            -- больше не пишет, она ждёт снятия вместе с экраном (см. schema.sql).
@@ -201,6 +208,7 @@ function rowToLead(row) {
         employeeName: row.employee_name,
         funnelStatusId: row.funnel_status_id,
         statusName: row.status_name,
+        statusIsSystem: row.status_is_system,
         // Пометка «заполнена частично» (часть 9, заход 5). Ставит её система,
         // когда пост-обработка закрыла карточку по времени: работа сделана,
         // просто не вся. Своей колонки в списке у неё нет — подстрокой под
