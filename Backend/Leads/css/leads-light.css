@@ -129,6 +129,23 @@
 .leads-wrap .ui-field--error .pick-empty { display: none; }
 .leads-wrap .lead-script-add + .ui-note { margin-top: var(--ui-space-4); }
 
+/* Системный статус в поле — красным (решение владельца: «просто красным
+   отображается в поле статус»). Красит САМО ПОЛЕ, а не пункт списка: цвет
+   пункта <option> браузеры красят по-разному или не красят вовсе, а поле
+   выглядит одинаково везде.
+
+   Цвет — токен опасного из слоя, тот же, что у .ui-pill--bad: красный в проекте
+   означает «работать нельзя», и здесь именно это — лид дальше не двинется, пока
+   руководитель не вмешается.
+
+   ⚠ ВИД ЖДЁТ ПАСПОРТА. Р11 редакции 6 на момент правки не выпущен: дизайн-сессия
+   ждёт дозаказа куратора. Здесь сделано ровно то, что сказал владелец, и ничего
+   сверх — рамку, значок и жирность не заводил намеренно. */
+.leads-wrap .ld-status--system {
+    color: var(--ui-color-danger);
+    font-weight: var(--ui-weight-bold);
+}
+
 /* Офферы: первый + счётчик остальных */
 .leads-wrap .offer-more { display: inline-block; margin-left: 6px; font-size: 11px; font-weight: 700; color: var(--ink-soft); background: rgba(96, 112, 148, .14); padding: 2px 7px; border-radius: 20px; cursor: default; }
 
