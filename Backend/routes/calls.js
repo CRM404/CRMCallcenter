@@ -342,8 +342,27 @@ router.get('/', async (req, res) => {
                     (SELECT string_agg(sg.transfer_offer_name, ', ' ORDER BY sg.position)
                        FROM call_segments sg
                       WHERE sg.call_id = c.id AND sg.transfer_offer_name IS NOT NULL) AS transfer_offers,
-                    e.last_name, e.first_name, e.middle_name, e.line_type
+                    e.last_name, e.first_name, e.middle_name, e.line_type,
+                    -- ПРИЗНАК «СТАТУС ЖДЁТ РЕШЕНИЯ РУКОВОДИТЕЛЯ» ЕДЕТ ВМЕСТЕ С
+                    -- ИМЕНЕМ (К246, паспорт Р1 редакции 11, состояние 17в). Тот
+                    -- же приём, что в списке лидов (fs.is_system AS
+                    -- status_is_system, routes/leadsAdmin.js:147), — но по
+                    -- ДРУГОЙ колонке: красным помечается один статус, а не оба
+                    -- системных (К260). «Не ответил после N перезвонов» тоже
+                    -- системный, и по нему работа кончена — тревоги в нём нет.
+                    --
+                    -- СОЕДИНЕНИЕ ПО ИДЕНТИФИКАТОРУ, А НЕ ПО ИМЕНИ. Имя лежит в
+                    -- звонке снимком и переживает переименование статуса; когда
+                    -- статус удалён, calls.funnel_status_id обнуляется
+                    -- (ON DELETE SET NULL), признак приходит пустым, и пилюля
+                    -- остаётся нейтральной — состояние 17б. Красить по имени
+                    -- значило бы гадать, ждал ли он тогда руководителя.
+                    --
+                    -- ⚠ ОБРАТНЫХ КАВЫЧЕК ЗДЕСЬ БЫТЬ НЕ МОЖЕТ: этот текст лежит
+                    -- ВНУТРИ шаблонной строки, и первая же закрыла бы её.
+                    fs.awaits_manager AS status_awaits_manager
              ${from}
+              LEFT JOIN lead_funnel_statuses fs ON fs.id = c.funnel_status_id
               WHERE ${listWhere}
               ORDER BY c.started_at DESC NULLS LAST, c.id DESC
               LIMIT ${limit}`,
@@ -371,6 +390,9 @@ router.get('/', async (req, res) => {
             waitSeconds: r.wait_seconds,
             talkSeconds: r.talk_seconds,
             funnelStatus: r.funnel_status_name,
+            // Пустым он приходит в двух случаях, и оба законны: статуса у
+            // звонка не было вовсе и статус с тех пор удалён (состояние 17б).
+            funnelStatusAwaitsManager: r.status_awaits_manager,
             notes: r.notes_snapshot,
             // Пометка — СНИМОК звонка, а не сегодняшнее состояние лида. Иначе
             // запись о прошлом разговоре меняла бы смысл каждый раз, когда
