@@ -257,9 +257,17 @@ function button(className, text, iconName) {
     return node;
 }
 
-/** Поле формы: метка, орган управления, место под ошибку и подсказка. */
-function fieldBox(label, control, { required = false, hint = '', wide = false } = {}) {
-    const box = el('div', `ui-field${wide ? ' ui-field--wide' : ''}`);
+/**
+ * Поле формы: метка, орган управления, место под ошибку и подсказка.
+ *
+ * `short` — четвёртый ключ рядом с `wide`, а не отдельный помощник: `--wide` и
+ * `--short` объявлены соседними модификаторами одного `.ui-field`
+ * (`field.css:299` и `:309`), и разводить одну природу по двум помощникам
+ * значило бы собирать её двумя способами. Сужается ОРГАН УПРАВЛЕНИЯ, а не
+ * ячейка сетки: метка и подсказка читаются во всю ширину, а раскладка не едет.
+ */
+function fieldBox(label, control, { required = false, hint = '', wide = false, short = false } = {}) {
+    const box = el('div', `ui-field${wide ? ' ui-field--wide' : ''}${short ? ' ui-field--short' : ''}`);
     if (label) {
         box.appendChild(el('label', `ui-field__label${required ? ' ui-field__label--required' : ''}`, label));
     }
@@ -562,11 +570,13 @@ export function createEventsTab({ pane, api, scope }) {
         const windowGrid = el('div', 'ui-form-grid');
         const fromInput = input('time', data.windowFrom || DEFAULT_WINDOW.from, 'Обзвон с');
         const toInput = input('time', data.windowTo || DEFAULT_WINDOW.to, 'Обзвон до');
-        // ПОДСКАЗКИ У ЭТИХ ДВУХ ПОЛЕЙ НЕТ, И ЭТО К232. `.ui-form-grid` равняет
-        // поля по низу, а подсказка стоит ПОД органом управления — поле с
-        // подсказкой поднимало свой ввод над соседним на 37 px, и две половины
-        // одного окна стояли на разных строках. Часовой пояс — свойство окна, а
-        // не поля: он сказан в плашке под таблицей.
+        // ПОДСКАЗКИ У ЭТИХ ДВУХ ПОЛЕЙ НЕТ. Прежний довод — «сетка равняет поля
+        // по низу, и поле с подсказкой поднимает свой ввод над соседним на
+        // 37 px» — СНЯТ К253: с 29.08.2026 `.ui-form-grid` равняет по верху
+        // (`field.css:297`), и подсказка соседа больше не двигает. Решение
+        // остаётся, но держится другим: часовой пояс — свойство окна, а не
+        // поля, и сказан он в плашке под таблицей. Два поля времени подписывать
+        // им по отдельности значило бы повторить одно и то же дважды.
         windowGrid.appendChild(fieldBox('Обзвон с', fromInput, { required: true }));
         windowGrid.appendChild(fieldBox('до', toInput, { required: true }));
         body.appendChild(windowGrid);
@@ -948,9 +958,11 @@ export function createEventsTab({ pane, api, scope }) {
             phone.dataset.role = 'phone';
             // ПОЛЕ С ПОДСКАЗКОЙ ЗАНИМАЕТ СТРОКУ СЕТКИ ЦЕЛИКОМ (К232) — то же
             // правило, что в «CPA-сетях» (`cpaApp.js`, `wide` по умолчанию).
-            // Сетка равняет поля по низу, а подсказка стоит под органом
-            // управления: без `--wide` соседнее «Разрешён с» уезжало на 54 px
-            // ниже. Заодно пара «Разрешён с … до» встаёт в одну строку.
+            // ⚠ Прежний довод — «сетка равняет по низу, и без `--wide` соседнее
+            // „Разрешён с“ уезжает на 54 px ниже» — СНЯТ К253: сетка равняет по
+            // верху (`field.css:297`). Само `--wide` остаётся, и по своим
+            // причинам: подсказка укладывается в одну строку и не удлиняет
+            // окно, а пара «Разрешён с … до» встаёт в одну строку рядом.
             //
             // Про московское время здесь больше не сказано: фраза повторялась
             // столько раз, сколько заведено офферов. Часовой пояс — свойство
@@ -972,7 +984,13 @@ export function createEventsTab({ pane, api, scope }) {
             grid.appendChild(fieldBox('до', to, { required: true }));
             const wait = input('number', row.waitSeconds, 'Ожидание, секунд');
             wait.dataset.role = 'wait';
-            grid.appendChild(fieldBox('Ожидание', withUnit(wait, 'секунд'), { required: true }));
+            // ПОЛЕ УЗКОЕ (К255, макет редакции 2). Ожидание принимает 1..3600 —
+            // так его и проверяет сервер, `wholeNumber(row.waitSeconds, 1, 3600)`
+            // в `routes/callEvents.js`, — то есть не больше четырёх знаков, а
+            // занимало оно всю ячейку сетки: ровно тот случай, ради которого
+            // К253 и завела `.ui-field--short`. Ячейка при этом не сужается —
+            // сужается только орган управления, и раскладка не едет.
+            grid.appendChild(fieldBox('Ожидание', withUnit(wait, 'секунд'), { required: true, short: true }));
             const days = daysRow(row.weekdays);
             days.dataset.role = 'days';
             grid.appendChild(fieldBox('Дни недели', days, { required: true, wide: true }));
@@ -1022,7 +1040,9 @@ export function createEventsTab({ pane, api, scope }) {
             // иначе одно и то же число набирается в двух разных видах.
             const wait = input('number', row.waitSeconds, 'Ожидание, секунд');
             wait.dataset.role = 'wait';
-            grid.appendChild(fieldBox('Ожидание', withUnit(wait, 'секунд'), { required: true }));
+            // Узкое — как у оффера. Одно правило на оба перечня: иначе одно и
+            // то же число набирается в двух разных видах.
+            grid.appendChild(fieldBox('Ожидание', withUnit(wait, 'секунд'), { required: true, short: true }));
             const days = daysRow(row.weekdays);
             days.dataset.role = 'days';
             grid.appendChild(fieldBox('Дни недели', days, { required: true, wide: true }));
@@ -1096,7 +1116,12 @@ export function createEventsTab({ pane, api, scope }) {
             grid.appendChild(fieldBox('до', to, { required: true }));
             const wait = input('number', '', 'Ожидание, секунд');
             wait.dataset.role = 'wait';
-            grid.appendChild(fieldBox('Ожидание', withUnit(wait, 'секунд'), { required: true }));
+            // ТРЕТЬЕ МЕСТО ОДНОГО ПОЛЯ, и узкое оно здесь по той же причине.
+            // Сузить только в строке перечня значило бы развести одно поле
+            // одного события по двум окнам: до сужения оно стояло 265,8 в
+            // строке и 282,8 здесь — 17 px разницы, измеренных, а не
+            // предположенных (дизайн-сессия, 30.08.2026).
+            grid.appendChild(fieldBox('Ожидание', withUnit(wait, 'секунд'), { required: true, short: true }));
             const days = daysRow([]);
             days.dataset.role = 'days';
             grid.appendChild(fieldBox('Дни недели', days, { required: true, wide: true }));
@@ -1318,10 +1343,10 @@ export function createEventsTab({ pane, api, scope }) {
                 body,
                 scope,
                 size: 'wide',
-                // Та же дверь на ключе, что у «Перевода» (`:516-517`): цена
-                // промаха мимо окна равна всему вводу, а здесь она выше — окно
-                // стоит поверх «Перевода», и две разные двери у двух окон одного
-                // события были бы разнобоем.
+                // Та же дверь на ключе, что у окна события, и тем же доводом:
+                // цена промаха мимо окна равна всему вводу. Здесь она выше —
+                // окно стоит ПОВЕРХ «Перевода», и две разные двери у двух окон
+                // одного события были бы разнобоем.
                 scrimClose: false,
                 actions: [
                     { label: 'Отмена', variant: 'ghost', value: false },
