@@ -129,7 +129,7 @@
              сотрудников нет, даже когда их четырнадцать и просто не подошли под
              отбор — и звал завести человека, который уже заведён. Тексты ставит
              employeesTable.js по признаку «есть ли активные фильтры». -->
-        <div class="ui-empty ui-empty--inline" data-role="empty-state" hidden>
+        <div class="ui-empty" data-role="empty-state" hidden>
             <!-- Значок появляется только у пустого архива (паспорт Р7): у
                  «никого нет» и «ничего не нашлось» его не было и раньше. -->
             <span data-role="empty-icon" hidden></span>
@@ -248,13 +248,26 @@
                         <!-- Блок «График работы»: «Дни» — справочная запись о
                              режиме, автоматика её не читает; «Время смены» —
                              одно поле «начало-конец», разбирается на две
-                             колонки TIME (dialog.md, Б1). -->
-                        <div class="ui-field ui-field--wide schedule-field" data-role="work-days-field">
+                             колонки TIME (dialog.md, Б1).
+
+                             К257: оба поля были во всю ширину сетки, а значения
+                             у них короткие — «5/2» и «09:00-18:00». Теперь пара
+                             стоит в одном ряду и оба поля узкие (`--short`,
+                             120). Ставить их на один уровень отдельным правилом
+                             не надо: сетка формы равняет поля по верху, и
+                             прыжок соседа при заполнении времени пропал вместе
+                             с выравниванием по низу.
+
+                             ПОДСКАЗКА «ДНЕЙ» ЖИВЁТ В ДВУХ МЕСТАХ, и правится
+                             тоже в двух: статичная здесь и рабочая в
+                             `employeesCard.js` (WORK_SCHEDULE_HINT), которая
+                             перетирает эту при первой же перерисовке. -->
+                        <div class="ui-field ui-field--short schedule-field" data-role="work-days-field">
                             <label class="ui-field__label" for="empWorkSchedule">Дни</label>
                             <input class="ui-field__control" type="text" id="empWorkSchedule" placeholder="5/2">
-                            <span class="ui-field__hint field-hint">Рабочих дней подряд и выходных подряд: 5/2, 3/3, 2/2, 4/2. Справочная запись: выходные при заполнении месяца отмечает администратор, из этого поля они не считаются.</span>
+                            <span class="ui-field__hint field-hint">Рабочих дней подряд и выходных подряд, например 5/2. Справочная запись: выходные месяца отсюда не считаются.</span>
                         </div>
-                        <div class="ui-field ui-field--wide schedule-field" data-role="shift-time-field">
+                        <div class="ui-field ui-field--short schedule-field" data-role="shift-time-field">
                             <label class="ui-field__label" for="empShiftTime">Время смены</label>
                             <input class="ui-field__control" type="text" id="empShiftTime" placeholder="09:00-18:00">
                             <span class="ui-field__hint field-hint">С минутами, 24 часа. Смена через полночь — 22:00-06:00.</span>
@@ -454,8 +467,14 @@
 
     <template data-role="departments-tpl">
             <div class="departments-list" data-role="departments-list"></div>
-            <div class="ui-empty ui-empty--inline" data-role="departments-empty" hidden>
-                <p class="ui-empty__text">Пока нет отделов. Добавьте первый!</p>
+            <!-- Состав дополнен заголовком (К252): здесь стояла одна строка без
+                 заголовка, а пустое состояние проекта — это заголовок с
+                 причиной и следующий шаг. Следующий шаг у этого места стоит
+                 отдельной строкой ввода сверху окна, поэтому кнопки внутри
+                 блока нет. -->
+            <div class="ui-empty" data-role="departments-empty" hidden>
+                <b class="ui-empty__title">Отделов пока нет</b>
+                <p class="ui-empty__text">Добавьте первый — отделы подставляются в карточку сотрудника и в отбор списка.</p>
             </div>
     </template>
 

@@ -560,9 +560,12 @@ function bindEvents(state) {
 
 // ---------------------------------------------------------------- окно оффера
 
-function fieldBlock({ label, name, control, hint, wide = true, required = false }) {
+// `short` — узкое поле: число или время, которому вся ячейка сетки не нужна
+// (К253). Ограничивается орган управления, а не ячейка: метка и подсказка
+// по-прежнему читаются во всю её ширину.
+function fieldBlock({ label, name, control, hint, wide = true, required = false, short = false }) {
     return `
-        <div class="ui-field${wide ? ' ui-field--wide' : ''}" data-field-box="${name}">
+        <div class="ui-field${wide ? ' ui-field--wide' : ''}${short ? ' ui-field--short' : ''}" data-field-box="${name}">
             <label class="ui-field__label${required ? ' ui-field__label--required' : ''}"${control.startsWith('<select') || control.startsWith('<input') || control.startsWith('<textarea') ? ` for="cpa-${name}"` : ''}>${escapeHtml(label)}</label>
             ${control}
             ${hint ? `<span class="ui-field__hint">${escapeHtml(hint)}</span>` : ''}
@@ -750,10 +753,17 @@ async function openOfferModal(state, offer, opts = {}) {
                   пустом»). Отказ без метки означал бы поле, которое молча не
                   сохраняется, — то же самое, что обещание без исполнения, только
                   в обратную сторону. */''}
-            ${fieldBlock({ label: 'Приоритет', name: 'priority', wide: false, required: true,
+            ${/* УЗКАЯ ПАРА В ОДИН РЯД (К253). Оба поля числовые, и обоим дан
+                  `--short`: без него поле на одну цифру занимало всю ячейку.
+                  На один уровень их ставит не эта строка, а слой — сетка формы
+                  равняет поля по верху; прежде «Лимит лидов» опускался на 16,7
+                  ниже «Приоритета», потому что у соседа подсказка в две строки,
+                  а низ у ячеек был общий. */''}
+            ${fieldBlock({ label: 'Приоритет', name: 'priority', wide: false, short: true, required: true,
                 hint: 'Число от 1 до 5, где 1 — высший. Решает, по какому офферу переводят лида.',
                 control: inputControl('priority', 'number', value.priority, '1') })}
-            ${fieldBlock({ label: 'Лимит лидов', name: 'leadLimit', wide: false, hint: 'На весь срок оффера; пусто — без лимита.',
+            ${fieldBlock({ label: 'Лимит лидов', name: 'leadLimit', wide: false, short: true,
+                hint: 'На весь срок оффера; пусто — без лимита.',
                 control: inputControl('leadLimit', 'number', value.leadLimit, '300') })}
         </div>`;
 

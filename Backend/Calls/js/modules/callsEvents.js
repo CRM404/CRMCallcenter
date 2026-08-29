@@ -277,7 +277,14 @@ function input(type, value, aria, small) {
     return node;
 }
 
-/** Поле с единицей измерения справа: «45» + «секунд». */
+/**
+ * Поле с единицей измерения справа: «45» + «секунд».
+ *
+ * ОСТАЛОСЬ ТОЛЬКО В ПЕРЕЧНЯХ «ПЕРЕВОДА», и это не остаток недоделки: там нет
+ * колонок, и подписать единицу больше негде. В таблицах «Автоперезвона» и
+ * «Пост-обработки» единица уехала в шапку колонки (К254, К256) — подпись рядом
+ * с полем не давала полю сжаться, и число вылезало из ячейки.
+ */
 function withUnit(control, unit) {
     const row = el('div', 'ui-field__row');
     row.appendChild(control);
@@ -562,11 +569,26 @@ export function createEventsTab({ pane, api, scope }) {
         // раздал ширины по содержимому: поле на три цифры стало самой широкой
         // колонкой окна, имя целевого статуса обрезалось, а пилюля с
         // последствием ломалась пополам. «Статус» забирает остаток.
+        //
+        // ЧИСЛА ПЕРЕМЕРЕНЫ ЗАНОВО (К256). Прежние 132 · 118 · 266 оставляли
+        // «Статусу» 106, и самое длинное имя вставало в три строки; на 130 оно
+        // встаёт в две, а три коротких — в одну. Больше 130 «Статусу» не даёт
+        // ничего до 207 — столько нужно, чтобы «Автоответчик / голосовая почта»
+        // встал в строку, а такой ширины в этой таблице нет.
+        //
+        // ЕДИНИЦА — В ШАПКЕ КОЛОНКИ, А НЕ В ЯЧЕЙКЕ. Подпись рядом с полем не
+        // давала полю сжаться, и `<input type="number">` занимал свои 164 px
+        // при заказанной колонке — 54 px наружу. Решение владельца по К254,
+        // и оно же применено здесь.
+        //
+        // `ui-table--fields` — ячейки с полями равняются по ВЕРХУ: у «Статуса
+        // после предела» под списком живёт подстрока-последствие, и общая для
+        // таблиц середина поднимала поля соседей на 16,5 px.
         const wrap = el('div', 'ui-table-wrap');
-        const table = el('table', 'ui-table zv-fixed');
+        const table = el('table', 'ui-table ui-table--fields zv-fixed');
         table.innerHTML = '<thead><tr>'
-            + '<th>Статус</th><th style="width:132px">Интервал</th>'
-            + '<th style="width:118px">Предел</th><th style="width:266px">Статус после предела</th>'
+            + '<th>Статус</th><th style="width:118px">Интервал, мин</th>'
+            + '<th style="width:100px">Предел</th><th style="width:274px">Статус после предела</th>'
             + '<th class="ui-table__acts" style="width:54px"></th></tr></thead>';
         const tbody = el('tbody');
         table.appendChild(tbody);
@@ -637,7 +659,8 @@ export function createEventsTab({ pane, api, scope }) {
             const intervalCell = el('td');
             const intervalInput = input('number', row.intervalMinutes, 'Интервал, минут', true);
             intervalInput.dataset.role = 'interval';
-            intervalCell.appendChild(fieldBox('', withUnit(intervalInput, 'мин')));
+            // Единица стоит в шапке колонки — «Интервал, мин» (К256).
+            intervalCell.appendChild(fieldBox('', intervalInput));
             tr.appendChild(intervalCell);
 
             const limitCell = el('td');
@@ -1173,12 +1196,18 @@ export function createEventsTab({ pane, api, scope }) {
         body.appendChild(statusBox);
 
         const wrap = el('div', 'ui-table-wrap');
-        const table = el('table', 'ui-table zv-fixed');
+        const table = el('table', 'ui-table ui-table--fields zv-fixed');
         // Ширины — та же К231. «Скрипт» забирает остаток: он единственное место
         // строки, где лежит длинный текст, а без правила ему доставалось ровно
         // столько же, сколько полю на две цифры.
+        //
+        // К254: «сек» ушло из ячейки в шапку колонки — решение владельца.
+        // Подпись рядом с полем не давала полю сжаться, и число вылезало из
+        // ячейки на 36 px. Колонка 140, а не 136: шапка «ДЛИТЕЛЬНОСТЬ, СЕК» —
+        // 113,4 px текста, а `.ui-table th` запрещает перенос, и 136 прошло бы
+        // впритык, без запаса на другой шрифт.
         table.innerHTML = '<thead><tr><th style="width:190px">Линия</th><th>Скрипт</th>'
-            + '<th style="width:150px">Длительность</th>'
+            + '<th style="width:140px">Длительность, сек</th>'
             + '<th class="ui-table__acts" style="width:54px"></th></tr></thead>';
         const tbody = el('tbody');
         table.appendChild(tbody);
@@ -1221,7 +1250,8 @@ export function createEventsTab({ pane, api, scope }) {
             const secondsCell = el('td');
             const seconds = input('number', row.durationSeconds, 'Длительность, секунд', true);
             seconds.dataset.role = 'seconds';
-            secondsCell.appendChild(fieldBox('', withUnit(seconds, 'сек')));
+            // Единица стоит в шапке колонки — «Длительность, сек» (К254).
+            secondsCell.appendChild(fieldBox('', seconds));
             tr.appendChild(secondsCell);
 
             const acts = el('td', 'ui-table__acts');
