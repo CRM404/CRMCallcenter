@@ -1,12 +1,17 @@
-// --- routes/callEvents.js: четыре события руководителя ------------------------
+// --- routes/callEvents.js: три события руководителя ---------------------------
 //
 // Вкладка «Звонки → События» (паспорт Р12). Числа, стоявшие константами в коде,
 // настраивает руководитель: интервал и предел автоперезвона, окно обзвона,
-// адресаты перевода, длительность пост-обработки и ожидание соединения.
+// адресаты перевода и длительность пост-обработки.
 //
-// СОБЫТИЙ РОВНО ЧЕТЫРЕ, И ПЯТОГО НЕ БЫВАЕТ. Каждое отвечает за своё место в
+// СОБЫТИЙ РОВНО ТРИ, И ЧЕТВЁРТОГО НЕ БЫВАЕТ. Каждое отвечает за своё место в
 // коде, а «добавить событие» означало бы «добавить поведение». Поэтому маршрута
-// «завести событие» здесь нет: есть четыре адреса по числу видов.
+// «завести событие» здесь нет: есть три адреса по числу видов.
+//
+// ⚠ БЫЛО ЧЕТЫРЕ. Решение владельца 109 (К259) сняло «Время перевода»: ожидание
+// соединения стало полем строки — своим у каждого сотрудника, ровно как у
+// оффера. Вместе с событием ушёл и адрес `PUT /transfer-wait`: одно число
+// сохраняется теперь тем же запросом, что и вся строка перевода.
 //
 // СОХРАНЕНИЕ СОБЫТИЯ — РАЗНИЦЕЙ, А НЕ ЗАМЕНОЙ ПЕРЕЧНЯ. Соблазн велик: снести все
 // строки и вставить пришедшие. Так нельзя из-за журнала изменений: правка одного
@@ -27,8 +32,7 @@ const router = express.Router();
 const KIND_BY_SLUG = {
     'auto-recall': 'auto_recall',
     transfer: 'transfer',
-    wrapup: 'wrapup',
-    'transfer-wait': 'transfer_wait'
+    wrapup: 'wrapup'
 };
 
 // Линия у пары пост-обработки — та же колонка, что у сотрудника и у лида
@@ -140,7 +144,7 @@ function isoDate(value) {
 async function readEvents(db) {
     const [events, rules, pairs, offers, employees] = await Promise.all([
         db.query(
-            `SELECT e.kind, e.enabled, e.window_from, e.window_to, e.wait_seconds,
+            `SELECT e.kind, e.enabled, e.window_from, e.window_to,
                     e.wrapup_status_id, s.status_name AS wrapup_status_name
                FROM call_events e
                LEFT JOIN lead_funnel_statuses s ON s.id = e.wrapup_status_id
@@ -172,7 +176,8 @@ async function readEvents(db) {
                JOIN cpa_networks n ON n.id = o.network_id
               ORDER BY o.priority NULLS LAST, o.id`),
         db.query(
-            `SELECT e.id, e.employee_id, e.weekdays, e.time_from, e.time_to, e.enabled,
+            `SELECT e.id, e.employee_id, e.weekdays, e.time_from, e.time_to,
+                    e.wait_seconds, e.enabled,
                     p.last_name, p.first_name, p.pbx_extension, p.status AS employee_status
                FROM call_transfer_employees e
                JOIN employees p ON p.id = e.employee_id
@@ -180,10 +185,9 @@ async function readEvents(db) {
     ]);
 
     const byKind = new Map(events.rows.map((r) => [r.kind, r]));
-    const one = (kind) => byKind.get(kind) || { enabled: false, window_from: null, window_to: null, wait_seconds: null };
+    const one = (kind) => byKind.get(kind) || { enabled: false, window_from: null, window_to: null };
 
     const recall = one('auto_recall');
-    const wait = one('transfer_wait');
     const today = todayInAppZone();
 
     return {
@@ -250,6 +254,10 @@ async function readEvents(db) {
                 weekdays: r.weekdays,
                 timeFrom: shortTime(r.time_from),
                 timeTo: shortTime(r.time_to),
+                // Ожидание своё у каждой строки — решение владельца 109 (К259).
+                // Поле то же, что у оффера, и приезжает тем же именем: два
+                // перечня одного окна не должны называть одно разными словами.
+                waitSeconds: r.wait_seconds,
                 enabled: r.enabled
             }))
         },
@@ -268,15 +276,11 @@ async function readEvents(db) {
                 scriptTitle: r.script_title,
                 durationSeconds: r.duration_seconds
             }))
-        },
-        transferWait: {
-            enabled: wait.enabled,
-            waitSeconds: wait.wait_seconds
         }
     };
 }
 
-// GET /api/call-events — все четыре события со своими перечнями.
+// GET /api/call-events — все три события со своими перечнями.
 router.get('/', async (req, res) => {
     try {
         res.json(await readEvents(pool));
@@ -286,7 +290,7 @@ router.get('/', async (req, res) => {
     }
 });
 
-// GET /api/call-events/directories — справочники ЧЕТЫРЁХ окон одним ответом.
+// GET /api/call-events/directories — справочники ТРЁХ окон одним ответом.
 //
 // ОДИН ЗАПРОС, А НЕ ЧЕТЫРЕ ЧУЖИХ. Окна события выбирают статус, скрипт, оффер и
 // сотрудника; три из четырёх справочников живут в чужих разделах, и брать их
@@ -580,18 +584,23 @@ router.put('/transfer', async (req, res) => {
     for (const row of employeeRows) {
         const employeeId = wholeNumber(row.employeeId, 1, 2147483647);
         const days = weekdays(row.weekdays);
+        // Границы те же, что у оффера, и это не совпадение: поле одно и то же,
+        // а два перечня одного окна не могут принимать разные числа (К259).
+        const wait = wholeNumber(row.waitSeconds, 1, 3600);
         if (employeeId === null) return bad(res, 'В строке перевода не выбран сотрудник');
         if (!days) return bad(res, 'Отметьте хотя бы один день — иначе перевод не работает никогда');
         if (!isTime(row.timeFrom) || !isTime(row.timeTo)) return bad(res, 'Укажите время «с» и «до»');
         if (String(row.timeFrom).trim() === String(row.timeTo).trim()) {
             return bad(res, 'Окно нулевой длины — это «никогда»: время «с» и «до» должны отличаться');
         }
+        if (wait === null) return bad(res, 'Ожидание — целое число секунд больше нуля');
         staff.push({
             id: row.id ? Number(row.id) : null,
             employeeId,
             days,
             from: String(row.timeFrom).trim(),
             to: String(row.timeTo).trim(),
+            wait,
             enabled: row.enabled !== false
         });
     }
@@ -635,15 +644,16 @@ router.put('/transfer', async (req, res) => {
                 await client.query(
                     `UPDATE call_transfer_employees
                         SET employee_id = $1, weekdays = $2::smallint[], time_from = $3::time,
-                            time_to = $4::time, enabled = $5
-                      WHERE id = $6`,
-                    [row.employeeId, row.days, row.from, row.to, row.enabled, row.id]);
+                            time_to = $4::time, wait_seconds = $5, enabled = $6
+                      WHERE id = $7`,
+                    [row.employeeId, row.days, row.from, row.to, row.wait, row.enabled, row.id]);
             }
             for (const row of staffDiff.insert) {
                 await client.query(
-                    `INSERT INTO call_transfer_employees (employee_id, weekdays, time_from, time_to, enabled)
-                     VALUES ($1, $2::smallint[], $3::time, $4::time, $5)`,
-                    [row.employeeId, row.days, row.from, row.to, row.enabled]);
+                    `INSERT INTO call_transfer_employees
+                        (employee_id, weekdays, time_from, time_to, wait_seconds, enabled)
+                     VALUES ($1, $2::smallint[], $3::time, $4::time, $5, $6)`,
+                    [row.employeeId, row.days, row.from, row.to, row.wait, row.enabled]);
             }
         });
         res.json(await readEvents(pool));
@@ -653,25 +663,11 @@ router.put('/transfer', async (req, res) => {
     }
 });
 
-// PUT /api/call-events/transfer-wait { waitSeconds }
-//
-// Одно число — и всё же событие, а не настройка: у него есть выключатель, и
-// выключенное означает «ждать без предела», а не «ноль секунд». Ключ со
-// значением такого различия не держит.
-router.put('/transfer-wait', async (req, res) => {
-    const seconds = wholeNumber(req.body && req.body.waitSeconds, 1, 3600);
-    if (seconds === null) return bad(res, 'Сколько ждать соединения — целое число секунд больше нуля');
-    try {
-        const result = await pool.query(
-            "UPDATE call_events SET wait_seconds = $1, updated_at = NOW() WHERE kind = 'transfer_wait' RETURNING kind",
-            [seconds]);
-        if (result.rows.length === 0) return res.status(404).json({ error: 'Событие не заведено' });
-        res.json(await readEvents(pool));
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: 'Не удалось сохранить время перевода' });
-    }
-});
+// ⚠ АДРЕСА `PUT /transfer-wait` ЗДЕСЬ БОЛЬШЕ НЕТ, и это не пропуск. Он правил
+// одно число на все переводы внутрь; решение владельца 109 (К259) сделало
+// ожидание полем строки, и сохраняется оно теперь тем же `PUT /transfer`, что и
+// остальные поля строки. Отдельный адрес ради одного поля означал бы два места,
+// где сохраняется одна строка, — и правку, потерянную между ними.
 
 module.exports = router;
 module.exports.readEvents = readEvents;
