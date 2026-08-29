@@ -509,11 +509,22 @@ function rowHtml(lead) {
     // У АРХИВНОГО В КОЛОНКЕ «Сотрудник» ПРОЧЕРК, а не «в очереди»: он не
     // участвует в раздаче, и плашка «в очереди» обещала бы работу, которой не
     // будет.
+    // ПЛАШКА «в очереди» СТОИТ ОДНА, БЕЗ ПОДПИСИ «не назначен» (К250, решение
+    // владельца 29.08.2026). Две подписи говорили об одном и том же состоянии
+    // разными словами: «не назначен» — про пустое поле, «в очереди» — про то,
+    // что из этого следует. Осталось второе: человеку важно не отсутствие
+    // записи, а то, что лид ждёт раздачи.
+    //
+    // Цвет плашки НЕ МЕНЯЕТСЯ — жёлтый `--warn`: очередь это ожидание, а не
+    // ошибка и не готовность.
+    //
+    // Списки «— не назначен —» (`leads-section.html:171` и `:327`) не трогаются:
+    // там ВЫБОР, а не состояние, и снятие оператора называется своим словом.
     const employeeCell = archived
         ? '<span class="ui-table__muted">—</span>'
         : (lead.employeeId
             ? escapeHtml(lead.employeeName)
-            : '<span class="ui-table__muted">не назначен</span><span class="ui-pill ui-pill--warn queue-tag">в очереди</span>');
+            : '<span class="ui-pill ui-pill--warn queue-tag">в очереди</span>');
     const cells = COLUMN_ORDER.map((key) => {
         const body = key === 'employee' ? employeeCell : cellHtml(key, lead);
         return `<td data-col="${key}"${visibleColumns[key] ? '' : ' hidden'}>${body}</td>`;
