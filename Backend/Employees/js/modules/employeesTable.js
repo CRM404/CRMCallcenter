@@ -203,8 +203,9 @@ export function createTable(root, deps) {
      */
     function renderRowActions(emp, archived) {
         if (archived) {
-            return `<button type="button" class="ui-btn ui-btn--row" data-return="${emp.id}"`
-                + ` title="Вернуть в работу">Вернуть в работу</button>`;
+            return `<button type="button" class="ui-btn ui-btn--icon ui-btn--row" data-return="${emp.id}"`
+                + ` title="Вернуть в работу" aria-label="Вернуть в работу">`
+                + `<svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-unarchive"></use></svg></button>`;
         }
         return `
             <button type="button" class="ui-btn ui-btn--icon ui-btn--row" data-edit="${emp.id}" title="Изменить" aria-label="Изменить"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-edit"></use></svg></button>
