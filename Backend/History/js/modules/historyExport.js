@@ -86,7 +86,12 @@ function changesText(row) {
 
     const head = row.op === 'insert' ? ['Запись создана'] : (row.op === 'delete' ? ['Запись удалена'] : []);
     const lines = row.changes.map((item) => {
-        const label = fieldLabel(row.table, item.field) || item.field;
+        // В ФАЙЛЕ СКОБКИ — ЧАСТЬ СТРОКИ, а не слой: CSS туда не едет, а
+        // техническое имя нужно в файле ровно затем же, зачем на экране
+        // (К258, паспорт Р5 редакции 9). Подписи нет — остаётся одно
+        // техническое имя, без скобок: обрамлять нечего.
+        const known = fieldLabel(row.table, item.field);
+        const label = known ? `${known} (${item.field})` : item.field;
         if (item.level === 'fact') return `${label}: изменено, значение не записано`;
         const before = value(item.beforeTitle, item.before);
         const after = value(item.afterTitle, item.after);

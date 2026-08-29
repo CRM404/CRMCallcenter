@@ -73,7 +73,24 @@ const BY_TABLE = {
         district: 'Район',
         client_type: 'Тип клиента',
         mortgage_type: 'Вид ипотеки',
-        down_payment_percent: 'Первый взнос, %'
+        down_payment_percent: 'Первый взнос, %',
+        locality: 'Населённый пункт',
+        client_region: 'Область клиента',
+        client_city: 'Город клиента',
+        client_district: 'Район клиента',
+        client_locality: 'Населённый пункт клиента',
+        purchase_method: 'Способ покупки',
+        purchase_timeframe: 'Срок покупки',
+        decision_maker: 'ЛПР',
+        other_borrower: 'Иной заёмщик',
+        category: 'Категория',
+        last_call_at: 'Последний звонок',
+        phone_fix_at: 'Разобран',
+        phone_fix_actor_name: 'Разобрал',
+        phone_fix_actor_kind: 'Разобрал, вид автора',
+        phone_fix_actor_id: 'Разобрал, номер автора',
+        merged_at: 'Слит',
+        archived_actor_id: 'В архив отправил, номер автора'
     },
     employees: {
         last_name: 'Фамилия',
@@ -111,7 +128,13 @@ const BY_TABLE = {
         tunnel_address: 'Адрес в туннеле',
         tunnel_public_key: 'Открытый ключ туннеля',
         tunnel_issued_at: 'Ключ выдан',
-        tunnel_issued_by: 'Ключ выдал'
+        tunnel_issued_by: 'Ключ выдал',
+        termination_date: 'Уволен',
+        work_schedule: 'Дни',
+        released_lead_notice: 'Лид вернулся в очередь',
+        frozen_at: 'Заморожен с',
+        tunnel_key_at: 'Ключ получен',
+        tunnel_revoked_at: 'Ключ туннеля отозван'
     },
     calls: {
         pbx_call_id: 'Вызов на АТС',
@@ -135,7 +158,10 @@ const BY_TABLE = {
         funnel_status_id: 'Статус воронки',
         funnel_status_name: 'Статус воронки, снимок',
         notes_snapshot: 'Комментарий, снимок',
-        attempt_no: 'Номер попытки'
+        attempt_no: 'Номер попытки',
+        pbx_api_id: 'Управление вызовом на АТС',
+        pbx_callback_id: 'Наша инициация на АТС',
+        partially_filled: 'Заполнена частично'
     },
     organizations: {
         name: 'Название',
@@ -145,7 +171,13 @@ const BY_TABLE = {
         legal_address: 'Юридический адрес',
         actual_address: 'Фактический адрес',
         letterhead_header: 'Шапка бланка',
-        letterhead_signature: 'Подпись бланка'
+        letterhead_signature: 'Подпись бланка',
+        legal_form: 'ОПФ',
+        general_director: 'Генеральный директор',
+        registration_country: 'Страна регистрации',
+        registration_date: 'Дата регистрации',
+        okved: 'ОКВЭД',
+        authorized_capital: 'Уставный капитал'
     },
     sources: {
         lead_source: 'Источник лидов',
@@ -153,11 +185,33 @@ const BY_TABLE = {
         city_region: 'Город и регион',
         platform_id: 'Площадка'
     },
-    cpa_networks: { name: 'Название', organization_id: 'Организация' },
+    cpa_networks: { name: 'Название', organization_id: 'Организация', connected_at: 'Подключена', payout_currency: 'Валюта выплат', commission_percent: 'Комиссия, %' },
     ad_platforms: { name: 'Название' },
     scripts: { title: 'Название', offer_id: 'Оффер' },
-    script_nodes: { label: 'Подпись', node_type: 'Вид куска', parent_id: 'Внутри', script_id: 'Скрипт' },
-    real_estate_offers: { name: 'Название', network_id: 'CPA-сеть' },
+    script_nodes: { label: 'Подпись', node_type: 'Вид куска', parent_id: 'Внутри', script_id: 'Скрипт', content: 'Текст' },
+    real_estate_offers: {
+        name: 'Название',
+        network_id: 'CPA-сеть',
+        category: 'Категория',
+        date_start: 'Действует с',
+        date_end: 'Действует по',
+        action_type: 'Тип действия',
+        rate: 'Ставка, ₽',
+        hold_days: 'Hold, дней',
+        lead_check: 'Наличие проверки лидов',
+        target_criteria: 'Критерии целевого лида',
+        non_target_criteria: 'Критерии нецелевого лида',
+        obj_types: 'Тип объекта',
+        finishes: 'Отделка',
+        developer: 'Застройщик',
+        deadline: 'Срок сдачи',
+        client_types: 'Тип клиента',
+        other_borrower: 'Иной заёмщик',
+        purchase_term: 'Срок покупки',
+        down_payment_percent: 'Первоначальный взнос, %',
+        priority: 'Приоритет',
+        lead_limit: 'Лимит лидов'
+    },
     lead_funnel_statuses: {
         stage_number: 'Номер этапа',
         stage_name: 'Этап',
@@ -165,7 +219,9 @@ const BY_TABLE = {
         auto_recall: 'Автоперезвон',
         requires_call_time: 'Спросит время перезвона',
         releases_lead: 'Освобождает лида',
-        mark: 'Пометка'
+        mark: 'Пометка',
+        is_system: 'Системный',
+        awaits_manager: 'Ждёт решения руководителя'
     },
     lead_script_statuses: { lead_id: 'Лид', script_id: 'Скрипт', funnel_status_id: 'Статус показа' },
     lead_offers: { lead_id: 'Лид', offer_id: 'Оффер' },
@@ -203,10 +259,10 @@ const BY_TABLE = {
         filters: 'Отбор'
     },
     phone_fix_reasons: { code: 'Код', title: 'Название' },
-    employee_schedule_days: { day: 'День', state: 'Состояние дня', shift_start: 'Смена с', shift_end: 'Смена до', is_extra: 'Сверх графика' },
-    employee_state_intervals: { state: 'Состояние', started_at: 'Начало', ended_at: 'Конец' },
-    employee_documents: { file_name: 'Имя файла', file_data: 'Файл', doc_type: 'Вид документа' },
-    tunnel_key_tokens: { employee_id: 'Сотрудник', used_at: 'Открыта', expires_at: 'Годна до', created_by: 'Выдал' },
+    employee_schedule_days: { employee_id: 'Сотрудник', day: 'День', state: 'Состояние дня', shift_start: 'Смена с', shift_end: 'Смена до', is_extra: 'Сверх графика' },
+    employee_state_intervals: { employee_id: 'Сотрудник', state: 'Состояние', started_at: 'Начало', ended_at: 'Конец' },
+    employee_documents: { employee_id: 'Сотрудник', document_type: 'Вид документа', file_name: 'Имя файла', file_data: 'Файл', uploaded_at: 'Загружен' },
+    tunnel_key_tokens: { employee_id: 'Сотрудник', token_hash: 'Отпечаток ссылки', used_at: 'Открыта', expires_at: 'Годна до', revoked_at: 'Погашена', created_by: 'Выдал' },
 
     // Участок звонка. Своего имени у записи нет — журнал называет её номером;
     // подписи полей нужны всё равно, иначе строка правки покажет технические
@@ -219,7 +275,11 @@ const BY_TABLE = {
         talk_seconds: 'Разговор, сек',
         transfer_offer_id: 'Оффер перевода',
         transfer_offer_name: 'Оффер перевода, имя',
-        transfer_network_name: 'Оффер перевода, сеть'
+        transfer_network_name: 'Оффер перевода, сеть',
+        pbx_sub_call_id: 'Плечо на АТС',
+        started_at: 'Начало',
+        answered_at: 'Ответ',
+        ended_at: 'Конец'
     },
 
     // Четыре события руководителя и строки их перечней (часть 9). Подписи —
@@ -230,7 +290,8 @@ const BY_TABLE = {
         enabled: 'Включено',
         window_from: 'Обзвон с',
         window_to: 'Обзвон до',
-        wait_seconds: 'Ждать соединения, сек'
+        wait_seconds: 'Ждать соединения, сек',
+        wrapup_status_id: 'Статус после пост-обработки'
     },
     call_recall_rules: {
         funnel_status_id: 'Статус',
@@ -254,7 +315,76 @@ const BY_TABLE = {
         time_from: 'Разрешён с',
         time_to: 'Разрешён до',
         enabled: 'Включена'
-    }
+    },
+    // ===== Таблицы, которых словарь не знал вовсе (К258) =====================
+    //
+    // Шестнадцать таблиц под журналом не имели ни одной подписи: их правки
+    // читались техническими именами целиком. Подписи взяты с экранов, где поле
+    // уже подписано человеку, и из комментариев схемы там, где экрана нет.
+
+    departments: { organization_id: 'Организация', name: 'Название' },
+    offers: { name: 'Название' },
+    param_lists: { list_key: 'Список', value: 'Значение' },
+    source_cpa_networks: { source_id: 'Источник', cpa_network_id: 'CPA-сеть' },
+    lead_distribution_pool: { lead_id: 'Лид', employee_id: 'Сотрудник' },
+    lead_funnel_stages: { stage_number: 'Номер этапа', description: 'Описание этапа' },
+    employee_column_settings: { employee_id: 'Сотрудник', hidden_columns: 'Скрытые колонки' },
+
+    // Счета и налоги организации — подписи с экрана «Реквизиты».
+    organization_bank_accounts: {
+        organization_id: 'Организация',
+        bank_name: 'Название банка',
+        bik: 'БИК',
+        checking_account: 'Расчётный счёт',
+        correspondent_account: 'Корреспондентский счёт',
+        currency: 'Валюта',
+        opened_at: 'Дата открытия'
+    },
+    organization_taxes: {
+        organization_id: 'Организация',
+        tax_type: 'Вид налога',
+        rate: 'Ставка',
+        periodicity: 'Периодичность'
+    },
+
+    // База знаний.
+    knowledge_articles: {
+        title: 'Заголовок',
+        content: 'Текст',
+        is_restricted: 'Ограничен доступ',
+        author_employee_id: 'Автор'
+    },
+    knowledge_article_attachments: {
+        article_id: 'Статья',
+        file_name: 'Имя файла',
+        file_data: 'Файл',
+        uploaded_at: 'Загружен'
+    },
+    knowledge_article_visibility: { article_id: 'Статья', employee_id: 'Сотрудник' },
+
+    // Оффер: сегменты, география и два множественных выбора. Слово `value` в
+    // двух последних значит РАЗНОЕ, и подписи у них поэтому разные — иначе
+    // строка журнала не сказала бы, что именно меняли.
+    real_estate_offer_segments: {
+        offer_id: 'Оффер',
+        label: 'Подпись сегмента',
+        object_class: 'Класс объекта',
+        price_min: 'Цена от',
+        price_max: 'Цена до',
+        area_min: 'Площадь от',
+        area_max: 'Площадь до',
+        room_count: 'Комнатность'
+    },
+    real_estate_offer_geo: {
+        offer_id: 'Оффер',
+        kind: 'Чья география',
+        region: 'Область',
+        city: 'Город',
+        district: 'Район',
+        locality: 'Населённый пункт'
+    },
+    real_estate_offer_payment_methods: { offer_id: 'Оффер', value: 'Способ покупки' },
+    real_estate_offer_mortgage_types: { offer_id: 'Оффер', value: 'Вид ипотеки' },
 };
 
 /**
