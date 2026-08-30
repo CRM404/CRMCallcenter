@@ -23,6 +23,7 @@
 
 const { distributePendingLeads } = require('./leadDistribution');
 const { closeAbandonedWrapups } = require('./callWrapup');
+const { closeStaleCalls } = require('./callWatchdog');
 
 // Раз в минуту. Шаг выбран под самую частую задачу — наступивший перезвон:
 // минута опоздания незаметна человеку и не заметна базе.
@@ -86,6 +87,17 @@ async function tick(pool) {
             const closed = await closeAbandonedWrapups(pool);
             if (closed.length > 0) {
                 console.log(`Планировщик: закрыто брошенных карточек — ${closed.length}`);
+            }
+
+            // СТОРОЖ ЗАВИСШИХ ЗВОНКОВ — ПЕРЕД РАЗДАЧЕЙ И ПОСЛЕ БРОШЕННЫХ
+            // КАРТОЧЕК (план 7.3). Он дешёвый: одна правка по индексу, ничего
+            // не читает построчно. Порядок значения не имеет — работы
+            // независимы, — но раздача самая долгая, и ставить перед ней то,
+            // что заведомо быстро, честнее к журналу службы: строка сторожа
+            // появится раньше, чем строка раздачи.
+            const stale = await closeStaleCalls(pool);
+            if (stale.closed > 0) {
+                console.log(`Планировщик: закрыто зависших звонков — ${stale.closed} (${stale.ids.join(', ')})`);
             }
 
             const result = await distributePendingLeads(pool);
