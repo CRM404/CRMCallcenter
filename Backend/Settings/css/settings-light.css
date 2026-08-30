@@ -1,0 +1,148 @@
+/* --- Settings/css/settings-light.css: раскладка раздела «Настройки» --------
+ *
+ * ПУНКТ Р8 НЕ ПРИНОСИТ В СЛОЙ НИЧЕГО — ни узла, ни значка, ни токена. Всё
+ * нужное приехало прежними пунктами: выключатель `.ui-switch` (ui/tabs.css:92),
+ * поле и его ступени `.ui-field__control--sm`, `.ui-field--mono`,
+ * `.ui-field--error` (ui/field.css), значок раздела `gear` — уже в наборе.
+ * Здесь только свои классы раздела, все с приставкой `set-`.
+ *
+ * ИЗ ДВАДЦАТИ ЧЕТЫРЁХ КЛАССОВ ПАСПОРТА ЗДЕСЬ ДЕВЯТНАДЦАТЬ, и пять недостающих
+ * названы поимённо, а не забыты:
+ *   `.set-tiles`, `.set-tile`, `.set-tile--new` — схема соседства на столе,
+ *     живут только в макете; паспорт прямо говорит, что в раздел они не идут.
+ *   `.set-live`, `.set-facts` — постоянная плашка включённого автообзвона и
+ *     список фактов в окне подтверждения. Не строятся этим заходом (ответ
+ *     куратора 32): дозвонщика нет, и числа в окне были бы ни о чём. Правила
+ *     под узлы, которых на экране не существует, — мёртвый код, и заводить их
+ *     заранее значит однажды поверить, что они проверены.
+ */
+
+/* Настройки читают, а не просматривают таблицей, поэтому раздел живёт столбцом
+   ограниченной ширины, а не растягивается во всю панель: строка, у которой
+   описание слева у края, а поле справа у другого края, читается в два приёма.
+   Остаток панели остаётся пустым намеренно. */
+.set-wrap {
+    container-type: inline-size;
+    display: flex;
+    flex-direction: column;
+    gap: var(--ui-space-6);
+    max-width: 900px;
+}
+
+/* Группа настроек. Заголовок группы — ДАННЫЕ, а не подпись в вёрстке:
+   порядок групп и порядок строк внутри приходят с сервера. */
+.set-group { display: flex; flex-direction: column; gap: var(--ui-space-3); }
+.set-group__name {
+    font-size: var(--ui-text-2xs);
+    font-weight: var(--ui-weight-bold);
+    letter-spacing: .09em;
+    text-transform: uppercase;
+    color: var(--ui-color-ink-faint);
+}
+
+/* Список строк группы — одна карточка, разделители внутри. Карточка на группу,
+   а не на строку: семь отдельных карточек читаются как семь несвязанных вещей. */
+.set-list {
+    border: 1px solid var(--ui-color-line);
+    border-radius: var(--ui-radius-md);
+    background: var(--ui-color-surface);
+    overflow: hidden;
+}
+
+/* Строка настройки. Слева — имя и описание, справа — управление. Колонка
+   управления фиксированной ширины, чтобы поля и переключатели выстроились в
+   одну вертикаль: разнобой справа читается как беспорядок. */
+.set-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 268px;
+    gap: var(--ui-space-5);
+    align-items: start;
+    padding: var(--ui-space-4) var(--ui-space-5);
+    border-top: 1px solid var(--ui-color-line);
+}
+.set-row:first-child { border-top: none; }
+
+.set-row__main { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.set-row__name {
+    display: flex;
+    align-items: center;
+    gap: var(--ui-space-2);
+    font-size: var(--ui-text-md);
+    font-weight: var(--ui-weight-bold);
+    color: var(--ui-color-ink);
+}
+/* Описание — ДАННЫЕ из той же строки таблицы. Сочинять его в вёрстке нельзя:
+   настройка без описания должна выглядеть недоделанной, а не обычной. */
+.set-row__desc {
+    font-size: var(--ui-text-sm);
+    color: var(--ui-color-ink-soft);
+    line-height: var(--ui-line-base);
+    max-width: 62ch;
+}
+.set-row__meta {
+    margin-top: 3px;
+    font-size: var(--ui-text-2xs);
+    color: var(--ui-color-ink-faint);
+}
+/* Управление прижато к левому краю своей колонки: поле числа, окно времени и
+   переключатель встают по одной вертикали, и растягивать узел слоя под ширину
+   колонки не приходится. Растягиваются только поля — им ширина колонки нужна. */
+.set-row__ctl {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--ui-space-2);
+}
+.set-row__ctl > .ui-field { align-self: stretch; }
+
+/* Опасная настройка. Полоса слева и подложка — не украшение: строка обязана
+   отличаться от соседних до того, как человек прочитает её имя. */
+.set-row--danger {
+    border-left: 3px solid var(--ui-color-warn-ink);
+    background: var(--ui-color-warn-bg);
+    padding-left: calc(var(--ui-space-5) - 3px);
+}
+/* На жёлтой подложке приглушённый серый теряет контраст, а это единственное
+   описание, которое обязаны прочитать целиком. */
+.set-row--danger .set-row__desc { color: var(--ui-color-ink); }
+
+/* Строка, значение которой изменили и ещё не сохранили. */
+.set-row--edited {
+    border-left: 3px solid var(--ui-color-accent);
+    background: var(--ui-color-wash-panel);
+    padding-left: calc(var(--ui-space-5) - 3px);
+}
+
+/* Число с единицей измерения. Единица — ДАННЫЕ строки, а не подпись:
+   «4» без слова «ч» не значит ничего. */
+.set-num { display: flex; align-items: center; gap: var(--ui-space-3); }
+.set-num .ui-field__control { width: 92px; text-align: right; font-variant-numeric: tabular-nums; }
+.set-unit { font-size: var(--ui-text-sm); color: var(--ui-color-ink-soft); white-space: nowrap; }
+
+/* Окно времени — одна настройка из двух полей. Между полями тире, а не слово:
+   «с» и «до» уже сказаны именем настройки. */
+.set-range { display: flex; align-items: center; gap: var(--ui-space-2); }
+.set-range .ui-field__control { width: 96px; text-align: center; font-variant-numeric: tabular-nums; }
+.set-range__dash { color: var(--ui-color-ink-faint); }
+
+/* Значение, которое нельзя править. Не поле с отключённым видом:
+   отключённое поле обещает, что его когда-нибудь включат. */
+.set-lock {
+    display: flex;
+    align-items: baseline;
+    gap: var(--ui-space-3);
+    min-height: var(--ui-control-h);
+    font-size: var(--ui-text-md);
+    font-variant-numeric: tabular-nums;
+    color: var(--ui-color-ink);
+}
+.set-lock__why { font-size: var(--ui-text-2xs); color: var(--ui-color-ink-faint); }
+
+/* Пара кнопок строки. Появляется только у изменённой строки. */
+.set-acts { display: flex; gap: var(--ui-space-2); }
+
+/* Панель уже 860 — управление уходит под описание. Колонка управления при этом
+   не «сжимается», а перестаёт существовать: поле времени в 60 пикселей не поле. */
+@container (max-width: 860px) {
+    .set-row { grid-template-columns: 1fr; gap: var(--ui-space-3); }
+}
