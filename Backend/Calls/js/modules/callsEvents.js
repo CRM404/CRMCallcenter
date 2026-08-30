@@ -2,21 +2,26 @@
 //
 // Третья вкладка раздела и первая настройка, которая меняет ПОВЕДЕНИЕ системы, а
 // не её вид (паспорт Р12). Числа, стоявшие константами в коде — перезвон через
-// час, двадцать попыток, окно 9–21, — стали четырьмя событиями руководителя.
+// час, двадцать попыток, окно 9–21, — стали тремя событиями руководителя.
 //
-// СОБЫТИЙ РОВНО ЧЕТЫРЕ, И ПЯТОГО НЕ БЫВАЕТ: каждое отвечает за своё место в
+// СОБЫТИЙ РОВНО ТРИ, И ЧЕТВЁРТОГО НЕ БЫВАЕТ: каждое отвечает за своё место в
 // коде, а «добавить событие» означало бы «добавить поведение». Отсюда всё
 // остальное — счётчика у вкладки нет (число, которое никогда не меняется, это
 // украшение), пустого состояния нет (`.ui-empty` спрятал бы единственное, что
 // человеку нужно увидеть, — какие события бывают), и вместо него у каждого
 // события строка «Не настроено» с ПОСЛЕДСТВИЕМ.
 //
+// ⚠ БЫЛО ЧЕТЫРЕ. Решение владельца 109 (К259) сняло «Время перевода»: одно
+// число на всех стало полем строки — своим у каждого сотрудника, ровно как у
+// оффера. Окна у события больше нет, и «ждать без предела» сказать больше
+// нечем: поле обязательное.
+//
 // СТРОКА-ИТОГ — ТО, РАДИ ЧЕГО ВКЛАДКА СУЩЕСТВУЕТ. Руководитель приходит
 // посмотреть, что система делает сама; строка «Включено» этого не отвечает и
-// заставляет открыть четыре окна подряд, чтобы собрать картину, которую экран
+// заставляет открыть три окна подряд, чтобы собрать картину, которую экран
 // обязан показать сразу. Поэтому здесь столько работы со словами.
 //
-// СВОЙ МОДУЛЬ, А НЕ ЧАСТЬ callsApp. У вкладки четыре окна, и вместе они больше
+// СВОЙ МОДУЛЬ, А НЕ ЧАСТЬ callsApp. У вкладки три окна, и вместе они больше
 // самого раздела; складывать журнал звонков и настройку планировщика в один
 // файл значит получить полторы тысячи строк, в которых правка одного не видна
 // на фоне другого. Экземпляр создаётся разделом и живёт ровно столько же.
@@ -32,7 +37,7 @@ import { showToast } from '/ui/toast.js';
 import { isAbort } from '/api.js';
 import {
     fetchEvents, fetchEventDirectories, setEventEnabled,
-    saveAutoRecall, saveTransfer, saveWrapup, saveTransferWait
+    saveAutoRecall, saveTransfer, saveWrapup
 } from './callsStorage.js';
 
 // Дни недели — числами 1..7, как их держит база (`weekdays SMALLINT[]`).
@@ -47,15 +52,14 @@ const LINE_TYPES = ['Входящая', 'Исходящая'];
 // в базе нет вовсе; заполненное отсюда не перетирается.
 const DEFAULT_WINDOW = { from: '09:00', to: '21:00' };
 
-// Четыре события в том порядке, в каком они стоят на вкладке. Порядок не
+// Три события в том порядке, в каком они стоят на вкладке. Порядок не
 // алфавитный и не по важности: сначала то, что работает без участия оператора
 // (автоперезвон), потом то, что он запускает сам (перевод), потом то, что
-// случается после разговора (пост-обработка и её время).
+// случается после разговора (пост-обработка).
 const EVENTS = [
     { slug: 'auto-recall', key: 'autoRecall', title: 'Автоперезвон' },
     { slug: 'transfer', key: 'transfer', title: 'Перевод' },
-    { slug: 'wrapup', key: 'wrapup', title: 'Пост-обработка' },
-    { slug: 'transfer-wait', key: 'transferWait', title: 'Время перевода' }
+    { slug: 'wrapup', key: 'wrapup', title: 'Пост-обработка' }
 ];
 
 // ТЕКСТЫ «НЕ НАСТРОЕНО» — ДОСЛОВНО ИЗ ПАСПОРТА Р12. Каждый называет не пустоту,
@@ -64,8 +68,7 @@ const EVENTS = [
 const NOT_SET = {
     autoRecall: 'Не настроено. Система не перезванивает — лид ждёт, пока оператор возьмёт его сам.',
     transfer: 'Не настроено. Ни одного адресата — перевод недоступен оператору в любое время.',
-    wrapup: 'Не настроено. Пост-обработка не кончается сама ни для одной пары.',
-    transferWait: 'Не настроено. Оператор ждёт соединения без предела, клиент всё это время слышит музыку.'
+    wrapup: 'Не настроено. Пост-обработка не кончается сама ни для одной пары.'
 };
 
 // ПОСЛЕДСТВИЕ ВЫКЛЮЧЕНИЯ — вторым предложением к настроенному событию. Текст
@@ -75,8 +78,7 @@ const NOT_SET = {
 const OFF_TAIL = {
     autoRecall: 'Событие выключено: система не перезванивает.',
     transfer: 'Событие выключено: перевод недоступен оператору.',
-    wrapup: 'Событие выключено: пост-обработка не кончается сама.',
-    transferWait: 'Событие выключено: оператор ждёт соединения без предела.'
+    wrapup: 'Событие выключено: пост-обработка не кончается сама.'
 };
 
 const MARK_TAIL = {
@@ -225,16 +227,10 @@ function wrapupSummary(data) {
     return `${pairs.length} ${plural(pairs.length, 'пара', 'пары', 'пар')} «линия + скрипт», ${range}.`;
 }
 
-function transferWaitSummary(data) {
-    if (!data.waitSeconds) return NOT_SET.transferWait;
-    return `Ждать соединения ${data.waitSeconds} ${plural(data.waitSeconds, 'секунда', 'секунды', 'секунд')}.`;
-}
-
 const SUMMARY = {
     autoRecall: autoRecallSummary,
     transfer: transferSummary,
-    wrapup: wrapupSummary,
-    transferWait: transferWaitSummary
+    wrapup: wrapupSummary
 };
 
 // Настроено ли событие вообще — по тому же признаку, что и строка-итог: если
@@ -494,8 +490,7 @@ export function createEventsTab({ pane, api, scope }) {
         const openers = {
             autoRecall: openAutoRecallWindow,
             transfer: openTransferWindow,
-            wrapup: openWrapupWindow,
-            transferWait: openTransferWaitWindow
+            wrapup: openWrapupWindow
         };
         openers[event.key]();
     }
@@ -804,7 +799,7 @@ export function createEventsTab({ pane, api, scope }) {
         body.appendChild(addOffer);
 
         body.appendChild(listHead('Сотрудники',
-            'перевод внутрь, на внутренний номер · сколько ждать соединения — событие «Время перевода»'));
+            'перевод внутрь, на внутренний номер · ожидание своё у каждой строки'));
         const staffList = el('div', 'zv-list');
         body.appendChild(staffList);
         const addStaff = button('ui-btn ui-btn--ghost ui-btn--add', 'Добавить сотрудника', 'plus');
@@ -999,8 +994,12 @@ export function createEventsTab({ pane, api, scope }) {
             const to = input('time', row.timeTo || '', 'Разрешён до');
             to.dataset.role = 'to';
             grid.appendChild(fieldBox('до', to, { required: true }));
-            // СЕКУНД ОЖИДАНИЯ ЗДЕСЬ НЕТ ВОВСЕ. Для переводов на своих действует
-            // четвёртое событие «Время перевода», и оно остаётся.
+            // ОЖИДАНИЕ — ТАКОЕ ЖЕ ПОЛЕ, ЧТО У ОФФЕРА, и стоит на том же месте
+            // ряда: решение владельца 109 (К259). Одно правило на оба перечня —
+            // иначе одно и то же число набирается в двух разных видах.
+            const wait = input('number', row.waitSeconds, 'Ожидание, секунд');
+            wait.dataset.role = 'wait';
+            grid.appendChild(fieldBox('Ожидание', withUnit(wait, 'секунд'), { required: true }));
             const days = daysRow(row.weekdays);
             days.dataset.role = 'days';
             grid.appendChild(fieldBox('Дни недели', days, { required: true, wide: true }));
@@ -1031,6 +1030,7 @@ export function createEventsTab({ pane, api, scope }) {
                 if (picker) row.employeeId = picker.value || null;
                 row.timeFrom = node.querySelector('[data-role="from"]').value;
                 row.timeTo = node.querySelector('[data-role="to"]').value;
+                row.waitSeconds = node.querySelector('[data-role="wait"]').value;
                 row.weekdays = readDays(node.querySelector('[data-role="days"]'));
                 row.enabled = node.querySelector('[data-role="row-enabled"]').checked;
             });
@@ -1046,7 +1046,7 @@ export function createEventsTab({ pane, api, scope }) {
         addStaff.addEventListener('click', () => {
             staff.push({
                 id: null, employeeId: null, weekdays: [],
-                timeFrom: '', timeTo: '', enabled: true, blockedReason: null
+                timeFrom: '', timeTo: '', waitSeconds: '', enabled: true, blockedReason: null
             });
             renderAll('staff');
         });
@@ -1094,6 +1094,9 @@ export function createEventsTab({ pane, api, scope }) {
                 const row = staff[index];
                 const picker = node.querySelector('[data-role="employee"]');
                 if (picker && !row.employeeId) { markError(picker, 'Не задан'); ok = false; }
+                if (wholeNumber(row.waitSeconds) === null) {
+                    markError(node.querySelector('[data-role="wait"]'), 'Не задано'); ok = false;
+                }
                 if (!checkTimes(node, row)) ok = false;
             });
 
@@ -1117,6 +1120,7 @@ export function createEventsTab({ pane, api, scope }) {
                         weekdays: r.weekdays,
                         timeFrom: r.timeFrom,
                         timeTo: r.timeTo,
+                        waitSeconds: wholeNumber(r.waitSeconds),
                         enabled: r.enabled
                     }))
                 });
@@ -1315,47 +1319,11 @@ export function createEventsTab({ pane, api, scope }) {
         });
     }
 
-    // ---------------------------------------------------- окно «Время перевода»
-
-    function openTransferWaitWindow() {
-        const data = state.events.transferWait;
-        const body = el('div');
-        const seconds = input('number', data.waitSeconds, 'Ждать соединения, секунд');
-        seconds.dataset.role = 'wait';
-        body.appendChild(fieldBox('Ждать соединения', withUnit(seconds, 'секунд'), {
-            required: true,
-            hint: 'Отсчёт идёт с нажатия «Перевести». Всё это время клиент слышит музыку.'
-        }));
-        body.appendChild(note(
-            'Если время истекло, система сама вернёт оператора к клиенту, а в журнал звонка запишет '
-            + '«перевод не удался». Пробовать перевести можно сколько угодно раз.'));
-
-        async function save() {
-            clearErrors(body);
-            const value = wholeNumber(seconds.value);
-            if (value === null) {
-                markError(seconds, 'Не задано — без числа оператор ждёт соединения без предела');
-                focusFirstError(body);
-                return false;
-            }
-            try {
-                const fresh = await saveTransferWait(api, value);
-                if (!state.alive) return true;
-                state.events = fresh;
-                render();
-                return true;
-            } catch (err) {
-                return serverRefusal(err);
-            }
-        }
-
-        modal({
-            title: 'Время перевода',
-            sub: 'Сколько ждать, пока второй оператор возьмёт трубку',
-            body,
-            onSave: save
-        });
-    }
+    // ⚠ ОКНА «ВРЕМЯ ПЕРЕВОДА» ЗДЕСЬ БОЛЬШЕ НЕТ (решение владельца 109, К259).
+    // Оно правило одно число на все переводы внутрь; теперь ожидание — поле
+    // строки сотрудника, и набирается оно там же, где остальные её поля. Вместе
+    // с окном ушли его тексты и адрес `PUT /transfer-wait`: одно поле, живущее в
+    // двух местах, — это два ответа на один вопрос.
 
     return {
         load,
