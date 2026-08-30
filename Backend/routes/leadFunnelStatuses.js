@@ -246,7 +246,7 @@ router.post('/', async (req, res) => {
         }
         if (await stageIsSystem(pool, stageNumber)) {
             return res.status(400).json({
-                error: 'Статусы системного этапа заводит система: вручную сюда не добавляют'
+                error: 'Статусы системного этапа заводит система: вручную сюда не добавляют.'
             });
         }
         if (await nameTaken(pool, stageNumber, name)) {
