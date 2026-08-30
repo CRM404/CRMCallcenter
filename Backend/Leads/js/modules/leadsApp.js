@@ -493,8 +493,9 @@ function phoneCell(lead) {
  */
 function rowActions(lead, archived) {
     if (archived) {
-        return `<button type="button" class="ui-btn ui-btn--row" data-unarchive="${lead.id}"`
-            + ' title="Вернуть из архива">Вернуть из архива</button>';
+        return `<button type="button" class="ui-btn ui-btn--icon ui-btn--row" data-unarchive="${lead.id}"`
+            + ' title="Вернуть из архива" aria-label="Вернуть из архива">'
+            + '<svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-unarchive"></use></svg></button>';
     }
     return `
         <button type="button" class="ui-btn ui-btn--icon ui-btn--row" data-edit="${lead.id}" title="Изменить" aria-label="Изменить"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-edit"></use></svg></button>
