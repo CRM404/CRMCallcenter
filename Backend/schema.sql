@@ -1437,6 +1437,29 @@ CREATE TABLE IF NOT EXISTS lead_comments (
 CREATE INDEX IF NOT EXISTS idx_lead_comments_lead
     ON lead_comments (lead_id, created_at DESC NULLS LAST, id DESC);
 
+-- ----- Перенос накопленного (Б4.4, решение владельца 57) ---------------------
+-- МИГРАЦИЯ ПОДПИСЫВАЕТ СЕБЯ САМА. Ниже INSERT в таблицу под триггером журнала,
+-- и автора триггер читает из настроек соединения. Без этих двух строк записи
+-- ушли бы с actor_kind = 'none' — ровно та ошибка, что стоила проекту К266 и
+-- семи безымянных записей на выкатке части 5 (против неё решение владельца 98).
+--
+-- РОВНО ОДНА ЗАПИСЬ НА ЛИДА, и только у тех, у кого поле было непустым.
+-- Комментарии остаются в одном месте, а не в двух.
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM applied_migrations WHERE id = '2026-08-30-notes-to-comments') THEN
+        PERFORM set_config('crm.audit_actor_kind', 'service', true);
+        PERFORM set_config('crm.audit_actor_name', 'Миграция', true);
+
+        INSERT INTO lead_comments (lead_id, body, created_at, is_migrated)
+        SELECT id, notes, NULL, true
+          FROM leads
+         WHERE notes IS NOT NULL AND btrim(notes) <> '';
+
+        INSERT INTO applied_migrations (id) VALUES ('2026-08-30-notes-to-comments');
+    END IF;
+END $$;
+
 -- ----- Правила: что писать, а что только отмечать --------------------------
 -- ОТДЕЛЬНОЙ ТАБЛИЦЕЙ, А НЕ КОНСТАНТОЙ В ТРИГГЕРЕ (Б2.4): уточнение списка не
 -- должно быть переделкой кода и миграцией. Правила нет — значит «пишем всё»:
