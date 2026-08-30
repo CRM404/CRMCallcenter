@@ -26,9 +26,13 @@
 // plpgsql мы получили бы два места, расходящихся в первый же день правки.
 
 const auditContext = require('./auditContext');
+const appSettings = require('./appSettings');
 
-// ПОРОГ — ЧЕТЫРЕ ЧАСА (план 7.3, там же он назван предложенным). Меняется одной
-// строкой: это единственное место, где число живёт.
+// ПОРОГ — ЧЕТЫРЕ ЧАСА (план 7.3, там же он назван предложенным). ТЕПЕРЬ ЭТО
+// УМОЛЧАНИЕ, А НЕ ЕДИНСТВЕННОЕ МЕСТО: порог задаётся на экране настроек
+// (`stale_call_hours`), а число здесь работает, пока настройку не задали, и
+// когда её значение оказалось битым. Убрать константу нельзя — пустая строка
+// в базе не должна ронять сторожа (ответы куратора 12 и 13).
 const STALE_HOURS = 4;
 
 /**
@@ -37,7 +41,15 @@ const STALE_HOURS = 4;
  * Возвращает `{ closed, ids }` — не «готово», а имена того, что снято: тик
  * пишет в журнал службы число, и по нему потом видно, был ли сбой станции.
  */
-async function closeStaleCalls(pool, hours = STALE_HOURS) {
+// ЧАСЫ ПРИХОДЯТ ПАРАМЕТРОМ ТОЛЬКО ЯВНО. Прежде здесь стояло умолчание
+// `hours = STALE_HOURS`, и с ним настройку было не прочитать: аргумент
+// всегда определён, и «звали без порога» стало бы неотличимо от «звали с
+// порогом четыре». Теперь не передали — читаем настройку, передали — верим
+// вызвавшему: этим пользуются проверки.
+async function closeStaleCalls(pool, hours) {
+    const limitHours = hours === undefined
+        ? await appSettings.getInt(pool, 'stale_call_hours', STALE_HOURS)
+        : hours;
     return auditContext.runAsService('Система', async () => {
         const result = await pool.query(
             `UPDATE calls c
@@ -54,7 +66,7 @@ async function closeStaleCalls(pool, hours = STALE_HOURS) {
                        AND e.pbx_call_id = c.pbx_call_id
                 )
               RETURNING id`,
-            [hours]
+            [limitHours]
         );
         return { closed: result.rows.length, ids: result.rows.map((r) => r.id) };
     });

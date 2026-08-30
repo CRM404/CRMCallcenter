@@ -22,6 +22,7 @@
 const { withTransaction } = require('./dbTx');
 const eventChannel = require('./eventChannel');
 const { MAX_OPEN_INTERVAL_HOURS, startOfDay } = require('./appTime');
+const appSettings = require('./appSettings');
 
 // off — не в системе (вышел или ещё не входил); в панели состояний не
 // показывается и вручную не выбирается, его ставит выход из системы.
@@ -84,7 +85,12 @@ function isRequestableState(state) {
 // освобождения удержанного лида. Если решение не нравится — снимается удалением
 // одного UPDATE ниже.
 async function closeStaleIntervals(db, employeeId) {
-    const params = [MAX_OPEN_INTERVAL_HOURS];
+    // ПОТОЛОК БЕРЁТСЯ ИЗ НАСТРОЙКИ, константа осталась умолчанием (ответы
+    // куратора 12 и 13): настройка, которую видно на экране и которая ничего
+    // не меняет, хуже её отсутствия. Пустая строка в базе при этом не должна
+    // ронять учёт времени — потому константа и не убрана.
+    const limitHours = await appSettings.getInt(db, 'max_open_interval_hours', MAX_OPEN_INTERVAL_HOURS);
+    const params = [limitHours];
     let where = 'ended_at IS NULL AND started_at <= NOW() - make_interval(hours => $1::int)';
     if (employeeId !== undefined && employeeId !== null) {
         params.push(employeeId);
