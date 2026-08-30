@@ -1392,6 +1392,51 @@ UPDATE app_settings SET
 -- Замки СЕССИОННЫЕ: снимаются либо явным pg_advisory_unlock, либо разрывом
 -- соединения. Это и есть защита от повисшего замка после падения процесса.
 
+
+-- ----- Лента комментариев (Б4.1, паспорт Р3 редакции 3) ---------------------
+-- Комментарий перестаёт быть полем. Сегодня это одна строка `leads.notes`,
+-- которая правится целиком: на втором звонке оператор видит старый текст и
+-- либо дописывает, либо стирает и пишет заново — и сказанное в первый раз
+-- исчезает навсегда. Поле, в котором лежит чужой текст, само предлагает его
+-- стереть; лента убирает не привычку, а возможность.
+--
+-- `created_at` ДОПУСКАЕТ ПУСТОТУ, И ЭТО ОТСТУПЛЕНИЕ ОТ НАЗВАННОГО СОСТАВА.
+-- Куратор назвал `created_at NOT NULL DEFAULT NOW()`, но паспорт требует от
+-- перенесённой записи двух вещей разом: «время неизвестно» и «дату переноса
+-- ставить нельзя — она соврала бы, что клиент сказал это сегодня». С NOT NULL
+-- перенесённая обязана нести какое-то время, а единственное доступное — момент
+-- переноса. Хуже того, порядок ленты «свежие сверху» тогда поставил бы её
+-- ПЕРВОЙ, а паспорт требует «всегда самая нижняя»: время переноса — самое
+-- свежее в таблице. Пустота плюс `NULLS LAST` дают оба правила даром.
+--
+-- ЗАПРЕТ ДЕРЖИТСЯ CHECK-ом, а не умолчанием: у обычной записи время
+-- обязательно, и пустое оно бывает ровно у перенесённой.
+CREATE TABLE IF NOT EXISTS lead_comments (
+    id SERIAL PRIMARY KEY,
+    -- Удаление лида уносит его комментарии: без лида они не значат ничего.
+    lead_id INTEGER NOT NULL REFERENCES leads(id) ON DELETE CASCADE,
+    -- ОБНУЛЯЮЩАЯ (ответ куратора). Комментарий принадлежит ЛИДУ, а не звонку:
+    -- он свидетельство разговора и обязан пережить удаление звонка.
+    -- Запрещающая связь означала бы, что комментарий держит чужую запись.
+    call_id INTEGER REFERENCES calls(id) ON DELETE SET NULL,
+    -- Может быть пусто: у правки из админки автора нет вовсе — входа в проекте
+    -- нет. Придумывать «система» для человека нельзя, это была бы неправда.
+    -- Связь обнуляющая по тому же доводу, что у звонка.
+    author_employee_id INTEGER REFERENCES employees(id) ON DELETE SET NULL,
+    body TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT NOW(),
+    -- ОТДЕЛЬНОЙ КОЛОНКОЙ, А НЕ ИМЕНЕМ АВТОРА. Проект уже наступал на сравнение
+    -- строк: флаги статусов воронки проставляются миграцией по названию, и
+    -- схема там же предупреждает, что лишний пробел ломает это молча.
+    is_migrated BOOLEAN NOT NULL DEFAULT false,
+    CONSTRAINT lead_comments_time_known CHECK (is_migrated OR created_at IS NOT NULL)
+);
+
+-- Лента читается ровно одним запросом — «все записи этого лида, свежие
+-- сверху». Индекс под него, и порядок в нём тот же, что в запросе.
+CREATE INDEX IF NOT EXISTS idx_lead_comments_lead
+    ON lead_comments (lead_id, created_at DESC NULLS LAST, id DESC);
+
 -- ----- Правила: что писать, а что только отмечать --------------------------
 -- ОТДЕЛЬНОЙ ТАБЛИЦЕЙ, А НЕ КОНСТАНТОЙ В ТРИГГЕРЕ (Б2.4): уточнение списка не
 -- должно быть переделкой кода и миграцией. Правила нет — значит «пишем всё»:
@@ -3569,5 +3614,36 @@ BEGIN
     ON CONFLICT (table_name, column_name) DO NOTHING;
 
     INSERT INTO applied_migrations (id) VALUES ('2026-08-26-audit-skip-updated-at');
+    END IF;
+END $$;
+
+-- ----- Журнал знает про ленту (Б4.1) ----------------------------------------
+-- ТЕКСТ КОММЕНТАРИЯ В ЖУРНАЛ НЕ ПИШЕТСЯ — уровень `fact`, «только факт
+-- изменения». Довод не в экономии: лента НЕ ПРАВИТСЯ, запись в ней вечна и
+-- лежит на своём месте. Записать её текст вторым разом значит хранить слова
+-- человека в двух местах, из которых журнал хранится бессрочно и уходит в
+-- выгрузку. Журнал отвечает на «кто и когда добавил», а «что сказано» читают
+-- в самой ленте — там оно первоисточник.
+--
+-- ЗАПИСЬ ПРИВЯЗАНА К КАРТОЧКЕ ЛИДА тем же способом, что офферы: `card_table`
+-- и `card_column`. Своей карточки у комментария нет и не будет.
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM applied_migrations WHERE id = '2026-08-30-audit-lead-comments') THEN
+
+    INSERT INTO audit_rules (table_name, column_name, title_columns, key_column, card_table, card_column) VALUES
+        ('lead_comments', '*', NULL, 'lead_id', 'leads', 'lead_id')
+    ON CONFLICT (table_name, column_name) DO NOTHING;
+
+    INSERT INTO audit_rules (table_name, column_name, level) VALUES
+        ('lead_comments', 'body', 'fact')
+    ON CONFLICT (table_name, column_name) DO NOTHING;
+
+    INSERT INTO audit_ref_map (table_name, column_name, ref_table, ref_title_columns) VALUES
+        ('lead_comments', 'lead_id',            'leads',     'last_name first_name'),
+        ('lead_comments', 'author_employee_id', 'employees', 'last_name first_name')
+    ON CONFLICT (table_name, column_name) DO NOTHING;
+
+    INSERT INTO applied_migrations (id) VALUES ('2026-08-30-audit-lead-comments');
     END IF;
 END $$;
