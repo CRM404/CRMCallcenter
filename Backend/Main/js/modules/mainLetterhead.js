@@ -36,7 +36,7 @@ export function renderAccounts(container, accounts) {
 
     if (!list.length) {
         container.innerHTML = `
-            <div class="ui-empty ui-empty--inline">
+            <div class="ui-empty">
                 <div class="ui-empty__title">Счетов пока нет</div>
                 <p class="ui-empty__text">Добавьте расчётный счёт — он подставляется в шапку документов и в реквизиты для оплаты.</p>
             </div>`;
@@ -68,7 +68,7 @@ export function renderTaxes(container, taxes) {
 
     if (!list.length) {
         container.innerHTML = `
-            <div class="ui-empty ui-empty--inline">
+            <div class="ui-empty">
                 <div class="ui-empty__title">Налоговых записей пока нет</div>
                 <p class="ui-empty__text">Добавьте систему налогообложения — она нужна в договорах и счетах.</p>
             </div>`;
@@ -118,7 +118,7 @@ export function renderLetterhead(container, organization) {
 
     if (!header && !signature) {
         container.innerHTML = `
-            <div class="ui-empty ui-empty--inline">
+            <div class="ui-empty">
                 <div class="ui-empty__title">Пока нечего показать</div>
                 <p class="ui-empty__text">Бланк соберётся сам, как только будут заполнены название, ИНН и адрес организации.</p>
             </div>`;

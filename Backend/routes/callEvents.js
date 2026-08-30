@@ -312,8 +312,14 @@ router.get('/directories', async (req, res) => {
                 `SELECT id, stage_number, stage_name, status_name, mark
                    FROM lead_funnel_statuses ORDER BY stage_number, sort_order`),
             pool.query('SELECT id, title FROM scripts ORDER BY title, id'),
+            // НОМЕР СЕТИ, А НЕ ТОЛЬКО ИМЯ (К255). Окно «Добавить офферы»
+            // сравнивает сети между собой: первый отмеченный оффер выключает
+            // офферы чужих сетей. Сравнивать по имени нельзя — `cpa_networks`
+            // объявлена без `UNIQUE` на `name` (`schema.sql:401-409`), и две
+            // одноимённые сети слились бы в одну молча. Имя тоже едет: его
+            // показывают подстрокой и называют им причину выключения.
             pool.query(
-                `SELECT o.id, o.name, o.priority, n.name AS network_name
+                `SELECT o.id, o.name, o.priority, o.network_id, n.name AS network_name
                    FROM real_estate_offers o
                    JOIN cpa_networks n ON n.id = o.network_id
                   ORDER BY o.priority NULLS LAST, o.id`),
@@ -343,6 +349,7 @@ router.get('/directories', async (req, res) => {
             offers: offers.rows.map((r) => ({
                 id: r.id,
                 name: r.name,
+                networkId: r.network_id,
                 networkName: r.network_name,
                 priority: r.priority
             })),

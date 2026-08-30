@@ -257,9 +257,17 @@ function button(className, text, iconName) {
     return node;
 }
 
-/** Поле формы: метка, орган управления, место под ошибку и подсказка. */
-function fieldBox(label, control, { required = false, hint = '', wide = false } = {}) {
-    const box = el('div', `ui-field${wide ? ' ui-field--wide' : ''}`);
+/**
+ * Поле формы: метка, орган управления, место под ошибку и подсказка.
+ *
+ * `short` — четвёртый ключ рядом с `wide`, а не отдельный помощник: `--wide` и
+ * `--short` объявлены соседними модификаторами одного `.ui-field`
+ * (`field.css:299` и `:309`), и разводить одну природу по двум помощникам
+ * значило бы собирать её двумя способами. Сужается ОРГАН УПРАВЛЕНИЯ, а не
+ * ячейка сетки: метка и подсказка читаются во всю ширину, а раскладка не едет.
+ */
+function fieldBox(label, control, { required = false, hint = '', wide = false, short = false } = {}) {
+    const box = el('div', `ui-field${wide ? ' ui-field--wide' : ''}${short ? ' ui-field--short' : ''}`);
     if (label) {
         box.appendChild(el('label', `ui-field__label${required ? ' ui-field__label--required' : ''}`, label));
     }
@@ -277,7 +285,14 @@ function input(type, value, aria, small) {
     return node;
 }
 
-/** Поле с единицей измерения справа: «45» + «секунд». */
+/**
+ * Поле с единицей измерения справа: «45» + «секунд».
+ *
+ * ОСТАЛОСЬ ТОЛЬКО В ПЕРЕЧНЯХ «ПЕРЕВОДА», и это не остаток недоделки: там нет
+ * колонок, и подписать единицу больше негде. В таблицах «Автоперезвона» и
+ * «Пост-обработки» единица уехала в шапку колонки (К254, К256) — подпись рядом
+ * с полем не давала полю сжаться, и число вылезало из ячейки.
+ */
 function withUnit(control, unit) {
     const row = el('div', 'ui-field__row');
     row.appendChild(control);
@@ -410,6 +425,12 @@ export function createEventsTab({ pane, api, scope }) {
 
     const state = { events: null, dirs: null, loaded: false, alive: true };
     let openWindow = null;
+    // ВТОРАЯ РУЧКА, А НЕ ТА ЖЕ САМАЯ (К255). Окно «Добавить офферы» стоит
+    // ПОВЕРХ окна «Перевод», и оба живы одновременно. Положи его в `openWindow`
+    // — и уход с вкладки закрыл бы только верхнее, оставив нижнее висеть над
+    // чужим разделом. Слой стопку окон держит сам (`modal.js`, `OPEN_STACK`);
+    // здесь надо помнить обе, чтобы закрыть обе.
+    let pickWindow = null;
 
     async function load() {
         // Справочники и события — одним заходом: без справочника окна нечем
@@ -549,11 +570,13 @@ export function createEventsTab({ pane, api, scope }) {
         const windowGrid = el('div', 'ui-form-grid');
         const fromInput = input('time', data.windowFrom || DEFAULT_WINDOW.from, 'Обзвон с');
         const toInput = input('time', data.windowTo || DEFAULT_WINDOW.to, 'Обзвон до');
-        // ПОДСКАЗКИ У ЭТИХ ДВУХ ПОЛЕЙ НЕТ, И ЭТО К232. `.ui-form-grid` равняет
-        // поля по низу, а подсказка стоит ПОД органом управления — поле с
-        // подсказкой поднимало свой ввод над соседним на 37 px, и две половины
-        // одного окна стояли на разных строках. Часовой пояс — свойство окна, а
-        // не поля: он сказан в плашке под таблицей.
+        // ПОДСКАЗКИ У ЭТИХ ДВУХ ПОЛЕЙ НЕТ. Прежний довод — «сетка равняет поля
+        // по низу, и поле с подсказкой поднимает свой ввод над соседним на
+        // 37 px» — СНЯТ К253: с 29.08.2026 `.ui-form-grid` равняет по верху
+        // (`field.css:297`), и подсказка соседа больше не двигает. Решение
+        // остаётся, но держится другим: часовой пояс — свойство окна, а не
+        // поля, и сказан он в плашке под таблицей. Два поля времени подписывать
+        // им по отдельности значило бы повторить одно и то же дважды.
         windowGrid.appendChild(fieldBox('Обзвон с', fromInput, { required: true }));
         windowGrid.appendChild(fieldBox('до', toInput, { required: true }));
         body.appendChild(windowGrid);
@@ -562,11 +585,26 @@ export function createEventsTab({ pane, api, scope }) {
         // раздал ширины по содержимому: поле на три цифры стало самой широкой
         // колонкой окна, имя целевого статуса обрезалось, а пилюля с
         // последствием ломалась пополам. «Статус» забирает остаток.
+        //
+        // ЧИСЛА ПЕРЕМЕРЕНЫ ЗАНОВО (К256). Прежние 132 · 118 · 266 оставляли
+        // «Статусу» 106, и самое длинное имя вставало в три строки; на 130 оно
+        // встаёт в две, а три коротких — в одну. Больше 130 «Статусу» не даёт
+        // ничего до 207 — столько нужно, чтобы «Автоответчик / голосовая почта»
+        // встал в строку, а такой ширины в этой таблице нет.
+        //
+        // ЕДИНИЦА — В ШАПКЕ КОЛОНКИ, А НЕ В ЯЧЕЙКЕ. Подпись рядом с полем не
+        // давала полю сжаться, и `<input type="number">` занимал свои 164 px
+        // при заказанной колонке — 54 px наружу. Решение владельца по К254,
+        // и оно же применено здесь.
+        //
+        // `ui-table--fields` — ячейки с полями равняются по ВЕРХУ: у «Статуса
+        // после предела» под списком живёт подстрока-последствие, и общая для
+        // таблиц середина поднимала поля соседей на 16,5 px.
         const wrap = el('div', 'ui-table-wrap');
-        const table = el('table', 'ui-table zv-fixed');
+        const table = el('table', 'ui-table ui-table--fields zv-fixed');
         table.innerHTML = '<thead><tr>'
-            + '<th>Статус</th><th style="width:132px">Интервал</th>'
-            + '<th style="width:118px">Предел</th><th style="width:266px">Статус после предела</th>'
+            + '<th>Статус</th><th style="width:118px">Интервал, мин</th>'
+            + '<th style="width:100px">Предел</th><th style="width:274px">Статус после предела</th>'
             + '<th class="ui-table__acts" style="width:54px"></th></tr></thead>';
         const tbody = el('tbody');
         table.appendChild(tbody);
@@ -637,7 +675,8 @@ export function createEventsTab({ pane, api, scope }) {
             const intervalCell = el('td');
             const intervalInput = input('number', row.intervalMinutes, 'Интервал, минут', true);
             intervalInput.dataset.role = 'interval';
-            intervalCell.appendChild(fieldBox('', withUnit(intervalInput, 'мин')));
+            // Единица стоит в шапке колонки — «Интервал, мин» (К256).
+            intervalCell.appendChild(fieldBox('', intervalInput));
             tr.appendChild(intervalCell);
 
             const limitCell = el('td');
@@ -834,7 +873,11 @@ export function createEventsTab({ pane, api, scope }) {
 
         function focusNew(list) {
             const last = list.lastElementChild;
-            const control = last && last.querySelector('select, input');
+            // ВЫКЛЮЧАТЕЛЬ И ЧИПЫ ДНЕЙ ПРОПУСКАЮТСЯ. У строки оффера первым
+            // органом управления теперь идёт «Включена»: оффер строке даёт окно
+            // выбора (К255), и своего списка у неё больше нет. Фокус на
+            // выключателе означал бы «начните с того, чтобы её выключить».
+            const control = last && last.querySelector('select, input:not([type="checkbox"])');
             if (control) control.focus();
         }
 
@@ -885,33 +928,23 @@ export function createEventsTab({ pane, api, scope }) {
             const box = el('div', `zv-row${row.enabled ? '' : ' zv-row--off'}`);
             box.dataset.index = String(index);
 
-            let main;
-            let sub = '';
-            if (row.id) {
-                main = row.offerName;
-                // Приоритет в подстроке объясняет порядок строк — без него
-                // порядок выглядит случайным. Пустой приоритет не выдумываем:
-                // обязательным он станет заходом миграций.
-                sub = row.priority === null || row.priority === undefined
-                    ? row.networkName
-                    : `${row.networkName} · приоритет ${row.priority}`;
-            } else {
-                const free = state.dirs.offers.filter((o) => o.id === Number(row.offerId)
-                    || !offers.some((r) => Number(r.offerId) === o.id));
-                const control = select(
-                    [{ value: '', label: '— выберите оффер —' }].concat(free.map((o) => ({
-                        value: o.id,
-                        // Одноимённые офферы у разных сетей бывают, и имя без
-                        // сети их не различает.
-                        label: o.priority === null || o.priority === undefined
-                            ? `${o.name} · ${o.networkName}`
-                            : `${o.name} · ${o.networkName} · приоритет ${o.priority}`
-                    }))),
-                    row.offerId, 'Оффер');
-                control.dataset.role = 'offer';
-                main = fieldBox('', control);
-            }
-            box.appendChild(rowHead(main, sub, row.enabled, () => {
+            // ОФФЕР В СТРОКЕ УЖЕ НАЗВАН И БОЛЬШЕ НЕ МЕНЯЕТСЯ (К255, паспорт Р12).
+            // Выпадающего списка здесь нет ни у сохранённой строки, ни у только
+            // что заведённой: выбор целиком переехал в окно «Добавить офферы»,
+            // где есть поиск и где держится правило «одна сеть». Оставь список
+            // в строке — и у одного и того же выбора стало бы два входа, а
+            // правило стерегло бы только один из них. Чтобы сменить оффер,
+            // строку убирают и заводят заново.
+            //
+            // Приоритет в подстроке объясняет порядок строк — без него порядок
+            // выглядит случайным. Пустой приоритет не выдумываем: миграция
+            // `2026-08-28-offer-priority-fill` заполнила прежние единицей, но
+            // колонку оставила необязательной, и у нового оффера он может быть
+            // пуст.
+            const sub = row.priority === null || row.priority === undefined
+                ? row.networkName
+                : `${row.networkName} · приоритет ${row.priority}`;
+            box.appendChild(rowHead(row.offerName, sub, row.enabled, () => {
                 syncOffers();
                 offers.splice(index, 1);
                 renderAll(null);
@@ -925,9 +958,11 @@ export function createEventsTab({ pane, api, scope }) {
             phone.dataset.role = 'phone';
             // ПОЛЕ С ПОДСКАЗКОЙ ЗАНИМАЕТ СТРОКУ СЕТКИ ЦЕЛИКОМ (К232) — то же
             // правило, что в «CPA-сетях» (`cpaApp.js`, `wide` по умолчанию).
-            // Сетка равняет поля по низу, а подсказка стоит под органом
-            // управления: без `--wide` соседнее «Разрешён с» уезжало на 54 px
-            // ниже. Заодно пара «Разрешён с … до» встаёт в одну строку.
+            // ⚠ Прежний довод — «сетка равняет по низу, и без `--wide` соседнее
+            // „Разрешён с“ уезжает на 54 px ниже» — СНЯТ К253: сетка равняет по
+            // верху (`field.css:297`). Само `--wide` остаётся, и по своим
+            // причинам: подсказка укладывается в одну строку и не удлиняет
+            // окно, а пара «Разрешён с … до» встаёт в одну строку рядом.
             //
             // Про московское время здесь больше не сказано: фраза повторялась
             // столько раз, сколько заведено офферов. Часовой пояс — свойство
@@ -949,7 +984,13 @@ export function createEventsTab({ pane, api, scope }) {
             grid.appendChild(fieldBox('до', to, { required: true }));
             const wait = input('number', row.waitSeconds, 'Ожидание, секунд');
             wait.dataset.role = 'wait';
-            grid.appendChild(fieldBox('Ожидание', withUnit(wait, 'секунд'), { required: true }));
+            // ПОЛЕ УЗКОЕ (К255, макет редакции 2). Ожидание принимает 1..3600 —
+            // так его и проверяет сервер, `wholeNumber(row.waitSeconds, 1, 3600)`
+            // в `routes/callEvents.js`, — то есть не больше четырёх знаков, а
+            // занимало оно всю ячейку сетки: ровно тот случай, ради которого
+            // К253 и завела `.ui-field--short`. Ячейка при этом не сужается —
+            // сужается только орган управления, и раскладка не едет.
+            grid.appendChild(fieldBox('Ожидание', withUnit(wait, 'секунд'), { required: true, short: true }));
             const days = daysRow(row.weekdays);
             days.dataset.role = 'days';
             grid.appendChild(fieldBox('Дни недели', days, { required: true, wide: true }));
@@ -999,7 +1040,9 @@ export function createEventsTab({ pane, api, scope }) {
             // иначе одно и то же число набирается в двух разных видах.
             const wait = input('number', row.waitSeconds, 'Ожидание, секунд');
             wait.dataset.role = 'wait';
-            grid.appendChild(fieldBox('Ожидание', withUnit(wait, 'секунд'), { required: true }));
+            // Узкое — как у оффера. Одно правило на оба перечня: иначе одно и
+            // то же число набирается в двух разных видах.
+            grid.appendChild(fieldBox('Ожидание', withUnit(wait, 'секунд'), { required: true, short: true }));
             const days = daysRow(row.weekdays);
             days.dataset.role = 'days';
             grid.appendChild(fieldBox('Дни недели', days, { required: true, wide: true }));
@@ -1007,12 +1050,323 @@ export function createEventsTab({ pane, api, scope }) {
             return box;
         }
 
+        // ------------------------------------------- окно «Добавить офферы»
+        //
+        // Решение владельца 108, К255, макет `4733e795`. Офферов у сети десятки,
+        // а настройка у них одна и та же — заводить их по одному значит набрать
+        // одно и то же пять раз подряд.
+        //
+        // «ОДНА СЕТЬ» ДЕРЖИТСЯ СУЖЕНИЕМ, А НЕ ОТКАЗОМ. Пока не отмечен ни один
+        // оффер — видны все свободные; отмечен первый — офферы чужих сетей
+        // ОСТАЮТСЯ ВИДИМЫМИ и выключаются, а причина стоит в самой строке.
+        // Прятать их нельзя по тому же правилу, по которому в «Автоперезвоне»
+        // неразмеченный статус остаётся в списке выключенным: спрятанный пункт
+        // читается как «такого оффера нет», и человек идёт искать ошибку не туда.
+        // Отказ после нажатия отпадает по другой причине: он наказывал бы за
+        // действие, которое форма сама позволила совершить.
+        //
+        // СЕТИ СРАВНИВАЮТСЯ ПО НОМЕРУ, А НЕ ПО ИМЕНИ: `cpa_networks` объявлена
+        // без `UNIQUE` на `name` (`schema.sql:401-409`), и две одноимённые сети
+        // слились бы в одну молча.
+        //
+        // Серверной проверки «одна сеть» здесь нет намеренно: решение владельца
+        // 108 говорит «запрещается ФОРМОЙ», а правило, выразимое на данных
+        // («один номер перевода — одна сеть»), шире решения и отбивало бы ещё и
+        // ручной ввод номера в строке перечня. Оно заведено отдельным предметом
+        // — К265, вместе со своим местом на экране.
+        function openOffersPick() {
+            // Свободные — те, которых в перечне ещё нет. Порядок берётся у
+            // справочника (приоритет по возрастанию, затем номер записи) и здесь
+            // не переставляется: тот же порядок, что у строк перечня.
+            const free = state.dirs.offers.filter((o) => !offers.some((r) => Number(r.offerId) === o.id));
+            const picked = new Set();
+
+            const body = el('div');
+
+            const search = input('search', '', 'Поиск офферов');
+            search.placeholder = 'Найти оффер по названию…';
+            search.addEventListener('input', () => { renderList(); syncPick(); });
+            body.appendChild(fieldBox('', search, {
+                hint: 'Офферы одной сети: номер для перевода — это номер партнёра, '
+                    + 'и общий номер у чужих друг другу офферов означал бы перевод не туда.'
+            }));
+
+            const listBox = el('div');
+            body.appendChild(listBox);
+
+            const countNote = el('p', 'ui-table-note');
+            body.appendChild(countNote);
+
+            // НАСТРОЙКИ СОБИРАЮТСЯ ОДИН РАЗ И ДАЛЬШЕ ТОЛЬКО ПРЯЧУТСЯ. Пересобери
+            // их при каждой отметке — и набранный номер пропадал бы от лишней
+            // галочки.
+            const grid = el('div', 'ui-form-grid');
+            const phone = input('text', '', 'Номер для перевода');
+            phone.dataset.role = 'phone';
+            grid.appendChild(fieldBox('Номер для перевода', phone, {
+                required: true,
+                wide: true,
+                hint: 'Внешний номер партнёра — городской или мобильный.'
+            }));
+            const from = input('time', '', 'Разрешён с');
+            from.dataset.role = 'from';
+            grid.appendChild(fieldBox('Разрешён с', from, { required: true }));
+            const to = input('time', '', 'Разрешён до');
+            to.dataset.role = 'to';
+            grid.appendChild(fieldBox('до', to, { required: true }));
+            const wait = input('number', '', 'Ожидание, секунд');
+            wait.dataset.role = 'wait';
+            // ТРЕТЬЕ МЕСТО ОДНОГО ПОЛЯ, и узкое оно здесь по той же причине.
+            // Сузить только в строке перечня значило бы развести одно поле
+            // одного события по двум окнам: до сужения оно стояло 265,8 в
+            // строке и 282,8 здесь — 17 px разницы, измеренных, а не
+            // предположенных (дизайн-сессия, 30.08.2026).
+            grid.appendChild(fieldBox('Ожидание', withUnit(wait, 'секунд'), { required: true, short: true }));
+            const days = daysRow([]);
+            days.dataset.role = 'days';
+            grid.appendChild(fieldBox('Дни недели', days, { required: true, wide: true }));
+            body.appendChild(grid);
+
+            const noteBox = el('div');
+            body.appendChild(noteBox);
+
+            /** Сеть выбора: её задаёт первый отмеченный оффер. */
+            function pickedNetwork() {
+                for (const o of free) if (picked.has(o.id)) return o.networkId;
+                return null;
+            }
+
+            function pickedName() {
+                for (const o of free) if (picked.has(o.id)) return o.networkName;
+                return '';
+            }
+
+            function renderList() {
+                listBox.innerHTML = '';
+                const query = search.value.trim().toLowerCase();
+                // ПО НАЗВАНИЮ, И ТОЛЬКО ПО НЕМУ: поле обещает «Найти оффер по
+                // названию…», а обещание поля — договор. Подстрока с первого
+                // знака, без учёта регистра — как в «CPA-сетях», откуда офферы
+                // и приходят (`cpaApp.js:263-264`): порог в два-три знака нужен
+                // там, где запрос дорог, а список уже в руках экрана.
+                const shown = query
+                    ? free.filter((o) => o.name.toLowerCase().includes(query))
+                    : free.slice();
+                if (!shown.length) { listBox.appendChild(nothingFound()); return; }
+
+                const wrap = el('div', 'ui-table-wrap');
+                const table = el('table', 'ui-table');
+                const head = el('tr');
+                head.appendChild(el('th', 'ui-table__sel'));
+                head.appendChild(el('th', '', 'Оффер'));
+                // Приоритет — ОТДЕЛЬНОЙ КОЛОНКОЙ, а не припиской к имени: по
+                // нему сравнивают строки глазами, а приписка в конце строки для
+                // сравнения не годится.
+                const priorityHead = el('th', '', 'Приоритет');
+                priorityHead.style.width = '104px';
+                head.appendChild(priorityHead);
+                const thead = el('thead');
+                thead.appendChild(head);
+                table.appendChild(thead);
+
+                const tbody = el('tbody');
+                shown.forEach((o) => tbody.appendChild(pickRow(o)));
+                table.appendChild(tbody);
+                wrap.appendChild(table);
+                listBox.appendChild(wrap);
+            }
+
+            function pickRow(offer) {
+                const net = pickedNetwork();
+                const other = net !== null && offer.networkId !== net;
+                const on = picked.has(offer.id);
+                const tr = el('tr', on ? 'ui-table__row--selected' : '');
+
+                const sel = el('td', 'ui-table__sel');
+                const box = el('input');
+                box.type = 'checkbox';
+                box.checked = on;
+                box.disabled = other;
+                box.dataset.offer = String(offer.id);
+                box.setAttribute('aria-label', other ? `${offer.name} — другая сеть` : offer.name);
+                box.addEventListener('change', () => {
+                    if (box.checked) picked.add(offer.id); else picked.delete(offer.id);
+                    renderList();
+                    syncPick();
+                });
+                sel.appendChild(box);
+
+                const who = el('td');
+                who.appendChild(el('span', `ui-table__main${other ? ' ui-table__muted' : ''}`, offer.name));
+                const sub = el('span', 'ui-table__sub');
+                if (other) {
+                    // ПРИЧИНА СТОИТ В САМОЙ СТРОКЕ, а не только в подсказке под
+                    // таблицей: человек читает ту строку, на которую смотрит.
+                    sub.appendChild(document.createTextNode(`${offer.networkName} — `));
+                    sub.appendChild(el('b', '', 'другая сеть'));
+                } else {
+                    sub.textContent = offer.networkName;
+                }
+                who.appendChild(sub);
+
+                const priority = el('td', `ui-table__num${other ? ' ui-table__muted' : ''}`);
+                if (offer.priority === null || offer.priority === undefined) {
+                    priority.appendChild(el('span', 'ui-dash', '—'));
+                } else {
+                    priority.textContent = String(offer.priority);
+                }
+
+                tr.append(sel, who, priority);
+                return tr;
+            }
+
+            function nothingFound() {
+                const box = el('div', 'ui-empty');
+                const icon = el('span', 'ui-empty__icon');
+                icon.appendChild(iconNode('search', 'lg'));
+                box.appendChild(icon);
+                box.appendChild(el('b', 'ui-empty__title', 'Ничего не найдено по запросу'));
+                box.appendChild(el('span', 'ui-empty__text',
+                    'Проверьте написание или очистите поиск — свободные офферы есть, '
+                    + 'просто не по этому запросу.'));
+                const clear = button('ui-btn ui-btn--ghost ui-empty__action', 'Очистить поиск');
+                // Сбрасывается ТОЛЬКО поиск. Отметки остаются: выбор поиском не
+                // делался, и снимать его чужой кнопкой нельзя.
+                clear.addEventListener('click', () => {
+                    search.value = '';
+                    renderList();
+                    syncPick();
+                    search.focus();
+                });
+                box.appendChild(clear);
+                return box;
+            }
+
+            // Счётчик, настройки, плашка и кнопка подвала — всё считается от
+            // одного числа, поэтому и обновляется одним местом.
+            function syncPick() {
+                const n = picked.size;
+                countNote.innerHTML = '';
+                countNote.appendChild(document.createTextNode('Выбрано: '));
+                countNote.appendChild(el('b', '', String(n)));
+                if (n === 0) {
+                    // Строка предупреждает ЗАРАНЕЕ: поле, появляющееся без
+                    // предупреждения, читается как сбой.
+                    countNote.appendChild(document.createTextNode(
+                        '. Отметьте офферы — настройки появятся ниже.'));
+                } else if (n === 1) {
+                    countNote.appendChild(document.createTextNode(` · сеть «${pickedName()}».`));
+                } else {
+                    countNote.appendChild(document.createTextNode(
+                        ` · все из сети «${pickedName()}». Офферы других сетей выключены, `
+                        + 'пока выбор не сброшен.'));
+                }
+
+                // Настроек без адресатов не бывает, а погашенная форма из шести
+                // полей читается как поломка.
+                grid.hidden = n === 0;
+
+                noteBox.innerHTML = '';
+                // При одном выбранном плашка врала бы про «все».
+                if (n >= 2) {
+                    noteBox.appendChild(note(
+                        `Появятся ${n} ${plural(n, 'отдельная строка', 'отдельные строки', 'отдельных строк')}`
+                        + ' — по одной на оффер. После сохранения каждая правится сама: '
+                        + 'правка одной остальных не трогает.',
+                        { title: `Настройки лягут на все ${n} ${plural(n, 'строку', 'строки', 'строк')}` }));
+                }
+
+                if (addBtn) {
+                    // Число в кнопке — цифрой, как в счётчике над ней: слово в
+                    // одном месте окна и цифра в другом это разнобой внутри
+                    // одного окна.
+                    addBtn.textContent = n ? `Добавить (${n})` : 'Добавить';
+                    addBtn.disabled = n === 0;
+                }
+            }
+
+            // ПРОВЕРКА СТОИТ ЗДЕСЬ, а не только при сохранении «Перевода».
+            // Пустить незаполненные значит привезти N негодных строк разом:
+            // «общие настройки» превратятся в «общую ошибку на N строк», и
+            // чинить её придётся по одной — ровно против того, ради чего
+            // множественный выбор и заводится. Тексты те же, что у строки
+            // перечня: одно правило — один текст.
+            function addPicked() {
+                clearErrors(body);
+                const draft = {
+                    transferPhone: phone.value,
+                    timeFrom: from.value,
+                    timeTo: to.value,
+                    waitSeconds: wait.value,
+                    weekdays: readDays(days)
+                };
+                let ok = true;
+                if (!String(draft.transferPhone).trim()) {
+                    markError(phone, 'Укажите номер для перевода: без него перевод не сработает');
+                    ok = false;
+                }
+                if (wholeNumber(draft.waitSeconds) === null) {
+                    markError(wait, 'Не задано');
+                    ok = false;
+                }
+                if (!checkTimes(grid, draft)) ok = false;
+                if (!ok) { focusFirstError(body); return false; }
+
+                // ЗАВОДЯТСЯ N САМОСТОЯТЕЛЬНЫХ СТРОК, а не одна на несколько
+                // офферов: `call_transfer_offers.offer_id` объявлен
+                // `NOT NULL UNIQUE` (`schema.sql:2706`), и сущности «группа» в
+                // данных нет. Множественный выбор — способ завести N строк
+                // одинаково, а не связь между ними.
+                free.filter((o) => picked.has(o.id)).forEach((offer) => {
+                    offers.push({
+                        id: null,
+                        offerId: offer.id,
+                        offerName: offer.name,
+                        networkName: offer.networkName,
+                        priority: offer.priority,
+                        transferPhone: draft.transferPhone,
+                        weekdays: draft.weekdays,
+                        timeFrom: draft.timeFrom,
+                        timeTo: draft.timeTo,
+                        waitSeconds: draft.waitSeconds,
+                        enabled: true,
+                        blockedReason: null
+                    });
+                });
+                renderAll('offer');
+                return true;
+            }
+
+            pickWindow = openModal({
+                title: 'Добавить офферы',
+                sub: 'Настройки лягут на все выбранные. После сохранения каждая строка правится сама',
+                body,
+                scope,
+                size: 'wide',
+                // Та же дверь на ключе, что у окна события, и тем же доводом:
+                // цена промаха мимо окна равна всему вводу. Здесь она выше —
+                // окно стоит ПОВЕРХ «Перевода», и две разные двери у двух окон
+                // одного события были бы разнобоем.
+                scrimClose: false,
+                actions: [
+                    { label: 'Отмена', variant: 'ghost', value: false },
+                    { label: 'Добавить', role: 'add', onClick: addPicked }
+                ]
+            });
+            const addBtn = pickWindow.box.querySelector('[data-role="add"]');
+            pickWindow.result.then(() => { pickWindow = null; });
+
+            renderList();
+            syncPick();
+        }
+
         function syncOffers() {
             Array.from(offerList.children).forEach((node, index) => {
                 const row = offers[index];
                 if (!row) return;
-                const picker = node.querySelector('[data-role="offer"]');
-                if (picker) row.offerId = picker.value || null;
+                // `offerId` отсюда не читается: оффер строке даёт окно выбора и
+                // после этого он не правится (К255). Читать нечего — органа
+                // управления для него в строке нет.
                 row.transferPhone = node.querySelector('[data-role="phone"]').value;
                 row.timeFrom = node.querySelector('[data-role="from"]').value;
                 row.timeTo = node.querySelector('[data-role="to"]').value;
@@ -1036,13 +1390,7 @@ export function createEventsTab({ pane, api, scope }) {
             });
         }
 
-        addOffer.addEventListener('click', () => {
-            offers.push({
-                id: null, offerId: null, transferPhone: '', weekdays: [],
-                timeFrom: '', timeTo: '', waitSeconds: '', enabled: true, blockedReason: null
-            });
-            renderAll('offer');
-        });
+        addOffer.addEventListener('click', openOffersPick);
         addStaff.addEventListener('click', () => {
             staff.push({
                 id: null, employeeId: null, weekdays: [],
@@ -1078,8 +1426,6 @@ export function createEventsTab({ pane, api, scope }) {
 
             Array.from(offerList.children).forEach((node, index) => {
                 const row = offers[index];
-                const picker = node.querySelector('[data-role="offer"]');
-                if (picker && !row.offerId) { markError(picker, 'Не задан'); ok = false; }
                 if (!String(row.transferPhone || '').trim()) {
                     markError(node.querySelector('[data-role="phone"]'),
                         'Укажите номер для перевода: без него перевод не сработает');
@@ -1173,12 +1519,18 @@ export function createEventsTab({ pane, api, scope }) {
         body.appendChild(statusBox);
 
         const wrap = el('div', 'ui-table-wrap');
-        const table = el('table', 'ui-table zv-fixed');
+        const table = el('table', 'ui-table ui-table--fields zv-fixed');
         // Ширины — та же К231. «Скрипт» забирает остаток: он единственное место
         // строки, где лежит длинный текст, а без правила ему доставалось ровно
         // столько же, сколько полю на две цифры.
+        //
+        // К254: «сек» ушло из ячейки в шапку колонки — решение владельца.
+        // Подпись рядом с полем не давала полю сжаться, и число вылезало из
+        // ячейки на 36 px. Колонка 140, а не 136: шапка «ДЛИТЕЛЬНОСТЬ, СЕК» —
+        // 113,4 px текста, а `.ui-table th` запрещает перенос, и 136 прошло бы
+        // впритык, без запаса на другой шрифт.
         table.innerHTML = '<thead><tr><th style="width:190px">Линия</th><th>Скрипт</th>'
-            + '<th style="width:150px">Длительность</th>'
+            + '<th style="width:140px">Длительность, сек</th>'
             + '<th class="ui-table__acts" style="width:54px"></th></tr></thead>';
         const tbody = el('tbody');
         table.appendChild(tbody);
@@ -1221,7 +1573,8 @@ export function createEventsTab({ pane, api, scope }) {
             const secondsCell = el('td');
             const seconds = input('number', row.durationSeconds, 'Длительность, секунд', true);
             seconds.dataset.role = 'seconds';
-            secondsCell.appendChild(fieldBox('', withUnit(seconds, 'сек')));
+            // Единица стоит в шапке колонки — «Длительность, сек» (К254).
+            secondsCell.appendChild(fieldBox('', seconds));
             tr.appendChild(secondsCell);
 
             const acts = el('td', 'ui-table__acts');
@@ -1330,6 +1683,10 @@ export function createEventsTab({ pane, api, scope }) {
         get loaded() { return state.loaded; },
         destroy() {
             state.alive = false;
+            // Сначала верхнее, потом нижнее: закрытие возвращает фокус туда,
+            // откуда окно открыли, и обратный порядок отправил бы его в уже
+            // снятое окно.
+            if (pickWindow) pickWindow.close();
             if (openWindow) openWindow.close();
         }
     };
