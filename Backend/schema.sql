@@ -2809,6 +2809,20 @@ DECLARE
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM applied_migrations WHERE id = '2026-08-29-transfer-wait-move') THEN
 
+    -- ⚠ МИГРАЦИЯ ПОДПИСЫВАЕТ СЕБЯ САМА (К266, найдено куратором при проверке
+    -- слияния 30.08.2026). Ниже стоит `DELETE FROM call_events`, и триггер
+    -- журнала запишет его как ЛЮБОЕ другое изменение — прочитав автора из
+    -- настроек соединения. Без этих двух строк запись уходит с `actor_kind =
+    -- 'none'`, а экран журнала рисует её «не указан» (`historyTable.js:154`).
+    -- Это ровно та ошибка, что уже стоила семи безымянных записей на выкатке
+    -- части 5 и против которой стоит решение владельца 98; соседняя миграция
+    -- `2026-08-28-offer-priority-fill` в этом же файле подписывается именно так.
+    -- ЧИНИТЬ ПОСЛЕ ВЫКАТКИ БЫЛО БЫ НЕЛЬЗЯ: замок встанет, блок больше не
+    -- выполнится, и запись «событие „Время перевода" снято» осталась бы без
+    -- автора навсегда — в единственном месте, где её будут искать.
+    PERFORM set_config('crm.audit_actor_kind', 'service', true);
+    PERFORM set_config('crm.audit_actor_name', 'Миграция', true);
+
     ALTER TABLE call_transfer_employees ADD COLUMN IF NOT EXISTS wait_seconds INTEGER;
 
     UPDATE call_transfer_employees t
