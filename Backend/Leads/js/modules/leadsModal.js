@@ -547,7 +547,7 @@ export function createLeadModal(root, deps) {
         scriptPairs.setScripts(scripts);
 
         offerPicker = createOfferTabPicker({
-            rootSelect: $('#ofltRoot'), platSelect: $('#ofltPlat'),
+            platSelect: $('#ofltPlat'),
             geoSelects: {
                 region: $('#ofltRegion'), city: $('#ofltCity'),
                 district: $('#ofltDistrict'), locality: $('#ofltLocality')

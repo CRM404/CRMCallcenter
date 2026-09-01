@@ -237,10 +237,16 @@
             <h3>Диапазоны</h3>
             <p class="section-hint">Лид подходит, если его диапазон пересекается с заданным: «до 12 млн» находит и того, кто готов на 10–14.</p>
             <div class="ui-form-grid">
-                <div class="ui-field"><label class="ui-field__label" for="fltPriceFrom">Цена от</label><input class="ui-field__control" type="number" id="fltPriceFrom"></div>
-                <div class="ui-field"><label class="ui-field__label" for="fltPriceTo">Цена до</label><input class="ui-field__control" type="number" id="fltPriceTo"></div>
-                <div class="ui-field"><label class="ui-field__label" for="fltAreaFrom">Площадь от</label><input class="ui-field__control" type="number" id="fltAreaFrom"></div>
-                <div class="ui-field"><label class="ui-field__label" for="fltAreaTo">Площадь до</label><input class="ui-field__control" type="number" id="fltAreaTo"></div>
+            <!-- ⚠ `min="0"` ЗДЕСЬ ПОДСКАЗКА, А НЕ ЗАПРЕТ (решение куратора).
+                 Формы в разделе нет, `checkValidity()` в проекте не зовётся
+                 нигде, а единственная форма проекта — вход оператора — стоит с
+                 `novalidate`. Значит `min` только не даёт стрелкам уводить в
+                 минус; набранное руками отрицательное уходит на сервер как
+                 было. Отбивает его СЕРВЕР (К269, К270). -->
+                <div class="ui-field"><label class="ui-field__label" for="fltPriceFrom">Цена от</label><input class="ui-field__control" type="number" min="0" id="fltPriceFrom"></div>
+                <div class="ui-field"><label class="ui-field__label" for="fltPriceTo">Цена до</label><input class="ui-field__control" type="number" min="0" id="fltPriceTo"></div>
+                <div class="ui-field"><label class="ui-field__label" for="fltAreaFrom">Площадь от</label><input class="ui-field__control" type="number" min="0" id="fltAreaFrom"></div>
+                <div class="ui-field"><label class="ui-field__label" for="fltAreaTo">Площадь до</label><input class="ui-field__control" type="number" min="0" id="fltAreaTo"></div>
             </div>
         </div>
         <div class="form-section">
@@ -364,10 +370,10 @@
                 <div class="ui-field"><label class="ui-field__label" for="ldRoomCount">Комнатность</label><select class="ui-field__control" id="ldRoomCount"></select></div>
                 <div class="ui-field"><label class="ui-field__label" for="ldFinish">Отделка</label><select class="ui-field__control" id="ldFinish"></select></div>
                 <div class="ui-field"><label class="ui-field__label" for="ldDeliveryDeadline">Срок сдачи <span class="hint">— не позже</span></label><select class="ui-field__control" id="ldDeliveryDeadline"></select></div>
-                <div class="ui-field"><label class="ui-field__label" for="ldPriceFrom">Цена от</label><input class="ui-field__control" type="number" id="ldPriceFrom"></div>
-                <div class="ui-field"><label class="ui-field__label" for="ldPriceTo">Цена до</label><input class="ui-field__control" type="number" id="ldPriceTo"></div>
-                <div class="ui-field"><label class="ui-field__label" for="ldAreaFrom">Площадь от</label><input class="ui-field__control" type="number" id="ldAreaFrom"></div>
-                <div class="ui-field"><label class="ui-field__label" for="ldAreaTo">Площадь до</label><input class="ui-field__control" type="number" id="ldAreaTo"></div>
+                <div class="ui-field"><label class="ui-field__label" for="ldPriceFrom">Цена от</label><input class="ui-field__control" type="number" min="0" id="ldPriceFrom"></div>
+                <div class="ui-field"><label class="ui-field__label" for="ldPriceTo">Цена до</label><input class="ui-field__control" type="number" min="0" id="ldPriceTo"></div>
+                <div class="ui-field"><label class="ui-field__label" for="ldAreaFrom">Площадь от</label><input class="ui-field__control" type="number" min="0" id="ldAreaFrom"></div>
+                <div class="ui-field"><label class="ui-field__label" for="ldAreaTo">Площадь до</label><input class="ui-field__control" type="number" min="0" id="ldAreaTo"></div>
             </div>
         </div>
 
@@ -464,8 +470,15 @@
 
     <!-- Вкладка «Офферы»: фильтры + серверный поиск по базе ≈38 000 -->
     <div data-role="tab-panel-offers" hidden>
+        <!-- ОТБОРА ПО КОРНЕВОМУ ИСТОЧНИКУ ЗДЕСЬ НЕТ (К273). У всех записей он
+             ОДИНАКОВ, и отбор по нему не сужает выдачу ни на один оффер.
+             Из ПОДПИСИ оффера он не убран — там это часть имени
+             (`leadsOffers.js`, `offerSubtitle`). Серверный параметр
+             `rootSource` и справочник `rootSources` остались рабочими: они
+             пригодятся, когда корневых источников станет больше одного.
+             Ряд остался с ОДНИМ полем намеренно: сведение рядов — часть К272,
+             и решает его дизайн-сессия, а не эта правка. -->
         <div class="ui-form-grid offers-filters">
-            <div class="ui-field"><label class="ui-field__label" for="ofltRoot">Корневой источник</label><select class="ui-field__control" id="ofltRoot"><option value="">Все</option></select></div>
             <div class="ui-field"><label class="ui-field__label" for="ofltPlat">Площадка</label><select class="ui-field__control" id="ofltPlat"><option value="">Все</option></select></div>
         </div>
         <!-- География оффера (real_estate_offer_geo, kind='object'), а не
