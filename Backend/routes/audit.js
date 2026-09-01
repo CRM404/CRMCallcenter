@@ -22,7 +22,17 @@ const auditContext = require('../services/auditContext');
 const router = express.Router();
 
 // Порция догрузки. Паспорт Р5: «Показано 30 из 342».
-const PAGE_SIZE = 30;
+//
+// ⚠ РАЗМЕР — ЗАКРЫТЫЙ СПИСОК, а не число от браузера. Довод тот же, что у
+// `PERIOD_PRESETS` ниже: принимать произвольное число значит принимать и
+// представление браузера о том, сколько сервер обязан отдать за раз.
+//
+// ВТОРОЕ ЗНАЧЕНИЕ ЗАВЕДЕНО РАДИ ВКЛАДКИ КАРТОЧКИ (К275). С привязанными
+// записями тридцати строк ей не хватает: у лида с десятками звонков
+// собственные правки лида вытеснило бы из видимых, и вкладка показала бы
+// ОБРАТНОЕ тому, ради чего заведена, — тридцать звонков вместо прошлого лида.
+const PAGE_SIZES = [30, 100];
+const PAGE_SIZE = PAGE_SIZES[0];
 
 // ПОТОЛОК ВЫГРУЗКИ — ОДИН НА ПРОЕКТ (ответ куратора И207, сведено в 7Б).
 // Библиотека одна, браузер один, файл собирается одинаково; два разных числа
@@ -56,6 +66,18 @@ const PERIOD_PRESETS = [1, 7, 30];
 // которые открываются иначе или не открываются вовсе. Вести «в раздел вообще»
 // значит обещать переход и не дать его — тогда лучше текст без ссылки.
 const CARD_SECTIONS = { leads: 'leads', employees: 'employees' };
+
+// ⚠ ЧТО НЕ ПОКАЗЫВАТЬ В КАРТОЧКЕ, ХОТЯ ОНО ПРИВЯЗАНО (решение куратора).
+// Исключение стоит ЗДЕСЬ, а не в `audit_rules`, и это разные вещи: в правилах
+// записано, ЧТО ЗАПИСЫВАТЬ, а здесь — ЧТО ПОКАЗЫВАТЬ. Ключи туннеля привязаны к
+// сотруднику служебно; в его истории это шум, и шум про доступы.
+const CARD_SCOPE_SKIP = ['tunnel_key_tokens'];
+
+// Имя таблицы и колонки уходит в SQL ИДЕНТИФИКАТОРОМ, а не параметром, и
+// проверяется по образцу до подстановки. Значения приходят из своей же схемы,
+// но «пришло из базы» не то же самое, что «можно склеить»: правила правят
+// руками, и опечатка в них не должна становиться выражением.
+const IDENT_RE = /^[a-z_][a-z_0-9]*$/;
 
 // ---------------------------------------------------------------- список
 
@@ -93,7 +115,7 @@ router.get('/', async (req, res) => {
 
         const list = await selectPage(whereSql, params, filters, collapse);
 
-        const rows = list.map(toRow);
+        const rows = list.map((r) => toRow(r, filters));
         await attachCards(rows);
 
         res.json({
@@ -108,7 +130,7 @@ router.get('/', async (req, res) => {
                 ? { at: list[list.length - 1].sort_at_key, id: Number(list[list.length - 1].sort_id) }
                 : null,
             // Выгрузка берёт всю выборку одним куском, и догружать ей нечего.
-            hasMore: !filters.forExport && rows.length === PAGE_SIZE,
+            hasMore: !filters.forExport && rows.length === filters.limit,
             filters: {
                 from: filters.from,
                 to: filters.to,
@@ -341,6 +363,71 @@ router.post('/export', async (req, res) => {
 
 // ---------------------------------------------------------------- сборка запроса
 
+/**
+ * УСЛОВИЕ «ЭТА ЗАПИСЬ И ВСЁ, ЧТО К НЕЙ ПРИВЯЗАНО» (К275).
+ *
+ * ⚠ СПИСОК ТАБЛИЦ ЧИТАЕТСЯ ИЗ `audit_rules`, А НЕ ВПИСАН В КОД. Имён двадцать
+ * одно у семи владельцев (замер на `64add46`), и вписанные в код они разошлись
+ * бы со схемой на первой же новой привязанной таблице — молча. Так новая
+ * таблица подхватывается сама: `lead_comments` приехала лентой комментариев и
+ * попала бы в отбор без единой правки здесь.
+ *
+ * ДВЕ ГРУППЫ, И ЗАПРОС ИМ НУЖЕН РАЗНЫЙ:
+ *   · группа А — ключ записи СОВПАДАЕТ с колонкой привязки (`lead_offers` и ещё
+ *     шесть). У них `record_id` в журнале УЖЕ равен номеру владельца, и всё
+ *     решается одним условием без единого подзапроса;
+ *   · группа Б — ключ свой (`calls` и остальные четырнадцать), до владельца
+ *     надо идти в саму таблицу.
+ *
+ * ⚠ СЛЕПОЕ ПЯТНО, И ОНО НАЗВАНО НАРОЧНО. Удалённая запись группы Б в подзапрос
+ * не попадает: строки в таблице больше нет. Живой случай ровно один —
+ * `routes/schedule.js:215`, снятый день графика сотрудника; по остальным
+ * таблицам группы Б удалений в коде нет. У группы А пятна нет по устройству.
+ * Лезть за владельцем в `changes` удалённой записи не стали: разбор JSON в
+ * условии отбора дорог и хрупок, а случай один.
+ */
+async function cardScopeSql(filters, params) {
+    params.push(filters.recordTable);
+    const tableParam = params.length;
+    params.push(filters.recordId);
+    const idParam = params.length;
+
+    // Сама запись — первым слагаемым и всегда.
+    const parts = [`(l.table_name = $${tableParam} AND l.record_id = $${idParam})`];
+
+    const rules = await pool.query(
+        `SELECT table_name, key_column, card_column
+           FROM audit_rules
+          WHERE column_name = '*' AND card_table = $1`,
+        [filters.recordTable]
+    );
+
+    const groupA = [];
+    for (const rule of rules.rows) {
+        const table = rule.table_name;
+        const column = rule.card_column;
+        const key = rule.key_column || 'id';
+        if (CARD_SCOPE_SKIP.includes(table)) continue;
+        // Негодное имя пропускается молча: это опечатка в правилах, а не запрос
+        // человека, и валить ей весь журнал незачем.
+        if (!IDENT_RE.test(table) || !IDENT_RE.test(column) || !IDENT_RE.test(key)) continue;
+        if (key === column) { groupA.push(table); continue; }
+        params.push(table);
+        parts.push(
+            `(l.table_name = $${params.length} AND l.record_id IN (`
+            + `SELECT ${quoteIdent(key)}::text FROM ${quoteIdent(table)}`
+            + ` WHERE ${quoteIdent(column)}::text = $${idParam}))`
+        );
+    }
+
+    if (groupA.length) {
+        params.push(groupA);
+        parts.push(`(l.table_name = ANY($${params.length}::text[]) AND l.record_id = $${idParam})`);
+    }
+
+    return `(${parts.join(' OR ')})`;
+}
+
 async function readFilters(query) {
     const today = todayIso();
     const defaultFrom = shiftIso(today, -(DEFAULT_PERIOD_DAYS - 1));
@@ -372,6 +459,8 @@ async function readFilters(query) {
         actorName: String(query.actorName || '').trim().slice(0, 64) || null,
         batchOnly: query.batchOnly === '1',
         batchId: /^[0-9a-fA-F-]{36}$/.test(String(query.batchId || '')) ? String(query.batchId) : null,
+        // Размер порции — из закрытого списка; всё прочее приводится к 30.
+        limit: PAGE_SIZES.includes(Number(query.limit)) ? Number(query.limit) : PAGE_SIZE,
         recordTable: String(query.recordTable || '').trim().slice(0, 64) || null,
         recordId: String(query.recordId || '').trim().slice(0, 64) || null,
         search: String(query.search || '').trim().slice(0, 64),
@@ -404,9 +493,28 @@ async function buildWhere(filters) {
     if (filters.actorName) add('l.actor_name = $$', filters.actorName);
     if (filters.batchOnly) where.push('l.batch_id IS NOT NULL');
     if (filters.batchId) add('l.batch_id = $$', filters.batchId);
-    if (filters.recordTable) add('l.table_name = $$', filters.recordTable);
-    if (filters.recordId) add('l.record_id = $$', filters.recordId);
+    // ⚠ ОТБОР КАРТОЧКИ ВИДИТ И ПРИВЯЗАННЫЕ ЗАПИСИ (К275).
+    //
+    // Раньше здесь стояли два условия — «эта таблица» и «этот номер», — и
+    // записи привязанных таблиц не попадали в карточку НИКОГДА: у оффера лида
+    // своё имя таблицы. Владелец не видел, что оффер сняли, хотя запись об этом
+    // в журнале была.
+    //
+    // Расширение работает ТОЛЬКО когда названы оба: одно имя таблицы без номера
+    // — это отбор раздела, расширять его нечем и незачем.
+    if (filters.recordTable && filters.recordId) {
+        where.push(await cardScopeSql(filters, params));
+    } else {
+        if (filters.recordTable) add('l.table_name = $$', filters.recordTable);
+        if (filters.recordId) add('l.record_id = $$', filters.recordId);
+    }
 
+    // ⚠ ПОИСК ВМЕСТЕ С ОТБОРОМ ПО ЗАПИСИ СУЖАЕТ ОБРАТНО ДО САМОЙ ЗАПИСИ,
+    // и это названо нарочно (К275). Пары ниже — «таблица#номер», для лида
+    // это `leads#42`; строки привязанных таблиц в них не входят и
+    // отсеются условием `AND`. Расширение при поиске молча схлопывается к
+    // прежнему поведению. Так и оставлено: поиск спрашивает про конкретную
+    // запись, и подмешивать к ответу чужие записи он не должен.
     if (filters.search) {
         const found = await resolveSearch(filters.search);
         if (!found.length) return { impossible: true };
@@ -570,7 +678,7 @@ async function selectPage(whereSql, params, filters, collapse) {
     // ПОТОЛОК ВЫГРУЗКИ — 50 000, И ОН НАКОНЕЦ СТОИТ В ЗАПРОСЕ (К205). Прежде
     // число было объявлено и не использовано ни разу: выгрузка уходила с той же
     // порцией в тридцать строк, что и экран, и файл врал про полноту молча.
-    const limit = filters.forExport ? EXPORT_LIMIT : PAGE_SIZE;
+    const limit = filters.forExport ? EXPORT_LIMIT : filters.limit;
 
     const sql = `
         SELECT * FROM (${collapse ? `${single} UNION ALL ${batched}` : single}) t
@@ -582,7 +690,7 @@ async function selectPage(whereSql, params, filters, collapse) {
     return result.rows;
 }
 
-function toRow(r) {
+function toRow(r, filters) {
     return {
         kind: r.kind,
         id: Number(r.id),
@@ -598,6 +706,12 @@ function toRow(r) {
             ? { rows: r.batch_rows, title: r.batch_title, fileName: r.batch_file, kind: r.batch_kind }
             : null,
         changes: Array.isArray(r.changes) ? r.changes : [],
+        // ⚠ ПРИЗНАК ПРИВЯЗАННОЙ ЗАПИСИ (К275). `false` — правка САМОЙ записи,
+        // `true` — правка привязанной к ней. Без него во вкладке сотрудника его
+        // собственные правки лежали бы вперемешку с правками его расписания, и
+        // человек не понял бы, почему в истории сотрудника чужая строка.
+        attached: Boolean(filters && filters.recordTable && filters.recordId
+            && r.table_name !== filters.recordTable),
         card: null,
         // Проставляется в attachCards и только для строк, чью запись искали.
         deleted: false
