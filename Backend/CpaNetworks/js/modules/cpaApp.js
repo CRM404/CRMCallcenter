@@ -791,12 +791,12 @@ async function openOfferModal(state, offer, opts = {}) {
                     <option value="">Комнатность</option>
                     ${(lists.rooms || []).map((v) => `<option value="${escapeHtml(v)}"${s.roomCount === v ? ' selected' : ''}>${escapeHtml(v)}</option>`).join('')}
                 </select>
-                <div class="cpa-range">
+                <div class="cpa-range" data-range="price">
                     <input class="ui-field__control" type="number" data-seg="priceMin" placeholder="цена от" value="${escapeHtml(s.priceMin ?? '')}" aria-label="Цена от">
                     <span>—</span>
                     <input class="ui-field__control" type="number" data-seg="priceMax" placeholder="цена до" value="${escapeHtml(s.priceMax ?? '')}" aria-label="Цена до">
                 </div>
-                <div class="cpa-range">
+                <div class="cpa-range" data-range="area">
                     <input class="ui-field__control" type="number" data-seg="areaMin" placeholder="S от" value="${escapeHtml(s.areaMin ?? '')}" aria-label="Площадь от">
                     <span>—</span>
                     <input class="ui-field__control" type="number" data-seg="areaMax" placeholder="S до" value="${escapeHtml(s.areaMax ?? '')}" aria-label="Площадь до">
