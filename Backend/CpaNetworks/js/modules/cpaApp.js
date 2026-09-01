@@ -32,6 +32,7 @@ import { isAbort } from '/api.js';
 // одно, и пять копий разошлись бы на первой же правке текста.
 import { openDeleteBlocked, isDeleteBlocked } from '/deleteBlocked.js';
 import { createStorage } from './cpaStorage.js';
+import { createFilter, emptyFilters, countActive, offerMatches } from './cpaFilter.js';
 
 const SEARCH_DEBOUNCE_MS = 300;
 const GEO_SUGGEST_DEBOUNCE_MS = 300;
@@ -96,7 +97,10 @@ export async function mount(container, ctx) {
         organization: null,
         paramLists: {},
         networkId: null,
-        status: 'all',
+        // Отбор НЕ переживает закрытие панели — решение владельца: открыл
+        // раздел заново, фильтр чист. Поэтому он живёт в состоянии панели, а
+        // не в настройках вида (там состав колонок, он как раз переживает).
+        filters: emptyFilters(),
         search: '',
         searchTimer: null,
         geoTimer: null,
@@ -265,9 +269,10 @@ function searchedOffers(state) {
 }
 
 function visibleOffers(state) {
-    const list = searchedOffers(state);
-    if (state.status === 'all') return list;
-    return list.filter((o) => o.status === state.status);
+    // Поиск и фильтр отбирают ПОСЛЕДОВАТЕЛЬНО и оба обязательны: поиск — по
+    // названию, фильтр — по всем полям. Статус с 01.09.2026 живёт в фильтре,
+    // отдельной ветки под него здесь больше нет.
+    return searchedOffers(state).filter((offer) => offerMatches(offer, state.filters));
 }
 
 function renderAll(state) {
@@ -339,21 +344,15 @@ function renderDetailHead(state) {
 }
 
 function renderTabs(state) {
-    const list = searchedOffers(state);
-    const counts = { all: list.length };
-    OFFER_STATUSES.forEach(([key]) => {
-        counts[key] = list.filter((o) => o.status === key).length;
-    });
-
-    // Порядок вкладок — жизненный цикл: работает → приостановлен → выключен →
-    // ещё не запущен. Черновик последний не потому, что он неважен, а потому,
-    // что он не участвует в передаче лидов.
-    const tabs = [['all', 'Все']].concat(OFFER_STATUSES.map(([key, , plural]) => [key, plural]));
-    $(state, 'status-tabs').innerHTML = tabs.map(([key, label]) => `
-        <button type="button" class="ui-tabs__tab${key === state.status ? ' ui-tabs__tab--active' : ''}${counts[key] === 0 && key !== 'all' ? ' ui-tabs__tab--quiet' : ''}"
-                data-status="${escapeHtml(key)}">
-            ${escapeHtml(label)} <span class="ui-tabs__count">${counts[key]}</span>
-        </button>`).join('');
+    // Вкладок статусов больше нет — статус переехал в окно фильтра. Функция
+    // осталась под прежним именем и рисует ТЕПЕРЬ СЧЁТЧИК условий: её зовут из
+    // renderAll и из обработчика поиска, и переименование развело бы правку по
+    // четырём местам ради слова.
+    const badge = $(state, 'filter-badge');
+    if (!badge) return;
+    const active = countActive(state.filters);
+    badge.hidden = active === 0;
+    badge.textContent = active;
 }
 
 function renderRows(state) {
@@ -445,12 +444,12 @@ function showEmpty(state) {
         action.dataset.act = 'clear-search';
         return;
     }
-    if (state.status !== 'all' && hasAny) {
-        title.textContent = 'Нет офферов с таким статусом';
-        text.textContent = 'В этой сети есть офферы, но ни один не подходит под текущий отбор.';
+    if (countActive(state.filters) > 0 && hasAny) {
+        title.textContent = 'Ни один оффер не подошёл под отбор';
+        text.textContent = 'В этой сети офферы есть — снимите часть условий, чтобы их увидеть.';
         action.hidden = false;
-        action.textContent = 'Показать все';
-        action.dataset.act = 'clear-status';
+        action.textContent = 'Сбросить фильтры';
+        action.dataset.act = 'clear-filters';
         return;
     }
     title.textContent = 'В этой сети пока нет офферов';
@@ -475,14 +474,6 @@ function bindEvents(state) {
             // который смотрит черновики в одной сети, обычно хочет увидеть
             // черновики и в соседней.
             renderAll(state);
-            return;
-        }
-
-        const tab = target.closest('[data-status]');
-        if (tab) {
-            state.status = tab.dataset.status;
-            renderTabs(state);
-            renderRows(state);
             return;
         }
 
@@ -535,8 +526,8 @@ function bindEvents(state) {
                 state.search = '';
                 $(state, 'search').value = '';
                 renderAll(state);
-            } else if (act === 'clear-status') {
-                state.status = 'all';
+            } else if (act === 'clear-filters') {
+                state.filters = emptyFilters();
                 renderAll(state);
             }
         }
@@ -556,6 +547,19 @@ function bindEvents(state) {
     // У type="search" есть свой крестик и Esc: браузер чистит поле, а события
     // input при этом может и не быть.
     searchField.addEventListener('search', (event) => scheduleSearch(event.target.value.trim()));
+
+    // Окно фильтра. Справочники и статусы отдаются функциями, а не значениями:
+    // окно открывают позже загрузки, а «Настройка списков» может пополнить
+    // справочник между двумя открытиями — снимок, взятый при подключении,
+    // показал бы вчерашний состав.
+    createFilter(state.container, {
+        getFilters: () => state.filters,
+        setFilters: (next) => { state.filters = next; },
+        getLists: () => state.paramLists || {},
+        getStatuses: () => OFFER_STATUSES.map(([key, label]) => [key, label]),
+        onApplied: () => { if (!state.destroyed) renderAll(state); },
+        toast: (text, kind) => state.ctx.toast(text, kind)
+    }).init();
 }
 
 // ---------------------------------------------------------------- окно оффера

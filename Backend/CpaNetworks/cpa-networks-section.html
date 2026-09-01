@@ -74,17 +74,29 @@
                 </button>
             </div>
 
-            <!-- Поиск своей строкой, вкладки статусов — под ним (М31). В одной
-                 строке вкладки читались как продолжение поиска, хотя отбирают
-                 другое и другим способом. -->
+            <!-- Поиск своей строкой, рядом — фильтр окном (решение владельца
+                 01.09.2026). ВКЛАДОК СТАТУСОВ ЗДЕСЬ БОЛЬШЕ НЕТ: статус переехал
+                 в окно вместе с остальными полями, и держать его двумя органами
+                 сразу значило бы спрашивать одно и то же в двух местах.
+
+                 Счётчик наложенных условий — узел слоя `.ui-count--corner` в
+                 обёртке `.ui-count-wrap`. Своего кружка раздел не заводит: он
+                 уже написан руками дважды, в «Лидах» и «Сотрудниках», и третья
+                 копия была бы ровно К36. Счёт идёт только по полям окна —
+                 поиск живёт в своём поле и в кружок не попадает (К-Ф4). -->
             <div class="ui-toolbar">
                 <div class="ui-field cpa-search">
                     <input type="search" class="ui-field__control" data-role="search"
                            placeholder="Найти оффер по названию…" aria-label="Поиск офферов">
                 </div>
+                <span class="ui-count-wrap">
+                    <button type="button" class="ui-btn ui-btn--ghost" data-role="filter-btn"
+                            title="Отбор офферов по всем полям">
+                        <svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-filter"></use></svg>Фильтры
+                    </button>
+                    <span class="ui-count ui-count--corner" data-role="filter-badge" hidden>0</span>
+                </span>
             </div>
-
-            <div class="ui-tabs" data-role="status-tabs"></div>
 
             <div class="ui-table-wrap" data-role="table-wrap">
                 <table class="ui-table ui-table--freeze-acts">
