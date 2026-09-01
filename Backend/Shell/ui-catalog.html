@@ -34,6 +34,7 @@
     <link rel="stylesheet" href="/ui/popover.css">
     <link rel="stylesheet" href="/ui/empty-state.css">
     <link rel="stylesheet" href="/ui/skeleton.css">
+    <link rel="stylesheet" href="/ui/fold.css">
     <link rel="stylesheet" href="/ui/solo.css">
 </head>
 <body>
@@ -352,6 +353,21 @@
             <li class="ui-chip ui-chip--muted"><span class="ui-chip__value">—</span><span class="ui-chip__label">Другой месяц</span></li>
         </ul>
 
+        <!-- .ui-count приехал в слой раньше каталога, и каталог отстал на один
+             узел. Отставший каталог хуже отсутствующего: ему верят. -->
+        <div class="cat-cap" style="margin-bottom: var(--ui-space-2)">счётчик наложенных условий — два положения, одно значение</div>
+        <div class="cat-row">
+            <span class="cat-item"><span class="cat-cap">строкой — в шапке складки</span>
+                <span><span class="ui-count">3</span></span>
+            </span>
+            <span class="cat-item"><span class="cat-cap">уголком — поверх кнопки, открывающей окно</span>
+                <span class="ui-count-wrap">
+                    <button type="button" class="ui-btn ui-btn--ghost ui-btn--icon" aria-label="Фильтры"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-filter"></use></svg></button>
+                    <span class="ui-count ui-count--corner">3</span>
+                </span>
+            </span>
+        </div>
+
         <div class="cat-row" style="margin-top: var(--ui-space-5)">
             <span class="cat-item"><span class="cat-cap">переключатель режимов</span>
                 <span class="ui-switch" data-role="switch">
@@ -483,6 +499,39 @@
             осталось случайностью.
         </p>
 
+        <div class="cat-cap" style="margin: var(--ui-space-5) 0 var(--ui-space-2)">разворот строки НА МЕСТЕ: кнопка живёт в ячейке, строка раскрывается ВНИЗ продолжением самой себя</div>
+        <div class="ui-table-wrap">
+            <table class="ui-table" data-role="table-expand">
+                <thead>
+                    <tr><th>Когда</th><th>Кто</th><th>Что изменилось</th></tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>17.08, 14:02</td>
+                        <td><span class="ui-table__main">Белов Д. С.</span></td>
+                        <td>
+                            <div style="display: flex; flex-direction: column; align-items: flex-start; gap: var(--ui-space-1)">
+                                <span>Статус: Новый → В работе</span>
+                                <button type="button" class="ui-table__expand" aria-expanded="false" aria-controls="catDetail1"><svg class="ui-ic" aria-hidden="true"><use href="#ui-ic-chevron-down"></use></svg>ещё 4 поля</button>
+                            </div>
+                        </td>
+                    </tr>
+                    <tr class="ui-table__detail" id="catDetail1" hidden>
+                        <td colspan="3">Комментарий, Перезвон, Оффер, Источник — четыре поля той же правки.</td>
+                    </tr>
+                    <tr>
+                        <td>17.08, 13:41</td>
+                        <td><span class="ui-table__main">Гусева М. А.</span></td>
+                        <td>Запись создана</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="cat-rule" style="margin-top: var(--ui-space-4)"><b>Правило.</b> <span><code>colSpan</code> развёрнутой ячейки выставляет РАЗДЕЛ, а не слой. По замыслу строка обязана накрыть таблицу целиком, но какие колонки спрятаны — знает только раздел: «Звонки» вычитают скрытые, журнал их не знает вовсе. Обязанность раздела: считать по видимым колонкам и пересчитывать при их смене.</span></div>
+        <div class="cat-rule"><b>Правило.</b> <span>Вид кнопки — слою, место в ячейке — разделу. Разметка несёт два имени: <code>class="ui-table__expand hi-more"</code>. У «Истории» своё — <code>align-self: flex-start</code> и отступ сверху 2, у «Звонков» — отступ 3; узел их не забирает.</span></div>
+        <div class="cat-rule"><b>Правило.</b> <span>Состояние — в <code>aria-expanded</code> на кнопке, тело скрывается атрибутом <code>hidden</code> на строке, связь — <code>aria-controls</code> по <code>id</code>. Так же устроена складка ниже: те же три вещи, другое вместилище.</span></div>
+
         <div class="cat-cap" style="margin: var(--ui-space-5) 0 var(--ui-space-2)">длинная и широкая таблица: шапка остаётся на месте при прокрутке вниз, первая колонка — при прокрутке вбок, действия появляются по наведению</div>
         <div class="ui-table-wrap ui-table-wrap--tall" data-role="table-tall" style="max-height: 220px">
             <table class="ui-table ui-table--wide ui-table--freeze-first ui-table--acts-on-hover" data-role="table-wide">
@@ -516,6 +565,73 @@
 
         <div class="cat-rule" style="margin-top: var(--ui-space-4)"><b>Правило.</b> <span>Таблица прокручивается внутри своей обёртки, а не растягивает панель. Числовые колонки вправо, первая колонка закрепляется классом.</span></div>
         <div class="cat-rule"><b>Правило.</b> <span>Действия в строке по умолчанию видны всегда. Наведение — отдельный класс: на «Сотрудниках» их сделали постоянными по прямому замечанию владельца, и перенос раздела не должен молча это отменить.</span></div>
+    </section>
+
+    <!-- ========================= СКЛАДКА ========================= -->
+    <section class="cat-sec" data-role="sec-fold">
+        <h2>Складка</h2>
+        <p class="cat-note">Блок, который сворачивается НА МЕСТЕ: содержимое остаётся в потоке и раздвигает то, что под ним. Складка берётся там, где отбор ЗАНИМАЕТ место, но не является отдельным действием; окно — там, где отбор сам по себе действие.</p>
+
+        <div class="cat-row" style="align-items: flex-start">
+            <span class="cat-item" style="flex: 1 1 300px; max-width: 380px">
+                <span class="cat-cap">свёрнута, условия наложены — счётчик в шапке</span>
+                <div class="ui-fold">
+                    <button type="button" class="ui-fold__head" aria-expanded="false" aria-controls="catFold1">
+                        <svg class="ui-ic ui-ic--sm ui-ic--quiet" aria-hidden="true"><use href="#ui-ic-filter"></use></svg>
+                        <span class="ui-fold__title">Фильтры</span>
+                        <span class="ui-count">3</span>
+                        <svg class="ui-ic ui-ic--sm ui-ic--quiet ui-fold__chev" aria-hidden="true"><use href="#ui-ic-chevron-down"></use></svg>
+                    </button>
+                    <div class="ui-fold__body" id="catFold1" hidden>
+                        <div class="ui-form-grid">
+                            <div class="ui-field">
+                                <label class="ui-field__label" for="catFoldCity">Город</label>
+                                <input id="catFoldCity" class="ui-field__control" value="Казань">
+                            </div>
+                        </div>
+                        <div class="ui-fold__foot"><button type="button" class="ui-btn ui-btn--ghost">Сбросить фильтры</button></div>
+                    </div>
+                </div>
+            </span>
+
+            <span class="cat-item" style="flex: 1 1 300px; max-width: 380px">
+                <span class="cat-cap">развёрнута — тело в потоке, подвал со «Сбросить»</span>
+                <div class="ui-fold">
+                    <button type="button" class="ui-fold__head" aria-expanded="true" aria-controls="catFold2">
+                        <svg class="ui-ic ui-ic--sm ui-ic--quiet" aria-hidden="true"><use href="#ui-ic-filter"></use></svg>
+                        <span class="ui-fold__title">Фильтры</span>
+                        <svg class="ui-ic ui-ic--sm ui-ic--quiet ui-fold__chev" aria-hidden="true"><use href="#ui-ic-chevron-down"></use></svg>
+                    </button>
+                    <div class="ui-fold__body" id="catFold2">
+                        <div class="ui-form-grid">
+                            <div class="ui-field">
+                                <label class="ui-field__label" for="catFoldArea">Площадь от</label>
+                                <input id="catFoldArea" class="ui-field__control" placeholder="не задано">
+                            </div>
+                        </div>
+                        <div class="ui-fold__foot"><button type="button" class="ui-btn ui-btn--ghost">Сбросить фильтры</button></div>
+                    </div>
+                </div>
+            </span>
+
+            <span class="cat-item" style="flex: 1 1 300px; max-width: 380px">
+                <span class="cat-cap">недоступна — приглушена и не нажимается</span>
+                <div class="ui-fold">
+                    <button type="button" class="ui-fold__head" aria-expanded="false" aria-controls="catFold3" disabled>
+                        <svg class="ui-ic ui-ic--sm ui-ic--quiet" aria-hidden="true"><use href="#ui-ic-filter"></use></svg>
+                        <span class="ui-fold__title">Фильтры</span>
+                        <svg class="ui-ic ui-ic--sm ui-ic--quiet ui-fold__chev" aria-hidden="true"><use href="#ui-ic-chevron-down"></use></svg>
+                    </button>
+                    <div class="ui-fold__body" id="catFold3" hidden></div>
+                </div>
+            </span>
+        </div>
+
+        <div class="cat-rule"><b>Правило.</b> <span>Состояние живёт в <code>aria-expanded</code>, а не в классе: атрибут одновременно рисует шеврон и говорит читалке. Класс-модификатор потребовал бы держать два признака в согласии.</span></div>
+        <div class="cat-rule"><b>Правило.</b> <span>Шапка — сама кнопка во всю ширину, поэтому внутрь неё нельзя положить вторую кнопку: кнопка в кнопке невалидна. «Сбросить» живёт в теле, в <code>.ui-fold__foot</code>.</span></div>
+        <div class="cat-rule"><b>Правило.</b> <span>Шеврон назван своим классом <code>.ui-fold__chev</code>, а не взят селектором <code>.ui-ic</code>: значков в шапке два — предметный слева и шеврон справа, — и общий селектор повернул бы оба.</span></div>
+        <div class="cat-rule"><b>Правило.</b> <span>Тело скрывается атрибутом <code>hidden</code>, а не правилом <code>display: none</code>: скрытое атрибутом видно в разметке и не требует второго правила.</span></div>
+        <div class="cat-rule"><b>Записанное отклонение.</b> <span>Четыре живых случая того же приёма на узел НЕ переведены — это К297. По поведению они сходятся, по виду расходятся: у «CPA-сетей» шапка на размер больше (зазор и отступы на ступень крупнее, кегль <code>--ui-text-lg</code>), у «Сотрудников» это вообще поле с рамкой и отдельная коробка под ним. Перенос был бы правкой вида выкаченных экранов, а не сборкой узла, и решать её дизайн-сессии.</span></div>
     </section>
 
     <!-- ==================== ОКНА И СООБЩЕНИЯ ==================== -->
@@ -926,6 +1042,19 @@ MTU = 1280</textarea>
             if (!button || !group.contains(button)) return;
             group.querySelectorAll('button').forEach((node) => node.classList.remove(activeClass));
             button.classList.add(activeClass);
+        });
+    });
+
+    // Складка и разворот строки — ОДИН обработчик на оба узла, потому что
+    // устроены они одинаково: состояние в aria-expanded на кнопке, тело
+    // скрыто атрибутом hidden, связь по aria-controls. В бою это делают сами
+    // разделы; здесь узел показывается живьём, а не разметкой в покое.
+    document.querySelectorAll('.ui-fold__head, .ui-table__expand').forEach((head) => {
+        head.addEventListener('click', () => {
+            const open = head.getAttribute('aria-expanded') !== 'true';
+            head.setAttribute('aria-expanded', String(open));
+            const body = document.getElementById(head.getAttribute('aria-controls'));
+            if (body) body.hidden = !open;
         });
     });
 </script>

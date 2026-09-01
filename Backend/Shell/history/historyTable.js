@@ -119,7 +119,10 @@ export function renderRow(row, opts) {
 
     if (more) {
         const detail = document.createElement('tr');
-        detail.className = 'hi-detail';
+        // ДВА ИМЕНИ, И ОБА НУЖНЫ (К295). Первое — узел слоя: подложка и
+        // отступы развёрнутой строки. Второе — своё: по нему раздел теснит
+        // список полей внутри разворота.
+        detail.className = 'ui-table__detail hi-detail';
         detail.id = detailId;
         detail.hidden = true;
         const td = document.createElement('td');
@@ -415,7 +418,12 @@ function change(children) {
 function moreButton(detailId, label) {
     const btn = document.createElement('button');
     btn.type = 'button';
-    btn.className = 'hi-more';
+    // ВИД — ИЗ СЛОЯ, МЕСТО — СВОЁ (К295). .ui-table__expand несёт всю кнопку;
+    // .hi-more остался ради двух строк размещения в ячейке.
+    // ⚠ ЛОВУШКА ЧИТАТЕЛЮ: в этом же файле есть data-role="hi-more" — и это
+    // ДРУГАЯ кнопка, «Открыть в журнале» в подвале вкладки карточки. Имена
+    // совпали, пространства разные; переименование одного не трогает второе.
+    btn.className = 'ui-table__expand hi-more';
     btn.setAttribute('aria-expanded', 'false');
     btn.setAttribute('aria-controls', detailId);
     btn.innerHTML = '<svg class="ui-ic" aria-hidden="true"><use href="#ui-ic-chevron-down"></use></svg>';

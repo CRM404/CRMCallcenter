@@ -13,9 +13,9 @@
  * ГЛОБАЛЬНЫХ СЕЛЕКТОРОВ ПО АТРИБУТУ РАЗДЕЛ НЕ ОБЪЯВЛЯЕТ — К83. Правил к чужим
  * именам здесь тоже нет.
  *
- * ГОЛЫХ ЧИСЕЛ ЧЕТЫРЕ, и все объяснены по месту: отступ подчёркивания ссылки
- * живёт в слое, здесь остаются зазор списка полей 3, отступы кнопки разворота
- * и боковой отступ развёрнутой строки 11.
+ * ГОЛЫХ ЧИСЕЛ ДВА, и оба объяснены по месту: зазор списка полей 3 и отступ
+ * кнопки разворота сверху 2. Остальные забрал слой вместе с видом кнопки и
+ * подложкой развёрнутой строки (К295, ui/table.css).
  */
 
 /* Раздел меряет себя по ПАНЕЛИ, а не по окну: панель делится пополам и
@@ -93,38 +93,24 @@
 .hi-raw { font-family: var(--ui-font-mono); font-size: var(--ui-text-xs); }
 
 /* ----- Кнопка разворота -----
- * Та же геометрия и тот же приём, что у разворота перевода в «Звонках»: строка
- * раскрывается ВНИЗ, значок поворачивается.
+ * ВИД ЗАБРАЛ СЛОЙ — .ui-table__expand (ui/table.css, К295). Забран по счёту:
+ * этот файл сам писал, что кнопка — копия разворота перевода в «Звонках», и
+ * из двадцати строк расходились две. Здесь остались ровно эти две, и обе про
+ * МЕСТО кнопки в ячейке, а не про её вид.
+ *
+ * Разметка несёт оба имени — class="ui-table__expand hi-more". Второе не
+ * лишнее: по нему раздел ставит кнопку на место, а слой о ячейке не знает.
  */
 .hi-more {
     align-self: flex-start;
-    display: inline-flex;
-    align-items: center;
-    gap: var(--ui-space-1);
     margin-top: 2px;
-    padding: 1px 7px;
-    border: 1px solid var(--ui-color-line-strong);
-    border-radius: var(--ui-radius-lg);
-    background: transparent;
-    color: var(--ui-color-ink-soft);
-    font-family: inherit;
-    font-size: var(--ui-text-2xs);
-    font-weight: var(--ui-weight-bold);
-    cursor: pointer;
 }
-.hi-more:hover { background: var(--ui-color-wash-hover); color: var(--ui-color-ink); }
-.hi-more:focus-visible { outline: 2px solid var(--ui-color-accent); outline-offset: 1px; }
-.hi-more .ui-ic { width: var(--ui-icon-xs); height: var(--ui-icon-xs); transition: transform var(--ui-dur-fast); }
-.hi-more[aria-expanded="true"] .ui-ic { transform: rotate(180deg); }
 
 /* ----- Развёрнутая строка -----
- * Продолжение той же записи: подложка утоплена, чтобы было видно, что это не
- * соседняя строка журнала.
+ * ПОДЛОЖКУ И ОТСТУПЫ ЗАБРАЛ СЛОЙ — .ui-table__detail (ui/table.css, К295): со
+ * «Звонками» они совпадали знак в знак, до последнего числа. Здесь осталось
+ * своё: внутри разворота список полей стоит теснее, чем в самой строке.
  */
-.hi-detail > td {
-    background: var(--ui-color-surface-sunken);
-    padding: var(--ui-space-4) 11px;
-}
 .hi-detail .hi-changes { gap: var(--ui-space-1); }
 
 /* Сводка партии внутри развёрнутой строки: что именно приехало. Пять тысяч

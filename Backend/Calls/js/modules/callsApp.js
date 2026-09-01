@@ -747,7 +747,9 @@ function createInstance(container, ctx) {
     function transferButton(callId) {
         const btn = document.createElement('button');
         btn.type = 'button';
-        btn.className = 'zv-transfer';
+        // Вид кнопки забрал слой (.ui-table__expand, К295); .zv-transfer
+        // остался ради отступа сверху и как адрес обработчика ниже.
+        btn.className = 'ui-table__expand zv-transfer';
         btn.setAttribute('aria-expanded', String(state.expanded.has(callId)));
         btn.setAttribute('aria-controls', `zv-chain-${callId}`);
         btn.dataset.chain = String(callId);
@@ -768,7 +770,9 @@ function createInstance(container, ctx) {
 
     function chainRow(row) {
         const tr = document.createElement('tr');
-        tr.className = 'zv-chain';
+        // Подложку и отступы забрал слой (.ui-table__detail, К295); имя
+        // раздела осталось: по нему ищут строку и правят colSpan.
+        tr.className = 'ui-table__detail zv-chain';
         tr.id = `zv-chain-${row.id}`;
         tr.hidden = !state.expanded.has(row.id);
         const td = document.createElement('td');
