@@ -527,7 +527,35 @@ async function fillBatch(td, row, opts) {
 // РАЗМЕТКУ ДАЁТ КАРТОЧКА, а имена ролей — этот модуль: hi-wrap, hi-body,
 // hi-foot, hi-shown, hi-more, hi-empty, hi-empty-text, hi-note.
 
+// Порция вкладки. Сервер принимает размер закрытым списком (30 и 100);
+// вкладке нужен больший: см. довод у `limit` в `load()`.
+const CARD_PAGE_SIZE = 100;
+
 const CARD_PERIOD_FROM = '2000-01-01';
+
+/**
+ * Заголовок колонки «Запись» на вкладке карточки: поставить или снять.
+ *
+ * Идемпотентна намеренно: вкладку рисуют заново при каждой загрузке, и второй
+ * заход не должен давать второй заголовок. Признак — свой атрибут, а не
+ * положение: положение сдвинется, стоит карточке поменять состав колонок.
+ */
+function syncRecordHeader(body, need) {
+    const table = body.closest('table');
+    const head = table && table.querySelector('thead tr');
+    if (!head) return;
+    const already = head.querySelector('[data-role="hi-th-record"]');
+    if (need && !already) {
+        const th = document.createElement('th');
+        th.dataset.role = 'hi-th-record';
+        th.textContent = 'Запись';
+        // Перед последней: последняя — «Что изменилось», и она обязана остаться
+        // последней, как в разделе.
+        head.insertBefore(th, head.lastElementChild);
+    } else if (!need && already) {
+        already.remove();
+    }
+}
 
 /**
  * @param {HTMLElement} pane  панель вкладки
@@ -596,7 +624,14 @@ export function createHistoryPane(pane, opts) {
                 recordId: String(id),
                 // Период вкладки — весь журнал, а не последние семь дней:
                 // человек открыл карточку, чтобы увидеть её прошлое целиком.
-                from: CARD_PERIOD_FROM
+                from: CARD_PERIOD_FROM,
+                // ⚠ СТО, А НЕ ТРИДЦАТЬ (К275). Вкладка грузит ОДНУ порцию и всё
+                // — «показать ещё» у неё нет вовсе. С привязанными записями
+                // тридцати строк не хватает: у лида с десятками звонков
+                // собственные правки лида вытеснило бы из видимых, и вкладка
+                // показала бы обратное тому, ради чего заведена. Число не
+                // произвольное: сервер принимает его закрытым списком.
+                limit: CARD_PAGE_SIZE
             });
             if (!isAlive() || !pane.isConnected) return;
             clearLoadError(pane);
@@ -642,9 +677,25 @@ export function createHistoryPane(pane, opts) {
         wrap.hidden = false;
         empty.hidden = true;
         body.innerHTML = '';
+        // ⚠ КОЛОНКА «ЗАПИСЬ» ВКЛЮЧАЕТСЯ, КОГДА ЕСТЬ ПРИВЯЗАННЫЕ (К275).
+        // Пока строки только свои, запись одна и известна — называть её в
+        // каждой строке незачем. Появились привязанные — без этой колонки они
+        // неотличимы от собственных правок вовсе, и признак `attached` в ответе
+        // не виден никому. Колонка существующая, своих видов раздел не заводит.
+        //
+        // ⚠ И ШАПКУ СТАВИТ ЭТОТ ЖЕ КОД, А НЕ КАРТОЧКА. В разметке обеих карточек
+        // три жёстких <th>, и четвёртая ячейка тела против трёх заголовков —
+        // сломанная таблица. Ставить <th> руками в двух местах значило бы завести
+        // два источника правды о том, когда колонка есть.
+        //
+        // ПОРЯДОК ЯЧЕЕК ЗАДАЁТ `renderRow`, А НЕ ЭТОТ СПИСОК: там жёстко
+        // «когда → кто → раздел → запись», а «что изменилось» дописывается
+        // последним. Значит «Запись» встаёт ТРЕТЬЕЙ, и заголовок — туда же.
+        const hasAttached = state.rows.some((row) => row.attached);
+        const columns = hasAttached ? ['when', 'who', 'record'] : ['when', 'who'];
+        syncRecordHeader(body, hasAttached);
         state.rows.forEach((row) => {
-            // Колонок три: «Раздел» и «Запись» не нужны — запись одна и известна.
-            renderRow(row, { columns: ['when', 'who'] }).forEach((tr) => body.appendChild(tr));
+            renderRow(row, { columns }).forEach((tr) => body.appendChild(tr));
         });
 
         // ПОДВАЛ ПОЯВЛЯЕТСЯ, ТОЛЬКО КОГДА ЧТО-ТО СКРЫТО. Пока помещается всё,

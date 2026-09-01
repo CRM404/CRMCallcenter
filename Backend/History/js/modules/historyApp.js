@@ -282,8 +282,13 @@ function createInstance(container, ctx) {
         }
         // Снимок имени — из самой строки: техническое «leads #42» человек
         // читать не обязан, а имя в журнале уже есть.
-        if (state.filters.recordId && !more && data.rows.length && data.rows[0].recordTitle) {
-            state.recordLabel = data.rows[0].recordTitle;
+        //
+        // ⚠ ИМЕННО ИЗ СВОЕЙ СТРОКИ, А НЕ ИЗ ПЕРВОЙ (К275). Порядок по времени, и
+        // с привязанными записями первой может оказаться строка звонка — тогда
+        // пилюля показала бы телефон клиента вместо имени лида.
+        if (state.filters.recordId && !more && data.rows.length) {
+            const own = data.rows.find((row) => !row.attached && row.recordTitle);
+            if (own) state.recordLabel = own.recordTitle;
         }
         $('[data-role="stat-changes"]').textContent = String(data.counts.changes);
         $('[data-role="stat-records"]').textContent = String(data.counts.records);
@@ -401,7 +406,16 @@ function createInstance(container, ctx) {
     function activeFilterLabels() {
         const f = state.filters;
         const out = [];
-        if (f.recordId) out.push({ key: 'record', label: 'Запись', value: state.recordLabel || `#${f.recordId}` });
+        // ⚠ ПИЛЮЛЯ НАЗЫВАЕТ РАСШИРЕНИЕ (К275). Отбор шире одной записи —
+        // в нём и привязанные к ней; подпись «Запись» после этого неправда, и
+        // человек не понял бы, почему в списке строки не той записи.
+        if (f.recordId) {
+            out.push({
+                key: 'record',
+                label: f.recordTable ? 'Запись и связанное' : 'Запись',
+                value: state.recordLabel || `#${f.recordId}`
+            });
+        }
         if (f.batchId) out.push({ key: 'batchId', label: 'Партия', value: state.batchLabel || 'выбранная' });
         if (!state.periodIsDefault) {
             out.push({
