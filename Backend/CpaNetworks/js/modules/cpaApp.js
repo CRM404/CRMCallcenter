@@ -32,6 +32,7 @@ import { isAbort } from '/api.js';
 // одно, и пять копий разошлись бы на первой же правке текста.
 import { openDeleteBlocked, isDeleteBlocked } from '/deleteBlocked.js';
 import { createStorage } from './cpaStorage.js';
+import { createColumns, visibleColumns } from './cpaColumns.js';
 
 const SEARCH_DEBOUNCE_MS = 300;
 const GEO_SUGGEST_DEBOUNCE_MS = 300;
@@ -194,6 +195,86 @@ function formatPeriod(offer) {
 }
 
 const DASH = '<span class="ui-dash">—</span>';
+
+/**
+ * Ячейка таблицы по описанию колонки.
+ *
+ * ЧЕТЫРЕ РОДА ЗНАЧЕНИЙ, и они показываются по-разному:
+ *   одиночное      — как есть, пустое даёт прочерк;
+ *   массив строк   — через запятую: значений два-три, и они короткие;
+ *   вложенный спискок (сегменты, география) — ЧИСЛОМ со словом, а полный
+ *                    перечень уезжает в подсказку `title`. Пять сегментов в
+ *                    ячейку не помещаются, а строка таблицы не место для
+ *                    разворота: он есть в карточке оффера;
+ *   да/нет         — словом, а не галкой: колонка узкая, и «да» читается
+ *                    быстрее значка.
+ */
+function cellHtml(offer, col) {
+    const num = col.num ? ' class="ui-table__num"' : '';
+    const cell = (inner) => `<td${num}>${inner}</td>`;
+    const value = offer[col.key];
+
+    switch (col.key) {
+        case 'period': {
+            const period = formatPeriod(offer);
+            return cell(period ? escapeHtml(period) : DASH);
+        }
+        case 'status':
+            return cell(`<span class="ui-pill ${STATUS_PILL[offer.status] || 'ui-pill--mute'}">${escapeHtml(STATUS_LABEL[offer.status] || offer.status)}</span>`);
+        case 'rate':
+            return cell(value === null || value === undefined ? DASH : `${formatMoney(value)} ₽`);
+        case 'leadsCount': {
+            const leads = value || 0;
+            return cell(leads ? leads : '<span class="ui-table__muted">0</span>');
+        }
+        case 'otherBorrower':
+            return cell(value ? 'да' : '<span class="ui-table__muted">нет</span>');
+        case 'segments':
+            return cell(listCell(offer.segments, 'сегмент', 'сегмента', 'сегментов', segmentTitle));
+        case 'objGeo':
+        case 'clientGeo':
+            return cell(listCell(value, 'адрес', 'адреса', 'адресов', geoTitle));
+        default:
+            break;
+    }
+
+    if (Array.isArray(value)) {
+        return cell(value.length ? escapeHtml(value.join(', ')) : DASH);
+    }
+    if (value === null || value === undefined || String(value).trim() === '') {
+        return cell(DASH);
+    }
+    return cell(escapeHtml(String(value)));
+}
+
+/** «3 сегмента» с полным перечнем в подсказке. */
+function listCell(list, one, few, many, describe) {
+    const rows = Array.isArray(list) ? list : [];
+    if (!rows.length) return DASH;
+    const n = rows.length;
+    const last = n % 10;
+    const word = (n % 100 >= 11 && n % 100 <= 14) ? many
+        : last === 1 ? one
+        : (last >= 2 && last <= 4) ? few
+        : many;
+    const title = rows.map(describe).filter(Boolean).join('; ');
+    return `<span class="cpa-cell-many" title="${escapeHtml(title)}">${n} ${word}</span>`;
+}
+
+function segmentTitle(s) {
+    const parts = [s.objectClass, s.roomCount].filter(Boolean);
+    const price = s.priceMin || s.priceMax
+        ? `${s.priceMin ? formatMoney(s.priceMin) : '…'}–${s.priceMax ? formatMoney(s.priceMax) : '…'} ₽`
+        : '';
+    const area = s.areaMin || s.areaMax
+        ? `${s.areaMin || '…'}–${s.areaMax || '…'} м²`
+        : '';
+    return [parts.join(', '), price, area].filter(Boolean).join(' · ');
+}
+
+function geoTitle(g) {
+    return [g.region, g.city, g.district, g.locality].filter(Boolean).join(', ');
+}
 
 // ---------------------------------------------------------------- данные
 
@@ -374,20 +455,21 @@ function renderRows(state) {
     wrap.hidden = false;
     foot.hidden = false;
 
+    // Состав и порядок колонок — из настройки вида; ID и название стоят всегда
+    // и идут первыми, действия — последними.
+    const columns = visibleColumns();
+    $(state, 'head-row').innerHTML = `
+        <th class="ui-table__num cpa-col-id">ID</th>
+        <th class="cpa-col-name">Оффер</th>
+        ${columns.map((c) => `<th${c.num ? ' class="ui-table__num"' : ''}>${escapeHtml(c.label)}</th>`).join('')}
+        <th class="ui-table__acts"></th>`;
+
     body.innerHTML = rows.map((offer) => {
-        const period = formatPeriod(offer);
-        const leads = offer.leadsCount || 0;
         return `
             <tr data-id="${offer.id}">
-                <td>
-                    <div class="cpa-offer-name">${escapeHtml(offer.name)}</div>
-                    <div class="cpa-offer-cat">${offer.category ? escapeHtml(offer.category) : DASH}</div>
-                </td>
-                <td>${offer.actionType ? escapeHtml(offer.actionType) : DASH}</td>
-                <td class="ui-table__num">${offer.rate === null || offer.rate === undefined ? DASH : `${formatMoney(offer.rate)} ₽`}</td>
-                <td>${period ? escapeHtml(period) : DASH}</td>
-                <td class="ui-table__num">${leads ? leads : '<span class="ui-table__muted">0</span>'}</td>
-                <td><span class="ui-pill ${STATUS_PILL[offer.status] || 'ui-pill--mute'}">${escapeHtml(STATUS_LABEL[offer.status] || offer.status)}</span></td>
+                <td class="ui-table__num cpa-col-id">${offer.id}</td>
+                <td class="cpa-col-name"><div class="cpa-offer-name">${escapeHtml(offer.name)}</div></td>
+                ${columns.map((c) => cellHtml(offer, c)).join('')}
                 <td class="ui-table__acts">
                     <span class="cpa-cell-actions">
                         <button type="button" class="ui-btn ui-btn--icon ui-btn--row" data-edit="${offer.id}" title="Настроить" aria-label="Настроить"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-edit"></use></svg></button>
@@ -402,6 +484,15 @@ function renderRows(state) {
     // подошедшие сразу, поэтому числа равны, и подвал отвечает на вопрос
     // «всё ли я вижу из того, что подошло».
     $(state, 'foot-shown').textContent = `Показано ${rows.length} из ${rows.length}`;
+
+    // Левый край замороженного названия — по ИЗМЕРЕННОЙ ширине колонки номера,
+    // а не по числу в стилях. Номера бывают трёхзначными и шестизначными, и
+    // записанное однажды значение при длинных номерах наложило бы название на
+    // номер молча: обе ячейки липкие, и наезд не выглядит поломкой.
+    const idCell = body.querySelector('.cpa-col-id');
+    if (idCell) {
+        state.container.style.setProperty('--cpa-col-id-w', `${Math.ceil(idCell.getBoundingClientRect().width)}px`);
+    }
 }
 
 /**
@@ -556,6 +647,14 @@ function bindEvents(state) {
     // У type="search" есть свой крестик и Esc: браузер чистит поле, а события
     // input при этом может и не быть.
     searchField.addEventListener('search', (event) => scheduleSearch(event.target.value.trim()));
+
+    // Настройка колонок. Перерисовывается только таблица: состав колонок не
+    // трогает ни отбор, ни вкладки статусов, ни подвал — перечитывать данные с
+    // сервера не за чем.
+    createColumns(state.container, {
+        toast: (text, kind) => state.ctx.toast(text, kind),
+        onApplied: () => { if (!state.destroyed) renderRows(state); }
+    }).init();
 }
 
 // ---------------------------------------------------------------- окно оффера

@@ -82,22 +82,27 @@
                     <input type="search" class="ui-field__control" data-role="search"
                            placeholder="Найти оффер по названию…" aria-label="Поиск офферов">
                 </div>
+                <!-- «Колонки» — тот же орган, что в «Сотрудниках» и «Лидах»:
+                     значок cols и подпись. Разметки окна здесь нет намеренно —
+                     список строится модулем: колонок двадцать пять, и держать
+                     их вторым перечнем в HTML значило бы завести второй
+                     источник правды (К36). -->
+                <button type="button" class="ui-btn ui-btn--ghost" data-role="columns-btn"
+                        title="Настроить видимые колонки">
+                    <svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-cols"></use></svg>Колонки
+                </button>
             </div>
 
             <div class="ui-tabs" data-role="status-tabs"></div>
 
             <div class="ui-table-wrap" data-role="table-wrap">
-                <table class="ui-table ui-table--freeze-acts">
+                <!-- Шапка собирается модулем: состав и порядок колонок
+                     настраиваются, и написанный заранее перечень <th> разошёлся
+                     бы с ячейками при первой же перестановке. Номер и название
+                     стоят всегда и потому заморожены слева. -->
+                <table class="ui-table ui-table--freeze-acts cpa-table">
                     <thead>
-                        <tr>
-                            <th>Оффер</th>
-                            <th>Тип действия</th>
-                            <th class="ui-table__num">Ставка</th>
-                            <th>Период</th>
-                            <th class="ui-table__num">Лидов</th>
-                            <th>Статус</th>
-                            <th class="ui-table__acts"></th>
-                        </tr>
+                        <tr data-role="head-row"></tr>
                     </thead>
                     <tbody data-role="rows"></tbody>
                 </table>

@@ -1,7 +1,9 @@
 // --- viewPrefs.js: НАСТРОЙКИ ВИДА, общие для разделов ---------------------
 //
 // Здесь живёт ровно одно: что человек настроил в том, КАК ему показывать
-// список. Сегодня это состав видимых колонок «Лидов» и «Сотрудников».
+// список. Сегодня это состав видимых колонок «Лидов», «Сотрудников» и офферов
+// в «CPA-сетях» — и, с 01.09.2026, их ПОРЯДОК (пока настраивается только у
+// офферов: решение владельца, у остальных разделов порядок задан разметкой).
 //
 // ПОЧЕМУ ОТДЕЛЬНЫЙ ФАЙЛ, А НЕ ПО РАЗДЕЛУ. Одно и то же окно «Настройка
 // колонок» помнило выбор двумя разными способами: «Сотрудники» — до закрытия
@@ -80,7 +82,7 @@ export function hasHiddenColumns(section) {
 /**
  * Запомнить состав скрытых колонок раздела.
  *
- * @param {string}   section 'leads' | 'employees'
+ * @param {string}   section 'leads' | 'employees' | 'cpaOffers'
  * @param {string[]} keys    ключи СКРЫТЫХ колонок
  */
 export function writeHiddenColumns(section, keys) {
@@ -89,4 +91,72 @@ export function writeHiddenColumns(section, keys) {
     box[section] = Array.from(keys);
     prefs.hiddenColumns = box;
     writeAll(prefs);
+}
+
+// ----- ПОРЯДОК КОЛОНОК ------------------------------------------------------
+//
+// Отдельно от состава, и это не дробление ради дробления: скрыть колонку и
+// переставить её местами — разные действия, и сохраняются они по отдельности.
+// Раздел, который порядок не настраивает, читает пустой список и рисует свой.
+//
+// ХРАНИТСЯ НЕПОЛНЫЙ СПИСОК, И ТАК ЗАДУМАНО. Записывается ровно то, что человек
+// расставил; ключи, которых в записи нет (появились новой сборкой), встают
+// после сохранённых, в порядке самого раздела. Иначе новая колонка не
+// показалась бы вовсе — а «её нет в моей записи» и «я её выключил» это разные
+// вещи, и путать их нельзя.
+
+/**
+ * Порядок колонок раздела: ключи, расставленные человеком.
+ *
+ * @param {string}   section
+ * @param {string[]} knownKeys весь состав колонок раздела — чужое отсеивается
+ * @returns {string[]} без повторов и без неизвестных ключей; пусто — не настроен
+ */
+export function readColumnOrder(section, knownKeys) {
+    const box = readAll().columnOrder;
+    const list = box && typeof box === 'object' ? box[section] : null;
+    if (!Array.isArray(list)) return [];
+    const known = new Set(knownKeys);
+    const seen = new Set();
+    return list.filter((key) => {
+        if (typeof key !== 'string' || !known.has(key) || seen.has(key)) return false;
+        seen.add(key);
+        return true;
+    });
+}
+
+/**
+ * Запомнить порядок колонок раздела.
+ *
+ * @param {string}   section
+ * @param {string[]} keys ключи в том порядке, в каком их поставил человек
+ */
+export function writeColumnOrder(section, keys) {
+    const prefs = readAll();
+    const box = prefs.columnOrder && typeof prefs.columnOrder === 'object' ? prefs.columnOrder : {};
+    box[section] = Array.from(keys);
+    prefs.columnOrder = box;
+    writeAll(prefs);
+}
+
+/**
+ * Состав раздела, разложенный по сохранённому порядку.
+ *
+ * Общая для разделов, потому что правило одно: сохранённые ключи идут первыми
+ * в своём порядке, остальные — следом, в порядке самого раздела.
+ *
+ * @param {Object[]} columns [{ key, label }, …] в порядке раздела
+ * @param {string[]} order   сохранённый порядок
+ * @returns {Object[]}
+ */
+export function applyColumnOrder(columns, order) {
+    if (!order.length) return columns.slice();
+    const byKey = new Map(columns.map((c) => [c.key, c]));
+    const out = [];
+    order.forEach((key) => {
+        const col = byKey.get(key);
+        if (col) { out.push(col); byKey.delete(key); }
+    });
+    columns.forEach((col) => { if (byKey.has(col.key)) out.push(col); });
+    return out;
 }

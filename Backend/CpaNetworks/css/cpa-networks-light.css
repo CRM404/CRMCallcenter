@@ -168,13 +168,90 @@
     gap: var(--ui-space-4);
 }
 
-/* Таблица шести колонок ниже 760 не сжимается, а прокручивается внутри своей
-   обёртки: сжатые до 660 колонки читаются хуже прокрутки. */
+/* Таблица ниже 760 не сжимается, а прокручивается внутри своей обёртки: сжатые
+   до 660 колонки читаются хуже прокрутки. Верхнего предела нет намеренно —
+   колонок бывает от двух до двадцати семи, и ширину задаёт их состав. */
 .cpa-wrap .ui-table { min-width: 760px; }
 .cpa-search { flex: 1 1 260px; min-width: 0; }
 
+/* ----- Настройка колонок: список с перетаскиванием -------------------------
+ * Флажок и его подпись — общее имя `column-checkbox-item`, то же, что в
+ * «Сотрудниках» и «Лидах»: третьей копии одного правила проект не заводит.
+ * Своё здесь только строка-носитель с ручкой — её в тех разделах нет, потому
+ * что порядок там не настраивается.
+ */
+.cpa-cols {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.cpa-cols__hint { margin: 0 0 var(--ui-space-4); }
+.cpa-cols__row {
+    display: flex;
+    align-items: center;
+    gap: var(--ui-space-3);
+    padding: var(--ui-space-2) var(--ui-space-3);
+    border: 1px solid transparent;
+    border-radius: var(--ui-radius-xs);
+    background: var(--ui-color-surface);
+    cursor: grab;
+}
+.cpa-cols__row:hover { background: var(--ui-color-wash-hover); }
+/* Тащимая строка гаснет, а не исчезает: пропав совсем, она сдвинула бы список
+   под курсором, и целиться стало бы некуда. */
+.cpa-cols__row.is-dragging { opacity: .45; cursor: grabbing; }
+/* Строка, над которой сейчас курсор, — линией сверху и снизу мало: место
+   вставки зависит от половины, а рамка целиком честнее показывает «сюда». */
+.cpa-cols__row.is-over { border-color: var(--ui-color-accent); }
+.cpa-cols__grip {
+    flex-shrink: 0;
+    font-size: 15px;
+    line-height: 1;
+    color: var(--ui-color-ink-faint);
+    user-select: none;
+}
+/* Подпись занимает остаток строки: тащить можно за любое место, а не только
+   за ручку — ручка тут метка, а не единственная цель. */
+.cpa-cols__row .column-checkbox-item { flex: 1; min-width: 0; }
+.cpa-cols .column-checkbox-item {
+    display: flex;
+    align-items: center;
+    gap: var(--ui-space-2);
+    font-size: var(--ui-text-sm);
+    color: var(--ui-color-ink);
+    cursor: pointer;
+}
+.cpa-cols .column-checkbox-item input {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--ui-color-accent);
+    cursor: pointer;
+}
+
 /* ----- Ячейки таблицы ----- */
 .cpa-offer-name { font-weight: var(--ui-weight-bold); }
+
+/* Номер и название заморожены слева (решение владельца 01.09.2026): колонок
+   бывает двадцать семь, таблица уезжает вбок, и без них строка перестаёт
+   отвечать на вопрос «чья она». Слой морозит только столбец действий
+   (`ui-table--freeze-acts`), поэтому левая пара объявлена здесь. */
+.cpa-table .cpa-col-id,
+.cpa-table .cpa-col-name {
+    position: sticky;
+    z-index: 1;
+    background: var(--ui-color-surface);
+}
+.cpa-table .cpa-col-id { left: 0; width: 1%; white-space: nowrap; }
+.cpa-table .cpa-col-name { left: var(--cpa-col-id-w, 56px); }
+.cpa-table thead .cpa-col-id,
+.cpa-table thead .cpa-col-name { z-index: 2; background: var(--ui-color-surface-sunken); }
+
+/* Вложенный список — числом со словом; полный перечень в подсказке браузера.
+   Пунктир говорит, что у ячейки есть что показать при наведении. */
+.cpa-cell-many {
+    border-bottom: 1px dashed var(--ui-color-line-strong);
+    cursor: help;
+}
 .cpa-offer-cat {
     margin-top: 2px;
     font-size: var(--ui-text-xs);
