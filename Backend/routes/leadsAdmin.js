@@ -390,6 +390,57 @@ function checkNumberLimits(source) {
     return null;
 }
 
+// ----- ПЕРЕВЁРНУТЫЙ ДИАПАЗОН (К302) -----
+//
+// «Цена от 9» при «цене до 5» — отбор, которому не может ответить ни одна
+// запись. Прежде такой запрос уходил на сервер и возвращал пустую выдачу без
+// единого слова, а человек читал её как «таких лидов нет».
+//
+// ⚠ ОТДЕЛЬНОЙ ФУНКЦИЕЙ, А НЕ СТРОКОЙ В `NUMBER_LIMITS`, и не по вкусу:
+// `checkNumberLimits` разбирает ПОЛЕ и возвращает первое негодное. Пара — это
+// два поля сразу, и в список одиночных проверок она не ложится по устройству.
+//
+// РАВЕНСТВО ЗАКОННО. «Цена от 5 до 5» — точечный отбор, он осмыслен.
+// ⚠ У ОКНА АВТОПЕРЕЗВОНА РАВЕНСТВО ОТБИТО — но по СВОЕЙ причине, а не по
+// общей: там `from = to` означает «никогда», а не «круглые сутки»
+// (`routes/callEvents.js:422`, тот же текст на `:570` и `:601`). Разница
+// записана здесь, чтобы не прочлась как разнобой: у времени равенство —
+// пустота, у числа — точка.
+//
+// ⚠⚠ И ГЛАВНОЕ, ЧЕГО ЗДЕСЬ НЕТ: ПЕРЕВЁРНУТОСТЬ ОТБИВАЕТСЯ НЕ ВЕЗДЕ.
+// Две пары проекта переворачиваются ЗАКОННО, и обе сказали это сами:
+//   · смена сотрудника — `services/scheduleFormat.js:57`: «shift_end <
+//     shift_start допустимо: это ночная смена»;
+//   · окно обзвона — `services/appTime.js:139`: `const wraps = to < from`,
+//     то есть окно через полночь.
+// Слепой отбой по всем парам сломал бы обе. Следующий, кто считает этот класс,
+// обязан прочитать это раньше, чем «починит».
+const RANGE_PAIRS = [
+    { from: 'priceFrom', to: 'priceTo', fromLabel: 'Цена от', toLabel: 'Цена до' },
+    { from: 'areaFrom', to: 'areaTo', fromLabel: 'Площадь от', toLabel: 'Площадь до' }
+];
+
+// Текст ОДИН на все пары, имена полей подставляются (К87): четыре своих текста
+// — это четыре места, где они разъедутся, и первое же переименование поля это
+// докажет. Кавычки в тексте не украшение: без них строка читается как
+// утверждение о ценах, а с ними видно, что названы поля.
+function checkRangePairs(source) {
+    for (const pair of RANGE_PAIRS) {
+        const rawFrom = source[pair.from];
+        const rawTo = source[pair.to];
+        if (rawFrom === undefined || rawFrom === null || String(rawFrom).trim() === '') continue;
+        if (rawTo === undefined || rawTo === null || String(rawTo).trim() === '') continue;
+        const from = Number(String(rawFrom).trim());
+        const to = Number(String(rawTo).trim());
+        // Нечисловое и запредельное сюда не доходит: пара проверяется ПОСЛЕ
+        // `checkNumberLimits`. Условие оставлено сторожем на случай, если
+        // порядок вызовов однажды переставят.
+        if (!Number.isFinite(from) || !Number.isFinite(to)) continue;
+        if (from > to) return `«${pair.fromLabel}» больше, чем «${pair.toLabel}»`;
+    }
+    return null;
+}
+
 // ================= Валидация =================
 
 async function checkActiveScript(db, scriptId, label) {
@@ -628,6 +679,12 @@ router.get('/', async (req, res) => {
         // захода, ложная выдача — решения.
         const numberError = checkNumberLimits(req.query);
         if (numberError) return res.status(400).json({ error: numberError });
+        // ПОРЯДОК ЗДЕСЬ ЗНАЧИМ: сначала «число и в пределах», потом «пара
+        // согласована». Сообщить о перевёрнутости, когда одно из чисел негодно,
+        // значит соврать о причине — человек пойдёт менять порядок вместо того,
+        // чтобы убрать букву.
+        const rangeError = checkRangePairs(req.query);
+        if (rangeError) return res.status(400).json({ error: rangeError });
 
         const { q, fio, phone, sourceId, employeeId, funnelStatusId, limit, offset } = req.query;
 
@@ -988,6 +1045,11 @@ router.post('/', async (req, res) => {
         if (numberError) {
             return res.status(400).json({ error: numberError });
         }
+        // Пара проверяется ПОСЛЕ пределов — довод у `checkRangePairs`.
+        const rangeError = checkRangePairs(req.body);
+        if (rangeError) {
+            return res.status(400).json({ error: rangeError });
+        }
         const validation = await validateFullLeadBody(client, req.body);
         if (validation.error) {
             return res.status(400).json({ error: validation.error });
@@ -1048,6 +1110,11 @@ router.put('/:id', async (req, res) => {
         const numberError = checkNumberLimits(req.body);
         if (numberError) {
             return res.status(400).json({ error: numberError });
+        }
+        // Пара проверяется ПОСЛЕ пределов — довод у `checkRangePairs`.
+        const rangeError = checkRangePairs(req.body);
+        if (rangeError) {
+            return res.status(400).json({ error: rangeError });
         }
         const validation = await validateFullLeadBody(client, req.body);
         if (validation.error) {
