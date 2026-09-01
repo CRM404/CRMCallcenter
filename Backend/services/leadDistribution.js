@@ -41,6 +41,7 @@
 
 const { withTransaction } = require('./dbTx');
 const { HELD_LEAD_RELEASE_HOURS } = require('./appTime');
+const appSettings = require('./appSettings');
 const auditContext = require('./auditContext');
 
 // ПОРЯДОК ОБЯЗАТЕЛЕН, И С ЧАСТИ 9 ЭТО НЕ ПЕДАНТИЗМ. Пока справочник был
@@ -169,6 +170,11 @@ async function findAvailableEmployee(db, lead, newStatusId) {
 // ничем, и лид, открытый в 19:55, до утра не достанется никому. Через
 // HELD_LEAD_RELEASE_HOURS вне линии он возвращается в общую очередь.
 //
+// ЧАСЫ БЕРУТСЯ ИЗ НАСТРОЙКИ, а константа осталась умолчанием (ответы куратора
+// 12 и 13). Настройка, которую видно на экране и которая ничего не меняет, хуже
+// её отсутствия — по ней принимают решения. Константу при этом не убираем:
+// пустая строка в базе не должна ронять раздачу.
+//
 // Отцепляются только лиды, ЖДУЩИЕ РАБОТЫ. Лид этапа 2+ остаётся закреплён за
 // оператором и в очередь не возвращается — это граница задачи (dialog.md 0.1).
 //
@@ -190,6 +196,8 @@ async function releaseHeldLeads(db, newStatusId) {
     // и лид с пустым статусом. Снимаем метку и возвращаем его в очередь.
     await db.query('UPDATE leads SET opened_at = NULL, updated_at = NOW() WHERE employee_id IS NULL AND opened_at IS NOT NULL AND merged_into_id IS NULL AND archived_at IS NULL');
 
+    const releaseHours = await appSettings.getInt(db, 'held_lead_release_hours', HELD_LEAD_RELEASE_HOURS);
+
     const result = await db.query(
         `UPDATE leads l
          SET employee_id = NULL, opened_at = NULL, updated_at = NOW()
@@ -203,7 +211,7 @@ async function releaseHeldLeads(db, newStatusId) {
                  l.updated_at
                ) <= NOW() - make_interval(hours => $2::int)
          RETURNING l.id, e.id AS employee_id`,
-        [newStatusId, HELD_LEAD_RELEASE_HOURS]
+        [newStatusId, releaseHours]
     );
     if (result.rows.length > 0) {
         const employeeIds = Array.from(new Set(result.rows.map((r) => r.employee_id)));

@@ -194,6 +194,24 @@ function createInstance(container, ctx) {
      * незачем: раньше него записей не существует.
      */
     function applyParams(params) {
+        // ДВА РАЗНЫХ УКАЗАНИЯ, И ПУТАТЬ ИХ НЕЛЬЗЯ.
+        //
+        //   `table` — весь журнал одной таблицы: «кто менял настройки».
+        //     Приходит с экрана настроек (решение владельца 112).
+        //   `recordTable` + `recordId` — прошлое ОДНОЙ записи: «кто менял вот
+        //     этого лида». Приходит из карточки.
+        //
+        // Первое отвечает на вопрос о хозяйстве целиком, второе — о строке.
+        // Отбор по одной настройке на экране настроек был бы ответом не на тот
+        // вопрос: человек пришёл посмотреть, кто вообще сюда лазил.
+        const whole = String((params && params.table) || '').trim();
+        if (whole) {
+            state.filters.table = whole;
+            widenPeriod();
+            load();
+            return;
+        }
+
         const table = String((params && params.recordTable) || '').trim();
         const id = String((params && params.recordId) || '').trim();
         if (!table || !id) return;
@@ -202,14 +220,18 @@ function createInstance(container, ctx) {
         state.filters.recordId = id;
         state.recordLabel = `${table} #${id}`;
 
-        const started = state.auditStartedAt ? String(state.auditStartedAt).slice(0, 10) : null;
-        if (started) {
-            state.period = 'custom';
-            state.filters.from = started;
-            state.filters.to = null;
-            $('[data-role="period"]').value = 'custom';
-        }
+        widenPeriod();
         load();
+    }
+
+    /** Период на весь журнал: умолчание — семь дней, а пришедший по ссылке ждёт всё. */
+    function widenPeriod() {
+        const started = state.auditStartedAt ? String(state.auditStartedAt).slice(0, 10) : null;
+        if (!started) return;
+        state.period = 'custom';
+        state.filters.from = started;
+        state.filters.to = null;
+        $('[data-role="period"]').value = 'custom';
     }
 
     // ------------------------------------------------------------ данные
