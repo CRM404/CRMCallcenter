@@ -268,3 +268,52 @@
     font-weight: var(--ui-weight-bold);
     color: var(--ui-color-ink);
 }
+
+/* ----- Разворот строки НА МЕСТЕ (К295) -----
+   Строка таблицы раскрывается вниз продолжением самой себя: кнопка живёт в
+   ячейке, а под строкой встаёт <tr> с единственной ячейкой на все колонки.
+   Окно оставлено для другого случая: что задела одна операция (К112).
+
+   Забрано по счёту, а не по замыслу: объявлений было два — .hi-more/.hi-detail
+   («История изменений») и .zv-transfer/.zv-chain («Звонки»), — и автор второго
+   САМ НАПИСАЛ, что это копия: «Та же геометрия и тот же приём, что у разворота
+   перевода в „Звонках“» (history-light.css:96-97).
+
+   ВИД — СЛОЮ, МЕСТО — РАЗДЕЛУ. Из двадцати строк кнопки две копии расходились
+   ровно в двух, и обе про положение в ячейке: align-self: flex-start («История»)
+   и margin-top 2 против 3. Их узел НЕ забирает — они остались у разделов.
+
+   ⚠ colSpan РАЗВЁРНУТОЙ ЯЧЕЙКИ ВЫСТАВЛЯЕТ РАЗДЕЛ, А НЕ СЛОЙ. По замыслу правило
+   часть узла — строка обязана накрыть таблицу целиком; но считают его разделы
+   ПО-РАЗНОМУ, и правильно: «Звонки» вычитают спрятанные колонки
+   (callsApp.js:1005-1006), «История» их не знает (historyTable.js:126). Слой не
+   знает, какие колонки раздел спрятал, и знать не должен. Обязанность раздела:
+   выставить colSpan по ВИДИМЫМ колонкам.
+   ------------------------------------------------------------------------ */
+.ui-table__expand {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--ui-space-1);
+    padding: 1px 7px;
+    border: 1px solid var(--ui-color-line-strong);
+    border-radius: var(--ui-radius-lg);
+    background: transparent;
+    color: var(--ui-color-ink-soft);
+    font-family: inherit;
+    font-size: var(--ui-text-2xs);
+    font-weight: var(--ui-weight-bold);
+    cursor: pointer;
+}
+.ui-table__expand:hover { background: var(--ui-color-wash-hover); color: var(--ui-color-ink); }
+.ui-table__expand:focus-visible { outline: 2px solid var(--ui-color-accent); outline-offset: 1px; }
+.ui-table__expand .ui-ic { width: var(--ui-icon-xs); height: var(--ui-icon-xs); transition: transform var(--ui-dur-fast); }
+.ui-table__expand[aria-expanded="true"] .ui-ic { transform: rotate(180deg); }
+
+/* Развёрнутая строка. 11px по бокам — не голое число: столько же у обычной
+   ячейки (.ui-table td, padding: 9px 11px), и содержимое разворота встаёт по
+   той же вертикали, что содержимое ячеек над ним. Цвет значка узел НЕ задаёт:
+   поведение и раскладка — узлу, цвет — свойство места. */
+.ui-table__detail > td {
+    background: var(--ui-color-surface-sunken);
+    padding: var(--ui-space-4) 11px;
+}
