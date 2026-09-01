@@ -464,8 +464,15 @@
 
     <!-- Вкладка «Офферы»: фильтры + серверный поиск по базе ≈38 000 -->
     <div data-role="tab-panel-offers" hidden>
+        <!-- ОТБОРА ПО КОРНЕВОМУ ИСТОЧНИКУ ЗДЕСЬ НЕТ (К273). У всех записей он
+             ОДИНАКОВ, и отбор по нему не сужает выдачу ни на один оффер.
+             Из ПОДПИСИ оффера он не убран — там это часть имени
+             (`leadsOffers.js`, `offerSubtitle`). Серверный параметр
+             `rootSource` и справочник `rootSources` остались рабочими: они
+             пригодятся, когда корневых источников станет больше одного.
+             Ряд остался с ОДНИМ полем намеренно: сведение рядов — часть К272,
+             и решает его дизайн-сессия, а не эта правка. -->
         <div class="ui-form-grid offers-filters">
-            <div class="ui-field"><label class="ui-field__label" for="ofltRoot">Корневой источник</label><select class="ui-field__control" id="ofltRoot"><option value="">Все</option></select></div>
             <div class="ui-field"><label class="ui-field__label" for="ofltPlat">Площадка</label><select class="ui-field__control" id="ofltPlat"><option value="">Все</option></select></div>
         </div>
         <!-- География оффера (real_estate_offer_geo, kind='object'), а не

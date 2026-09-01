@@ -66,7 +66,7 @@ function createDebounced(fn, ms) {
 // ============================================================
 
 export function createOfferTabPicker({
-    rootSelect, platSelect, geoSelects, searchInput, resetBtn,
+    platSelect, geoSelects, searchInput, resetBtn,
     resultsEl, tagsEl, countEl, emptyEl, clearAllBtn, tabCountEl, onChange,
     storage, toast, isAlive, isAbort
 }) {
@@ -82,9 +82,11 @@ export function createOfferTabPicker({
     let maxPerLead = null;
 
     function currentParams() {
+        // `rootSource` СЮДА БОЛЬШЕ НЕ КЛАДЁТСЯ (К273). Серверный параметр
+        // остался рабочим, но слать пустую строку значило бы утверждать, что
+        // отбор по корневому источнику ещё жив.
         const params = {
             search: searchInput.value.trim(),
-            rootSource: rootSelect.value,
             platformId: platSelect.value
         };
         GEO_LEVELS.forEach((level) => { params[level] = geoSelects[level].value; });
@@ -223,7 +225,7 @@ export function createOfferTabPicker({
     });
 
     searchInput.addEventListener('input', runSearchDebounced);
-    [rootSelect, platSelect].forEach((el) => el.addEventListener('change', runSearch));
+    platSelect.addEventListener('change', runSearch);
 
     // Смена гео-уровня сбрасывает все НИЖНИЕ и перезагружает их списки:
     // прежний город почти наверняка не принадлежит новому региону, и оставлять
@@ -238,7 +240,6 @@ export function createOfferTabPicker({
     });
 
     resetBtn.addEventListener('click', async () => {
-        rootSelect.value = '';
         platSelect.value = '';
         GEO_LEVELS.forEach((level) => { geoSelects[level].value = ''; });
         searchInput.value = '';
@@ -259,16 +260,16 @@ export function createOfferTabPicker({
     async function loadFilters({ force = false } = {}) {
         if (filtersLoaded && !force) return;
         try {
-            const { rootSources, platforms, regions, cities, districts, localities } = await storage.fetchOfferFilters({
+            // ⚠ `rootSources` сервер ПО-ПРЕЖНЕМУ ОТДАЁТ, и это решение куратора
+            // (ответы 23 и 26): справочник не мешает и пригодится, когда
+            // корневых источников станет больше одного. Здесь поле ответа
+            // просто не читается — узла, который им заполнялся, больше нет.
+            const { platforms, regions, cities, districts, localities } = await storage.fetchOfferFilters({
                 region: geoSelects.region.value,
                 city: geoSelects.city.value,
                 district: geoSelects.district.value
             });
             if (!isAlive()) return;
-            const previousRoot = rootSelect.value;
-            rootSelect.innerHTML = '<option value="">Все</option>'
-                + rootSources.map((v) => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
-            rootSelect.value = rootSources.includes(previousRoot) ? previousRoot : '';
             const previousPlat = platSelect.value;
             platSelect.innerHTML = '<option value="">Все</option>'
                 + platforms.map((p) => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join('');
@@ -294,7 +295,6 @@ export function createOfferTabPicker({
             selected.clear();
             (offers || []).forEach((o) => selected.set(o.id, o.name));
             renderSelected();
-            rootSelect.value = '';
             platSelect.value = '';
             GEO_LEVELS.forEach((level) => { geoSelects[level].value = ''; });
             searchInput.value = '';
