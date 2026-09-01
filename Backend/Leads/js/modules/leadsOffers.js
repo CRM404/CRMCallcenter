@@ -67,6 +67,7 @@ function createDebounced(fn, ms) {
 
 export function createOfferTabPicker({
     platSelect, geoSelects, searchInput, resetBtn,
+    foldHead, foldBody, filterCountEl,
     resultsEl, tagsEl, countEl, emptyEl, clearAllBtn, tabCountEl, onChange,
     storage, toast, isAlive, isAbort
 }) {
@@ -95,6 +96,36 @@ export function createOfferTabPicker({
 
     function emitChange() {
         if (onChange) onChange(getValues());
+    }
+
+    // ----- СЧЁТ НАЛОЖЕННЫХ УСЛОВИЙ (К296) -----
+    // ПРАВИЛО НЕ ВЫДУМАНО ЗДЕСЬ: оно уже стоит в коде с доводом — К-Ф4,
+    // `leadsApp.js`, `syncFilterControls()`. Считаются только ПОЛЯ ОТБОРА;
+    // поиск не считается, потому что живёт СНАРУЖИ складки, и число обещало
+    // бы его содержимым складки: набрал текст — загорелась единица,
+    // развернул — пустые поля.
+    //
+    // ⚠ ПЕРЕНЕСЕНО ПРАВИЛО, А НЕ КОД. Там свой набор — фильтры СПИСКА лидов;
+    // здесь пять полей карточки, и «Площадка» среди них не особая: особым её
+    // делает место в разметке, а не роль.
+    //
+    // НОЛЯ НЕ БЫВАЕТ: при нуле условий счётчик скрыт целиком, а не показывает
+    // «0». Скрытием управляет раздел — так сказано у самого узла в chip.css.
+    function syncFilterCount() {
+        if (!filterCountEl) return;
+        const active = [platSelect.value, ...GEO_LEVELS.map((level) => geoSelects[level].value)]
+            .filter((value) => value).length;
+        filterCountEl.hidden = active === 0;
+        filterCountEl.textContent = active;
+    }
+
+    // Складка. Состояние живёт в `aria-expanded` на шапке, тело скрыто
+    // атрибутом `hidden`; второго признака в классе нет — держать два в
+    // согласии некому.
+    function setFold(open) {
+        if (!foldHead || !foldBody) return;
+        foldHead.setAttribute('aria-expanded', String(open));
+        foldBody.hidden = !open;
     }
 
     function renderSelected() {
@@ -151,6 +182,14 @@ export function createOfferTabPicker({
     }
 
     async function runSearch() {
+        // Счётчик пересчитывается ЗДЕСЬ, а не в каждом слушателе: через этот
+        // вызов проходят все пути, меняющие отбор, — смена площадки, смена
+        // гео-уровня, сброс и открытие карточки. Считать в слушателях значило
+        // бы держать пять копий одного правила и однажды забыть шестую.
+        // ⚠ Важен и обратный случай: `loadFilters` молча обнуляет значение,
+        // которого больше нет в суженном списке, — и пересчёт после него
+        // обязателен, иначе счётчик обещает условие, которого уже нет.
+        syncFilterCount();
         try {
             const { total, items, maxPerLead: limit } = await storage.searchOffers(currentParams());
             if (!isAlive()) return;
@@ -227,6 +266,12 @@ export function createOfferTabPicker({
     searchInput.addEventListener('input', runSearchDebounced);
     platSelect.addEventListener('change', runSearch);
 
+    if (foldHead) {
+        foldHead.addEventListener('click', () => {
+            setFold(foldHead.getAttribute('aria-expanded') !== 'true');
+        });
+    }
+
     // Смена гео-уровня сбрасывает все НИЖНИЕ и перезагружает их списки:
     // прежний город почти наверняка не принадлежит новому региону, и оставлять
     // его — значит показывать пустую выдачу вместо понятного результата.
@@ -239,10 +284,16 @@ export function createOfferTabPicker({
         });
     });
 
+    // ⚠ КНОПКА ЧИСТИТ ТОЛЬКО ПОЛЯ ОТБОРА И НЕ ТРОГАЕТ ПОИСК — решение
+    // владельца 122. Прежде она стирала и текст поиска; после К296 поиск живёт
+    // СНАРУЖИ складки и в счёт условий не входит, а орган внутри коробки,
+    // чистящий поле за её пределами, обещал бы больше, чем считает счётчик.
+    // Подпись «Сбросить ФИЛЬТРЫ» теперь правда: поиск не фильтр.
+    // Очистка поиска осталась в `open()` — это другое событие и другой смысл:
+    // карточка открывается с чистого листа.
     resetBtn.addEventListener('click', async () => {
         platSelect.value = '';
         GEO_LEVELS.forEach((level) => { geoSelects[level].value = ''; });
-        searchInput.value = '';
         await loadFilters({ force: true });
         if (!isAlive()) return;
         await runSearch();
@@ -295,6 +346,13 @@ export function createOfferTabPicker({
             selected.clear();
             (offers || []).forEach((o) => selected.set(o.id, o.name));
             renderSelected();
+            // ⚠ СВЁРТЫВАНИЕ СТОИТ ИМЕННО ЗДЕСЬ, И ЭТО ПРОВЕРЕНО ПО КОДУ.
+            // `open()` зовётся ОДИН раз, при открытии карточки; `switchTab()`
+            // только переключает `hidden` у панелей и сюда не заходит. Привязать
+            // свёртывание к переключению вкладок значило бы закрывать складку
+            // поверх живого отбора: выдача сужена, полей не видно, и счётчик
+            // остаётся единственным следом.
+            setFold(false);
             platSelect.value = '';
             GEO_LEVELS.forEach((level) => { geoSelects[level].value = ''; });
             searchInput.value = '';

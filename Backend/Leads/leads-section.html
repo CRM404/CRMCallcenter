@@ -470,32 +470,67 @@
 
     <!-- Вкладка «Офферы»: фильтры + серверный поиск по базе ≈38 000 -->
     <div data-role="tab-panel-offers" hidden>
+        <!-- ПОИСК СТОИТ НАД ФИЛЬТРАМИ, И ЭТО НЕ ПЕРЕСТАНОВКА РАДИ ВИДА (К296).
+             Решение владельца по фильтру CPA: «поиск по названию остаётся
+             отдельной строкой над кнопкой фильтра». Порядок «поиск → фильтры»
+             обязан быть одинаковым на обоих экранах, иначе они одинаковы
+             только на вид. Поиск ЖИВЁТ СНАРУЖИ складки и в счёт условий не
+             входит — правило К-Ф4, `leadsApp.js`.
+             ⚠ СВОЕГО ОРГАНА ОЧИСТКИ У ПОИСКА НЕТ, и это сознательно (ответ
+             куратора 7): текст стирается выделением и Backspace, как в любом
+             поле. Крестик был бы новым видом, которого нет ни в слое, ни в
+             макете, — заводить орган ради симметрии значит рисовать по
+             догадке. -->
+        <div class="ui-field">
+            <label class="ui-field__label ui-field__label--required" for="offerSearchInput">Поиск по базе офферов</label>
+            <input class="ui-field__control" type="text" id="offerSearchInput" placeholder="Начните вводить название ЖК или оффера…" autocomplete="off">
+        </div>
+
         <!-- ОТБОРА ПО КОРНЕВОМУ ИСТОЧНИКУ ЗДЕСЬ НЕТ (К273). У всех записей он
              ОДИНАКОВ, и отбор по нему не сужает выдачу ни на один оффер.
              Из ПОДПИСИ оффера он не убран — там это часть имени
              (`leadsOffers.js`, `offerSubtitle`). Серверный параметр
              `rootSource` и справочник `rootSources` остались рабочими: они
              пригодятся, когда корневых источников станет больше одного.
-             Ряд остался с ОДНИМ полем намеренно: сведение рядов — часть К272,
-             и решает его дизайн-сессия, а не эта правка. -->
-        <div class="ui-form-grid offers-filters">
-            <div class="ui-field"><label class="ui-field__label" for="ofltPlat">Площадка</label><select class="ui-field__control" id="ofltPlat"><option value="">Все</option></select></div>
-        </div>
-        <!-- География оффера (real_estate_offer_geo, kind='object'), а не
-             география источника: 4 уровня, каскадом сверху вниз -->
-        <div class="ui-form-grid offers-filters">
-            <div class="ui-field"><label class="ui-field__label" for="ofltRegion">Область</label><select class="ui-field__control" id="ofltRegion"><option value="">Все</option></select></div>
-            <div class="ui-field"><label class="ui-field__label" for="ofltCity">Город</label><select class="ui-field__control" id="ofltCity"><option value="">Все</option></select></div>
-            <div class="ui-field"><label class="ui-field__label" for="ofltDistrict">Район</label><select class="ui-field__control" id="ofltDistrict"><option value="">Все</option></select></div>
-            <div class="ui-field"><label class="ui-field__label" for="ofltLocality">Населённый пункт</label><select class="ui-field__control" id="ofltLocality"><option value="">Все</option></select></div>
-        </div>
-        <div class="ui-field">
-            <label class="ui-field__label ui-field__label--required" for="offerSearchInput">Поиск по базе офферов</label>
-            <input class="ui-field__control" type="text" id="offerSearchInput" placeholder="Начните вводить название ЖК или оффера…" autocomplete="off">
-        </div>
-        <div class="offer-search-row">
-            <div class="offer-search-hint">Значения фильтров подтягиваются из базы источников. Фильтры работают и без текста поиска.</div>
-            <button type="button" class="ui-btn ui-btn--ghost" data-role="offer-filters-reset">Сбросить фильтры</button>
+
+             ПЕРВЫЕ ЧЕТЫРЕ ПОЛЯ СЕТКИ — ГЕОГРАФИЯ ОФФЕРА
+             (real_estate_offer_geo, kind='object'), а не география источника:
+             четыре уровня каскадом сверху вниз. ⚠ ПЯТОЕ ПОЛЕ, «ПЛОЩАДКА», К
+             ГЕОГРАФИИ НЕ ОТНОСИТСЯ — оно стоит последним именно поэтому:
+             каскад остаётся целым блоком 2 × 2, а поле, в цепочку не входящее,
+             занимает последнюю ячейку (К296, замер трёх раскладок в макете).
+             Ряды сведены в ОДНУ сетку: единственное поле в своём ряду
+             `auto-fit` растягивает во всю ширину, и оно врёт о своём весе. -->
+        <div class="ui-fold offers-fold">
+            <button type="button" class="ui-fold__head" aria-expanded="false" aria-controls="offerFiltersBody" data-role="offer-filters-head">
+                <svg class="ui-ic ui-ic--sm ui-ic--quiet" aria-hidden="true"><use href="#ui-ic-filter"></use></svg>
+                <span class="ui-fold__title">Фильтры</span>
+                <!-- Счётчик наложенных условий. Считает ПОЛЯ ОТБОРА и не считает
+                     поиск; при нуле скрыт, а не показывает «0». Скрытием
+                     управляет раздел — так сказано у самого узла в chip.css. -->
+                <span class="ui-count" data-role="offer-filters-count" hidden>0</span>
+                <svg class="ui-ic ui-ic--sm ui-ic--quiet ui-fold__chev" aria-hidden="true"><use href="#ui-ic-chevron-down"></use></svg>
+            </button>
+            <div class="ui-fold__body" id="offerFiltersBody" data-role="offer-filters-body" hidden>
+                <div class="ui-form-grid offers-filters">
+                    <div class="ui-field"><label class="ui-field__label" for="ofltRegion">Область</label><select class="ui-field__control" id="ofltRegion"><option value="">Все</option></select></div>
+                    <div class="ui-field"><label class="ui-field__label" for="ofltCity">Город</label><select class="ui-field__control" id="ofltCity"><option value="">Все</option></select></div>
+                    <div class="ui-field"><label class="ui-field__label" for="ofltDistrict">Район</label><select class="ui-field__control" id="ofltDistrict"><option value="">Все</option></select></div>
+                    <div class="ui-field"><label class="ui-field__label" for="ofltLocality">Населённый пункт</label><select class="ui-field__control" id="ofltLocality"><option value="">Все</option></select></div>
+                    <div class="ui-field"><label class="ui-field__label" for="ofltPlat">Площадка</label><select class="ui-field__control" id="ofltPlat"><option value="">Все</option></select></div>
+                </div>
+                <div class="offer-search-hint">Значения фильтров подтягиваются из базы источников. Фильтры работают и без текста поиска.</div>
+                <!-- «Сбросить» СТОИТ В ПОДВАЛЕ ТЕЛА, А НЕ В ШАПКЕ, и это не
+                     выбор места: шапка складки сама кнопка, а кнопка в кнопке
+                     невалидна. Следствие названо прямо — свёрнутую складку не
+                     сбросить не разворачивая; счётчик говорит, что условия
+                     есть, снять их можно только внутри.
+                     ⚠ Кнопка НЕ ужимается, а переносится подсказка рядом с ней
+                     (К38): её подпись обрезалась посреди слова — 73 px при
+                     содержимом 104. Здесь этого не может случиться вовсе:
+                     подсказка и кнопка стоят разными строками, а не одной. -->
+                <div class="ui-fold__foot"><button type="button" class="ui-btn ui-btn--ghost" data-role="offer-filters-reset">Сбросить фильтры</button></div>
+            </div>
         </div>
         <div class="offer-results" data-role="offer-results" hidden></div>
         <div class="form-section form-section--offers">

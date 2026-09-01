@@ -553,6 +553,9 @@ export function createLeadModal(root, deps) {
                 district: $('#ofltDistrict'), locality: $('#ofltLocality')
             },
             searchInput: $('#offerSearchInput'), resetBtn: $('[data-role="offer-filters-reset"]'),
+            foldHead: $('[data-role="offer-filters-head"]'),
+            foldBody: $('[data-role="offer-filters-body"]'),
+            filterCountEl: $('[data-role="offer-filters-count"]'),
             resultsEl: $('[data-role="offer-results"]'), tagsEl: $('[data-role="offer-sel-tags"]'),
             countEl: $('[data-role="offer-sel-count"]'), emptyEl: $('[data-role="offer-sel-empty"]'),
             clearAllBtn: $('[data-role="offer-clear-all"]'), tabCountEl: $('[data-role="offer-tab-count"]')
