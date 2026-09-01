@@ -225,6 +225,16 @@ const BY_TABLE = {
     },
     lead_script_statuses: { lead_id: 'Лид', script_id: 'Скрипт', funnel_status_id: 'Статус показа' },
     lead_offers: { lead_id: 'Лид', offer_id: 'Оффер' },
+    // Текст комментария журнал не хранит — уровень `fact`. Подпись всё равно
+    // нужна: без неё поле встало бы в журнале машинным именем.
+    lead_comments: {
+        lead_id: 'Лид',
+        call_id: 'Звонок',
+        author_employee_id: 'Автор',
+        body: 'Текст комментария',
+        created_at: 'Когда написан',
+        is_migrated: 'Перенесён из старого поля'
+    },
     app_settings: {
         key: 'Ключ',
         value: 'Значение',

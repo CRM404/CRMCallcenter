@@ -174,7 +174,10 @@ function geoBlock(title, prefix, lead) {
 const GEO_KEYS = GEO_LEVELS.map((g) => g.level).concat(GEO_LEVELS.map((g) => geoFieldKey('client', g.level)));
 const ALWAYS_VISIBLE_KEYS = [
     'phone', 'lastName', 'firstName', 'middleName', 'decisionMaker', 'purchaseTimeframe',
-    'notes', 'funnelStatusId'
+    // `notes` ЗДЕСЬ БОЛЬШЕ НЕТ: старое поле не собирается и не отправляется —
+    // править его нечем, потому что его нет на экране. На его месте `comment` —
+    // НОВАЯ запись ленты, а не значение поля.
+    'comment', 'funnelStatusId'
 ];
 const PARAMS_KEYS = [
     'priceFrom', 'priceTo', 'purchaseMethod', 'downPaymentPercent', 'mortgageType', 'clientType',
@@ -283,6 +286,129 @@ export function recallLimitOf(status) {
 // options.flash = true — карточку только что подменили после сохранения:
 // над ней на две секунды появляется полоса «Новый лид № …». Смена собеседника
 // обязана быть заметна боковым зрением.
+// ----- Лента комментариев (Б4.3, паспорт Р3 редакции 3) ---------------------
+//
+// ТЕКСТЫ ДОСЛОВНО ИЗ ПАСПОРТА. Собирать их по месту нельзя: текст, набранный
+// дважды, расходится на первой же правке.
+const FEED = {
+    label: 'Добавить комментарий',
+    placeholder: 'Что сказал клиент в этом разговоре',
+    hint: 'Запись сохранится вместе с карточкой и станет частью ленты. Изменить её потом будет нельзя.',
+    empty: 'Комментариев пока нет — этот разговор первый.',
+    author: 'система',
+    noTime: 'время неизвестно',
+    collapse: 'Свернуть',
+    noAnswer: 'недозвон'
+};
+
+// ТРИ ВИДИМЫЕ ЗАПИСИ — ПРАВИЛО ПОКАЗА, А НЕ РАЗМЕР. Оператор читает ленту за
+// секунды до звонка, а не изучает её: прошлый разговор, позапрошлый и тот, где
+// договорились. Дальше начинается история, а история — работа руководителя.
+const FEED_VISIBLE = 3;
+
+const MONTHS = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
+    'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
+
+/**
+ * Когда написана запись: «сегодня, 16:04» · «вчера, 16:04» · «22 августа, 09:48».
+ *
+ * ПЕРВЫЕ ДВА ДНЯ СЛОВАМИ, дальше числом и месяцем. Год не пишется вовсе: лента
+ * коротка по устройству, а «22 августа 2026» рядом с «вчера» читается как две
+ * разные шкалы.
+ */
+function commentWhen(iso) {
+    if (!iso) return FEED.noTime;
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return FEED.noTime;
+    const time = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    const midnight = new Date();
+    midnight.setHours(0, 0, 0, 0);
+    const days = Math.floor((midnight.getTime() - new Date(d).setHours(0, 0, 0, 0)) / 86400000);
+    if (days === 0) return `сегодня, ${time}`;
+    if (days === 1) return `вчера, ${time}`;
+    return `${d.getDate()} ${MONTHS[d.getMonth()]}, ${time}`;
+}
+
+/**
+ * Отсылка к звонку: «к звонку 16:04 · 4:12», при недозвоне — «к звонку 10:15 ·
+ * недозвон».
+ *
+ * СОБИРАЕТСЯ ЗДЕСЬ, А НЕ НА СЕРВЕРЕ. В карточке оператора это ПОДПИСЬ: вкладки
+ * звонков у него нет, и вести отсюда некуда. В карточке лида у руководителя та
+ * же запись станет ссылкой — готовая фраза с сервера мешала бы второму.
+ *
+ * ПУСТОЙ ОТСЫЛКИ НЕ ПИШЕМ. Комментарий без звонка — законный случай:
+ * руководитель пишет, не звоня; оператор дописывает после закрытия звонка.
+ * «Звонок не указан» сообщало бы о том, чего не случилось.
+ */
+function commentCall(call) {
+    if (!call || !call.startedAt) return '';
+    const d = new Date(call.startedAt);
+    if (Number.isNaN(d.getTime())) return '';
+    const at = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    if (!call.answered) return `к звонку ${at} · ${FEED.noAnswer}`;
+    const sec = Number(call.talkSeconds);
+    const talk = Number.isFinite(sec) && sec >= 0
+        ? `${Math.floor(sec / 60)}:${pad(sec % 60)}`
+        : '';
+    return talk ? `к звонку ${at} · ${talk}` : `к звонку ${at}`;
+}
+
+/** Одна запись ленты. Перенесённая отличается пунктиром и приглушённым фоном. */
+function commentBox(item, index) {
+    const who = item.isMigrated
+        ? FEED.author
+        : (item.author && item.author.name ? item.author.name : '');
+    const when = item.isMigrated ? FEED.noTime : commentWhen(item.createdAt);
+    const call = commentCall(item.call);
+    // Скрытые записи ОСТАЮТСЯ в разметке: раскрытие происходит на месте, у
+    // оператора идёт разговор, и второй запрос к серверу ради уже полученного
+    // означал бы паузу ровно в этот момент.
+    const extra = index >= FEED_VISIBLE ? ' hidden' : '';
+    return `
+        <div class="op-comment${item.isMigrated ? ' op-comment--legacy' : ''}" data-role="comment"${extra}>
+            <div class="op-comment__head">
+                ${who ? `<span class="op-comment__who">${escapeHtml(who)}</span>` : ''}
+                <span>${escapeHtml(when)}</span>
+                ${call ? `<span class="op-comment__call">${escapeHtml(call)}</span>` : ''}
+            </div>
+            <div class="op-comment__text">${escapeHtml(item.body || '')}</div>
+        </div>
+    `;
+}
+
+/**
+ * Секция «Комментарии» целиком: пустое поле СВЕРХУ, лента под ним на чтение
+ * (решение владельца 116, К282).
+ *
+ * ПОЛЕ ВСЕГДА ПУСТОЕ, и это главное правило пункта. Оно не «очищается после
+ * сохранения» — в нём НИКОГДА не лежит чужой текст. Стереть чужое невозможно не
+ * потому, что запретили, а потому, что стирать нечего.
+ */
+function commentsSection(lead) {
+    const items = Array.isArray(lead.comments) ? lead.comments : [];
+    const feed = items.length === 0
+        ? `<div class="ui-empty ui-empty--inline"><div class="ui-empty__text">${escapeHtml(FEED.empty)}</div></div>`
+        : `<div class="op-comments" data-role="comments">${items.map((it, i) => commentBox(it, i)).join('')}</div>`;
+    // Кнопки нет, пока скрывать нечего: до трёх записей видно всё.
+    const more = items.length > FEED_VISIBLE
+        ? `<button type="button" class="ui-btn ui-btn--ghost op-comments-more" data-role="comments-more">Показать все ${items.length}</button>`
+        : '';
+    return `
+        <div class="op-form-section">
+            <div class="op-section-label">Комментарии</div>
+            <div class="ui-field">
+                <span class="ui-field__label" for="op-field-comment">${FEED.label}</span>
+                <textarea class="ui-field__control" id="op-field-comment" name="comment" rows="3"
+                          placeholder="${escapeHtml(FEED.placeholder)}"></textarea>
+                <span class="ui-field__hint">${escapeHtml(FEED.hint)}</span>
+            </div>
+            ${feed}
+            ${more}
+        </div>
+    `;
+}
+
 export function renderLeadForm(container, lead, statuses, paramLists, onSave, options) {
     const lists = paramLists || {};
     const savedAt = formatDateTime(lead.updatedAt);
@@ -379,12 +505,7 @@ export function renderLeadForm(container, lead, statuses, paramLists, onSave, op
             </div>
         </div>
 
-        <div class="op-form-section">
-            <div class="op-section-label">Комментарии</div>
-            <div class="form-group">
-                <textarea id="op-field-notes" name="notes" rows="3">${escapeHtml(lead.notes)}</textarea>
-            </div>
-        </div>
+        ${commentsSection(lead)}
 
         <div class="op-form-section">
             <div class="op-section-label">Статус звонка</div>
@@ -578,6 +699,27 @@ export function renderLeadForm(container, lead, statuses, paramLists, onSave, op
     renderAttempts();
 
     // --- Сохранение --------------------------------------------------------
+    // --- Лента: раскрыть и свернуть ----------------------------------------
+    //
+    // КНОПКА НАЗЫВАЕТ ПОЛНОЕ ЧИСЛО, а не «ещё 8»: «Показать все 11» отвечает на
+    // вопрос «сколько всего с ним говорили» — тот, который оператор задаёт
+    // первым. «Ещё 8» заставляет складывать.
+    //
+    // ФОКУС ОСТАЁТСЯ НА КНОПКЕ, она меняет подпись. Уводить фокус в ленту
+    // некуда: записи в порядок обхода не входят — они ничего не открывают и не
+    // выбираются.
+    const commentsMore = container.querySelector('[data-role="comments-more"]');
+    if (commentsMore) {
+        const boxes = Array.from(container.querySelectorAll('[data-role="comment"]'));
+        const total = boxes.length;
+        let open = false;
+        commentsMore.addEventListener('click', () => {
+            open = !open;
+            boxes.forEach((box, i) => { box.hidden = !open && i >= FEED_VISIBLE; });
+            commentsMore.textContent = open ? FEED.collapse : `Показать все ${total}`;
+        });
+    }
+
     container.querySelector('#opSaveLeadBtn').addEventListener('click', () => {
         const status = selectedStatus();
 

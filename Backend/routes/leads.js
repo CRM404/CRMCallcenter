@@ -12,6 +12,7 @@ const { fetchStatusFlags, resolveCallStatusEffects } = require('../services/lead
 const { resolveWrapupSeconds, closeByTimeout } = require('../services/callWrapup');
 const auditContext = require('../services/auditContext');
 const { withTransaction } = require('../services/dbTx');
+const leadComments = require('../services/leadComments');
 const { phoneColumnsFor, findLeadByPhone } = require('../services/phoneFix');
 
 const router = express.Router();
@@ -53,8 +54,12 @@ const EDITABLE_FIELD_COLUMNS = [
     ['purchaseMethod', 'purchase_method'],
     ['mortgageType', 'mortgage_type'],
     ['downPaymentPercent', 'down_payment_percent'],
-    ['purchaseTimeframe', 'purchase_timeframe'],
-    ['notes', 'notes']
+    ['purchaseTimeframe', 'purchase_timeframe']
+    // `notes` ЗДЕСЬ БОЛЬШЕ НЕТ, и это не пропуск (Б4.2). Поле перестало
+    // быть правимым: комментарий пишется записью ленты, а старое поле
+    // доживает как архив накопленного до работы, которая его снимет.
+    // Оставить его в списке значило бы держать второй источник правды
+    // на то же самое — и первая же правка карточки затёрла бы перенос.
 ];
 
 const NUMERIC_FIELDS = new Set(['funnelStatusId', 'priceFrom', 'priceTo', 'areaFrom', 'areaTo', 'downPaymentPercent']);
@@ -204,6 +209,11 @@ async function fetchLeadCard(db, leadId) {
         funnelStatusId: result.rows[0].funnel_status_id,
         lineType: result.rows[0].line_type
     });
+    // ЛЕНТА ЕДЕТ ВМЕСТЕ С КАРТОЧКОЙ, а не вторым запросом. Оператор получает
+    // лида карточкой и читает ленту за секунды до звонка: второе обращение
+    // означало бы, что прошлый разговор появляется на экране позже самого
+    // экрана — ровно в тот момент, когда человек уже набирает номер.
+    lead.comments = await leadComments.fetchForLead(db, leadId);
     return lead;
 }
 
@@ -329,6 +339,21 @@ router.post('/:id/complete', async (req, res) => {
                 `UPDATE leads SET ${setClauses.join(', ')}, updated_at = NOW() WHERE id = $${values.length}`,
                 values
             );
+            // ЗАПИСЬ ЛЕНТЫ — В ТОЙ ЖЕ ТРАНЗАКЦИИ, что и карточка. Отдельным
+            // запросом она пережила бы откат сохранения: карточка не легла бы,
+            // а комментарий о несостоявшейся правке остался.
+            //
+            // ⚠ ЗВОНОК НЕ ПРИВЯЗЫВАЕТСЯ, И ЭТО НЕ ПРОПУСК. Строк в `calls` не
+            // заводит СЕГОДНЯ НИКТО: во всём проекте нет ни одного `INSERT INTO
+            // calls` — таблицу наполнит телефония. Правило «к какому звонку
+            // относится комментарий» пишется вместе с ней; выдумать его сейчас
+            // значит выдумать и проверку, которую не на чем прогнать. Колонка
+            // заведена, связь обнуляющая, место готово.
+            await leadComments.add(client, {
+                leadId: req.params.id,
+                body: req.body.comment,
+                authorEmployeeId: employeeId
+            });
             return { code: 200 };
         });
     } catch (err) {
@@ -408,6 +433,21 @@ router.post('/:id/wrapup-timeout', async (req, res) => {
                   WHERE id = $${values.length}`,
                 values
             );
+            // ЗАПИСЬ ЛЕНТЫ — В ТОЙ ЖЕ ТРАНЗАКЦИИ, что и карточка. Отдельным
+            // запросом она пережила бы откат сохранения: карточка не легла бы,
+            // а комментарий о несостоявшейся правке остался.
+            //
+            // ⚠ ЗВОНОК НЕ ПРИВЯЗЫВАЕТСЯ, И ЭТО НЕ ПРОПУСК. Строк в `calls` не
+            // заводит СЕГОДНЯ НИКТО: во всём проекте нет ни одного `INSERT INTO
+            // calls` — таблицу наполнит телефония. Правило «к какому звонку
+            // относится комментарий» пишется вместе с ней; выдумать его сейчас
+            // значит выдумать и проверку, которую не на чем прогнать. Колонка
+            // заведена, связь обнуляющая, место готово.
+            await leadComments.add(client, {
+                leadId: req.params.id,
+                body: req.body.comment,
+                authorEmployeeId: employeeId
+            });
             // А закрытие — под именем системы и общим на оба пути куском кода.
             //
             // ⚠ ОДНОГО `runAsService` ЗДЕСЬ МАЛО, и это не видно чтением. Триггер

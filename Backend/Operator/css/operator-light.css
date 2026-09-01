@@ -1085,3 +1085,79 @@ h2 {
 @media (prefers-reduced-motion: reduce) {
     .op-state-pill.nudge { animation: none; }
 }
+
+/* ===================== ЛЕНТА КОММЕНТАРИЕВ (Б4.3, паспорт Р3 ред. 3) =========
+   Своих классов восемь, все с приставкой op-comment. Значения — ТОКЕНЫ СЛОЯ:
+   он подключён к этой странице отдельным шагом, и своих цветов, радиусов и
+   теней лента не заводит ни одного.
+
+   ⚠ ПАСПОРТ НАЗЫВАЕТ СЕМЬ, А ИХ ВОСЕМЬ. В карте классов паспорта нет
+   `.op-comments-more`, хотя в тексте он назван: «кнопка — .ui-btn--ghost во
+   всю ширину ленты (.op-comments-more)». Расхождение внутри одного документа;
+   названо в докладе, число здесь честное.
+   ========================================================================= */
+
+/* Лента: поле «добавить» СВЕРХУ, под ним записи — свежие первыми (решение
+   владельца 116, К282). Отступ переехал с низа на верх вместе с порядком:
+   12 отделяют ленту от поля, 8 — кнопку от ленты. */
+.op-comments {
+    display: flex;
+    flex-direction: column;
+    gap: var(--ui-space-3);
+    margin: var(--ui-space-4) 0 var(--ui-space-3);
+}
+
+/* Одна запись. Читается, но не правится: правка задним числом — это то же
+   стирание, только медленнее. */
+.op-comment {
+    padding: var(--ui-space-3) var(--ui-space-4);
+    border: 1px solid var(--ui-color-line);
+    border-radius: var(--ui-radius-sm);
+    background: var(--ui-color-surface);
+}
+
+/* Шапка записи: кто · когда · к какому звонку. Мельче текста и приглушена —
+   читают текст, а шапка отвечает на вопрос «чьё это и когда».
+   flex-wrap: в узкой карточке «к звонку …» переносится, а не режется. */
+.op-comment__head {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: var(--ui-space-1) var(--ui-space-3);
+    margin-bottom: var(--ui-space-2);
+    font-size: var(--ui-text-xs);
+    color: var(--ui-color-ink-faint);
+}
+.op-comment__who { font-weight: var(--ui-weight-bold); color: var(--ui-color-ink-soft); }
+
+/* Отсылка к звонку — ПОДПИСЬ, а не ссылка: в карточке оператора вкладки
+   звонков нет, и вести отсюда некуда. Ссылкой она станет там, где есть куда
+   вести, — в карточке лида у руководителя (Р9). */
+.op-comment__call {
+    font-family: var(--ui-font-mono);
+    color: var(--ui-color-ink-faint);
+}
+
+/* pre-wrap: переносы оператора значимые, он писал их в разговоре. */
+.op-comment__text {
+    font-size: var(--ui-text-md);
+    line-height: var(--ui-line-base);
+    color: var(--ui-color-ink);
+    white-space: pre-wrap;
+}
+
+/* Перенесённая запись — та, в которую слилось старое поле (решение владельца
+   57). Пунктир: у неё нет ни автора, ни времени, и она не должна выглядеть
+   такой же полноценной, как написанные человеком. Второго знака не заводим —
+   пунктир и приглушённый фон в проекте уже значат «не такое, как соседние». */
+.op-comment--legacy {
+    border-style: dashed;
+    border-color: var(--ui-color-line-strong);
+    background: var(--ui-color-surface-sunken);
+}
+
+/* «Показать все» — тихая кнопка во всю ширину ленты, чтобы её не искали. */
+.op-comments-more {
+    width: 100%;
+    justify-content: center;
+}
