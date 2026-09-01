@@ -340,6 +340,56 @@ function handleFkError(err, res) {
     return true;
 }
 
+// ================= Пределы числовых полей (К269, К270) =================
+//
+// ⚠ ЭТО ЕДИНСТВЕННОЕ МЕСТО, ГДЕ ОТРИЦАТЕЛЬНОЕ ОТБИВАЕТСЯ. `min="0"` в разметке
+// подсказка, а не запрет: формы в разделе нет, `checkValidity()` в проекте не
+// зовётся нигде, а единственная форма проекта — вход оператора — стоит с
+// `novalidate`. Набранное руками уходит на сервер как было.
+//
+// ЗДЕСЬ, А НЕ В `validateLeadParams`: ту делит `bulk-import`, а он этих полей
+// не кладёт вовсе (вставляет только имя, телефон, источник, статус и линию), —
+// проверка оказалась бы там мёртвой. И не внутри `normalizeValue`: она
+// возвращает значение и только, переделывать её ради двух путей значит тронуть
+// все.
+//
+// ОДНА ФУНКЦИЯ НА ОБА ПУТИ — отбор и сохранение. Правило у них одно, и разъехаться
+// им нельзя: человек не поймёт, почему 150 % в карточке отбито, а в отборе принято.
+//
+// Верхнего предела у цены и площади НЕТ намеренно: обоснованного числа не
+// существует, а выдуманное однажды упрётся в настоящий дорогой объект.
+// Дробное допустимо у обоих — «9.7» в поле «цена от» никому не вредит.
+const NUMBER_LIMITS = [
+    { key: 'priceFrom', label: 'Цена от', max: null, integer: false },
+    { key: 'priceTo', label: 'Цена до', max: null, integer: false },
+    { key: 'areaFrom', label: 'Площадь от', max: null, integer: false },
+    { key: 'areaTo', label: 'Площадь до', max: null, integer: false },
+    // Доля, и она целая: список экрана даёт 10 15 20 25 30 50, дробных в нём нет.
+    { key: 'downPaymentPercent', label: 'Первоначальный взнос', max: 100, integer: true }
+];
+
+// Возвращает текст отказа или null. ПЕРВОЕ негодное поле, а не список всех:
+// так же ведут себя все остальные проверки этого файла, и два разных поведения
+// в одном маршруте читались бы как ошибка.
+function checkNumberLimits(source) {
+    for (const limit of NUMBER_LIMITS) {
+        const raw = source[limit.key];
+        if (raw === undefined || raw === null || String(raw).trim() === '') continue;
+        const value = Number(String(raw).trim());
+        // Нечисловое — ТОТ ЖЕ класс, а не соседний: негодное значение. Молча
+        // отбросить его значит отдать выдачу шире заданной, и человек решит,
+        // что лидов столько и есть.
+        if (!Number.isFinite(value)) return `${limit.label}: нужно число`;
+        if (limit.integer && !Number.isInteger(value)) return `${limit.label}: нужно целое число`;
+        if (limit.max === null) {
+            if (value < 0) return `${limit.label}: значение не может быть отрицательным`;
+        } else if (value < 0 || value > limit.max) {
+            return `${limit.label}: значение должно быть от 0 до ${limit.max}`;
+        }
+    }
+    return null;
+}
+
 // ================= Валидация =================
 
 async function checkActiveScript(db, scriptId, label) {
@@ -572,6 +622,13 @@ async function fetchLeadById(id) {
 // пользуется окно «Фильтры», где это два разных поля.
 router.get('/', async (req, res) => {
     try {
+        // 400 НА ВЕСЬ ЗАПРОС, а не «отбросить негодное условие». Молчаливый
+        // отброс показал бы выдачу, которая НЕ соответствует заданному отбору,
+        // и человек решил бы, что лидов столько и есть. Отказ стоит одного
+        // захода, ложная выдача — решения.
+        const numberError = checkNumberLimits(req.query);
+        if (numberError) return res.status(400).json({ error: numberError });
+
         const { q, fio, phone, sourceId, employeeId, funnelStatusId, limit, offset } = req.query;
 
         const conditions = [];
@@ -927,6 +984,10 @@ router.get('/:id', async (req, res) => {
 router.post('/', async (req, res) => {
     const client = await pool.connect();
     try {
+        const numberError = checkNumberLimits(req.body);
+        if (numberError) {
+            return res.status(400).json({ error: numberError });
+        }
         const validation = await validateFullLeadBody(client, req.body);
         if (validation.error) {
             return res.status(400).json({ error: validation.error });
@@ -984,6 +1045,10 @@ router.post('/', async (req, res) => {
 router.put('/:id', async (req, res) => {
     const client = await pool.connect();
     try {
+        const numberError = checkNumberLimits(req.body);
+        if (numberError) {
+            return res.status(400).json({ error: numberError });
+        }
         const validation = await validateFullLeadBody(client, req.body);
         if (validation.error) {
             return res.status(400).json({ error: validation.error });

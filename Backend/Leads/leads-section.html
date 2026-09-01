@@ -237,10 +237,16 @@
             <h3>Диапазоны</h3>
             <p class="section-hint">Лид подходит, если его диапазон пересекается с заданным: «до 12 млн» находит и того, кто готов на 10–14.</p>
             <div class="ui-form-grid">
-                <div class="ui-field"><label class="ui-field__label" for="fltPriceFrom">Цена от</label><input class="ui-field__control" type="number" id="fltPriceFrom"></div>
-                <div class="ui-field"><label class="ui-field__label" for="fltPriceTo">Цена до</label><input class="ui-field__control" type="number" id="fltPriceTo"></div>
-                <div class="ui-field"><label class="ui-field__label" for="fltAreaFrom">Площадь от</label><input class="ui-field__control" type="number" id="fltAreaFrom"></div>
-                <div class="ui-field"><label class="ui-field__label" for="fltAreaTo">Площадь до</label><input class="ui-field__control" type="number" id="fltAreaTo"></div>
+            <!-- ⚠ `min="0"` ЗДЕСЬ ПОДСКАЗКА, А НЕ ЗАПРЕТ (решение куратора).
+                 Формы в разделе нет, `checkValidity()` в проекте не зовётся
+                 нигде, а единственная форма проекта — вход оператора — стоит с
+                 `novalidate`. Значит `min` только не даёт стрелкам уводить в
+                 минус; набранное руками отрицательное уходит на сервер как
+                 было. Отбивает его СЕРВЕР (К269, К270). -->
+                <div class="ui-field"><label class="ui-field__label" for="fltPriceFrom">Цена от</label><input class="ui-field__control" type="number" min="0" id="fltPriceFrom"></div>
+                <div class="ui-field"><label class="ui-field__label" for="fltPriceTo">Цена до</label><input class="ui-field__control" type="number" min="0" id="fltPriceTo"></div>
+                <div class="ui-field"><label class="ui-field__label" for="fltAreaFrom">Площадь от</label><input class="ui-field__control" type="number" min="0" id="fltAreaFrom"></div>
+                <div class="ui-field"><label class="ui-field__label" for="fltAreaTo">Площадь до</label><input class="ui-field__control" type="number" min="0" id="fltAreaTo"></div>
             </div>
         </div>
         <div class="form-section">
@@ -364,10 +370,10 @@
                 <div class="ui-field"><label class="ui-field__label" for="ldRoomCount">Комнатность</label><select class="ui-field__control" id="ldRoomCount"></select></div>
                 <div class="ui-field"><label class="ui-field__label" for="ldFinish">Отделка</label><select class="ui-field__control" id="ldFinish"></select></div>
                 <div class="ui-field"><label class="ui-field__label" for="ldDeliveryDeadline">Срок сдачи <span class="hint">— не позже</span></label><select class="ui-field__control" id="ldDeliveryDeadline"></select></div>
-                <div class="ui-field"><label class="ui-field__label" for="ldPriceFrom">Цена от</label><input class="ui-field__control" type="number" id="ldPriceFrom"></div>
-                <div class="ui-field"><label class="ui-field__label" for="ldPriceTo">Цена до</label><input class="ui-field__control" type="number" id="ldPriceTo"></div>
-                <div class="ui-field"><label class="ui-field__label" for="ldAreaFrom">Площадь от</label><input class="ui-field__control" type="number" id="ldAreaFrom"></div>
-                <div class="ui-field"><label class="ui-field__label" for="ldAreaTo">Площадь до</label><input class="ui-field__control" type="number" id="ldAreaTo"></div>
+                <div class="ui-field"><label class="ui-field__label" for="ldPriceFrom">Цена от</label><input class="ui-field__control" type="number" min="0" id="ldPriceFrom"></div>
+                <div class="ui-field"><label class="ui-field__label" for="ldPriceTo">Цена до</label><input class="ui-field__control" type="number" min="0" id="ldPriceTo"></div>
+                <div class="ui-field"><label class="ui-field__label" for="ldAreaFrom">Площадь от</label><input class="ui-field__control" type="number" min="0" id="ldAreaFrom"></div>
+                <div class="ui-field"><label class="ui-field__label" for="ldAreaTo">Площадь до</label><input class="ui-field__control" type="number" min="0" id="ldAreaTo"></div>
             </div>
         </div>
 
