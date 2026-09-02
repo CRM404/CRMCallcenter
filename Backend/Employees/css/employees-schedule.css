@@ -290,25 +290,48 @@
 
 /* ----- Окно «Добавить график» ----- */
 /* Данные выбранного сотрудника — читаются, не редактируются. */
-.emp-wrap .emp-schedule {
+/* ============================================================
+   ⚠⚠ ОСТАЛЬНЫЕ СЕМЬ ИМЁН ЭТОГО ОКНА — ТОЖЕ БЕЗ ПРИСТАВКИ (К306).
+
+   Тот же дефект, что у семьи .wk-*, то же окно и тот же способ. Их правила
+   были ограничены .emp-wrap и потому не применялись НИ РАЗУ: сводка смены,
+   её строки, предпросмотр и предупреждение рисовались голым текстом — без
+   рамки, без подложки, без веса.
+
+   ⚠ ПРО ПРЕДУПРЕЖДЕНИЕ ОТДЕЛЬНО. Ниже про .fill-warn написано, что это
+   «единственная защита отпуска и больничного». До К306 она выводилась ровно
+   как та фраза, которую по её же доводу перестают читать: без черты, без
+   цвета и без веса.
+
+   ЧЕМ ЭТО ОГРАНИЧЕНО — проверено перебором, а не предположено: ни одно из семи
+   имён не встречается нигде, кроме «Сотрудников», и ни одно не стоит в разделе
+   вне шаблона окна (`fill-tpl`). Значит правила были мертвы целиком, а став
+   глобальными, применились ровно там, где и задумывались.
+
+   ЗНАЧЕНИЯ БЕРУТСЯ ИЗ СЛОЯ НАПРЯМУЮ по той же причине, что в К299: --e-* и
+   --s-… объявлены на .emp-wrap, а окно вне её. Все восемь — ЧИСТЫЕ ПСЕВДОНИМЫ
+   слоя (employees-light.css:34-77), значение по обе стороны одно; собственного
+   значения, как --e-wend-ink у складки, среди них нет ни одного.
+   ============================================================ */
+.emp-schedule {
     display: flex;
     flex-direction: column;
     gap: 6px;
     background: rgba(96, 112, 148, .08);
-    border: 1px solid var(--e-line);
-    border-radius: var(--e-radius-sm);
+    border: 1px solid var(--ui-color-line);
+    border-radius: var(--ui-radius-sm);
     padding: 10px 12px;
     margin-top: 4px;
 }
-.emp-wrap .emp-schedule .es-line { display: flex; align-items: baseline; gap: 10px; }
-.emp-wrap .emp-schedule .es-key { font-size: 11.5px; color: var(--e-ink-faint); min-width: 92px; }
-.emp-wrap .emp-schedule .es-val { font-size: 13.5px; font-weight: 700; color: var(--e-ink); }
-.emp-wrap .emp-schedule .es-note { font-size: 12.5px; color: var(--e-ink-soft); }
-.emp-wrap .emp-schedule .es-note .ui-ic { flex-shrink: 0; }
+.emp-schedule .es-line { display: flex; align-items: baseline; gap: 10px; }
+.emp-schedule .es-key { font-size: 11.5px; color: var(--ui-color-ink-faint); min-width: 92px; }
+.emp-schedule .es-val { font-size: 13.5px; font-weight: 700; color: var(--ui-color-ink); }
+.emp-schedule .es-note { font-size: 12.5px; color: var(--ui-color-ink-soft); }
+.emp-schedule .es-note .ui-ic { flex-shrink: 0; }
 /* Краснеет СРАЗУ при выборе сотрудника, а не после нажатия «Заполнить»:
    ругаться, когда человек уже заполнил форму, — худший момент из возможных. */
-.emp-wrap .emp-schedule.bad { background: var(--s-danger-bg); border-color: rgba(192, 57, 43, .3); }
-.emp-wrap .emp-schedule.bad .es-val { color: var(--e-danger-deep); font-size: 12.5px; font-weight: 600; line-height: 1.4; }
+.emp-schedule.bad { background: var(--ui-color-danger-wash); border-color: rgba(192, 57, 43, .3); }
+.emp-schedule.bad .es-val { color: var(--ui-color-danger-deep); font-size: 12.5px; font-weight: 600; line-height: 1.4; }
 
 /* ============================================================
    ⚠⚠ СЕМЬЯ .wk-* ОБЪЯВЛЕНА БЕЗ ПРИСТАВКИ .emp-wrap — К299, решение владельца 120.
@@ -451,25 +474,25 @@
 .wk-note { font-size: 11.5px; color: var(--ui-color-ink-faint); line-height: 1.45; margin-top: 10px; }
 
 /* Предпросмотр: что именно будет проставлено и что затрётся. */
-.emp-wrap .fill-preview {
-    border: 1px solid var(--e-line);
-    border-radius: var(--e-radius-sm);
+.fill-preview {
+    border: 1px solid var(--ui-color-line);
+    border-radius: var(--ui-radius-sm);
     padding: 11px 12px;
     background: rgba(255, 255, 255, .7);
     font-size: 12.5px;
-    color: var(--e-ink-soft);
+    color: var(--ui-color-ink-soft);
     line-height: 1.5;
     margin-top: 4px;
 }
-.emp-wrap .fill-preview b { color: var(--e-ink); font-weight: 700; }
-.emp-wrap .fill-preview i { font-style: italic; }
+.fill-preview b { color: var(--ui-color-ink); font-weight: 700; }
+.fill-preview i { font-style: italic; }
 /* Единственная защита отпуска и больничного — считаемое предупреждение.
    Статическую фразу перестают читать на третий раз, число читают. */
-.emp-wrap .fill-warn {
+.fill-warn {
     margin-top: 8px;
     padding-top: 8px;
-    border-top: 1px solid var(--e-line);
-    color: var(--s-vac-ink);
+    border-top: 1px solid var(--ui-color-line);
+    color: var(--ui-color-warn-ink);
     font-weight: 600;
     font-size: 12.5px;
 }
