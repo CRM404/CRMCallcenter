@@ -534,9 +534,17 @@
         </div>
         <div class="offer-results" data-role="offer-results" hidden></div>
         <div class="form-section form-section--offers">
+            <!-- ⚠ КНОПКИ «УБРАТЬ ВСЕ» ЗДЕСЬ БОЛЬШЕ НЕТ (К274): она переехала
+                 в шапку результатов, к «Добавить все» — слово владельца о месте.
+                 ПРЕДМЕТ ПРИ ПЕРЕЕЗДЕ НЕ СМЕНИЛСЯ: снимает всю подборку целиком, а
+                 не часть её, попавшую в текущий отбор. Строится теперь разметкой
+                 выдачи (`leadsOffers.js`, `renderResults`), потому что стоит
+                 внутри блока, который рисует модуль.
+                 Обёртка `.form-section-head` ОСТАЁТСЯ при одном заголовке: у неё
+                 своя черта и отступы (`leads-light.css:188`), и заголовок без неё
+                 потеряет и то, и другое. -->
             <div class="form-section-head">
                 <h3>Выбранные офферы (<span data-role="offer-sel-count">0</span>)</h3>
-                <button type="button" class="ui-btn ui-btn--ghost" data-role="offer-clear-all" hidden>Убрать все</button>
             </div>
             <div class="ui-fchips" data-role="offer-sel-tags"></div>
             <div class="pick-empty" data-role="offer-sel-empty">Пока не выбран ни один оффер — обязателен минимум один.</div>

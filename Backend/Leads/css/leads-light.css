@@ -264,6 +264,17 @@
 /* ----- Вкладка «Офферы»: результаты серверного поиска ----- */
 .leads-wrap .offer-results { margin-top: 12px; border: 1px solid var(--line); border-radius: var(--radius-md); overflow: hidden; background: rgba(255, 255, 255, .45); }
 .leads-wrap .offer-results-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 14px; border-bottom: 1px solid var(--line); background: rgba(241, 245, 249, .6); font-size: 12.5px; font-weight: 600; color: var(--ink-soft); }
+/* ⚠ ПЕРВАЯ ЯЧЕЙКА ШАПКИ ОТТАЛКИВАЕТ ОСТАЛЬНЫЕ ВПРАВО (К274). До переезда
+   детей у шапки было двое, и `space-between` разводил их по краям. Теперь при
+   отборе шире потолка их ТРОЕ — «Найдено», узел кнопок и текст «Сузьте
+   отбор», — и `space-between` поставил бы кнопку в середину пустой полосы.
+   Замер на стенде (1500 × 1000, отбор 1202 оффера): «Найдено» стоит на 426
+   и с правилом, и без него, а кнопка снятия — на 728,3 с ним против 626,2
+   без него, то есть уезжает на 102,1 в середину пустой полосы.
+   Автоотступ съедает свободное место ДО того, как до него доберётся
+   `justify-content`, поэтому вторая и третья ячейки пакуются вправо своим
+   зазором, а состояние с двумя детьми не меняется вовсе. */
+.leads-wrap .offer-results-head > span:first-child { margin-right: auto; }
 .leads-wrap .offer-result-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px; border-bottom: 1px solid rgba(96, 112, 148, .12); font-size: 13.5px; color: var(--ink); }
 .leads-wrap .offer-result-row:last-child { border-bottom: none; }
 .leads-wrap .offer-result-row:hover { background: rgba(255, 255, 255, .6); }
