@@ -94,6 +94,62 @@ function validateNumbers(body) {
     return null;
 }
 
+// ----- Числа сегмента: тип, предел и пара (К304) ------------------------------
+//
+// ⚠ ОТДЕЛЬНОЙ ФУНКЦИЕЙ, А НЕ СТРОКАМИ В `NUMBER_RULES`, и причин две. Первая:
+// `NUMBER_RULES` разбирает ПОЛЕ тела оффера, а здесь предмет — вложенный массив,
+// и отказ обязан назвать НОМЕР сегмента: «Сегмент 2» человек найдёт глазами,
+// «цена неверна» — нет. Вторая: пара — это ДВА поля сразу, и правилу «ключ плюс
+// проверка одного числа» она не подчиняется. То же устройство и тот же довод,
+// что у `checkRangePairs` в `leadsAdmin.js` (К302).
+//
+// ⚠ ПОРЯДОК ТРЁХ ПРОВЕРОК НЕ СЛУЧАЕН: сперва «это вообще число», потом «оно не
+// отрицательное», и только потом «пара не перевёрнута». Сообщить о перевёрнутой
+// паре, когда одно из чисел негодно, значит соврать о причине (правило К302).
+//
+// ⚠ ДО ЭТОГО ЗАХОДА НЕ ПРОВЕРЯЛОСЬ НИЧЕГО, и это замер, а не предположение:
+// `normalizeValue` выше разбирает только `status` и `otherBorrower`, остальное
+// пропускает как есть, а `NUMBER_RULES` знает ставку, hold, взнос, приоритет и
+// лимит — цен и площадей там нет. Опыт на стенде 02.09.2026: «цена от −5 до −900»
+// и «от 9 000 000 до 1 000 000» уходили ответом 200 и ЛОЖИЛИСЬ В БАЗУ.
+//
+// ⚠⚠ И ТРЕТИЙ СЛУЧАЙ, НАЙДЕННЫЙ ТЕМ ЖЕ ОПЫТОМ СВЕРХ НОМЕРА: нечисловое значение
+// («дорого») давало не отказ, а ПАДЕНИЕ — 500 от `numeric_in` самой базы. То есть
+// отбивал Postgres, а приложение показывало «наша ошибка». Теперь его отбивает
+// первая же проверка, и человек получает 400 с внятным текстом.
+//
+// РАВЕНСТВО ЗАКОННО: «цена ровно 5 000 000» — точечный отбор, а не ошибка.
+// Верхнего предела нет намеренно: обоснованного числа не существует, а
+// выдуманное однажды упрётся в настоящий дорогой объект (довод К269 и К270).
+const SEGMENT_PAIRS = [
+    ['priceMin', 'priceMax', 'Цена от', 'Цена до'],
+    ['areaMin', 'areaMax', 'Площадь от', 'Площадь до']
+];
+
+function validateSegments(body) {
+    const rows = Array.isArray(body.segments) ? body.segments : [];
+    for (let i = 0; i < rows.length; i++) {
+        const row = rows[i] || {};
+        const where = `Сегмент ${i + 1}`;
+        for (const [minKey, maxKey, minLabel, maxLabel] of SEGMENT_PAIRS) {
+            const pair = {};
+            for (const [key, label] of [[minKey, minLabel], [maxKey, maxLabel]]) {
+                const raw = row[key];
+                if (raw === undefined || raw === null || String(raw).trim() === '') continue;
+                const number = Number(raw);
+                if (!Number.isFinite(number)) return `${where}: «${label}» должно быть числом`;
+                if (number < 0) return `${where}: «${label}» не может быть отрицательной`;
+                pair[key] = number;
+            }
+            if (pair[minKey] !== undefined && pair[maxKey] !== undefined
+                && pair[minKey] > pair[maxKey]) {
+                return `${where}: «${minLabel}» больше, чем «${maxLabel}»`;
+            }
+        }
+    }
+    return null;
+}
+
 function validateBody(body) {
     if (!body.name || String(body.name).trim() === '') {
         return 'Заполните обязательное поле: Название';
@@ -123,6 +179,10 @@ function validateBody(body) {
     }
     const numberError = validateNumbers(body);
     if (numberError) return numberError;
+    // Сегменты проверяются ПОСЛЕ полей самого оффера: сперва человек чинит
+    // карточку, потом её строки. Порядок тот же, что у отказов внутри сегмента.
+    const segmentError = validateSegments(body);
+    if (segmentError) return segmentError;
     // Пустой конец периода значит «бессрочно», поэтому проверяется только пара
     // заполненных дат.
     const start = normalizeValue('dateStart', body.dateStart);

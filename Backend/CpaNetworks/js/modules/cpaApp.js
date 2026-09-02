@@ -894,15 +894,21 @@ async function openOfferModal(state, offer, opts = {}) {
                     <option value="">Комнатность</option>
                     ${(lists.rooms || []).map((v) => `<option value="${escapeHtml(v)}"${s.roomCount === v ? ' selected' : ''}>${escapeHtml(v)}</option>`).join('')}
                 </select>
+                <!-- ⚠ min="0" ЗДЕСЬ — ПОДСКАЗКА, А НЕ ЗАПРЕТ (К304, тот же довод, что у К269
+                     и К270): формы в разделе нет, checkValidity() в проекте не зовётся нигде,
+                     и набранное руками отрицательное уходит на сервер как было. Запрет держат
+                     сервер (validateSegments в routes/realEstateOffers.js) и CHECK в базе
+                     (offer_segment_numbers_check). Стрелки поля перестают уводить в минус —
+                     ради этого атрибут и стоит. -->
                 <div class="cpa-range" data-range="price">
-                    <input class="ui-field__control" type="number" data-seg="priceMin" placeholder="цена от" value="${escapeHtml(s.priceMin ?? '')}" aria-label="Цена от">
+                    <input class="ui-field__control" type="number" min="0" data-seg="priceMin" placeholder="цена от" value="${escapeHtml(s.priceMin ?? '')}" aria-label="Цена от">
                     <span>—</span>
-                    <input class="ui-field__control" type="number" data-seg="priceMax" placeholder="цена до" value="${escapeHtml(s.priceMax ?? '')}" aria-label="Цена до">
+                    <input class="ui-field__control" type="number" min="0" data-seg="priceMax" placeholder="цена до" value="${escapeHtml(s.priceMax ?? '')}" aria-label="Цена до">
                 </div>
                 <div class="cpa-range" data-range="area">
-                    <input class="ui-field__control" type="number" data-seg="areaMin" placeholder="S от" value="${escapeHtml(s.areaMin ?? '')}" aria-label="Площадь от">
+                    <input class="ui-field__control" type="number" min="0" data-seg="areaMin" placeholder="S от" value="${escapeHtml(s.areaMin ?? '')}" aria-label="Площадь от">
                     <span>—</span>
-                    <input class="ui-field__control" type="number" data-seg="areaMax" placeholder="S до" value="${escapeHtml(s.areaMax ?? '')}" aria-label="Площадь до">
+                    <input class="ui-field__control" type="number" min="0" data-seg="areaMax" placeholder="S до" value="${escapeHtml(s.areaMax ?? '')}" aria-label="Площадь до">
                 </div>
                 <button type="button" class="ui-btn ui-btn--icon ui-btn--row ui-btn--danger" data-remove-segment="${index}" title="Удалить сегмент" aria-label="Удалить сегмент"><svg class="ui-ic ui-ic--sm" aria-hidden="true"><use href="#ui-ic-trash"></use></svg></button>
             </div>`).join('')
