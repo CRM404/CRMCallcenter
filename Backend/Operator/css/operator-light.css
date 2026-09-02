@@ -85,7 +85,7 @@
 /* ⚠ ПОЛЯ И КНОПКИ ШРИФТ НЕ НАСЛЕДУЮТ — им браузер даёт свой. Пока шрифт стоял
    в `*`, это было не видно. Перечислены СВОИ поля страницы; те, у кого
    `font-family: inherit` уже стоял (.form-group textarea, .op-obj-search
-   input, .op-state-pill, .op-state-row, .op-dashed-row, .op-callback-quick
+   input, .op-state, .op-state-row, .op-dashed-row, .op-callback-quick
    button), повторять не нужно. Узлы слоя (.ui-btn, .ui-field__control) сюда НЕ
    входят: у них свой шрифт из слоя, и отбирать его — та же ошибка, что была в
    `*`. Полнота перечня проверяется прибором: он снимает шрифт КАЖДОГО input,
@@ -848,7 +848,21 @@ body { margin: 0; }
 .op-identity-line { font-size: 12px; color: #8a95a8; margin-top: 1px; }
 
 /* ----- Пилюля состояния ----- */
-.op-state-pill {
+
+/* ⚠ ИМЯ ПРИВЕДЕНО К МАКЕТУ — К311. Было .op-state-pill, в макете рабочего
+   места (паспорт, редакция 2) — .op-state. Расхождение прожило до 02.09.2026:
+   куратор обещал 01.09, что переименование «входит в работу», но в какую —
+   названо не было, и номера у него не оказалось ни одного.
+
+   ПЕРЕИМЕНОВАНО ТОЛЬКО ИМЯ БЛОКА, одиннадцать мест: девять правил здесь, одно
+   в operatorWorkState.js и одно в operator.html. Внутренние имена — .dot,
+   .timer — и признаки .online, .post, .nudge макет называет иначе
+   (op-state__dot, op-state__timer, --off, --post, --break, --nudge), но это
+   ДРУГОЙ предмет и другой объём: он заведён отдельным номером К313. Спрятать
+   его внутрь К311 значило бы сделать треть и отчитаться целой.
+
+   Идентификатор #opStatePill не тронут: он адрес для кода, а не имя вида. */
+.op-state {
     display: inline-flex;
     align-items: center;
     gap: 9px;
@@ -864,16 +878,16 @@ body { margin: 0; }
     white-space: nowrap;
     transition: filter .15s;
 }
-.op-state-pill:hover { filter: brightness(.97); }
-.op-state-pill .dot { width: 9px; height: 9px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
-.op-state-pill .timer { font-weight: 600; opacity: .8; font-variant-numeric: tabular-nums; }
-.op-state-pill.online { background: #e2f3e8; border-color: rgba(21, 112, 63, 0.28); color: #15703f; }
-.op-state-pill.online .dot { box-shadow: 0 0 0 4px rgba(21, 112, 63, 0.16); }
+.op-state:hover { filter: brightness(.97); }
+.op-state .dot { width: 9px; height: 9px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
+.op-state .timer { font-weight: 600; opacity: .8; font-variant-numeric: tabular-nums; }
+.op-state.online { background: #e2f3e8; border-color: rgba(21, 112, 63, 0.28); color: #15703f; }
+.op-state.online .dot { box-shadow: 0 0 0 4px rgba(21, 112, 63, 0.16); }
 /* Пост-обработка — единственное состояние, где время работает против оператора. */
-.op-state-pill.post { background: #e8edfa; border-color: rgba(47, 63, 140, 0.26); color: #2f3f8c; }
+.op-state.post { background: #e8edfa; border-color: rgba(47, 63, 140, 0.26); color: #2f3f8c; }
 /* Мягкое напоминание, без блокировок: забытый «обед» до конца смены — реальный
    сценарий, но выбрасывать человека из карточки мы не будем. */
-.op-state-pill.nudge { animation: opNudge 2.4s ease-in-out infinite; }
+.op-state.nudge { animation: opNudge 2.4s ease-in-out infinite; }
 @keyframes opNudge {
     0%, 100% { box-shadow: 0 0 0 0 rgba(138, 100, 16, 0); }
     50%      { box-shadow: 0 0 0 6px rgba(138, 100, 16, .14); }
@@ -1219,7 +1233,7 @@ body { margin: 0; }
 .op-obj-panel mark { background: rgba(255, 221, 87, .55); color: inherit; border-radius: 3px; padding: 0 1px; }
 
 @media (prefers-reduced-motion: reduce) {
-    .op-state-pill.nudge { animation: none; }
+    .op-state.nudge { animation: none; }
 }
 
 /* ===================== ЛЕНТА КОММЕНТАРИЕВ (Б4.3, паспорт Р3 ред. 3) =========
