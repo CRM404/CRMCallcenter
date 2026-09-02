@@ -31,6 +31,7 @@
 // незаэкранированное имя в innerHTML уже становилось находкой приёмки на
 // прошлой задаче.
 
+import { plural } from '/plural.js';
 import { openModal } from '/ui/modal.js';
 import { iconNode } from '/ui/icons.js';
 import { showToast } from '/ui/toast.js';
@@ -95,13 +96,6 @@ const MARK_TAIL = {
  * и в `Shell/deleteBlocked.js`. Выносить её в слой — отдельная работа со своим
  * разбором, и делать её мимоходом внутри чужой задачи нельзя.
  */
-function plural(n, one, few, many) {
-    const mod10 = n % 10;
-    const mod100 = n % 100;
-    if (mod10 === 1 && mod100 !== 11) return one;
-    if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return few;
-    return many;
-}
 
 // Родительный падеж — то, что стоит после «от» и «до»: «от 30 минут до 4 часов»,
 // «до 21 часа». Форм здесь две, а не три, и это не упрощение: в родительном

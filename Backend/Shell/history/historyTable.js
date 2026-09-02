@@ -14,6 +14,7 @@
 // подвала, пустых состояний — это разное у раздела и у вкладки, и общего в них
 // только видимость.
 
+import { plural } from '/plural.js';
 import { fieldLabel } from './historyFields.js';
 import { showLoadError, clearLoadError } from '../ui/load-error.js';
 
@@ -742,10 +743,3 @@ function pad(n) {
     return String(n).padStart(2, '0');
 }
 
-function plural(n, one, few, many) {
-    const mod10 = n % 10;
-    const mod100 = n % 100;
-    if (mod10 === 1 && mod100 !== 11) return one;
-    if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return few;
-    return many;
-}

@@ -23,6 +23,7 @@
 // Тексты — из кода страницы как есть (правило брифа: источник истины по
 // текстам — код, а не макет).
 
+import { plural } from '/plural.js';
 import { openModal } from '/ui/modal.js';
 import { isAbort } from '/api.js';
 import { openDeleteBlocked, isDeleteBlocked } from '/deleteBlocked.js';
@@ -518,14 +519,6 @@ function renderSelection(state) {
  * число. «Статус обновлён для 1 источников» выдаёт, что текст собран
  * склейкой, и подрывает доверие к самому числу.
  */
-function plural(n, one, few, many) {
-    const tens = n % 100;
-    if (tens >= 11 && tens <= 14) return many;
-    const ones = n % 10;
-    if (ones === 1) return one;
-    if (ones >= 2 && ones <= 4) return few;
-    return many;
-}
 
 // «снято с 1 строки / с 2 строк / с 5 строк» — родительный после предлога «с»,
 // поэтому 2–4 берут ту же форму, что и 5+.

@@ -10,6 +10,7 @@
 // машинным кодом. Транспорт оболочки проносит их наружу полем `blockers`
 // (api.js), поэтому разбирать готовую фразу не приходится.
 
+import { plural as obshchiyPlural } from '/plural.js';
 import { openModal } from '/ui/modal.js';
 
 // СКЛОНЕНИЕ ЖИВЁТ ЗДЕСЬ, И ЭТО НЕ САМОДЕЯТЕЛЬНОСТЬ, а прямое требование
@@ -59,12 +60,12 @@ const WORDS = {
 function plural(kind, count, fallback) {
     const forms = WORDS[kind];
     if (!forms) return fallback || kind || '';
-    const n = Math.abs(Number(count)) % 100;
-    if (n >= 11 && n <= 14) return forms[2];
-    const last = n % 10;
-    if (last === 1) return forms[0];
-    if (last >= 2 && last <= 4) return forms[1];
-    return forms[2];
+    // ⚠ `Math.abs` ОСТАЁТСЯ ЗДЕСЬ, А НЕ УХОДИТ В ОБЩИЙ ПОМОЩНИК (К308).
+    // Он был только у этой копии: остальные шесть на отрицательном числе
+    // дают форму множественного. Отрицательных помех не бывает, но
+    // сведение не вправе менять поведение молча — местная особенность
+    // остаётся у места, где она была.
+    return obshchiyPlural(Math.abs(Number(count)), forms[0], forms[1], forms[2]);
 }
 
 /**
