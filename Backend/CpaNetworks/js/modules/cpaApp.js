@@ -235,6 +235,16 @@ function cellHtml(offer, col) {
             return cell(value ? 'да' : '<span class="ui-table__muted">нет</span>');
         case 'segments':
             return cell(listCell(offer.segments, 'сегмент', 'сегмента', 'сегментов', segmentTitle));
+        // ⚠ СВОД ПО ВСЕМ СЕГМЕНТАМ, А НЕ ЗНАЧЕНИЕ ОДНОГО. У оффера сегментов
+        // бывает несколько, и у каждого своя вилка: «от» здесь — самая низкая
+        // нижняя граница, «до» — самая высокая верхняя.
+        // ⚠ ПУСТЫЕ ГРАНИЦЫ ПРОПУСКАЮТСЯ, А НЕ СЧИТАЮТСЯ НУЛЁМ: у сегмента может
+        // быть задана только одна сторона вилки, и ноль в своде означал бы
+        // «оффер от нуля рублей» — неправду. Если ни у одного сегмента граница
+        // не задана, в ячейке прочерк.
+        case 'segPriceMin':
+        case 'segPriceMax':
+            return cell(segmentPriceEdge(offer.segments, col.key === 'segPriceMin'));
         case 'objGeo':
         case 'clientGeo':
             return cell(listCell(value, 'адрес', 'адреса', 'адресов', geoTitle));
@@ -263,6 +273,28 @@ function listCell(list, one, few, many, describe) {
         : many;
     const title = rows.map(describe).filter(Boolean).join('; ');
     return `<span class="cpa-cell-many" title="${escapeHtml(title)}">${n} ${word}</span>`;
+}
+
+/**
+ * Край ценовой вилки оффера по всем его сегментам.
+ *
+ * `low = true` — самая низкая `priceMin`, иначе самая высокая `priceMax`.
+ * Границы, которых нет, в счёт не идут: сегмент с одной только верхней
+ * границей не делает оффер «от нуля».
+ */
+function segmentPriceEdge(segments, low) {
+    const key = low ? 'priceMin' : 'priceMax';
+    // ⚠ ПУСТОЕ ОТСЕИВАЕТСЯ ДО ПРИВЕДЕНИЯ, И ЭТО НЕ ПРИДИРКА: `Number(null)`
+    // равен НУЛЮ и проходит `isFinite`, а сервер отдаёт незаполненную границу
+    // именно как `null` (проверено на живом ответе). Приведи сначала — и
+    // сегмент без нижней границы сделал бы оффер «от 0 ₽».
+    const numbers = (segments || [])
+        .filter((s) => s[key] !== null && s[key] !== undefined && String(s[key]).trim() !== '')
+        .map((s) => Number(s[key]))
+        .filter((n) => Number.isFinite(n));
+    if (!numbers.length) return DASH;
+    const edge = low ? Math.min(...numbers) : Math.max(...numbers);
+    return `${formatMoney(edge)} ₽`;
 }
 
 function segmentTitle(s) {
