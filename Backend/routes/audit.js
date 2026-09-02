@@ -440,6 +440,13 @@ async function readFilters(query) {
     const days = PERIOD_PRESETS.includes(Number(query.days)) ? Number(query.days) : null;
     const explicit = isDate(query.from) || isDate(query.to);
 
+    // ⚠ ПЕРЕВЁРНУТЫЙ ПЕРИОД ЗДЕСЬ НЕ ОТБИВАЕТСЯ, И ЭТО РЕШЕНО, А НЕ ЗАБЫТО
+    // (К302). Период журнала — ОТБОР, а не запись: «с 10-го по 5-е» даёт
+    // пустую выдачу, и пустая выдача есть честный ответ на бессмысленный
+    // вопрос. Портить данные тут нечем.
+    // Отбой заведён там, где перевёрнутость незаконна И идёт запись: пара
+    // «цена/площадь» у лидов (`routes/leadsAdmin.js`, `checkRangePairs`) и
+    // период оффера (`routes/realEstateOffers.js`).
     const from = !explicit && days ? shiftIso(today, -(days - 1)) : asDate(query.from, defaultFrom);
     const to = !explicit && days ? today : asDate(query.to, today);
 

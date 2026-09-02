@@ -366,6 +366,11 @@ router.get('/', async (req, res) => {
         if (hasTelegram === 'true') {
             conditions.push(`e.telegram IS NOT NULL AND e.telegram <> ''`);
         }
+        // ⚠ ПЕРЕВЁРНУТАЯ ПАРА ДАТ НАЙМА ЗДЕСЬ НЕ ОТБИВАЕТСЯ, И ЭТО РЕШЕНО, А НЕ
+        // ЗАБЫТО (К302). Это ОТБОР списка, а не запись: «принят с 10-го по
+        // 5-е» даёт пустую выдачу — честный ответ на бессмысленный вопрос.
+        // Отбой заведён там, где перевёрнутость незаконна И идёт запись: пара
+        // «цена/площадь» у лидов (`routes/leadsAdmin.js`, `checkRangePairs`).
         if (hireDateFrom) {
             params.push(hireDateFrom);
             conditions.push(`e.hire_date >= $${params.length}`);
