@@ -3,6 +3,33 @@
    у employees-light.css (фон, палитра кнопок/модалок), плюс
    разметка, специфичная для страницы оператора (навигация, скрипт,
    карточка лида).
+
+   ⚠⚠ ПОДЛЕЖАЩЕЕ .op-shell — К298, решение дизайн-сессии, путь «б».
+   Файл ставил подлежащим 88 имён, из них 15 БЕЗ приставки op-, то есть
+   действовавших на весь документ. Шесть из них сталкивались по-настоящему —
+   и все шесть гео: .geo-block, .geo-block-title, .geo-field, .geo-suggest,
+   .geo-suggest-empty и .geo-suggest-item одновременно объявлены в
+   leads-light.css. Замер перебором по 31 чужому файлу стилей, комментарии из
+   счёта выкинуты.
+
+   ⚠ ПОДЛЕЖАЩЕЕ ПОЛУЧИЛИ ОДИННАДЦАТЬ, А НЕ ПЯТНАДЦАТЬ, И ЭТО ЗАМЕР, А НЕ ЛЕНЬ.
+   Четырём его дать нельзя — у них есть узлы ВНЕ .op-shell, и приставка убила
+   бы их ровно так, как .emp-wrap убила окно «Сотрудников» (К299, К306):
+
+     .toast — контейнер #toastContainer стоит СОСЕДОМ .op-shell, а не внутри
+        неё: баланс тегов между ними в operator.html ровно ноль. Тосты
+        страницы оператора остались бы без стиля;
+     .btn, .btn-primary, .form-group — ими пользуется ВТОРАЯ СТРАНИЦА,
+        operator-login.html: она грузит этот же файл (её строка 7) и .op-shell
+        не имеет вовсе. Приставка раздела бы вход.
+
+   ВСЕ ШЕСТЬ СТАЛКИВАЮЩИХСЯ ИМЁН — СРЕДИ ОДИННАДЦАТИ, значит столкновение
+   закрыто целиком. Четыре оставшихся не сталкиваются ни с чем сегодня.
+
+   ⚠ И ДВА ИМЕНИ ИЗ ОДИННАДЦАТИ МЕРТВЫ УЖЕ СЕЙЧАС: .btn-secondary и .btn-sm
+   (четыре правила) не встречаются ни в разметке, ни в модулях ни разу.
+   Подлежащее им поставлено заодно, чтобы файл не делился на два порядка;
+   снимать их или оставить — отдельный вопрос, он задан в канале.
    ============================================================ */
 
 /* ----- Сброс и глобальные настройки ----- */
@@ -105,14 +132,14 @@ h2 {
 .btn-primary:after { background-color: #696969; }
 .btn-primary:before { background-color: #555555; }
 
-.btn-secondary { background-color: #6c757d; }
-.btn-secondary:after { background-color: #6c757d; }
-.btn-secondary:before { background-color: #5a6268; }
+.op-shell .btn-secondary { background-color: #6c757d; }
+.op-shell .btn-secondary:after { background-color: #6c757d; }
+.op-shell .btn-secondary:before { background-color: #5a6268; }
 
-.btn-sm { padding: 6px 16px; font-size: 13px; }
+.op-shell .btn-sm { padding: 6px 16px; font-size: 13px; }
 
 /* ----- Формы ----- */
-.form-grid {
+.op-shell .form-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
     gap: 16px 20px;
@@ -336,18 +363,18 @@ h2 {
 
 /* Сетки карточки. Базовый .form-grid (auto-fill) не трогаем — он используется
    и вне карточки; раскладка макета задаётся модификаторами. */
-.form-grid.cols-3 {
+.op-shell .form-grid.cols-3 {
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 14px 16px;
     align-items: end; /* двухстрочная подпись не роняет своё поле ниже соседей */
     margin-bottom: 0;
 }
-.form-grid.cols-3 + .form-grid.cols-3 { margin-top: 14px; }
-.form-grid .span-2 { grid-column: span 2; }
-.form-grid .span-full { grid-column: 1 / -1; }
+.op-shell .form-grid.cols-3 + .form-grid.cols-3 { margin-top: 14px; }
+.op-shell .form-grid .span-2 { grid-column: span 2; }
+.op-shell .form-grid .span-full { grid-column: 1 / -1; }
 @media (max-width: 700px) {
-    .form-grid.cols-3 { grid-template-columns: 1fr; }
-    .form-grid .span-2 { grid-column: auto; }
+    .op-shell .form-grid.cols-3 { grid-template-columns: 1fr; }
+    .op-shell .form-grid .span-2 { grid-column: auto; }
 }
 
 .op-card-head {
@@ -431,17 +458,17 @@ h2 {
 
 /* Пара «от — до»: два поля базы под одной подписью по центру */
 .form-group.centered label { text-align: center; }
-.range-pair {
+.op-shell .range-pair {
     display: flex;
     align-items: center;
     gap: 8px;
 }
-.range-pair .sep {
+.op-shell .range-pair .sep {
     color: #8a95a8;
     font-size: 12.5px;
     flex-shrink: 0;
 }
-.range-pair input {
+.op-shell .range-pair input {
     text-align: right;
     min-width: 0;
 }
@@ -506,8 +533,8 @@ h2 {
 
 /* Адресный блок: подпись + четыре уровня 2 × 2 (в карточке шириной 45 %
    четыре поля в один ряд стали бы нечитаемо узкими) */
-.geo-block + .geo-block { margin-top: 16px; }
-.geo-block-title {
+.op-shell .geo-block + .geo-block { margin-top: 16px; }
+.op-shell .geo-block-title {
     display: flex;
     align-items: center;
     gap: 7px;
@@ -516,20 +543,20 @@ h2 {
     color: #1e2a3a;
     margin-bottom: 10px;
 }
-.geo-block-title i { color: #0000FF; }
-.geo-grid {
+.op-shell .geo-block-title i { color: #0000FF; }
+.op-shell .geo-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 12px 14px;
 }
 @media (max-width: 700px) {
-    .geo-grid { grid-template-columns: 1fr; }
+    .op-shell .geo-grid { grid-template-columns: 1fr; }
 }
 
 /* Подсказки адреса (прокси DaData). Стили продублированы из leads-light.css:
    страницы проекта не делят CSS — каждая раздаётся своей статической папкой. */
-.geo-field { position: relative; }
-.geo-suggest {
+.op-shell .geo-field { position: relative; }
+.op-shell .geo-suggest {
     position: absolute;
     z-index: 40;
     top: calc(100% + 4px);
@@ -544,7 +571,7 @@ h2 {
     max-height: 236px;
     overflow-y: auto;
 }
-.geo-suggest-item {
+.op-shell .geo-suggest-item {
     display: flex;
     align-items: center;
     gap: 8px;
@@ -554,10 +581,10 @@ h2 {
     cursor: pointer;
     border-bottom: 1px solid rgba(96, 112, 148, 0.14);
 }
-.geo-suggest-item:last-child { border-bottom: none; }
-.geo-suggest-item:hover { background: rgba(0, 0, 255, 0.06); }
-.geo-suggest-item i { color: #8a95a8; font-size: 12px; }
-.geo-suggest-empty {
+.op-shell .geo-suggest-item:last-child { border-bottom: none; }
+.op-shell .geo-suggest-item:hover { background: rgba(0, 0, 255, 0.06); }
+.op-shell .geo-suggest-item i { color: #8a95a8; font-size: 12px; }
+.op-shell .geo-suggest-empty {
     padding: 11px 13px;
     font-size: 13px;
     color: #8a95a8;
