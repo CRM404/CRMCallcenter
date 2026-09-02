@@ -300,11 +300,13 @@
 .leads-wrap .col-group { margin-bottom: 16px; }
 .leads-wrap .col-group:last-child { margin-bottom: 0; }
 .leads-wrap .col-group-label { font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 8px; }
-/* Колонки списка считаются от МЕСТА, а не от ширины окна: в узкой панели
-   пункты встают в один столбец сами (К38). */
-.leads-wrap .column-checkbox-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 9px 16px; }
-.leads-wrap .column-checkbox-item { display: flex; align-items: center; gap: 8px; font-size: 13.5px; color: var(--ink); cursor: pointer; }
-.leads-wrap .column-checkbox-item input { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; }
+/* ⚠ СПИСОК И СТРОКА СВОИХ ПРАВИЛ БОЛЬШЕ НЕ ИМЕЮТ: они переехали в слой —
+   `.ui-checks` и `.ui-check` (`Shell/ui/field.css`, К303). Вид объявили два
+   совпавших случая, и вторым был этот: «Лиды» и «Сотрудники» рисовали сетку
+   знак в знак, в двух файлах разделов.
+
+   Группировка списка по разделам (`.col-group` выше) осталась своей: она про
+   содержимое окна «Лидов», а не про вид флажка. */
 
 /* ----- Загрузка файла ----- */
 .leads-wrap .file-upload-area { display: flex; align-items: center; gap: 16px; width: 100%; border: 1.5px dashed var(--line-strong); border-radius: var(--radius-sm); padding: 14px 16px; }
