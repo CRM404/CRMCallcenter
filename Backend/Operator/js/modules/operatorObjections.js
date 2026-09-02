@@ -62,7 +62,17 @@ export function createObjectionsPanel() {
         `;
     }
 
-    function render(query) {
+    // ⚠ ДВЕ ФУНКЦИИ ВМЕСТО ОДНОЙ — В ЭТОМ ВСЯ ПРАВКА (К315).
+    // Раньше на каждое нажатие переписывалась ВСЯ панель вместе со строкой
+    // поиска: узел поля исчезал, а фокус и каретку приходилось ставить обратно
+    // руками — `pos = input.selectionStart` до перерисовки и
+    // `setSelectionRange(pos, pos)` после. Костыль работал, но поле, которое
+    // пересоздаётся под пальцами, отнимает у браузера всё, что тот делает сам:
+    // выделение, отмену ввода, составной набор (для языков, где буква
+    // собирается из нескольких нажатий).
+    // Теперь рама панели собирается ОДИН РАЗ при открытии, а на ввод
+    // переписывается ТОЛЬКО список — поле живёт, и восстанавливать в нём нечего.
+    function listHtml(query) {
         const needle = (query || '').trim();
         const lower = needle.toLowerCase();
         // Поиск по заголовку И по тексту ответа, без учёта регистра, по части
@@ -71,52 +81,29 @@ export function createObjectionsPanel() {
             ? objections.filter((o) => `${o.label || ''} ${o.content || ''}`.toLowerCase().includes(lower))
             : objections;
 
-        let body;
         if (!objections.length) {
-            body = '<div class="op-obj-empty"><b>У этого скрипта нет возражений</b><div class="hint">Их добавляет администратор в редакторе скриптов.</div></div>';
-        } else if (found.length) {
-            body = found.map((o) => itemHtml(o, objections.indexOf(o), needle)).join('');
-        } else {
-            // Пустой результат — не тупик: сразу под ним весь список. В разговоре
-            // оператор не будет придумывать второй запрос, ему нужно что-то
-            // показать немедленно.
-            body = `
-                <div class="op-obj-empty">
-                    <b>Ничего не нашлось</b>
-                    <div class="hint">Попробуйте одно слово или его часть. Ниже — все возражения скрипта.</div>
-                </div>
-                ${objections.map((o, i) => itemHtml(o, i, '')).join('')}
-            `;
+            return '<div class="op-obj-empty"><b>У этого скрипта нет возражений</b><div class="hint">Их добавляет администратор в редакторе скриптов.</div></div>';
         }
-
-        panel.innerHTML = `
-            <div class="op-obj-head">
-                <i class="fas fa-comments" aria-hidden="true"></i>
-                <h3>Возражения — поиск по скрипту</h3>
-                <button type="button" class="op-obj-close" id="opObjClose" aria-label="Закрыть">
-                    <i class="fas fa-xmark" aria-hidden="true"></i>
-                </button>
+        if (found.length) {
+            return found.map((o) => itemHtml(o, objections.indexOf(o), needle)).join('');
+        }
+        // Пустой результат — не тупик: сразу под ним весь список. В разговоре
+        // оператор не будет придумывать второй запрос, ему нужно что-то
+        // показать немедленно.
+        return `
+            <div class="op-obj-empty">
+                <b>Ничего не нашлось</b>
+                <div class="hint">Попробуйте одно слово или его часть. Ниже — все возражения скрипта.</div>
             </div>
-            <div class="op-obj-search">
-                <i class="fas fa-magnifying-glass" aria-hidden="true"></i>
-                <input type="text" id="opObjQuery" placeholder="Слово или часть слова: дорого, метро, ипотек…"
-                       value="${escapeHtml(needle)}" autocomplete="off">
-            </div>
-            <div class="op-obj-list">${body}</div>
+            ${objections.map((o, i) => itemHtml(o, i, '')).join('')}
         `;
+    }
 
-        const input = panel.querySelector('#opObjQuery');
-        input.addEventListener('input', () => {
-            const pos = input.selectionStart;
-            render(input.value);
-            const again = panel.querySelector('#opObjQuery');
-            again.focus();
-            again.setSelectionRange(pos, pos);
-        });
-        input.focus();
-        input.setSelectionRange(input.value.length, input.value.length);
-
-        panel.querySelector('#opObjClose').addEventListener('click', close);
+    // Список переписывается целиком, поэтому обработчики раскрытия вешаются
+    // заново при каждой перерисовке — они живут ВНУТРИ списка, в отличие от
+    // поля и кнопки закрытия, которые переживают ввод.
+    function renderList(query) {
+        panel.querySelector('.op-obj-list').innerHTML = listHtml(query);
         panel.querySelectorAll('.op-obj-item-head').forEach((head) => {
             head.addEventListener('click', () => {
                 const item = head.closest('.op-obj-item');
@@ -140,10 +127,35 @@ export function createObjectionsPanel() {
         });
     }
 
+    function render() {
+        panel.innerHTML = `
+            <div class="op-obj-head">
+                <i class="fas fa-comments" aria-hidden="true"></i>
+                <h3>Возражения — поиск по скрипту</h3>
+                <button type="button" class="op-obj-close" id="opObjClose" aria-label="Закрыть">
+                    <i class="fas fa-xmark" aria-hidden="true"></i>
+                </button>
+            </div>
+            <div class="op-obj-search">
+                <i class="fas fa-magnifying-glass" aria-hidden="true"></i>
+                <input type="text" id="opObjQuery" placeholder="Слово или часть слова: дорого, метро, ипотек…"
+                       autocomplete="off">
+            </div>
+            <div class="op-obj-list"></div>
+        `;
+
+        const input = panel.querySelector('#opObjQuery');
+        input.addEventListener('input', () => renderList(input.value));
+        panel.querySelector('#opObjClose').addEventListener('click', close);
+
+        renderList('');
+        input.focus();
+    }
+
     function open() {
         if (button.hidden) return;
         panel.hidden = false;
-        render('');
+        render();
     }
 
     function close() {
