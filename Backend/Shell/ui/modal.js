@@ -34,7 +34,7 @@ const OPEN_STACK = [];
  * @param {boolean}     [opts.spread]         развести подвал: side:'start' слева, прочие справа
  * @param {HTMLElement} [opts.scope]          панель, которую надо накрыть
  * @param {boolean}     [opts.screen]         накрыть весь экран (необратимое действие)
- * @param {string}      [opts.size]           'narrow' | 'wide'
+ * @param {string}      [opts.size]           'narrow' | 'wide' | 'xwide'
  * @param {boolean}     [opts.dismissable]    закрытие по Esc и клику вне (по умолчанию да)
  * @param {boolean}     [opts.scrimClose]     закрытие ЩЕЛЧКОМ ПО ЗАТЕМНЕНИЮ (по умолчанию да)
  * @param {Function}    [opts.confirmClose]   спросить перед закрытием; см. ниже

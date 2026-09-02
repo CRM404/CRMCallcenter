@@ -245,7 +245,7 @@ export function createFilter(root, deps) {
             sub: `${FILTER_FIELDS.length} полей, пять групп`,
             body,
             scope: root,
-            size: 'wide',
+            size: 'xwide',
             actions: [
                 {
                     // «Сбросить» очищает поля и ОСТАЁТСЯ в окне: человек видит,
@@ -307,7 +307,19 @@ export function createFilter(root, deps) {
 
     function buildField(field, draft, lists, statuses) {
         const wrap = document.createElement('div');
-        wrap.className = 'ui-field ui-field--wide';
+        // ⚠⚠ ВО ВСЮ ШИРИНУ — ТОЛЬКО ЧИПАМ (К316), а было всем 33 полям без
+        // разбора. `--wide` в слое означает `grid-column: 1 / -1`
+        // (field.css:299) — «на все колонки сетки». Сетка при этом
+        // многоколоночная: `repeat(auto-fit, minmax(220px, 1fr))`
+        // (field.css:279). Пока модификатор стоял у каждого поля, КАЖДАЯ
+        // ячейка растягивалась на всю ширину — и окно выглядело
+        // одностолбцовым при любой ширине коробки. Расширение окна без этой
+        // правки не дало бы ничего: столбец просто стал бы длиннее.
+        //
+        // Чипам ширина нужна по делу: ряд переносится сам, и в ячейке 252 он
+        // встал бы лесенкой. Их семь из 33 — пять `multi` и два `segMulti`.
+        const wide = field.kind === 'multi' || field.kind === 'segMulti';
+        wrap.className = wide ? 'ui-field ui-field--wide' : 'ui-field';
         const label = document.createElement('label');
         label.className = 'ui-field__label';
         label.textContent = field.label;
