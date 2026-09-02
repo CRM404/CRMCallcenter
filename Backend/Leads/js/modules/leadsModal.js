@@ -558,7 +558,7 @@ export function createLeadModal(root, deps) {
             filterCountEl: $('[data-role="offer-filters-count"]'),
             resultsEl: $('[data-role="offer-results"]'), tagsEl: $('[data-role="offer-sel-tags"]'),
             countEl: $('[data-role="offer-sel-count"]'), emptyEl: $('[data-role="offer-sel-empty"]'),
-            clearAllBtn: $('[data-role="offer-clear-all"]'), tabCountEl: $('[data-role="offer-tab-count"]')
+            tabCountEl: $('[data-role="offer-tab-count"]')
         });
 
         geo = createGeo();

@@ -68,7 +68,7 @@ function createDebounced(fn, ms) {
 export function createOfferTabPicker({
     platSelect, geoSelects, searchInput, resetBtn,
     foldHead, foldBody, filterCountEl,
-    resultsEl, tagsEl, countEl, emptyEl, clearAllBtn, tabCountEl, onChange,
+    resultsEl, tagsEl, countEl, emptyEl, tabCountEl, onChange,
     storage, toast, isAlive, isAbort
 }) {
     // id -> name: имя нужно для тегов выбранного, а поиск возвращает только
@@ -76,6 +76,11 @@ export function createOfferTabPicker({
     const selected = new Map();
     let lastResults = [];
     let lastTotal = 0;
+    // ⚠ ПОИСК НЕ ОТВЕТИЛ — ЭТО СОСТОЯНИЕ ШАПКИ, А НЕ ТОЛЬКО ПОВОД ДЛЯ ТОСТА
+    // (К274, ответ 3). Подборка при упавшем запросе жива, и снять её человек
+    // вправе; числа «Найдено» в этом состоянии не существует вовсе, и
+    // придумывать его нельзя — шапка несёт тогда одну кнопку снятия.
+    let lastFailed = false;
     let filtersLoaded = false;
     // Потолок офферов на лида приходит с сервера вместе с выдачей — во фронте
     // его не хардкодим, иначе через полгода лимит поменяют на сервере, а
@@ -128,6 +133,12 @@ export function createOfferTabPicker({
         foldBody.hidden = !open;
     }
 
+    // ⚠ ЧИСЛО В КНОПКЕ СНЯТИЯ СЮДА НЕ ВХОДИТ: оно живёт в шапке выдачи, а
+    // шапку рисует `renderResults()`. Каждый путь, меняющий подборку, обязан
+    // звать ОБЕ — так и сделано во всех четырёх (добавление одного, снятие
+    // одного, добавление пачкой, снятие пачкой). Слить их в одну нельзя:
+    // `renderResults()` зовётся и без изменения подборки — после каждого
+    // поиска.
     function renderSelected() {
         countEl.textContent = selected.size;
         if (tabCountEl) tabCountEl.textContent = selected.size;
@@ -135,13 +146,53 @@ export function createOfferTabPicker({
             .map(([id, name]) => `<span class="ui-fchip">${escapeHtml(name)}<button type="button" class="ui-fchip__remove" data-remove="${id}" aria-label="Убрать"><svg class="ui-ic ui-ic--xs" aria-hidden="true"><use href="#ui-ic-close"></use></svg></button></span>`)
             .join('');
         emptyEl.hidden = selected.size > 0;
-        clearAllBtn.hidden = selected.size === 0;
+    }
+
+    // ----- ШАПКА ВЫДАЧИ (К274) -----
+    // Левая ячейка — «Найдено: N», правая — органы. Кнопки собираются в узел
+    // слоя `.ui-btn-row` (`ui/button.css`), своего имени для группы раздел не
+    // заводит: это было бы вторым объявлением того, что в слое уже есть.
+    // ⚠ РАСХОЖДЕНИЕ С МАКЕТОМ НАЗВАНО, А НЕ СПРЯТАНО: макет рисует зазор 8px
+    // (`--ui-space-3`), узел слоя даёт 12px (`--ui-space-4`). Взят узел, 4px —
+    // ступень, а не смысл; правку макета решает дизайн-сессия.
+    // ⚠ ТЕКСТ «Сузьте отбор» В УЗЕЛ НЕ КЛАДЁТСЯ (ответ куратора 16): это группа
+    // КНОПОК, а текст не кнопка. Он встаёт третьим ребёнком шапки сам, и ради
+    // этого у первой ячейки стоит `margin-right: auto` — см. `leads-light.css`.
+    function resultsHead(left, controls) {
+        return `<div class="offer-results-head"><span>${left}</span>${controls}</div>`;
+    }
+
+    // Кнопка снятия — ТОЛЬКО при непустой подборке: убирать нечего, а блок
+    // «Выбранные офферы» уже сказал об этом словами. Число в скобках — размер
+    // ПОДБОРКИ, а не отбора: фронт держит её у себя и знает число без запроса.
+    // Склонения в подписи нет вовсе — «Убрать все (1)» (ответ куратора 11).
+    function clearAllButton() {
+        if (selected.size === 0) return '';
+        return `<button type="button" class="ui-btn ui-btn--ghost" data-role="offer-clear-all">Убрать все (${selected.size})</button>`;
     }
 
     function renderResults() {
+        const clearAll = clearAllButton();
+
+        // ⚠⚠ ШАПКА РИСУЕТСЯ И ТАМ, ГДЕ ВЫДАЧИ НЕТ, И ЭТО ГЛАВНОЕ В К274.
+        // Правило паспорта — «отбор к этой кнопке отношения не имеет вовсе», и
+        // переезд не вправе его отменить. Кнопка, пропадающая вместе с выдачей,
+        // отдаёт отбору власть над снятием: набрал в поиске то, чего нет, — и
+        // семь офферов подборки снять нечем.
+        if (lastFailed) {
+            resultsEl.hidden = clearAll === '';
+            resultsEl.innerHTML = clearAll === ''
+                ? ''
+                : resultsHead('', `<span class="ui-btn-row">${clearAll}</span>`);
+            return;
+        }
         if (lastResults.length === 0 && lastTotal === 0) {
+            // «Найдено: 0» и строка «Ничего не найдено» — про РАЗНОЕ: первая о
+            // подборке и её кнопке, вторая о выдаче. Заменять одно другим значило
+            // бы отвечать на незаданный вопрос (ответ куратора 2).
             resultsEl.hidden = false;
-            resultsEl.innerHTML = '<div class="offer-results-note">Ничего не найдено по текущему отбору.</div>';
+            resultsEl.innerHTML = (clearAll ? resultsHead('Найдено: 0', `<span class="ui-btn-row">${clearAll}</span>`) : '')
+                + '<div class="offer-results-note">Ничего не найдено по текущему отбору.</div>';
             return;
         }
         const allAdded = lastResults.length > 0 && lastResults.every((o) => selected.has(o.id));
@@ -152,9 +203,16 @@ export function createOfferTabPicker({
         // равно отобьёт, а предлагать заведомо невыполнимое действие нечестно
         // (при 38 000 офферов это первое, что видит пользователь).
         const overLimit = maxPerLead !== null && lastTotal > maxPerLead;
-        const addAllControl = overLimit
-            ? `<span>${escapeHtml(TOO_MANY_OFFERS_HINT)}</span>`
+        const addAllButton = overLimit
+            ? ''
             : `<button type="button" class="ui-btn ui-btn--ghost" data-role="offer-add-all"${allAdded && lastTotal === lastResults.length ? ' disabled' : ''}>${addAllLabel}</button>`;
+        // Порядок в узле — снятие слева, добавление справа (макет `a8dba108`).
+        // Пустого узла не бывает: подборка пуста и потолок превышен — рисовать
+        // нечего, и коробка не заводится.
+        const btnRow = clearAll || addAllButton
+            ? `<span class="ui-btn-row">${clearAll}${addAllButton}</span>`
+            : '';
+        const addAllControl = btnRow + (overLimit ? `<span>${escapeHtml(TOO_MANY_OFFERS_HINT)}</span>` : '');
 
         const rows = lastResults.map((o) => {
             const added = selected.has(o.id);
@@ -172,13 +230,7 @@ export function createOfferTabPicker({
             : '';
 
         resultsEl.hidden = false;
-        resultsEl.innerHTML = `
-            <div class="offer-results-head">
-                <span>Найдено: ${lastTotal}</span>
-                ${addAllControl}
-            </div>
-            ${rows}
-            ${note}`;
+        resultsEl.innerHTML = resultsHead(`Найдено: ${lastTotal}`, addAllControl) + rows + note;
     }
 
     async function runSearch() {
@@ -193,12 +245,20 @@ export function createOfferTabPicker({
         try {
             const { total, items, maxPerLead: limit } = await storage.searchOffers(currentParams());
             if (!isAlive()) return;
+            lastFailed = false;
             lastTotal = total;
             lastResults = items;
             if (typeof limit === 'number') maxPerLead = limit;
             renderResults();
         } catch (e) {
             if (!isAlive() || isAbort(e)) return;
+            // Прежде здесь был только тост, и блок выдачи оставался скрытым с
+            // `open()`. После переезда это означало бы «кнопки снятия нет, пока
+            // сервер молчит» — подборка жива, а снять её нечем.
+            lastFailed = true;
+            lastResults = [];
+            lastTotal = 0;
+            renderResults();
             toast(e.message, 'error');
         }
     }
@@ -231,7 +291,32 @@ export function createOfferTabPicker({
         }
     }
 
+    // ⚠⚠ ПОДТВЕРЖДЕНИЯ ЗДЕСЬ ПОКА НЕТ, И ЭТО НЕ ЗАБЫТО.
+    // Паспорт требует спросить и назвать последствие числом; вид окна решён
+    // (обычный `confirm` слоя, `screen: true`, кнопка «Убрать все» — ответы
+    // куратора 6–9), а САМ ТЕКСТ отправлен дизайн-сессии: форма «Убрать все 7
+    // офферов…» требует склонения при одном оффере, и решено менять форму, а не
+    // заводить третью копию помощника склонений (ответ 10). До её слова текст не
+    // ставится. `confirm` уже лежит в зависимостях карточки (`leadsModal.js`) и
+    // придёт сюда одной строкой.
+    // ⚠ ПОКА ЭТОГО НЕТ, СНЯТИЕ МОЛЧАЛИВО — как и было до переезда. Но кнопка
+    // теперь стоит ВПЛОТНУЮ к «Добавить все», и промах по соседке стоит всей
+    // подборки: до подтверждения заход в бой не выкатывается.
+    function clearAll() {
+        const removed = selected.size;
+        if (removed === 0) return;
+        selected.clear();
+        renderSelected();
+        renderResults();
+        emitChange();
+        toast(`Убрано офферов: ${removed}`, 'success');
+    }
+
     resultsEl.addEventListener('click', (e) => {
+        if (e.target.closest('[data-role="offer-clear-all"]')) {
+            clearAll();
+            return;
+        }
         const addBtn = e.target.closest('[data-add]');
         if (addBtn) {
             const id = Number(addBtn.dataset.add);
@@ -251,13 +336,6 @@ export function createOfferTabPicker({
         const btn = e.target.closest('[data-remove]');
         if (!btn) return;
         selected.delete(Number(btn.dataset.remove));
-        renderSelected();
-        renderResults();
-        emitChange();
-    });
-
-    clearAllBtn.addEventListener('click', () => {
-        selected.clear();
         renderSelected();
         renderResults();
         emitChange();
@@ -359,6 +437,7 @@ export function createOfferTabPicker({
             resultsEl.hidden = true;
             lastResults = [];
             lastTotal = 0;
+            lastFailed = false;
             // force: списки гео-уровней могли остаться суженными каскадом от
             // прошлого открытия, а значения мы только что сбросили.
             await loadFilters({ force: true });
