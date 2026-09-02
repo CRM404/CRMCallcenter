@@ -26,6 +26,7 @@
 // (Shell/shell/app.js) и наборы проверок, а переименование ради соглашения об
 // именах — это правка общего файла ради нуля пользы.
 
+import { plural } from '/plural.js';
 import { openModal, confirm } from '/ui/modal.js';
 import { isAbort } from '/api.js';
 // Окно отказа — общее на пять разделов (ответ на И118): устройство у него
@@ -163,14 +164,6 @@ function escapeHtml(value) {
 }
 
 /** Числительные согласуются везде, где есть число. */
-function plural(n, one, few, many) {
-    const tens = n % 100;
-    if (tens >= 11 && tens <= 14) return many;
-    const ones = n % 10;
-    if (ones === 1) return one;
-    if (ones >= 2 && ones <= 4) return few;
-    return many;
-}
 
 const pluralOffers = (n) => plural(n, 'оффер', 'оффера', 'офферов');
 const pluralLeads = (n) => plural(n, 'лида', 'лидов', 'лидов');

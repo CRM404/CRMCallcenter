@@ -10,10 +10,11 @@
 // счётчик снятых лежали в переменных уровня модуля, то есть переживали закрытие
 // панели и всплывали в следующем открытии.
 
+import { plural } from '/plural.js';
 import { openModal } from '/ui/modal.js';
 import {
     daysInMonth, dayKey, dayOf, monthKeyOf, monthLabel, monthGenitive,
-    formatRangeSpaced, formatDayGenitive, plural, pluralDays, shortName
+    formatRangeSpaced, formatDayGenitive, pluralDays, shortName
 } from './employeesScheduleTime.js';
 
 const WEEK_DAYS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];

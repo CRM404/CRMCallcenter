@@ -1,3 +1,5 @@
+import { plural } from '/plural.js';
+
 // --- scriptsAdminScriptList.js: таблица скриптов (черновики + активные) ---
 // Колонки: Скрипт (название + подстрока наполненности) / Статус / Действия.
 // Колонки «Операторов» больше нет — ручная привязка операторов к скриптам
@@ -27,11 +29,7 @@ export function escapeHtml(value) {
 }
 
 function pluralObjections(count) {
-    const mod10 = count % 10;
-    const mod100 = count % 100;
-    if (mod10 === 1 && mod100 !== 11) return `${count} возражение`;
-    if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return `${count} возражения`;
-    return `${count} возражений`;
+    return `${count} ${plural(count, 'возражение', 'возражения', 'возражений')}`;
 }
 
 // Подстрока наполненности показывает уже существующие данные: агрегаты

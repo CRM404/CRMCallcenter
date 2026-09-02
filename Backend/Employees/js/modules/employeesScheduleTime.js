@@ -1,3 +1,5 @@
+import { plural } from '/plural.js';
+
 // Переименован из scheduleTime.js при переносе в оболочку. Сам код не тронут:
 // модуль чистый — ни одного обращения к document, только вычисления над
 // строками времени и датами. Переименование нужно по другой причине: все
@@ -189,14 +191,6 @@ export function formatDateGenitive(dateKey, openMonthKey) {
  * склонять приходится не только дни: предпросмотр заполнения обещал «1 смен»
  * и «1 выходных» (К117), а строкой выше в том же окне дни склонялись верно.
  */
-export function plural(n, one, few, many) {
-    const tens = n % 100;
-    const units = n % 10;
-    if (tens > 10 && tens < 20) return many;
-    if (units === 1) return one;
-    if (units >= 2 && units <= 4) return few;
-    return many;
-}
 
 export function pluralDays(n) {
     return plural(n, 'день', 'дня', 'дней');
