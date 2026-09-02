@@ -868,9 +868,9 @@ body { margin: 0; }
     gap: 9px;
     padding: 8px 14px;
     border-radius: 22px;
-    border: 1px solid rgba(96, 112, 148, 0.26);
-    background: #eceff5;
-    color: #55637c;
+    border: 1px solid var(--ui-color-line);
+    background: var(--ui-color-surface);
+    color: var(--ui-color-ink);
     font-size: 13.5px;
     font-weight: 700;
     font-family: inherit;
@@ -878,13 +878,31 @@ body { margin: 0; }
     white-space: nowrap;
     transition: filter .15s;
 }
-.op-state:hover { filter: brightness(.97); }
-.op-state__dot { width: 9px; height: 9px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
+.op-state:hover { border-color: var(--ui-color-line-strong); background: var(--ui-color-wash-hover); }
+/* ⚠⚠ ЦВЕТ НЕСЁТ ТОЧКА, А НЕ ПИЛЮЛЯ — К321, модель макета
+   `maket-operatora-v-obolochke.html` (строки 3228-3230 и 3565-3566).
+
+   ПРЕЖДЕ БЫЛО НАОБОРОТ: точка брала цвет у пилюли (`currentColor`), а признак
+   красил пилюлю целиком — фон, рамку и текст. Пилюля меняла цвет всей своей
+   площадью на каждое состояние, и рядом с ней всё остальное в шапке читалось
+   как менее важное.
+
+   ⚠ «НА ЛИНИИ» — СОСТОЯНИЕ ПО УМОЛЧАНИЮ, И ПОТОМУ ПРИЗНАКА У НЕГО НЕТ. В
+   макете `--online` не объявлен ни разу: зелёная точка стоит в самом
+   `.op-state__dot`, а признаком помечается ОТКЛОНЕНИЕ — `--off`. Модель
+   перевёрнута относительно прежней, и вместе с правилом перевёрнут признак в
+   `operatorWorkState.js`: иначе точка осталась бы зелёной у оператора, которого
+   на линии нет.
+
+   ⚠ ПОСТ-ОБРАБОТКА — ЕДИНСТВЕННОЕ ИСКЛЮЧЕНИЕ, и оно тоже из макета: здесь
+   красится и пилюля, и точка. Довод прежний и он верен: это единственное
+   состояние, где время работает ПРОТИВ оператора. Текст при этом остаётся
+   обычным — макет `--post` цвета текста не задаёт. */
+.op-state__dot { width: 9px; height: 9px; border-radius: 50%; background: var(--ui-color-ok-edge); flex-shrink: 0; }
 .op-state__timer { font-weight: 600; opacity: .8; font-variant-numeric: tabular-nums; }
-.op-state--online { background: #e2f3e8; border-color: rgba(21, 112, 63, 0.28); color: #15703f; }
-.op-state--online .op-state__dot { box-shadow: 0 0 0 4px rgba(21, 112, 63, 0.16); }
-/* Пост-обработка — единственное состояние, где время работает против оператора. */
-.op-state--post { background: #e8edfa; border-color: rgba(47, 63, 140, 0.26); color: #2f3f8c; }
+.op-state--off .op-state__dot { background: var(--ui-color-ink-faint); }
+.op-state--post { background: var(--ui-color-accent-panel); border-color: var(--ui-color-accent-line); }
+.op-state--post .op-state__dot { background: var(--ui-color-accent); }
 /* Мягкое напоминание, без блокировок: забытый «обед» до конца смены — реальный
    сценарий, но выбрасывать человека из карточки мы не будем. */
 .op-state--nudge { animation: opNudge 2.4s ease-in-out infinite; }
