@@ -123,9 +123,15 @@ export function createColumns(root, deps) {
         hint.textContent = 'Галка показывает колонку, перетаскивание меняет порядок. Номер и название стоят всегда.';
         body.appendChild(hint);
 
+        // ⚠ АТРИБУТА `data-role="columns-list"` ЗДЕСЬ БОЛЬШЕ НЕТ — К305.
+        // Он ставился и НИКЕМ НЕ ЧИТАЛСЯ: единственный читатель в проекте —
+        // `employeesColumns.js`, и тот ищет свой список в своём окне. Полезной
+        // работы у него было ноль, а вредная одна: он притягивал сюда чужое
+        // правило вида, написанное без подлежащего, и список перетаскиваемых
+        // строк становился двухколоночной сеткой. Само правило снято тем же
+        // заходом; атрибут уходит, чтобы притягивать было нечему.
         const list = document.createElement('div');
         list.className = 'cpa-cols';
-        list.setAttribute('data-role', 'columns-list');
         ordered.forEach((col) => list.appendChild(buildRow(col, !hidden.has(col.key))));
         body.appendChild(list);
 
