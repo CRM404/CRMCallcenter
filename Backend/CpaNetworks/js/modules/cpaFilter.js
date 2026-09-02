@@ -36,6 +36,7 @@
 //   отрицательные числа отбиваются отказом (К269/К270).
 
 import { openModal } from '/ui/modal.js';
+import { plural } from '/plural.js';
 
 // Поля отбора. `kind` говорит, КАК поле сравнивается, а не как выглядит:
 //   text     — подстрока без учёта регистра
@@ -242,7 +243,10 @@ export function createFilter(root, deps) {
 
         modal = openModal({
             title: 'Фильтры офферов',
-            sub: `${FILTER_FIELDS.length} полей, пять групп`,
+            // ⚠ ЧИСЛО ПОДСТАВЛЯЛОСЬ В ЖЁСТКО НАПИСАННОЕ СЛОВО, и на экране
+            // стояло «33 полей». Форма слова берётся у общего помощника
+            // (`/plural.js`, К308) — своей восьмой копии здесь не заводится.
+            sub: `${FILTER_FIELDS.length} ${plural(FILTER_FIELDS.length, 'поле', 'поля', 'полей')}, пять групп`,
             body,
             scope: root,
             size: 'xwide',
