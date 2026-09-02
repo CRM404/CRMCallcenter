@@ -150,7 +150,7 @@ export function createWorkStatePanel({ employeeId, identity, onStateChange, onWr
     function renderPill() {
         const post = isPostwork();
         const seconds = post ? postworkSeconds() : secondsInState();
-        const classes = ['op-state-pill'];
+        const classes = ['op-state'];
         if (post) classes.push('post');
         else if (current.state === 'on_line') classes.push('online');
         if (post) checkWrapupExpired(seconds);
