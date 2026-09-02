@@ -179,7 +179,7 @@ export function createColumns(root, deps) {
         grip.textContent = '⠿';
 
         const label = document.createElement('label');
-        label.className = 'column-checkbox-item';
+        label.className = 'ui-check';
         const checkbox = document.createElement('input');
         checkbox.type = 'checkbox';
         checkbox.dataset.columnKey = col.key;

@@ -1033,8 +1033,8 @@ function renderColumnsModalBody() {
     $('[data-role="columns-body"]').innerHTML = COLUMN_GROUPS.map((group) => `
         <div class="col-group">
             <div class="col-group-label">${escapeHtml(group.label)}</div>
-            <div class="column-checkbox-list">
-                ${group.columns.map((c) => `<label class="column-checkbox-item"><input type="checkbox" data-col-check="${c.key}">${escapeHtml(c.label)}</label>`).join('')}
+            <div class="ui-checks">
+                ${group.columns.map((c) => `<label class="ui-check"><input type="checkbox" data-col-check="${c.key}">${escapeHtml(c.label)}</label>`).join('')}
             </div>
         </div>
     `).join('');
