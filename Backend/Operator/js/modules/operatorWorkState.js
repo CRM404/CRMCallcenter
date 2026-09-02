@@ -151,8 +151,14 @@ export function createWorkStatePanel({ employeeId, identity, onStateChange, onWr
         const post = isPostwork();
         const seconds = post ? postworkSeconds() : secondsInState();
         const classes = ['op-state'];
+        // ⚠ ПРИЗНАКОМ ПОМЕЧАЕТСЯ ОТКЛОНЕНИЕ, А НЕ НОРМА — К321, модель макета.
+        // Было наоборот: `--online` вешался на состояние «на линии», а всё
+        // прочее оставалось без признака. В макете «на линии» — состояние по
+        // умолчанию (зелёная точка стоит в самом `.op-state__dot`), а признак
+        // несёт тот, кто из нормы вышел. Оставь прежний признак при новом
+        // правиле — и у оператора не на линии точка осталась бы зелёной.
         if (post) classes.push('op-state--post');
-        else if (current.state === 'on_line') classes.push('op-state--online');
+        else if (current.state !== 'on_line') classes.push('op-state--off');
         if (post) checkWrapupExpired(seconds);
         if (post && seconds > postworkNudgeSeconds()) classes.push('op-state--nudge');
         if (!post && current.state !== 'on_line' && secondsInState() > OFFLINE_NUDGE_SECONDS) classes.push('op-state--nudge');
