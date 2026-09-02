@@ -558,7 +558,11 @@ export function createLeadModal(root, deps) {
             filterCountEl: $('[data-role="offer-filters-count"]'),
             resultsEl: $('[data-role="offer-results"]'), tagsEl: $('[data-role="offer-sel-tags"]'),
             countEl: $('[data-role="offer-sel-count"]'), emptyEl: $('[data-role="offer-sel-empty"]'),
-            tabCountEl: $('[data-role="offer-tab-count"]')
+            tabCountEl: $('[data-role="offer-tab-count"]'),
+            // ⚠ ПОДТВЕРЖДЕНИЕ СНЯТИЯ БЕРЁТ `confirm` ОТСЮДА, а не из общей
+            // обёртки `leadsApp.js`: там раздаются зависимости, нужные всем
+            // модулям панели, а этот нужен ровно одному вызову (К274).
+            confirm
         });
 
         geo = createGeo();
