@@ -86,7 +86,7 @@
          scriptsSection.js через openModal({ scope }). -->
 
     <!-- Открытый скрипт: шапка (название + статус) → наполнение. -->
-    <section data-role="opened" hidden>
+    <section class="scr-stack" data-role="opened" hidden>
         <!-- Карточка открытого скрипта отмечена цветом (К164): она относится к
              строке, подсвеченной в списке выше, и связь между ними должна
              читаться без чтения текста. -->
@@ -104,7 +104,7 @@
             </div>
         </div>
 
-        <div data-role="nodes"></div>
+        <div class="scr-stack" data-role="nodes"></div>
     </section>
 
     <!-- Вкладка «Статусы воронки»: полсотни строк в восьми коробках по этапам.
