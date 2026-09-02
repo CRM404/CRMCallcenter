@@ -151,11 +151,11 @@ export function createWorkStatePanel({ employeeId, identity, onStateChange, onWr
         const post = isPostwork();
         const seconds = post ? postworkSeconds() : secondsInState();
         const classes = ['op-state'];
-        if (post) classes.push('post');
-        else if (current.state === 'on_line') classes.push('online');
+        if (post) classes.push('op-state--post');
+        else if (current.state === 'on_line') classes.push('op-state--online');
         if (post) checkWrapupExpired(seconds);
-        if (post && seconds > postworkNudgeSeconds()) classes.push('nudge');
-        if (!post && current.state !== 'on_line' && secondsInState() > OFFLINE_NUDGE_SECONDS) classes.push('nudge');
+        if (post && seconds > postworkNudgeSeconds()) classes.push('op-state--nudge');
+        if (!post && current.state !== 'on_line' && secondsInState() > OFFLINE_NUDGE_SECONDS) classes.push('op-state--nudge');
         pill.className = classes.join(' ');
         pillName.textContent = post ? 'Пост-обработка' : stateLabel(current.state);
         pillTimer.textContent = mmss(seconds);

@@ -879,15 +879,15 @@ body { margin: 0; }
     transition: filter .15s;
 }
 .op-state:hover { filter: brightness(.97); }
-.op-state .dot { width: 9px; height: 9px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
-.op-state .timer { font-weight: 600; opacity: .8; font-variant-numeric: tabular-nums; }
-.op-state.online { background: #e2f3e8; border-color: rgba(21, 112, 63, 0.28); color: #15703f; }
-.op-state.online .dot { box-shadow: 0 0 0 4px rgba(21, 112, 63, 0.16); }
+.op-state__dot { width: 9px; height: 9px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
+.op-state__timer { font-weight: 600; opacity: .8; font-variant-numeric: tabular-nums; }
+.op-state--online { background: #e2f3e8; border-color: rgba(21, 112, 63, 0.28); color: #15703f; }
+.op-state--online .op-state__dot { box-shadow: 0 0 0 4px rgba(21, 112, 63, 0.16); }
 /* Пост-обработка — единственное состояние, где время работает против оператора. */
-.op-state.post { background: #e8edfa; border-color: rgba(47, 63, 140, 0.26); color: #2f3f8c; }
+.op-state--post { background: #e8edfa; border-color: rgba(47, 63, 140, 0.26); color: #2f3f8c; }
 /* Мягкое напоминание, без блокировок: забытый «обед» до конца смены — реальный
    сценарий, но выбрасывать человека из карточки мы не будем. */
-.op-state.nudge { animation: opNudge 2.4s ease-in-out infinite; }
+.op-state--nudge { animation: opNudge 2.4s ease-in-out infinite; }
 @keyframes opNudge {
     0%, 100% { box-shadow: 0 0 0 0 rgba(138, 100, 16, 0); }
     50%      { box-shadow: 0 0 0 6px rgba(138, 100, 16, .14); }
@@ -1245,7 +1245,7 @@ body { margin: 0; }
 .op-obj-panel mark { background: rgba(255, 221, 87, .55); color: inherit; border-radius: 3px; padding: 0 1px; }
 
 @media (prefers-reduced-motion: reduce) {
-    .op-state.nudge { animation: none; }
+    .op-state--nudge { animation: none; }
 }
 
 /* ===================== ЛЕНТА КОММЕНТАРИЕВ (Б4.3, паспорт Р3 ред. 3) =========
