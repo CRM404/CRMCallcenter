@@ -10,7 +10,8 @@
    кнопки, поля, окно заполнения (.ui-modal), поповер дня (.ui-popover) — от
    него здесь остались только цветные точки состояний и второй шаг с временем.
 
-   ВСЕ СЕЛЕКТОРЫ ОГРАНИЧЕНЫ .emp-wrap.
+   ВСЕ СЕЛЕКТОРЫ ОГРАНИЧЕНЫ .emp-wrap, КРОМЕ СЕМЬИ .wk-* — и это не небрежность,
+   а решение владельца 120 (К299). Разбор у самой семьи, ниже по файлу.
    ============================================================ */
 
 /* ----- Тулбар графика ----- */
@@ -309,47 +310,96 @@
 .emp-wrap .emp-schedule.bad { background: var(--s-danger-bg); border-color: rgba(192, 57, 43, .3); }
 .emp-wrap .emp-schedule.bad .es-val { color: var(--e-danger-deep); font-size: 12.5px; font-weight: 600; line-height: 1.4; }
 
+/* ============================================================
+   ⚠⚠ СЕМЬЯ .wk-* ОБЪЯВЛЕНА БЕЗ ПРИСТАВКИ .emp-wrap — К299, решение владельца 120.
+
+   ПОЧЕМУ ТАК, А НЕ КАК ВЕСЬ ОСТАЛЬНОЙ ФАЙЛ. Единственная разметка с этими
+   именами — <template data-role="fill-tpl"> (employees-section.html) — не стоит
+   в разделе: она клонируется в ОКНО СЛОЯ, а окно вешается на контейнер панели
+   (`openModal({ scope: root })` в employeesScheduleFill.js, root — container из
+   employeesApp.js). `.emp-wrap` этому контейнеру ПОТОМОК, значит окно выходит
+   рядом с ним, а не внутрь.
+
+   Следствие было видно людям: все двадцать шесть правил семьи не применялись
+   НИ РАЗУ. Поле «Выходные» рисовалось голой кнопкой браузера (фон
+   rgb(240,240,240), Arial, без рамки), а календарь месяца — не сеткой 7 колонок,
+   а столбиком: `.wk-grid` не становился `grid`.
+
+   ПОЧЕМУ СНЯТА ПРИСТАВКА, А НЕ ДАНО ОКНУ ПОДЛЕЖАЩЕЕ. Место окна оказалось
+   ненадёжным: следующее окно раздела откроется так же, и правила снова окажутся
+   мёртвыми. Опираться второй раз на то, что уже подвело, — значит заложить ту же
+   поломку заново.
+
+   ⚠ ЧЕМ ЭТО ОГРАНИЧЕНО. Имена `wk-` не встречаются больше нигде в проекте —
+   проверено перебором по всей разметке и всем модулям. Стили раздела грузятся
+   один раз при первом открытии и не снимаются, поэтому правила живут в документе
+   до конца сеанса; сталкиваться им сегодня не с чем. Заводя новое имя `wk-`,
+   помните, что оно глобальное.
+
+   ⚠⚠ ЗНАЧЕНИЯ БЕРУТСЯ ИЗ СЛОЯ НАПРЯМУЮ, А НЕ ЧЕРЕЗ ТОКЕНЫ РАЗДЕЛА — вторая
+   половина К299, способ 1. Снятой приставки было мало: правила применились, а
+   каждое `var(--e-…)` в них осталось недействительным, потому что --e-… и --s-…
+   объявлены на .emp-wrap (employees-light.css), а семья живёт в окне. Замер
+   показал, что заход в таком виде один элемент УХУДШИЛ: `.wk-day.on` рисовал
+   белый текст (литерал `#fff` сработал) на пустом фоне (токен не дошёл) —
+   выбранный день исчезал совсем, тогда как до захода он был чёрным на сером.
+
+   ШЕСТЬ ЗАМЕН НИЧЕГО НЕ ПЕРЕКРАШИВАЮТ: --e-accent, --e-ink, --e-ink-faint,
+   --e-ink-soft, --e-line-strong и --e-radius-sm — ЧИСТЫЕ ПСЕВДОНИМЫ слоя
+   (employees-light.css:32-77), значение по обе стороны одно. Седьмой,
+   --e-wend-ink, разобран по месту у .wk-dow.wend.
+
+   ⚠ ЗАМЕНА СДЕЛАНА ПОПРАВИЛЬНО, А НЕ ПО ФАЙЛУ: те же имена токенов стоят в двух
+   десятках правил самого раздела, и общая замена вынесла бы из него то, чего
+   решение 120 не касалось.
+
+   ⚠ ГРУППА В @media (prefers-reduced-motion) НИЖЕ РАЗДЕЛЕНА НАРОЧНО: там рядом
+   стоят живые правила раздела (.month-pill button, .cellbtn) — у них приставка
+   ОСТАЛАСЬ. Снять её заодно значило бы вынести в документ то, чего решение не
+   касалось.
+   ============================================================ */
+
 /* Поле «Выходные»: сводка + раскрывающийся календарь месяца */
-.emp-wrap .wk-field {
+.wk-field {
     display: flex;
     align-items: center;
     gap: 10px;
     width: 100%;
     min-height: 40px;
     padding: 8px 12px;
-    border: 1px solid var(--e-line-strong);
+    border: 1px solid var(--ui-color-line-strong);
     border-radius: 8px;
     background: #fff;
     cursor: pointer;
     font-size: 13.5px;
-    color: var(--e-ink);
+    color: var(--ui-color-ink);
     font-family: inherit;
     text-align: left;
 }
-.emp-wrap .wk-field:hover { border-color: var(--e-accent); }
-.emp-wrap .wk-field:focus-visible { outline: 2px solid var(--e-accent); outline-offset: 1px; }
-.emp-wrap .wk-field .wk-sum { flex: 1; }
-.emp-wrap .wk-field .wk-sum.none { color: var(--e-ink-faint); }
+.wk-field:hover { border-color: var(--ui-color-accent); }
+.wk-field:focus-visible { outline: 2px solid var(--ui-color-accent); outline-offset: 1px; }
+.wk-field .wk-sum { flex: 1; }
+.wk-field .wk-sum.none { color: var(--ui-color-ink-faint); }
 /* Единственный указатель состояния у этой кнопки — поворот шеврона. Правило
    целилось в <i> и перестало работать вместе с переводом значков на SVG:
    панель открывалась, стрелка не двигалась (Ф3). Цвет теперь даёт .ui-ic--quiet
    из слоя, здесь остаётся только поведение. */
-.emp-wrap .wk-field .ui-ic { flex-shrink: 0; transition: transform .18s; }
-.emp-wrap .wk-field[aria-expanded="true"] .ui-ic { transform: rotate(180deg); }
+.wk-field .ui-ic { flex-shrink: 0; transition: transform .18s; }
+.wk-field[aria-expanded="true"] .ui-ic { transform: rotate(180deg); }
 
-.emp-wrap .wk-panel {
+.wk-panel {
     margin-top: 8px;
-    border: 1px solid var(--e-line-strong);
-    border-radius: var(--e-radius-sm);
+    border: 1px solid var(--ui-color-line-strong);
+    border-radius: var(--ui-radius-sm);
     background: rgba(255, 255, 255, .85);
     padding: 12px;
 }
-.emp-wrap .wk-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
-.emp-wrap .wk-head .wk-month { font-size: 13.5px; font-weight: 700; color: var(--e-ink); }
-.emp-wrap .wk-clear {
+.wk-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.wk-head .wk-month { font-size: 13.5px; font-weight: 700; color: var(--ui-color-ink); }
+.wk-clear {
     border: none;
     background: transparent;
-    color: var(--e-ink-soft);
+    color: var(--ui-color-ink-soft);
     font-size: 12px;
     font-weight: 600;
     cursor: pointer;
@@ -357,25 +407,32 @@
     border-radius: 6px;
     font-family: inherit;
 }
-.emp-wrap .wk-clear:hover { color: var(--e-accent); background: rgba(0, 0, 255, .06); }
-.emp-wrap .wk-clear:disabled { color: var(--e-ink-faint); opacity: .5; cursor: default; background: transparent; }
-.emp-wrap .wk-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
-.emp-wrap .wk-dow {
+.wk-clear:hover { color: var(--ui-color-accent); background: rgba(0, 0, 255, .06); }
+.wk-clear:disabled { color: var(--ui-color-ink-faint); opacity: .5; cursor: default; background: transparent; }
+.wk-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.wk-dow {
     font-size: 10px;
     font-weight: 700;
     letter-spacing: .05em;
     text-transform: uppercase;
-    color: var(--e-ink-faint);
+    color: var(--ui-color-ink-faint);
     text-align: center;
     padding-bottom: 2px;
 }
-.emp-wrap .wk-dow.wend { color: var(--e-wend-ink); }
-.emp-wrap .wk-day {
+/* ⚠ ЛИТЕРАЛ, А НЕ ТОКЕН, И ЭТО НЕ НЕБРЕЖНОСТЬ. Остальные значения семьи взяты
+   из слоя напрямую (см. довод выше), но у этого цвета пары в слое нет: он
+   собственный цвет раздела, `--e-wend-ink` в employees-light.css. Токен туда не
+   доходит — он объявлен на .emp-wrap, а семья живёт в окне; заводить ради
+   одного случая имя в слое нечего, а вторая копия отображения была бы К36.
+   Значение переехало на строку, а не появилось: в словаре оболочки этот цвет и
+   раньше числился идущим мимо токенов. */
+.wk-dow.wend { color: #b0736c; }
+.wk-day {
     height: 32px;
     border: 1px solid transparent;
     border-radius: 7px;
     background: rgba(96, 112, 148, .07);
-    color: var(--e-ink);
+    color: var(--ui-color-ink);
     font-size: 12.5px;
     font-weight: 600;
     cursor: pointer;
@@ -385,13 +442,13 @@
     justify-content: center;
     transition: background var(--ui-dur-fast), color var(--ui-dur-fast);
 }
-.emp-wrap .wk-day:hover { background: rgba(0, 0, 255, .08); }
-.emp-wrap .wk-day:focus-visible { outline: 2px solid var(--e-accent); outline-offset: 1px; }
-.emp-wrap .wk-day.on { background: var(--e-accent); color: #fff; }
-.emp-wrap .wk-day.blank { background: transparent; cursor: default; }
-.emp-wrap .wk-day.out { background: transparent; color: rgba(136, 148, 168, .55); cursor: not-allowed; }
-.emp-wrap .wk-day.out:hover { background: transparent; }
-.emp-wrap .wk-note { font-size: 11.5px; color: var(--e-ink-faint); line-height: 1.45; margin-top: 10px; }
+.wk-day:hover { background: rgba(0, 0, 255, .08); }
+.wk-day:focus-visible { outline: 2px solid var(--ui-color-accent); outline-offset: 1px; }
+.wk-day.on { background: var(--ui-color-accent); color: #fff; }
+.wk-day.blank { background: transparent; cursor: default; }
+.wk-day.out { background: transparent; color: rgba(136, 148, 168, .55); cursor: not-allowed; }
+.wk-day.out:hover { background: transparent; }
+.wk-note { font-size: 11.5px; color: var(--ui-color-ink-faint); line-height: 1.45; margin-top: 10px; }
 
 /* Предпросмотр: что именно будет проставлено и что затрётся. */
 .emp-wrap .fill-preview {
@@ -420,8 +477,8 @@
 @media (prefers-reduced-motion: reduce) {
     .emp-wrap .month-pill button,
     .emp-wrap .cellbtn,
-    .emp-wrap .wk-day,
-    .emp-wrap .wk-field .ui-ic { transition: none !important; }
+    .wk-day,
+    .wk-field .ui-ic { transition: none !important; }
 }
 
 /* Точка перелома по ширине КОНТЕЙНЕРА, а не окна (К38): панель бывает узкой на
