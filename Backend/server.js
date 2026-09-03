@@ -14,6 +14,7 @@ const { runPhoneNormalization } = require('./services/phoneMigration');
 const { runRecallRecalc } = require('./services/recallMigration');
 const scheduler = require('./services/scheduler');
 const eventChannel = require('./services/eventChannel');
+const pbxClient = require('./services/pbxClient');
 const employeesRouter = require('./routes/employees');
 const documentsRouter = require('./routes/documents');
 const authRouter = require('./routes/auth');
@@ -239,6 +240,12 @@ runMigrations()
         // По умолчанию выключен, включается переменной SCHEDULER_ENABLED —
         // разбор в шапке services/scheduler.js.
         scheduler.start(pool);
+
+        // СВЕРКА С АТС ПРИ СТАРТЕ (этап Е0, план 7.2). Идёт ПОСЛЕ подъёма
+        // слушателя и НЕ ожидается: станция может отвечать секунды, а порт
+        // обязан открыться сразу. Своих исключений наружу не выпускает — вся
+        // обработка внутри, старт от недоступной АТС не падает.
+        pbxClient.checkAtStart(pool);
 
         // Сердцебиение канала — СВОИМ таймером (ответ куратора И139):
         // планировщик по умолчанию выключен, а канал обязан жить и без него.
