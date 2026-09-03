@@ -27,6 +27,7 @@ import { openModal } from '/ui/modal.js';
 import { isAbort } from '/api.js';
 import { readHiddenColumns, hasHiddenColumns, writeHiddenColumns } from '/viewPrefs.js';
 import { showLoadError, clearLoadError } from '/ui/load-error.js';
+import { iconNode } from '/ui/icons.js';
 import { createSkeleton } from '/ui/skeleton.js';
 import {
     fetchActive, fetchMeta, fetchCalls, fetchCallsForExport, fetchChain, fetchRecording
@@ -373,25 +374,87 @@ function createInstance(container, ctx) {
         showPbxState(data.pbx);
     }
 
-    // ТРЕТЬЕ СОСТОЯНИЕ ОТКАЗА: «Нет связи с телефонией» (матрица паспорта, № 3).
+    // ОТКАЗ № 3 — ЭТО ТРИ СЛУЧАЯ, А НЕ ОДИН (паспорт `a06feda1` ред. 16, задача 58,
+    // решение владельца 144). Прежде их было два, и второй отвечал за оба разом.
     //
-    // Полоса положена ТОЛЬКО тогда, когда связь была настроена и пропала. Пока
-    // ключей Телфина нет вовсе — а это весь срок до этапа Е, — полосы нет: она
-    // висела бы круглосуточно и за неделю стала бы частью фона, а в день, когда
-    // связь оборвётся по-настоящему, её никто бы не заметил.
+    //   3а · связь БЫЛА и пропала        — полоса «Нет связи с телефонией»
+    //   3б · обмена ещё НЕ БЫЛО          — плашка `.ui-note` без вида
+    //   3в · ключей нет вовсе            — экран МОЛЧИТ
     //
-    // ЗАГОЛОВОК ЗДЕСЬ СВОЙ, И РАДИ ЭТОГО ПРАВИЛСЯ СЛОЙ. Умолчание полосы —
-    // «Данные не загрузились», а здесь данные как раз загрузились: молчит
-    // телефония, и полоса с таким заголовком солгала бы.
+    // ⚠⚠ РАЗЛИЧАЕТ ИХ `lastKnownAt`, И ПРИЗНАК ЭТОТ ЕДИНСТВЕННЫЙ. Значит «связь
+    // была, но время неизвестно» случаем полосы быть не может: заявить «связь
+    // потеряна», не имея ни одной записи об удачном обмене, тяжелее, чем сказать
+    // «ещё не подключена». Это ограничение модели, названное дизайн-сессией до
+    // постройки, а не после.
+    //
+    // ПОЧЕМУ У 3б ПЛАШКА, А НЕ ПОЛОСА, И НЕ МОЛЧАНИЕ — три довода, все замеренные:
+    //   · кнопка «Повторить» строится в полосе БЕЗУСЛОВНО (`load-error.js`), а
+    //     повторяют то, что однажды получалось; на экране, где станция не
+    //     отвечала ни разу, она обещает возврат к состоянию, которого не было;
+    //   · текст полосы солгал бы дважды: «Нет связи» — связи не было никогда;
+    //     умолчание слоя «Данные не загрузились» — данные как раз загрузились;
+    //   · вид `--warn` утверждал бы диагноз, которого у экрана нет: ничего не
+    //     сломано, связи просто ещё не было.
+    // Молчание отвергнуто по своему доводу: раздел отвечает «что прямо сейчас»,
+    // и без станции это только наша запись — молчащий экран дал бы прочесть её
+    // как правду станции.
+    //
+    // ЗАГОЛОВОК ПОЛОСЫ ЗДЕСЬ СВОЙ, И РАДИ ЭТОГО ПРАВИЛСЯ СЛОЙ (Г9-а): умолчание
+    // «Данные не загрузились» в этом месте неправда.
+    const PBX_NOTE = 'pbx-note';
+
+    function showPbxNote() {
+        if (!container || !container.isConnected) return;
+        if (container.querySelector(`[data-role="${PBX_NOTE}"]`)) return;
+        const box = document.createElement('div');
+        box.className = 'ui-note';
+        box.dataset.role = PBX_NOTE;
+        box.appendChild(iconNode('info', 'sm', 'ui-note__icon'));
+        const body = document.createElement('div');
+        body.className = 'ui-note__body';
+        const title = document.createElement('span');
+        title.className = 'ui-note__title';
+        title.textContent = 'Телефония ещё не подключена';
+        const text = document.createElement('span');
+        text.className = 'ui-note__text';
+        // ⚠ Три узла, а не одна строка: «не было ни одного» выделено в макете,
+        //   и текстом с разметкой это не собрать без `innerHTML`.
+        text.appendChild(document.createTextNode('Ключи станции вписаны, но обмена с ней '));
+        const bold = document.createElement('b');
+        bold.textContent = 'не было ни одного';
+        text.appendChild(bold);
+        text.appendChild(document.createTextNode('. Показано то, что записано у нас.'));
+        body.append(title, text);
+        box.appendChild(body);
+        // Место то же, что у полосы: над шапкой раздела (макет `8b74de43` ред. 13).
+        container.insertBefore(box, container.firstChild);
+    }
+
+    function clearPbxNote() {
+        if (!container) return;
+        const box = container.querySelector(`[data-role="${PBX_NOTE}"]`);
+        if (box) box.remove();
+    }
+
     function showPbxState(pbx) {
+        // 3в и «связь есть» — экран молчит, и оба раза снимаем ОБА узла: иначе
+        // плашка пережила бы подключение станции, а полоса — восстановление связи.
         if (!pbx || !pbx.configured || pbx.available) {
             clearLoadError(container);
+            clearPbxNote();
             return;
         }
-        const known = pbx.lastKnownAt
-            ? `Показано последнее, что мы знали в ${timeLabel(pbx.lastKnownAt)}.`
-            : 'Показано то, что записано у нас.';
-        showLoadError(container, known, () => scheduleRefresh(), 'Нет связи с телефонией');
+        // 3б — обмена ещё не было.
+        if (!pbx.lastKnownAt) {
+            clearLoadError(container);
+            showPbxNote();
+            return;
+        }
+        // 3а — связь была и пропала.
+        clearPbxNote();
+        showLoadError(container,
+            `Показано последнее, что мы знали в ${timeLabel(pbx.lastKnownAt)}.`,
+            () => scheduleRefresh(), 'Нет связи с телефонией');
     }
 
     function renderActive(changedIds) {
