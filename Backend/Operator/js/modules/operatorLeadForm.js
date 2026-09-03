@@ -1,3 +1,6 @@
+// ⚠ Значки из набора слоя, а не из Font Awesome (задача 44).
+import { icon } from '/ui/icons.js';
+
 // --- operatorLeadForm.js: карточка клиента (лид) — форма редактирования ---
 // Состав, порядок и раскладка — по согласованному владельцем макету
 // дизайн-сессии (report_designer.md, версия «script-order», 14.08.2026).
@@ -161,7 +164,7 @@ function geoBlock(title, prefix, lead) {
     }).join('');
     return `
         <div class="geo-block">
-            <div class="geo-block-title"><i class="fas fa-location-dot" aria-hidden="true"></i>${escapeHtml(title)}</div>
+            <div class="geo-block-title">${icon('pin', 'sm')}${escapeHtml(title)}</div>
             <div class="geo-grid">${fields}</div>
         </div>
     `;
@@ -232,7 +235,7 @@ function phoneNote(lead) {
     // бы «система сломалась», а система работает: испорчен номер. Оператору
     // надо не испугаться, а не тратить время на набор.
     return '<div class="ui-note ui-note--warn op-phone-note">'
-        + '<i class="fas fa-triangle-exclamation ui-note__icon" aria-hidden="true"></i>'
+        + icon('warn', 'sm', 'ui-note__icon')
         + '<div class="ui-note__body">'
         + `<div class="ui-note__title">${escapeHtml(note.title)}</div>`
         + `<div class="ui-note__text">${escapeHtml(note.text)}</div>`
@@ -428,17 +431,17 @@ export function renderLeadForm(container, lead, statuses, paramLists, onSave, op
     const opts = options || {};
 
     container.innerHTML = `
-        ${opts.flash ? `<div class="op-flash" id="opFlashBar"><i class="fas fa-circle-check" aria-hidden="true"></i>Новый лид № ${lead.id} — перед вами другой человек</div>` : ''}
+        ${opts.flash ? `<div class="op-flash" id="opFlashBar">${icon('check-circle', 'sm')}Новый лид № ${lead.id} — перед вами другой человек</div>` : ''}
         <div class="op-card-head">
-            <h2><span class="op-card-icon"><i class="fas fa-user" aria-hidden="true"></i></span>Карточка клиента</h2>
+            <h2><span class="op-card-icon">${icon('user', 'sm')}</span>Карточка клиента</h2>
             <span class="op-lead-no" title="Номер лида — из базы, не редактируется">
-                <i class="fas fa-hashtag" aria-hidden="true"></i>Лид <span class="n">№&nbsp;${lead.id}</span>
+                ${icon('hashtag', 'sm')}Лид <span class="n">№&nbsp;${lead.id}</span>
             </span>
             <div class="op-lead-meta">Создан ${escapeHtml(formatDateTime(lead.createdAt)) || '—'} · источник: ${escapeHtml(lead.sourceName) || '—'}</div>
         </div>
 
         <div class="op-lead-phone">
-            <i class="fas fa-phone" aria-hidden="true"></i>
+            ${icon('phone', 'sm')}
             <input id="op-field-phone" name="phone" type="tel" value="${escapeHtml(lead.phone)}" aria-label="Телефон">
             ${attempts ? '<span class="op-attempt" id="opAttemptBadge"></span>' : ''}
         </div>
@@ -459,7 +462,7 @@ export function renderLeadForm(container, lead, statuses, paramLists, onSave, op
         <div class="op-form-section">
             <div class="op-section-label">География</div>
             <button type="button" class="op-dashed-row" id="opShowGeoBtn">
-                <i class="fas fa-location-dot" aria-hidden="true"></i>
+                ${icon('pin', 'sm')}
                 Показать географию <span class="count">— гео объекта и гео клиента</span>
             </button>
             <div id="opGeoBody" hidden>
@@ -470,7 +473,7 @@ export function renderLeadForm(container, lead, statuses, paramLists, onSave, op
 
         <div class="op-form-section" id="opParamsStep" hidden>
             <button type="button" class="op-dashed-row" id="opShowParamsBtn">
-                <i class="fas fa-magnifying-glass" aria-hidden="true"></i>
+                ${icon('search', 'sm')}
                 Показать бюджет и объект <span class="count">— цена, способ покупки, параметры объекта</span>
             </button>
         </div>

@@ -1,17 +1,20 @@
+// ⚠ Значки берутся из набора слоя, а не из Font Awesome (задача 44).
+import { icon } from '/ui/icons.js';
+
 // --- operatorNav.js: иконочная навигация слева (8 вкладок, 7 из них — заглушки) ---
 
 import { clearOperatorIdentity } from './operatorIdentity.js';
 import { showToast } from './operatorToast.js';
 
 const NAV_ITEMS = [
-    { key: 'desktop', label: 'Рабочий стол', icon: 'fa-table-columns', active: true },
-    { key: 'stats', label: 'Статистика', icon: 'fa-chart-line' },
-    { key: 'analytics', label: 'Аналитика', icon: 'fa-magnifying-glass-chart' },
-    { key: 'schedule', label: 'График работы', icon: 'fa-calendar-days' },
-    { key: 'mail', label: 'Почта', icon: 'fa-envelope' },
-    { key: 'knowledge', label: 'База знаний', icon: 'fa-book' },
-    { key: 'history', label: 'История', icon: 'fa-clock-rotate-left' },
-    { key: 'access', label: 'Доступы', icon: 'fa-key' }
+    { key: 'desktop', label: 'Рабочий стол', icon: 'cols', active: true },
+    { key: 'stats', label: 'Статистика', icon: 'chart-line' },
+    { key: 'analytics', label: 'Аналитика', icon: 'magnifying-glass-chart' },
+    { key: 'schedule', label: 'График работы', icon: 'calendar' },
+    { key: 'mail', label: 'Почта', icon: 'mail' },
+    { key: 'knowledge', label: 'База знаний', icon: 'book' },
+    { key: 'history', label: 'История', icon: 'history' },
+    { key: 'access', label: 'Доступы', icon: 'key' }
 ];
 
 // beforeLogout — снять оператора с линии перед выходом. Открытый интервал
@@ -27,7 +30,7 @@ export function initOperatorNav(options) {
         btn.type = 'button';
         btn.className = 'op-nav-item' + (item.active ? ' active' : '');
         btn.dataset.tooltip = item.label;
-        btn.innerHTML = `<i class="fas ${item.icon}" aria-hidden="true"></i>`;
+        btn.innerHTML = icon(item.icon);
         btn.setAttribute('aria-label', item.label);
         if (!item.active) {
             btn.addEventListener('click', () => showToast(`${item.label}: скоро появится`, 'info'));
@@ -44,7 +47,7 @@ export function initOperatorNav(options) {
     logoutBtn.className = 'op-nav-item op-nav-logout';
     logoutBtn.dataset.tooltip = 'Выход';
     logoutBtn.setAttribute('aria-label', 'Выход');
-    logoutBtn.innerHTML = '<i class="fas fa-right-from-bracket" aria-hidden="true"></i>';
+    logoutBtn.innerHTML = icon('logout');
     logoutBtn.addEventListener('click', async () => {
         // Не блокируем выход, если запрос не прошёл: человек всё равно уходит,
         // а зависший интервал закроется потолком на сервере.

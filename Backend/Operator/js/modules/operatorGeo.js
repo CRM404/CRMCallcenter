@@ -1,3 +1,6 @@
+// ⚠ Значок из набора слоя, а не из Font Awesome (задача 44).
+import { icon } from '/ui/icons.js';
+
 // --- operatorGeo.js: гео-автоподсказки (DaData) для карточки клиента ---
 // Перенос приёма из Leads/js/modules/leadsGeo.js (страницы проекта не делят
 // код: каждая лежит своей статической папкой, общего модуля нет). Отличие
@@ -94,7 +97,7 @@ function attachField(input, context) {
             const box = document.createElement('div');
             box.className = 'geo-suggest';
             box.innerHTML = items.length
-                ? items.map((data, idx) => `<div class="geo-suggest-item" data-i="${idx}"><i class="fas fa-location-dot" aria-hidden="true"></i><span>${highlightMatch(geoSuggestionDisplay(bound, data), q)}</span></div>`).join('')
+                ? items.map((data, idx) => `<div class="geo-suggest-item" data-i="${idx}">${icon('pin', 'sm')}<span>${highlightMatch(geoSuggestionDisplay(bound, data), q)}</span></div>`).join('')
                 : '<div class="geo-suggest-empty">Ничего не найдено</div>';
             fieldEl.appendChild(box);
 

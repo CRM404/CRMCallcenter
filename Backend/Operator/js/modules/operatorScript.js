@@ -1,3 +1,6 @@
+// ⚠ Значки из набора слоя, а не из Font Awesome (задача 44).
+import { icon } from '/ui/icons.js';
+
 // --- operatorScript.js: линейный текст скрипта звонка ---
 //
 // Решение владельца (15.08.2026): скрипт стал ЛИНЕЙНЫМ. Пошагового показа с
@@ -15,7 +18,7 @@ export function createScriptView(container, script) {
     if (!nodes.length) {
         container.innerHTML = `
             <div class="op-panel-head">
-                <h2><span class="op-card-icon"><i class="fas fa-file-lines" aria-hidden="true"></i></span>Скрипт разговора</h2>
+                <h2><span class="op-card-icon">${icon('doc', 'sm')}</span>Скрипт разговора</h2>
             </div>
             <p class="op-script-end">Скрипт пуст.</p>
         `;
@@ -24,7 +27,7 @@ export function createScriptView(container, script) {
 
     container.innerHTML = `
         <div class="op-panel-head">
-            <h2><span class="op-card-icon"><i class="fas fa-file-lines" aria-hidden="true"></i></span>Скрипт разговора</h2>
+            <h2><span class="op-card-icon">${icon('doc', 'sm')}</span>Скрипт разговора</h2>
             <span class="op-script-title">${escapeHtml(script.title)}</span>
         </div>
         <div class="op-script-content">

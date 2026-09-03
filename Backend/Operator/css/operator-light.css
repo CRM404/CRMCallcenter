@@ -427,7 +427,10 @@ body { margin: 0; }
     padding: 10px 14px;
     margin-bottom: 18px;
 }
-.op-lead-phone i { color: #0000FF; }
+/* ⚠ СЕЛЕКТОР ПЕРЕПИСАН С `i` НА `.ui-ic` (задача 44): значок больше не
+   Font Awesome, а узел слоя. Цвет сохранён знак в знак — замена значков
+   не должна была стать видимым изменением. */
+.op-lead-phone .ui-ic { color: #0000FF; }
 .op-lead-phone input {
     border: none;
     background: transparent;
@@ -645,7 +648,7 @@ body { margin: 0; }
     color: #1e2a3a;
     margin-bottom: 10px;
 }
-.op-shell .geo-block-title i { color: #0000FF; }
+.op-shell .geo-block-title .ui-ic { color: #0000FF; }
 .op-shell .geo-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -685,7 +688,10 @@ body { margin: 0; }
 }
 .op-shell .geo-suggest-item:last-child { border-bottom: none; }
 .op-shell .geo-suggest-item:hover { background: rgba(0, 0, 255, 0.06); }
-.op-shell .geo-suggest-item i { color: #8a95a8; font-size: 12px; }
+/* ⚠ Размер здесь СВОЙ, 12: ступени 12 в лесенке слоя нет (`--ui-icon-xs`
+   это 12 — совпало, но правило оставлено числом, чтобы подсказка не
+   поехала, если лесенку когда-нибудь перенастроят). */
+.op-shell .geo-suggest-item .ui-ic { color: #8a95a8; width: 12px; height: 12px; }
 .op-shell .geo-suggest-empty {
     padding: 11px 13px;
     font-size: 13px;
@@ -733,7 +739,9 @@ body { margin: 0; }
 }
 .toast.error { border-left-color: #ef4444; }
 .toast.success { border-left-color: #22c55e; }
-.toast i { font-size: 18px; }
+/* ⚠ Было 18 через `font-size` у глифа; стало 15 ступенью `sm` у узла слоя —
+   так же, как в тосте оболочки (`Shell/ui/toast.js` ставит `sm`). Правило
+   размера здесь больше не нужно: его несёт класс ступени. */
 .toast .toast-close {
     margin-left: auto;
     cursor: pointer;
@@ -1253,7 +1261,7 @@ body { margin: 0; }
     padding: 14px 16px 12px;
     border-bottom: 1px solid rgba(96, 112, 148, 0.18);
 }
-.op-obj-head i { color: #0000FF; }
+.op-obj-head .ui-ic { color: #0000FF; }
 .op-obj-head h3 { font-size: 14px; font-weight: 700; flex: 1; margin: 0; color: #16202e; }
 .op-obj-close {
     background: none;
@@ -1281,7 +1289,7 @@ body { margin: 0; }
     border-color: #4a90d9;
     box-shadow: 0 0 0 3px rgba(0, 0, 255, 0.12);
 }
-.op-obj-search i {
+.op-obj-search .ui-ic {
     position: absolute;
     left: 28px;
     top: 50%;
