@@ -19,6 +19,7 @@ const express = require('express');
 const { pool } = require('../db');
 const { normalizeForSearch } = require('../services/phoneFormat');
 const pbxClient = require('../services/pbxClient');
+const appSettings = require('../services/appSettings');
 const { zonedParts } = require('../services/appTime');
 
 const router = express.Router();
@@ -78,10 +79,23 @@ async function pbxState() {
     // отдаётся на каждый показ экрана, и поход к АТС на каждый показ сжёг бы
     // часовой лимит — 1000 запросов, 429 стоит часа простоя.
     const link = await pbxClient.readState(pool);
+
+    // ⚠⚠ ЧЕТВЁРТЫЙ ПРИЗНАК — СОСТОЯНИЕ ПРИЁМА, И БЕЗ НЕГО ЭКРАН МОЛЧИТ О ГЛАВНОМ
+    // (находка дизайн-сессии, проверена куратором на `19d8eac`). `available`
+    // считается по НАШИМ исходящим обменам: токен взят, значит «связь есть». Но
+    // рубильник (решение владельца 145) может быть выключен — события станции в
+    // это время НЕ ПИШУТСЯ, а по трём прежним признакам всё выглядит здоровым.
+    //
+    // ⚠ ЗНАЧЕНИЕ БЕРЁТСЯ ИЗ ТОЙ ЖЕ НАСТРОЙКИ И ТЕМ ЖЕ ЧТЕНИЕМ, что у приёмника
+    // (`routes/pbxEvents.js`): второй способ узнать одно и то же разошёлся бы с
+    // первым, и экран показывал бы «приём идёт», пока он стоит.
+    const receiving = await appSettings.getBool(pool, 'pbx_events_enabled', true);
+
     return {
         configured,
         available: configured && link.available,
-        lastKnownAt: link.lastKnownAt
+        lastKnownAt: link.lastKnownAt,
+        receiving
     };
 }
 

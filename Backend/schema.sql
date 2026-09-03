@@ -1561,7 +1561,7 @@ BEGIN
         ('pbx_events_enabled', 'true',
          'Приём событий от АТС',
          'Пока включён, система принимает и записывает сообщения станции о звонках. Выключение останавливает приём немедленно — события за это время будут потеряны безвозвратно, станция их не повторяет.',
-         'switch', NULL, 'Звонки', 20, false, true, 'true')
+         'switch', NULL, 'Звонки', 25, false, true, 'true')
     ON CONFLICT (key) DO NOTHING;
 END $$;
 
@@ -1573,7 +1573,7 @@ UPDATE app_settings SET
     value_type = 'switch',
     unit = NULL,
     group_key = 'Звонки',
-    group_order = 20,
+    group_order = 25,
     is_readonly = false,
     is_dangerous = true,
     default_value = 'true'
