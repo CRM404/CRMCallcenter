@@ -59,6 +59,74 @@ function writeAll(prefs) {
 }
 
 /**
+ * Место перемещаемого окна `.ui-float`.
+ *
+ * ⚠ ОДНА ИМЕНОВАННАЯ ЯЧЕЙКА В СУЩЕСТВУЮЩЕМ ФАЙЛЕ, а не отдельный модуль
+ * (паспорт `d3afce57`, К323). Файл написан как общее место «что человек
+ * настроил в том, КАК ему показывать», и место окна — ровно это; заводить
+ * рядом второе хранилище значило бы развести один вопрос по двум ключам.
+ *
+ * ⚠ ПОМНИТСЯ МЕСТО, А НЕ СОДЕРЖИМОЕ. Номер в поле пульта сюда не попадает
+ * намеренно: подставленный вчерашний номер — это звонок не тому человеку.
+ *
+ * Читается как чужой ввод: значение мог оставить прежний размер экрана или
+ * человек руками в консоли. Не число — то же, что «не сохраняли».
+ *
+ * @param {string} key имя окна, например 'operatorTel'
+ * @returns {{left:number, top:number}|null}
+ */
+export function readFloatPlace(key) {
+    const box = readAll().floatPlace;
+    const place = box && typeof box === 'object' ? box[key] : null;
+    if (!place || typeof place !== 'object') return null;
+    const { left, top } = place;
+    if (!Number.isFinite(left) || !Number.isFinite(top)) return null;
+    return { left, top };
+}
+
+/**
+ * Запомнить место окна. Границы здесь не проверяются: их знает `float.js`,
+ * который единственный видит настоящий размер окна и экрана.
+ *
+ * @param {string} key
+ * @param {{left:number, top:number}} place
+ */
+export function writeFloatPlace(key, place) {
+    if (!place || !Number.isFinite(place.left) || !Number.isFinite(place.top)) return;
+    const prefs = readAll();
+    const box = prefs.floatPlace && typeof prefs.floatPlace === 'object' ? prefs.floatPlace : {};
+    box[key] = { left: Math.round(place.left), top: Math.round(place.top) };
+    prefs.floatPlace = box;
+    writeAll(prefs);
+}
+
+/**
+ * Свёрнуто ли перемещаемое окно.
+ *
+ * Отдельно от места намеренно: место есть всегда, а свёрнутость — состояние,
+ * и «нет записи» здесь значит «первый заход», а не «ноль».
+ *
+ * @param {string} key
+ * @returns {boolean}
+ */
+export function readFloatCollapsed(key) {
+    const box = readAll().floatCollapsed;
+    return Boolean(box && typeof box === 'object' && box[key] === true);
+}
+
+/**
+ * @param {string} key
+ * @param {boolean} collapsed
+ */
+export function writeFloatCollapsed(key, collapsed) {
+    const prefs = readAll();
+    const box = prefs.floatCollapsed && typeof prefs.floatCollapsed === 'object' ? prefs.floatCollapsed : {};
+    box[key] = Boolean(collapsed);
+    prefs.floatCollapsed = box;
+    writeAll(prefs);
+}
+
+/**
  * Ключи СКРЫТЫХ колонок раздела.
  *
  * @param {string}   section   'leads' | 'employees'

@@ -70,6 +70,9 @@ export function createWorkStatePanel({ employeeId, identity, onStateChange, onWr
     const pillName = document.getElementById('opStateName');
     const pillTimer = document.getElementById('opStateTimer');
     const panel = document.getElementById('opStatePanel');
+    // Второй хост списка состояний — тело телефонного пульта. Пустой, пока
+    // пульт не открыт.
+    let mirror = null;
 
     // Смещение серверных часов относительно браузерных. Пересчитывается на
     // каждом ответе сервера.
@@ -167,8 +170,16 @@ export function createWorkStatePanel({ employeeId, identity, onStateChange, onWr
         pillTimer.textContent = mmss(seconds);
     }
 
-    function renderPanel() {
-        const rows = (current.states || []).map((s) => {
+    // ⚠⚠ СТРОКИ ВЫНЕСЕНЫ, ПОТОМУ ЧТО ЗРИТЕЛЕЙ У НИХ ДВА (задача 1, К323):
+    // панель под пилюлей и телефонный пульт. Решение владельца 119, вариант
+    // «б»: список состояний и там, и там. ⚠ ЭТО НЕ ВТОРОЙ СПИСОК, А ВТОРОЙ ВИД
+    // ОДНОГО — оба читают `current` и меняются в один и тот же миг. Два места,
+    // показывающие разное, — та самая поломка, ради которой источник один.
+    // Сказано это было заранее шапкой этого же файла: панель «оставляет ОДНУ
+    // точку входа, куда телефония потом будет писать состояние сама».
+    // Телефонный пульт — та самая телефония.
+    function stateRows() {
+        return (current.states || []).map((s) => {
             const today = (current.totals && current.totals[s.key]) || 0;
             const live = s.key === current.state ? secondsInState() : 0;
             return `
@@ -179,19 +190,38 @@ export function createWorkStatePanel({ employeeId, identity, onStateChange, onWr
                 </button>
             `;
         }).join('');
+    }
+
+    // Нажатия одинаковы у обоих видов; разнится только то, надо ли закрывать
+    // панель — у пульта закрывать нечего, он и так открыт.
+    function wireRows(host, closeAfter) {
+        host.querySelectorAll('[data-state]').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                const key = btn.dataset.state;
+                if (closeAfter) closePanel();
+                if (key === current.state) return;
+                changeState(key);
+            });
+        });
+    }
+
+    function renderPanel() {
+        const rows = stateRows();
         panel.innerHTML = `
             <div class="op-state-panel-head">Состояние и время за сегодня</div>
             ${rows}
             <div class="op-state-panel-foot">Лиды поступают только в состоянии «На линии». Пост-обработка включается сама, пока карточка открыта.</div>
         `;
-        panel.querySelectorAll('[data-state]').forEach((btn) => {
-            btn.addEventListener('click', () => {
-                const key = btn.dataset.state;
-                closePanel();
-                if (key === current.state) return;
-                changeState(key);
-            });
-        });
+        wireRows(panel, true);
+    }
+
+    // Второй вид: список внутри телефонного пульта. Узел даёт сам пульт, когда
+    // окно открыто, и снимает, когда свёрнуто, — свёрнутое окно СНИМАЕТСЯ из
+    // разметки, а не прячется, и рисовать в него нечего.
+    function renderMirror() {
+        if (!mirror) return;
+        mirror.innerHTML = stateRows();
+        wireRows(mirror, false);
     }
 
     function openPanel() {
@@ -216,6 +246,9 @@ export function createWorkStatePanel({ employeeId, identity, onStateChange, onWr
         };
         renderPill();
         if (!panel.hidden) renderPanel();
+        // ⚠ Пульт перерисовывается ВСЕГДА, а не «если открыт»: он не панель,
+        // его не открывают нажатием — он стоит на экране, пока не свёрнут.
+        renderMirror();
         if (data.releasedLeadNotice) {
             showToast('Лид, который был за вами, вернулся в общую очередь', 'info');
         }
@@ -248,6 +281,7 @@ export function createWorkStatePanel({ employeeId, identity, onStateChange, onWr
     setInterval(() => {
         renderPill();
         if (!panel.hidden) renderPanel();
+        renderMirror();
         document.querySelectorAll('[data-live-timer]').forEach((el) => {
             const from = Number(el.dataset.liveTimer);
             el.textContent = mmss((serverNow() - from) / 1000);
@@ -263,6 +297,11 @@ export function createWorkStatePanel({ employeeId, identity, onStateChange, onWr
             }
         },
         setState(key) { return changeState(key); },
+        /**
+         * Подключить второй вид списка (телефонный пульт) или отключить его.
+         * @param {HTMLElement|null} host узел, в который рисуются те же строки
+         */
+        setMirror(host) { mirror = host || null; renderMirror(); },
         getState() { return current.state; },
         isOnline() { return current.state === 'on_line'; },
         // Карточка выдана/закрыта — от этого зависит, показывать ли пост-обработку.

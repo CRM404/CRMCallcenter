@@ -25,6 +25,8 @@ import { createScriptView } from './operatorScript.js';
 import { renderLeadForm, clearFlash } from './operatorLeadForm.js';
 import { createWorkStatePanel } from './operatorWorkState.js';
 import { createObjectionsPanel } from './operatorObjections.js';
+import { createTelPult } from './operatorTel.js';
+import { mountIconSprite } from '/ui/icons.js';
 
 // Опрос очереди на экране ожидания. Кнопки «Обновить» нет намеренно: она
 // провоцирует дёргать страницу вместо того, чтобы ждать.
@@ -82,6 +84,19 @@ document.addEventListener('DOMContentLoaded', async function () {
         onWrapupExpired: () => requestTimeoutClose()
     });
     const objections = createObjectionsPanel();
+
+    // ⚠ СПРАЙТ ЗНАЧКОВ СЛОЯ МОНТИРУЕТСЯ ЗДЕСЬ ВПЕРВЫЕ (задача 1, К323). До сих
+    // пор его звали только оболочка, витрина узлов и страница выдачи ключа, а
+    // страница оператора обходилась без него.
+    //
+    // ⚠⚠ СЕГОДНЯ ЭТО НИ ОДНОГО ЗНАЧКА НЕ ОЖИВЛЯЕТ, и число в сдаче — НОЛЬ.
+    // Замер: `ui-ic` во всём каталоге `Backend/Operator` встречается ноль раз,
+    // страница целиком на Font Awesome. Монтаж — не оживление, а условие: без
+    // него `<use href="#ui-ic-…">` рисует пустое место, и первым потребителем
+    // становится телефонный пульт ниже.
+    mountIconSprite();
+
+    const telPult = createTelPult({ workState });
 
     initOperatorNav({
         employeeId: identity.id,
