@@ -18,6 +18,7 @@
 const express = require('express');
 const { pool } = require('../db');
 const { normalizeForSearch } = require('../services/phoneFormat');
+const pbxClient = require('../services/pbxClient');
 const { zonedParts } = require('../services/appTime');
 
 const router = express.Router();
@@ -56,44 +57,31 @@ const OUTCOMES = ['answered', 'busy', 'no_answer', 'cancelled', 'congestion', 'u
 // потому, что телефонии ещё нет в природе, за неделю становится частью фона — и
 // в тот день, когда связь действительно оборвётся, её никто не заметит. Тревога,
 // которая всегда горит, не тревога.
-// ⚠⚠ КЛЮЧИ ЧИТАЮТСЯ ИЗ ДВУХ ИСТОЧНИКОВ, И ПОРЯДОК МЕЖДУ НИМИ — РЕШЕНИЕ, А НЕ
-// УДОБСТВО. Владелец выбрал путь Б (решение 132): ключи живут в настройках CRM.
-// Настройки ПОБЕЖДАЮТ, окружение остаётся ЗАПАСНЫМ — на случай пустой настройки
-// и на время, пока ключи ещё не внесены. Обратный порядок означал бы, что
-// забытая переменная окружения молча отменяет то, что человек вписал на экране.
-//
-// ⚠ Функция стала асинхронной: за ключами надо в базу. Все четыре её зова
-// стоят внутри `async`-обработчиков — проверено поимённо, а не на глаз.
-async function readKeys() {
-    try {
-        const found = await pool.query(
-            `SELECT key, value FROM pbx_credentials
-              WHERE key IN ('telphin_app_id', 'telphin_app_secret')`
-        );
-        const byKey = new Map(found.rows.map((r) => [r.key, r.value]));
-        const id = byKey.get('telphin_app_id') || process.env.TELPHIN_APP_ID;
-        const secret = byKey.get('telphin_app_secret') || process.env.TELPHIN_APP_SECRET;
-        return { id, secret };
-    } catch (err) {
-        // ⚠ Таблицы может не быть на старой базе — это не повод ронять экран
-        // «Звонков»: он тогда честно скажет «телефония не настроена».
-        // ⓘ Печатается КОД ошибки, а не она сама: в тексте ошибки драйвера
-        // лежат параметры запроса.
-        console.error('Не удалось прочитать ключи телефонии:', err && err.code);
-        return { id: process.env.TELPHIN_APP_ID, secret: process.env.TELPHIN_APP_SECRET };
-    }
-}
+// ⚠⚠ ЧТЕНИЕ КЛЮЧЕЙ ПЕРЕЕХАЛО В `services/pbxClient.js` ВМЕСТЕ СО СВОИМ ДОВОДОМ
+// (Е0). Здесь его больше нет намеренно: ключи понадобились ещё и службе, а два
+// экземпляра правила «настройки побеждают, окружение запасное» (решение
+// владельца 132) разошлись бы рано или поздно — и разошлись бы молча.
 
 async function pbxState() {
-    const keys = await readKeys();
+    const keys = await pbxClient.readKeys(pool);
     const configured = Boolean(keys.id && keys.secret);
+    // ⚠⚠ ЗДЕСЬ БЫЛИ ДВЕ КОНСТАНТЫ, И ОНИ СНЯТЫ (Е0, решение владельца 144).
+    // `available` и `lastKnownAt` приходят из таблицы `pbx_state`, которую
+    // ведёт служба `services/pbxClient.js` при каждом обмене со станцией.
+    //
+    // ⚠⚠ ТРЕТЬЕ СОСТОЯНИЕ ЖИВЁТ В РАЗНИЦЕ ЭТИХ ДВУХ ПОЛЕЙ, а не в третьем поле:
+    //   configured, но lastKnownAt пусто  — ключи есть, связи ещё НЕ БЫЛО;
+    //   configured, но lastKnownAt задано — связь БЫЛА и пропала.
+    // Экран различает их сам (задача 58); служба текста не сочиняет.
+    //
+    // ⓘ Состояние читается ИЗ БАЗЫ, а не спрашивается у станции: этот ответ
+    // отдаётся на каждый показ экрана, и поход к АТС на каждый показ сжёг бы
+    // часовой лимит — 1000 запросов, 429 стоит часа простоя.
+    const link = await pbxClient.readState(pool);
     return {
         configured,
-        // Клиента станции ещё нет (этап Е). Как только он появится, здесь
-        // встанет его настоящий ответ, а `lastKnownAt` — время последнего
-        // удачного обмена: полоса называет его человеку.
-        available: false,
-        lastKnownAt: null
+        available: configured && link.available,
+        lastKnownAt: link.lastKnownAt
     };
 }
 
