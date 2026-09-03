@@ -26,7 +26,7 @@ import { renderLeadForm, clearFlash } from './operatorLeadForm.js';
 import { createWorkStatePanel } from './operatorWorkState.js';
 import { createObjectionsPanel } from './operatorObjections.js';
 import { createTelPult } from './operatorTel.js';
-import { mountIconSprite } from '/ui/icons.js';
+import { mountIconSprite, icon } from '/ui/icons.js';
 
 // Опрос очереди на экране ожидания. Кнопки «Обновить» нет намеренно: она
 // провоцирует дёргать страницу вместо того, чтобы ждать.
@@ -142,7 +142,7 @@ document.addEventListener('DOMContentLoaded', async function () {
         const label = document.getElementById('opStateName').textContent;
         workArea.innerHTML = `
             <div class="op-screen">
-                <div class="op-halo"><i class="fas fa-mug-hot" aria-hidden="true"></i></div>
+                <div class="op-halo">${icon('mug-hot', 'lg')}</div>
                 <h2>Новые лиды не поступают</h2>
                 <p>Вы в состоянии «${escapeHtml(label)}». Очередь остановлена${currentLead
                     ? ', текущий лид остаётся закреплён за вами и откроется, как только вы вернётесь на линию.'
@@ -161,7 +161,7 @@ document.addEventListener('DOMContentLoaded', async function () {
         if (workArea.querySelector('.op-screen.waiting')) return; // не сбрасываем счётчик на каждом опросе
         workArea.innerHTML = `
             <div class="op-screen waiting">
-                <div class="op-halo"><i class="fas fa-inbox" aria-hidden="true"></i></div>
+                <div class="op-halo">${icon('inbox', 'lg')}</div>
                 <h2>Нет активных лидов</h2>
                 <p>Вы на линии — следующий лид откроется здесь автоматически, как только поступит.</p>
                 <div class="op-wait-timer">Ожидание: <b data-live-timer="${workState.serverNow()}">00:00</b></div>

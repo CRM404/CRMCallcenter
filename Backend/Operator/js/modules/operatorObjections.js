@@ -1,3 +1,6 @@
+// ⚠ Значки из набора слоя, а не из Font Awesome (задача 44).
+import { icon } from '/ui/icons.js';
+
 // --- operatorObjections.js: поиск возражений по открытому скрипту ---
 //
 // Скрипт стал линейным, кнопок перехода под текстом больше нет — возражения
@@ -130,14 +133,14 @@ export function createObjectionsPanel() {
     function render() {
         panel.innerHTML = `
             <div class="op-obj-head">
-                <i class="fas fa-comments" aria-hidden="true"></i>
+                ${icon('comments', 'sm')}
                 <h3>Возражения — поиск по скрипту</h3>
                 <button type="button" class="op-obj-close" id="opObjClose" aria-label="Закрыть">
-                    <i class="fas fa-xmark" aria-hidden="true"></i>
+                    ${icon('close', 'sm')}
                 </button>
             </div>
             <div class="op-obj-search">
-                <i class="fas fa-magnifying-glass" aria-hidden="true"></i>
+                ${icon('search', 'sm')}
                 <input type="text" id="opObjQuery" placeholder="Слово или часть слова: дорого, метро, ипотек…"
                        autocomplete="off">
             </div>
