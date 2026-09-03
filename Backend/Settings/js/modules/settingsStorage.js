@@ -19,3 +19,13 @@ export function fetchSettings(api) {
 export function saveSetting(api, key, value) {
     return api.put(`/settings/${encodeURIComponent(key)}`, { value });
 }
+
+/**
+ * Ключ телефонии. ⚠ СВОЯ ДВЕРЬ, А НЕ ВЕТКА В ОБЩЕЙ: за ней другое хранилище
+ * (`pbx_credentials`, исключена из журнала) и другое правило ответа —
+ * значение обратно НЕ ПРИХОДИТ, приходит только признак «задано».
+ * ⚠ Пустое значение здесь законно: это очистка ключа, а не ошибка ввода.
+ */
+export function saveSecret(api, key, value) {
+    return api.put(`/settings/secret/${encodeURIComponent(key)}`, { value });
+}

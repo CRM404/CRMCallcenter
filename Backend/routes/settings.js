@@ -162,20 +162,68 @@ async function lastValueEdits() {
     return byKey;
 }
 
+
+// ⚠⚠ КЛЮЧИ ТЕЛЕФОНИИ ОТДАЮТСЯ БЕЗ ЗНАЧЕНИЯ, И ЭТО НЕ УКРАШЕНИЕ ЭКРАНА.
+// Правило слоя записано в каталоге дословно: «„Скрыто навсегда" — это про
+// сервер, а не про вид. Прятать значение интерфейсом нельзя — оно осталось бы
+// в исходном коде страницы» (`Shell/ui-catalog.html`). Поэтому строки `value`
+// в ответе НЕТ ВОВСЕ: не пустая строка, не точки — поля нет. Вместо него
+// признак `isSet`, по которому экран рисует приглашение.
+//
+// ⚠ Лежат они в своей таблице `pbx_credentials`, исключённой из журнала:
+// правила аудита задаются парой «таблица + колонка», и общий `app_settings.value`
+// пришлось бы либо писать целиком, либо лишить значений все семь настроек.
+// Довод целиком — в `schema.sql`, рядом с самой таблицей.
+//
+// Форма строки — та же, что у обычной настройки: экран не должен различать
+// породы, он смотрит на `valueType`.
+function serializeSecret(row) {
+    return {
+        key: row.key,
+        title: row.title,
+        description: row.description,
+        valueType: 'secret',
+        unit: null,
+        groupKey: row.group_key,
+        groupOrder: row.group_order,
+        isReadonly: false,
+        isDangerous: true,
+        defaultValue: null,
+        // ⚠ Значения нет. `isSet` — единственное, что уходит на экран.
+        isSet: Boolean(row.value && String(row.value).length),
+        // Подпись «Изменено …» этой строке не положена: журнала у таблицы нет
+        // намеренно, и обещать след, которого не существует, нельзя.
+        changed: null
+    };
+}
+
 // Список настроек. Порядок — из данных: `group_order` задаёт место строки в
 // СПЛОШНОМ списке, поэтому порядок групп выходит сам, без второй колонки.
 router.get('/', async (req, res) => {
     try {
-        const [rows, edits] = await Promise.all([
+        const [rows, secrets, edits] = await Promise.all([
             pool.query(
                 `SELECT key, value, title, description, value_type, unit,
                         group_key, group_order, is_readonly, is_dangerous, default_value
                    FROM app_settings
                   ORDER BY group_order, key`
             ),
+            // ⚠ `value` берётся, но на экран НЕ уходит: он нужен только чтобы
+            // ответить «задано или нет». Дальше `serializeSecret` его теряет.
+            pool.query(
+                `SELECT key, value, title, description, group_key, group_order
+                   FROM pbx_credentials
+                  ORDER BY group_order, key`
+            ),
             lastValueEdits()
         ]);
-        res.json(rows.rows.map((r) => serialize(r, edits.get(r.key))));
+
+        // Две породы строк сходятся в ОДИН список и сортируются вместе: место
+        // строки задаёт `group_order`, а не то, из какой она таблицы.
+        const list = rows.rows.map((r) => serialize(r, edits.get(r.key)))
+            .concat(secrets.rows.map(serializeSecret))
+            .sort((a, b) => (a.groupOrder - b.groupOrder) || a.key.localeCompare(b.key));
+        res.json(list);
     } catch (err) {
         console.error('Ошибка получения настроек:', err);
         res.status(500).json({ error: 'Не удалось получить настройки' });
@@ -227,6 +275,46 @@ router.put('/:key', async (req, res) => {
     } catch (err) {
         console.error('Ошибка сохранения настройки:', err);
         res.status(500).json({ error: 'Не удалось сохранить настройку' });
+    }
+});
+
+
+// Правка ключа телефонии. ⚠ ОТДЕЛЬНЫЙ МАРШРУТ, А НЕ ВЕТКА В ОБЩЕМ: у общего
+// первым делом стоит `SELECT ... FROM app_settings`, и ключа он там не найдёт —
+// значит либо второй запрос в каждом сохранении настройки, либо отдельная
+// дверь. Дверь честнее: она сразу говорит, что за ней другое хранилище и
+// другие правила.
+//
+// ⚠ ОТВЕТ НЕ ВОЗВРАЩАЕТ ЗНАЧЕНИЯ — ни того, что сохранили, ни прежнего.
+// Вернуть только что присланное было бы безобидно на вид и вредно по сути:
+// значение легло бы в ответ, а ответ — в журнал браузера и в отладчик.
+router.put('/secret/:key', async (req, res) => {
+    const key = String(req.params.key);
+    try {
+        const found = await pool.query('SELECT key FROM pbx_credentials WHERE key = $1', [key]);
+        if (found.rows.length === 0) {
+            return res.status(404).json({ error: 'Ключа с таким именем нет' });
+        }
+
+        // ПУСТОЕ ЗНАЧЕНИЕ — ОЧИСТКА, А НЕ ОТКАЗ (ответ куратора 13). Стереть
+        // ключ надо уметь: скомпрометированный ключ снимают немедленно, а
+        // ждать замены в этот момент некогда.
+        const raw = req.body && req.body.value;
+        const value = raw === null || raw === undefined ? '' : String(raw).trim();
+
+        const saved = await pool.query(
+            `UPDATE pbx_credentials SET value = $2, updated_at = NOW()
+              WHERE key = $1
+          RETURNING key, value, title, description, group_key, group_order`,
+            [key, value.length ? value : null]
+        );
+        res.json(serializeSecret(saved.rows[0]));
+    } catch (err) {
+        // ⚠ В журнал сервера идёт ТОЛЬКО имя ключа. `err` печатать нельзя:
+        // драйвер базы кладёт в текст ошибки параметры запроса, а второй
+        // параметр здесь — сам ключ.
+        console.error('Ошибка сохранения ключа телефонии:', key, err && err.code);
+        res.status(500).json({ error: 'Не удалось сохранить ключ' });
     }
 });
 

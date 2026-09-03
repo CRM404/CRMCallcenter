@@ -56,8 +56,37 @@ const OUTCOMES = ['answered', 'busy', 'no_answer', 'cancelled', 'congestion', 'u
 // потому, что телефонии ещё нет в природе, за неделю становится частью фона — и
 // в тот день, когда связь действительно оборвётся, её никто не заметит. Тревога,
 // которая всегда горит, не тревога.
-function pbxState() {
-    const configured = Boolean(process.env.TELPHIN_APP_ID && process.env.TELPHIN_APP_SECRET);
+// ⚠⚠ КЛЮЧИ ЧИТАЮТСЯ ИЗ ДВУХ ИСТОЧНИКОВ, И ПОРЯДОК МЕЖДУ НИМИ — РЕШЕНИЕ, А НЕ
+// УДОБСТВО. Владелец выбрал путь Б (решение 132): ключи живут в настройках CRM.
+// Настройки ПОБЕЖДАЮТ, окружение остаётся ЗАПАСНЫМ — на случай пустой настройки
+// и на время, пока ключи ещё не внесены. Обратный порядок означал бы, что
+// забытая переменная окружения молча отменяет то, что человек вписал на экране.
+//
+// ⚠ Функция стала асинхронной: за ключами надо в базу. Все четыре её зова
+// стоят внутри `async`-обработчиков — проверено поимённо, а не на глаз.
+async function readKeys() {
+    try {
+        const found = await pool.query(
+            `SELECT key, value FROM pbx_credentials
+              WHERE key IN ('telphin_app_id', 'telphin_app_secret')`
+        );
+        const byKey = new Map(found.rows.map((r) => [r.key, r.value]));
+        const id = byKey.get('telphin_app_id') || process.env.TELPHIN_APP_ID;
+        const secret = byKey.get('telphin_app_secret') || process.env.TELPHIN_APP_SECRET;
+        return { id, secret };
+    } catch (err) {
+        // ⚠ Таблицы может не быть на старой базе — это не повод ронять экран
+        // «Звонков»: он тогда честно скажет «телефония не настроена».
+        // ⓘ Печатается КОД ошибки, а не она сама: в тексте ошибки драйвера
+        // лежат параметры запроса.
+        console.error('Не удалось прочитать ключи телефонии:', err && err.code);
+        return { id: process.env.TELPHIN_APP_ID, secret: process.env.TELPHIN_APP_SECRET };
+    }
+}
+
+async function pbxState() {
+    const keys = await readKeys();
+    const configured = Boolean(keys.id && keys.secret);
     return {
         configured,
         // Клиента станции ещё нет (этап Е). Как только он появится, здесь
@@ -141,7 +170,7 @@ router.get('/active', async (req, res) => {
             // Часы браузера и часы сервера расходятся, а длительность считается
             // от серверного момента. Разницу экран вычтет один раз.
             serverNow: new Date().toISOString(),
-            pbx: pbxState()
+            pbx: await pbxState()
         });
     } catch (err) {
         console.error(err);
@@ -191,7 +220,7 @@ router.get('/meta', async (req, res) => {
                 title: [r.lead_source, r.city_region].filter(Boolean).join(' · ')
             })),
             outcomes: OUTCOMES,
-            pbx: pbxState()
+            pbx: await pbxState()
         });
     } catch (err) {
         console.error(err);
@@ -437,7 +466,7 @@ router.get('/', async (req, res) => {
                 ? { at: list.rows[list.rows.length - 1].started_at_key, id: list.rows[list.rows.length - 1].id }
                 : null,
             serverNow: new Date().toISOString(),
-            pbx: pbxState()
+            pbx: await pbxState()
         });
     } catch (err) {
         console.error(err);
@@ -512,7 +541,7 @@ router.get('/:id/recording', async (req, res) => {
             return res.status(404).json({ code: 'no_record', error: 'У этого звонка записи нет' });
         }
 
-        const pbx = pbxState();
+        const pbx = await pbxState();
         if (!pbx.available) {
             return res.status(503).json({
                 code: 'pbx_unavailable',
