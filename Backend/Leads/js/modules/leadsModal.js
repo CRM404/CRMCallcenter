@@ -13,6 +13,9 @@
 // возвращает объект окна, и всё его состояние живёт внутри замыкания.
 
 import { openModal } from '/ui/modal.js';
+// ⚠ Маска номера переехала в общий файл (задача 1, К323): та же самая
+// нужна телефонному пульту оператора, и второй копией они разошлись бы.
+import { wireRuPhoneMask } from '/phoneMask.js';
 
 // Экспортируется: тот же список нужен одноимённому полю окна «Фильтры».
 // Второй копией он однажды разошёлся бы с этой, и отбор предлагал бы значение,
@@ -166,22 +169,6 @@ function paintSystemStatus(select, statuses, id) {
     // намеренно — оно живёт в паспорте и в CSS раздела; менять его значит
     // тянуть правку в документы ради слова.
     select.classList.toggle('ld-status--system', Boolean(current && current.awaitsManager));
-}
-
-// Живая маска «+7 (___) ___-__-__» — только российский формат (design-решение,
-// report_designer.md, «правки по фидбеку владельца», 12.08.2026).
-function maskRuPhone(raw) {
-    let d = raw.replace(/\D/g, '');
-    if (d.startsWith('8')) d = '7' + d.slice(1);
-    if (!d.startsWith('7')) d = '7' + d;
-    d = d.slice(0, 11);
-    let out = '+7';
-    if (d.length > 1) out += ' (' + d.slice(1, 4);
-    if (d.length >= 4) out += ')';
-    if (d.length > 4) out += ' ' + d.slice(4, 7);
-    if (d.length > 7) out += '-' + d.slice(7, 9);
-    if (d.length > 9) out += '-' + d.slice(9, 11);
-    return out;
 }
 
 function employeeName(employee) {
@@ -578,13 +565,7 @@ export function createLeadModal(root, deps) {
         $('#ldPurchaseMethod').addEventListener('change', handleCascadeChange);
         $('#ldClientType').addEventListener('change', handleCascadeChange);
 
-        $('#ldPhone').addEventListener('input', (e) => {
-            const pos = e.target.selectionStart;
-            const before = e.target.value.length;
-            e.target.value = maskRuPhone(e.target.value);
-            const after = e.target.value.length;
-            e.target.selectionEnd = Math.max(0, pos + (after - before));
-        });
+        wireRuPhoneMask($('#ldPhone'));
         $('#ldPhone').addEventListener('blur', handlePhoneBlur);
 
         // Кнопок подвала и крестика здесь больше нет: их строит слой при

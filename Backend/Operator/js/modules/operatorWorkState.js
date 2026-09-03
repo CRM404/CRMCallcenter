@@ -170,14 +170,16 @@ export function createWorkStatePanel({ employeeId, identity, onStateChange, onWr
         pillTimer.textContent = mmss(seconds);
     }
 
-    // ⚠⚠ СТРОКИ ВЫНЕСЕНЫ, ПОТОМУ ЧТО ЗРИТЕЛЕЙ У НИХ ДВА (задача 1, К323):
-    // панель под пилюлей и телефонный пульт. Решение владельца 119, вариант
-    // «б»: список состояний и там, и там. ⚠ ЭТО НЕ ВТОРОЙ СПИСОК, А ВТОРОЙ ВИД
-    // ОДНОГО — оба читают `current` и меняются в один и тот же миг. Два места,
-    // показывающие разное, — та самая поломка, ради которой источник один.
-    // Сказано это было заранее шапкой этого же файла: панель «оставляет ОДНУ
-    // точку входа, куда телефония потом будет писать состояние сама».
-    // Телефонный пульт — та самая телефония.
+    // ⚠⚠ ДВА ВИДА ОДНОГО СПИСКА, И ВЫГЛЯДЯТ ОНИ ПО-РАЗНОМУ (задача 1, К323).
+    // Решение владельца 119, вариант «б»: состояние выбирается и в пилюле
+    // наверху, и в телефонном пульте. Панель показывает СТРОКАМИ — со временем
+    // за сегодня; пульт показывает ВЫПАДАЮЩИМ ПОЛЕМ — так его называют и 119
+    // («выпадающий список статусов»), и паспорт, и макет.
+    // ⚠ ЭТО НЕ ДВА СПИСКА, А ДВА ВИДА ОДНОГО: оба читают `current` и меняются
+    // в один и тот же миг. Два места, показывающие разное, — та самая поломка,
+    // ради которой источник один. Сказано это было заранее шапкой этого же
+    // файла: панель «оставляет ОДНУ точку входа, куда телефония потом будет
+    // писать состояние сама». Телефонный пульт — та самая телефония.
     function stateRows() {
         return (current.states || []).map((s) => {
             const today = (current.totals && current.totals[s.key]) || 0;
@@ -192,13 +194,15 @@ export function createWorkStatePanel({ employeeId, identity, onStateChange, onWr
         }).join('');
     }
 
-    // Нажатия одинаковы у обоих видов; разнится только то, надо ли закрывать
-    // панель — у пульта закрывать нечего, он и так открыт.
-    function wireRows(host, closeAfter) {
+    // ⚠ Потребитель у строк снова ОДИН — панель под пилюлей: пульт показывает
+    // состояние полем, а не строками. Признак «закрывать ли панель» поэтому
+    // снят вместе со вторым потребителем: довод, переживший свой предмет, не
+    // молчит — он продолжает говорить не о том.
+    function wireRows(host) {
         host.querySelectorAll('[data-state]').forEach((btn) => {
             btn.addEventListener('click', () => {
                 const key = btn.dataset.state;
-                if (closeAfter) closePanel();
+                closePanel();
                 if (key === current.state) return;
                 changeState(key);
             });
@@ -212,16 +216,39 @@ export function createWorkStatePanel({ employeeId, identity, onStateChange, onWr
             ${rows}
             <div class="op-state-panel-foot">Лиды поступают только в состоянии «На линии». Пост-обработка включается сама, пока карточка открыта.</div>
         `;
-        wireRows(panel, true);
+        wireRows(panel);
     }
 
-    // Второй вид: список внутри телефонного пульта. Узел даёт сам пульт, когда
+    function stateOptions() {
+        return (current.states || []).map((s) =>
+            `<option value="${escapeHtml(s.key)}">${escapeHtml(s.label)}</option>`).join('');
+    }
+
+    // Второй вид: поле внутри телефонного пульта. Узел даёт сам пульт, когда
     // окно открыто, и снимает, когда свёрнуто, — свёрнутое окно СНИМАЕТСЯ из
     // разметки, а не прячется, и рисовать в него нечего.
+    //
+    // ⚠⚠ РАЗМЕТКА ПЕРЕСОБИРАЕТСЯ, ТОЛЬКО ЕСЛИ ИЗМЕНИЛСЯ СОСТАВ СОСТОЯНИЙ, а не
+    // на каждом тике. Тик идёт раз в секунду — сплошная пересборка захлопывала
+    // бы раскрытое поле ровно в тот миг, когда в него выбирают. По той же
+    // причине значение подставляется, только если оно и правда разошлось И
+    // поле не в руках оператора.
     function renderMirror() {
         if (!mirror) return;
-        mirror.innerHTML = stateRows();
-        wireRows(mirror, false);
+        const keys = (current.states || []).map((s) => s.key).join('|');
+        if (mirror.dataset.stateKeys !== keys) {
+            mirror.innerHTML = '<label class="ui-field__label" for="opTelState">Состояние</label>'
+                + `<select class="ui-field__control" id="opTelState" data-role="tel-state">${stateOptions()}</select>`;
+            mirror.dataset.stateKeys = keys;
+            mirror.querySelector('[data-role="tel-state"]').addEventListener('change', (e) => {
+                if (e.target.value === current.state) return;
+                changeState(e.target.value);
+            });
+        }
+        const select = mirror.querySelector('[data-role="tel-state"]');
+        if (select && select.value !== current.state && document.activeElement !== select) {
+            select.value = current.state;
+        }
     }
 
     function openPanel() {
