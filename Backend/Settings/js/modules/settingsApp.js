@@ -53,7 +53,11 @@ const T = {
     secretNone: 'Не задан',
     // Приглашение при заданном ключе. ⚠ Точки НАРИСОВАНЫ, а не маскируют
     // значение: значения на экране нет вовсе (правило каталога слоя).
-    secretMask: '••••••••',
+    // Двенадцать точек — счёт снят с макета `3d1154f6` (`maket-nastroek.html`,
+    // правлен 15:45), а не выбран на глаз.
+    secretMask: '••••••••••••',
+    // ⚠ ПОДПИСЬ ПОД ПОЛЕМ, ФОРМЫ ДВЕ, ОБЕ ВЗЯТЫ У МАКЕТА ДОСЛОВНО.
+    secretHintSet: 'Задан. Показать его нельзя — значение не возвращается с сервера',
     secretSaved: 'сохранён',
     secretCleared: 'снят',
     // ⚠ ИМЯ И ТЕКСТ ИСПРАВЛЕНЫ ВМЕСТЕ (К283). Прежде здесь стояло
@@ -278,7 +282,10 @@ function createSection(container, ctx) {
 
     function renderField(row, edited, error) {
         const field = el('div', 'ui-field');
-        if (row.valueType === 'text') field.classList.add('ui-field--mono');
+        // ⚠ КЛЮЧ — ТОЖЕ МАШИННЫЙ ТЕКСТ, и в макете он в той же обёртке:
+        // в пропорциональном шрифте l, I и 1 не различаются, а ключ
+        // переписывают по знакам.
+        if (row.valueType === 'text' || row.valueType === 'secret') field.classList.add('ui-field--mono');
         if (error) field.classList.add('ui-field--error');
 
         const draft = edited ? row.draft : (row.value === null ? '' : row.value);
@@ -306,6 +313,15 @@ function createSection(container, ctx) {
         if (error) {
             field.appendChild(el('span', 'ui-field__error', error));
         } else if (row.valueType === 'secret') {
+            // ⚠⚠ ПОДПИСЬ БЫЛА НЕДОДЕЛКОЙ, А НЕ РЕШЕНИЕМ. Прежняя, общая, врала —
+            // печатала «умолчания нет» под заданным ключом, и снять её было верно.
+            // Но на её место надо было поставить ПРАВИЛЬНУЮ, а я оставил пусто.
+            // Обе формы взяты у макета `3d1154f6` дословно.
+            //
+            // ⓘ «Дважды одно» здесь не выходит: подпись говорит про СОСТОЯНИЕ
+            // КЛЮЧА, а приглашение — про то, что в поле ничего не набрано.
+            field.appendChild(el('span', 'ui-field__hint',
+                row.isSet ? T.secretHintSet : T.secretNone));
             // ⚠⚠ КЛЮЧУ ПОДПИСЬ ПРО УМОЛЧАНИЕ НЕ ПОЛОЖЕНА, И БЕЗ ЭТОЙ ВЕТКИ ОН
             // ЕЁ ПОЛУЧАЛ. У ключа `value` не приходит НИКОГДА — значит проверка
             // ниже считала его незаданным всегда и печатала «Не задано —
@@ -368,7 +384,14 @@ function createSection(container, ctx) {
         input.disabled = Boolean(row.saving);
         input.autocomplete = 'new-password';
         input.spellcheck = false;
-        input.placeholder = row.isSet ? T.secretMask : T.secretNone;
+        // ⚠⚠ ТОЧКИ СТОЯТ ВСЕГДА, У ОБЕИХ СТРОК И В ОБОИХ СОСТОЯНИЯХ (макет
+        // `3d1154f6`). Прежде здесь было «точки при заданном, „Не задан" при
+        // пустом» — приглашение несло СОСТОЯНИЕ. Довод куратора, который это
+        // отменил: приглашение видно, только пока поле пусто, и едва человек
+        // начал набирать новый ключ, ответ на вопрос «а прежний-то был задан?»
+        // исчезает — ровно тогда, когда он нужнее всего. Состояние ушло в
+        // подпись, которая на экране всегда.
+        input.placeholder = T.secretMask;
         input.setAttribute('aria-label', row.title);
         input.addEventListener('input', () => draftChanged(row, input.value));
         input.addEventListener('keydown', (e) => keys(e, row));
