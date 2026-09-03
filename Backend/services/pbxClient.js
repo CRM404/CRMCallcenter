@@ -21,6 +21,8 @@
 // осторожность: повтор допускается либо по действию человека, либо по выдержке
 // времени. Неудача возвращается наверх как неудача.
 
+const auditContext = require('./auditContext');
+
 const API_BASE = (process.env.TELPHIN_API_BASE || 'https://apiproxy.telphin.ru/api/ver1.0/')
     .replace(/\/+$/, '');
 
@@ -274,6 +276,110 @@ async function readState(pool) {
     }
 }
 
+// ---------------------------------------------------------------- добавочные
+//
+// ⚠⚠ ЗАЧЕМ ЭТО КОД, А НЕ РУКИ. `pbx_extension_id` — колонка ЗАЩИЩЁННАЯ:
+// «поля в карточке нет и не будет: паспорт Р4 говорит „человеку не
+// показывается"» (`routes/employees.js`, GUARDED_COLUMNS). Заполнить её
+// человеку нечем и незачем — идентификатор служебный, живёт на станции, и
+// единственный, кто знает соответствие, это сама АТС.
+//
+// ⚠ СОПОСТАВЛЕНИЕ ИДЁТ ПО `pbx_extension`, И ЭТО ЕДИНСТВЕННОЕ, ЧТО ИХ СВЯЗЫВАЕТ.
+// Станция зовёт добавочный полным именем `ПРЕФИКС*НОМЕР` (`16780*102`), а у нас
+// в карточке лежит только номер («102»): так записано у самой колонки — «только
+// цифры». Значит имя со станции разбирается по `*`, а не сравнивается целиком.
+//
+// ⛔ ЧЕГО ЗДЕСЬ НЕТ НАМЕРЕННО: сопоставления по догадке. Если добавочного нет у
+// сотрудника или станция не знает такого номера — это ГОВОРИТСЯ, а не
+// достраивается. Проставить наугад значит связать звонки не с тем человеком, и
+// заметят это по чужим записям разговоров, а не сразу.
+//
+// ⚠ ПИШЕТСЯ ОТ ИМЕНИ СИСТЕМЫ. Правка идёт в `employees` — таблицу под журналом,
+// и автор у неё есть: `runAsService`. Без него строка журнала встала бы «автор
+// не указан», то есть выглядела бы правкой из ниоткуда. Настройки автора
+// кладутся при взятии соединения из пула (`db.js`), а соединение здесь свежее —
+// та оговорка про уже взятый клиент (`routes/leads.js`) сюда не относится.
+async function syncExtensionIds(pool) {
+    let station;
+    try {
+        const who = await apiGet(pool, '/user/');
+        if (!who || !who.client_id) {
+            console.error('Телефония: станция не назвала client_id — добавочные не сверены');
+            return;
+        }
+        station = await apiGet(pool, `/client/${encodeURIComponent(who.client_id)}/extension/`);
+    } catch (err) {
+        console.error('Телефония: список добавочных со станции не получен —', err && err.code);
+        return;
+    }
+    if (!Array.isArray(station)) {
+        console.error('Телефония: станция вернула не список добавочных');
+        return;
+    }
+
+    // `16780*102` → «102». Имя без `*` берётся как есть: формат задан станцией,
+    // и молча выбрасывать непонятное хуже, чем попробовать сопоставить.
+    const byNumber = new Map();
+    for (const ext of station) {
+        const name = String(ext && ext.name ? ext.name : '');
+        const short = name.includes('*') ? name.slice(name.lastIndexOf('*') + 1) : name;
+        if (short) byNumber.set(short, { id: String(ext.id), name, type: ext.type });
+    }
+
+    let staff;
+    try {
+        staff = (await pool.query(
+            `SELECT id, last_name, pbx_extension, pbx_extension_id
+               FROM employees
+              ORDER BY id`
+        )).rows;
+    } catch (err) {
+        console.error('Телефония: сотрудники не прочитаны —', err && err.code);
+        return;
+    }
+
+    const noExtension = [];
+    const unknown = [];
+    let filled = 0;
+    let already = 0;
+
+    for (const person of staff) {
+        const number = String(person.pbx_extension || '').trim();
+        if (!number) { noExtension.push(person); continue; }
+
+        const found = byNumber.get(number);
+        if (!found) { unknown.push({ person, number }); continue; }
+        if (String(person.pbx_extension_id || '') === found.id) { already++; continue; }
+
+        try {
+            await auditContext.runAsService('Телефония', () => pool.query(
+                'UPDATE employees SET pbx_extension_id = $1 WHERE id = $2',
+                [found.id, person.id]
+            ));
+            filled++;
+            console.log(`Телефония: сотруднику ${person.id} проставлено расширение АТС`
+                + ` по добавочному ${number} (${found.name})`);
+        } catch (err) {
+            console.error(`Телефония: сотруднику ${person.id} расширение не проставлено —`, err && err.code);
+        }
+    }
+
+    // ⚠⚠ ОБА МОЛЧАНИЯ НАЗЫВАЮТСЯ ВСЛУХ. «Сверка прошла» и «сверять было нечего»
+    // выглядят одинаково, если про второе не сказать; а сотрудник без
+    // добавочного — это не ошибка и не норма, это то, что должен увидеть человек.
+    console.log(`Телефония: добавочных на станции ${byNumber.size},`
+        + ` сотрудников ${staff.length}; проставлено ${filled}, уже стояло ${already}`);
+    if (noExtension.length) {
+        console.log('Телефония: ⚠ добавочный не задан у сотрудников — '
+            + noExtension.map((p) => `${p.id} (${p.last_name || 'без фамилии'})`).join(', ')
+            + '; наугад не проставляю');
+    }
+    for (const miss of unknown) {
+        console.log(`Телефония: ⚠ станция не знает добавочного ${miss.number}`
+            + ` (сотрудник ${miss.person.id}) — оставлено пустым`);
+    }
+}
+
 // ---------------------------------------------------------------- сверка при старте
 //
 // ПЛАН 7.2: при запуске один запрос «что идёт прямо сейчас» — АТС знает своё
@@ -314,6 +420,11 @@ async function checkAtStart(pool) {
     }
     console.log('Телефония: токен взят, связь со станцией есть');
 
+    // ⚠ ЗАПОЛНЕНИЕ ИДЁТ ПЕРВЫМ, И ПОРЯДОК ЗДЕСЬ — СМЫСЛ, А НЕ УДОБСТВО. Опрос
+    // ниже идёт по `pbx_extension_id`, а его до этой строки могло не быть ни у
+    // кого: тогда сверка молча не сделала бы ни одного запроса.
+    await syncExtensionIds(pool);
+
     let extensions = [];
     try {
         const found = await pool.query(
@@ -350,4 +461,7 @@ async function checkAtStart(pool) {
         + ` идущих разговоров ${live}`);
 }
 
-module.exports = { readKeys, apiGet, getToken, readState, checkAtStart, TOKEN_URL, API_BASE };
+module.exports = {
+    readKeys, apiGet, getToken, readState, syncExtensionIds, checkAtStart,
+    TOKEN_URL, API_BASE
+};
