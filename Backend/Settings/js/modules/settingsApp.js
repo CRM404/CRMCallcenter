@@ -30,7 +30,7 @@
 
 import { isAbort } from '/api.js';
 import { iconNode } from '/ui/icons.js';
-import { fetchSettings, saveSetting } from './settingsStorage.js';
+import { fetchSettings, saveSetting, saveSecret } from './settingsStorage.js';
 
 // ---------------------------------------------------------------- тексты
 //
@@ -45,6 +45,21 @@ const T = {
     saving: 'Сохраняю…',
     noAuthor: 'автор не указан',
     notSet: 'Не задано',
+    // ⚠ У КЛЮЧА ТЕЛЕФОНИИ СВОИ СЛОВА, И «Не задано» ИМ НЕ ГОДИТСЯ: настройка
+    // бывает не задана, а ключ — не задан. Разница не в роде, а в том, что у
+    // ключа нет умолчания и не может быть: пустой ключ это не «работает по
+    // умолчанию», это «телефония не настроена».
+    secretSet: 'Задан',
+    secretNone: 'Не задан',
+    // Приглашение при заданном ключе. ⚠ Точки НАРИСОВАНЫ, а не маскируют
+    // значение: значения на экране нет вовсе (правило каталога слоя).
+    // Двенадцать точек — счёт снят с макета `3d1154f6` (`maket-nastroek.html`,
+    // правлен 15:45), а не выбран на глаз.
+    secretMask: '••••••••••••',
+    // ⚠ ПОДПИСЬ ПОД ПОЛЕМ, ФОРМЫ ДВЕ, ОБЕ ВЗЯТЫ У МАКЕТА ДОСЛОВНО.
+    secretHintSet: 'Задан. Показать его нельзя — значение не возвращается с сервера',
+    secretSaved: 'сохранён',
+    secretCleared: 'снят',
     // ⚠ ИМЯ И ТЕКСТ ИСПРАВЛЕНЫ ВМЕСТЕ (К283). Прежде здесь стояло
     // `defaultFromCode: 'Не задано — работает умолчание из кода'` — и эта фраза
     // доставалась ровно тем настройкам, для которых она НЕПРАВДА: подпись
@@ -111,6 +126,9 @@ function createSection(container, ctx) {
 
     /** Как значение читается человеком — в подписи «Было …» и в замке. */
     function human(row, value) {
+        // ⚠ КЛЮЧ ОТВЕЧАЕТ НЕ ЗНАЧЕНИЕМ, А ФАКТОМ. Значения у него на экране нет
+        // ни в каком виде, поэтому и читается он «задан» / «не задан».
+        if (row.valueType === 'secret') return row.isSet ? T.secretSet : T.secretNone;
         if (isEmpty(value)) return T.notSet;
         if (row.valueType === 'date') return stamp(value);
         if (row.valueType === 'switch') return value === 'true' ? T.on : T.off;
@@ -264,7 +282,10 @@ function createSection(container, ctx) {
 
     function renderField(row, edited, error) {
         const field = el('div', 'ui-field');
-        if (row.valueType === 'text') field.classList.add('ui-field--mono');
+        // ⚠ КЛЮЧ — ТОЖЕ МАШИННЫЙ ТЕКСТ, и в макете он в той же обёртке:
+        // в пропорциональном шрифте l, I и 1 не различаются, а ключ
+        // переписывают по знакам.
+        if (row.valueType === 'text' || row.valueType === 'secret') field.classList.add('ui-field--mono');
         if (error) field.classList.add('ui-field--error');
 
         const draft = edited ? row.draft : (row.value === null ? '' : row.value);
@@ -278,6 +299,8 @@ function createSection(container, ctx) {
             wrap.appendChild(el('span', 'set-range__dash', '—'));
             wrap.appendChild(to);
             field.appendChild(wrap);
+        } else if (row.valueType === 'secret') {
+            field.appendChild(secretInput(row, edited ? row.draft : ''));
         } else if (row.valueType === 'number' || row.valueType === 'percent') {
             const wrap = el('div', 'set-num');
             wrap.appendChild(textInput(row, draft, row.title));
@@ -289,6 +312,28 @@ function createSection(container, ctx) {
 
         if (error) {
             field.appendChild(el('span', 'ui-field__error', error));
+        } else if (row.valueType === 'secret') {
+            // ⚠⚠ ПОДПИСЬ БЫЛА НЕДОДЕЛКОЙ, А НЕ РЕШЕНИЕМ. Прежняя, общая, врала —
+            // печатала «умолчания нет» под заданным ключом, и снять её было верно.
+            // Но на её место надо было поставить ПРАВИЛЬНУЮ, а я оставил пусто.
+            // Обе формы взяты у макета `3d1154f6` дословно.
+            //
+            // ⓘ «Дважды одно» здесь не выходит: подпись говорит про СОСТОЯНИЕ
+            // КЛЮЧА, а приглашение — про то, что в поле ничего не набрано.
+            field.appendChild(el('span', 'ui-field__hint',
+                row.isSet ? T.secretHintSet : T.secretNone));
+            // ⚠⚠ КЛЮЧУ ПОДПИСЬ ПРО УМОЛЧАНИЕ НЕ ПОЛОЖЕНА, И БЕЗ ЭТОЙ ВЕТКИ ОН
+            // ЕЁ ПОЛУЧАЛ. У ключа `value` не приходит НИКОГДА — значит проверка
+            // ниже считала его незаданным всегда и печатала «Не задано —
+            // умолчания нет, настройка не действует» даже у только что
+            // сохранённого. Подпись врала ровно в том месте, ради которого
+            // работа и делалась.
+            //
+            // ⓘ Своей подписи здесь тоже нет, и это не пропуск: состояние несёт
+            // ПРИГЛАШЕНИЕ поля — точки при заданном ключе, «Не задан» при
+            // пустом. Повторять его строкой ниже значило бы сказать дважды одно.
+            // Умолчания у ключа не бывает вовсе: пустой ключ это не «работает
+            // по умолчанию», это «телефония не настроена».
         } else if (!edited && isEmpty(row.value)) {
             // НЕЗАДАННОЕ ЗНАЧЕНИЕ — СОСТОЯНИЕ СТРОКИ, А НЕ ПУСТОЙ ЭКРАН.
             // Человек должен видеть, ЧТО именно работает: умолчание, если оно
@@ -313,6 +358,41 @@ function createSection(container, ctx) {
         input.value = value;
         input.disabled = Boolean(row.saving);
         if (label) input.setAttribute('aria-label', label);
+        input.addEventListener('input', () => draftChanged(row, input.value));
+        input.addEventListener('keydown', (e) => keys(e, row));
+        return input;
+    }
+
+    // ⚠⚠ ПОЛЕ КЛЮЧА: НИ КНОПКИ ПОКАЗА, НИ ЗНАЧЕНИЯ В РАЗМЕТКЕ.
+    // Правило слоя записано в каталоге дословно: «„Скрыто навсегда" — это про
+    // сервер, а не про вид. Кнопки нет вовсе и `.ui-field--reveal` не ставится,
+    // потому что значение с сервера не приходит: точки в приглашении нарисованы,
+    // а не маскируют пароль». Показывать нечего — сервер значения не отдаёт.
+    //
+    // ⚠ `type="password"` при этом ставится, и не ради вида: маскируется то,
+    // что человек НАБИРАЕТ сейчас. Взгляд через плечо — единственная защита,
+    // которая нам здесь вообще доступна (входа в систему нет, риск назван
+    // владельцу и принят решением 132).
+    //
+    // ⚠ Поле всегда начинается ПУСТЫМ, даже когда ключ задан: подставить туда
+    // нечего, а показать точки значением значило бы отправить их обратно на
+    // сервер при первом же сохранении.
+    function secretInput(row, draft) {
+        const input = el('input', 'ui-field__control ui-field__control--sm');
+        input.type = 'password';
+        input.value = draft || '';
+        input.disabled = Boolean(row.saving);
+        input.autocomplete = 'new-password';
+        input.spellcheck = false;
+        // ⚠⚠ ТОЧКИ СТОЯТ ВСЕГДА, У ОБЕИХ СТРОК И В ОБОИХ СОСТОЯНИЯХ (макет
+        // `3d1154f6`). Прежде здесь было «точки при заданном, „Не задан" при
+        // пустом» — приглашение несло СОСТОЯНИЕ. Довод куратора, который это
+        // отменил: приглашение видно, только пока поле пусто, и едва человек
+        // начал набирать новый ключ, ответ на вопрос «а прежний-то был задан?»
+        // исчезает — ровно тогда, когда он нужнее всего. Состояние ушло в
+        // подпись, которая на экране всегда.
+        input.placeholder = T.secretMask;
+        input.setAttribute('aria-label', row.title);
         input.addEventListener('input', () => draftChanged(row, input.value));
         input.addEventListener('keydown', (e) => keys(e, row));
         return input;
@@ -447,7 +527,12 @@ function createSection(container, ctx) {
         row.saving = true;
         render();
         try {
-            const saved = await saveSetting(ctx.api, row.key, value === undefined ? '' : value);
+            // ⚠ У КЛЮЧА СВОЯ ДВЕРЬ И СВОЙ ОТВЕТ: значения в нём нет, поэтому
+            // и класть в строку нечего, кроме признака «задано».
+            const sent = value === undefined ? '' : value;
+            const saved = row.valueType === 'secret'
+                ? await saveSecret(ctx.api, row.key, sent)
+                : await saveSetting(ctx.api, row.key, sent);
             if (!alive) return;
             // Ответ сервера кладётся ЦЕЛИКОМ, а не одним значением: вместе со
             // значением приезжает и подпись «кто менял», собранная по журналу.
@@ -455,7 +540,12 @@ function createSection(container, ctx) {
             delete row.draft;
             row.saving = false;
             render();
-            ctx.toast(`«${row.title}» — теперь ${human(row, row.value)}`, 'success');
+            // ⚠⚠ ТОСТ КЛЮЧА НЕ НАЗЫВАЕТ ЗНАЧЕНИЯ. Обычная настройка говорит
+            // «теперь 4 ч» — и это правильно; ключ сказал бы вслух то, что мы
+            // только что спрятали, и оставил бы это в углу экрана на пять секунд.
+            ctx.toast(row.valueType === 'secret'
+                ? `«${row.title}» — ${row.isSet ? T.secretSaved : T.secretCleared}`
+                : `«${row.title}» — теперь ${human(row, row.value)}`, 'success');
         } catch (err) {
             if (!alive || isAbort(err)) return;
             row.saving = false;
