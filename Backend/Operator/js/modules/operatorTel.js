@@ -96,7 +96,14 @@ export function createTelPult({ workState, employeeId, currentLeadId }) {
     // ⚠ СВЁРНУТОЕ ОКНО СНИМАЕТСЯ ИЗ РАЗМЕТКИ, А НЕ ПРЯЧЕТСЯ ПОД КНОПКОЙ.
     // Спрятанное продолжало бы ловить фокус Tab и читаться с экрана — то же
     // правило, что у складки: нет содержимого, нет и узла.
-    function open() {
+    // ⚠⚠ ОТКРЫТИЕ БЫВАЕТ ДВУХ РОДОВ, И РАЗЛИЧАЕТ ИХ ТОЛЬКО ПАМЯТЬ (ответ
+    // куратора 11). Оператор развернул окно сам — это его решение, и оно
+    // помнится. Окно подняла кнопка «Позвонить» из карточки — надобность
+    // разовая, и запомненную свёрнутость она не отменяет: человек свернул
+    // пульт намеренно, один звонок не повод решать за него.
+    function open() { openWindow(true); }
+
+    function openWindow(remember) {
         if (win) return;
         removeFab();
 
@@ -138,7 +145,7 @@ export function createTelPult({ workState, employeeId, currentLeadId }) {
         // Список состояний кладёт сюда сам `operatorWorkState` — своих строк
         // пульт не рисует.
         workState.setMirror(win.querySelector('[data-role="tel-state-field"]'));
-        writeFloatCollapsed(KEY, false);
+        if (remember) writeFloatCollapsed(KEY, false);
     }
 
     // ---------------------------------------------------------------- набор
@@ -207,6 +214,33 @@ export function createTelPult({ workState, employeeId, currentLeadId }) {
         }
     }
 
+    // ------------------------------------------- набор извне, из карточки
+    //
+    // ⛔ КНОПКА КАРТОЧКИ НЕ ЗНАЕТ ПРО СТАНЦИЮ, И ЭТО ОТВЕТ КУРАТОРА 12.
+    // Второй путь к `dialNumber` был бы вторым знанием об одном: свой разбор
+    // отказа, своё место для плашки, свой признак занятости. Набор живёт в
+    // одном месте — здесь, — а карточка только называет номер.
+    //
+    // ⚠ НОМЕР ПРОГОНЯЕТСЯ ЧЕРЕЗ СОБЫТИЕ `input`, А НЕ КЛАДЁТСЯ В ПОЛЕ
+    // МОЛЧА: на этом событии висят и маска (`wireDialMask`), и `syncDial`.
+    // Присваивание значения свойством ни того, ни другого не разбудит, и в
+    // поле осталась бы строка в чужом виде при неактивной кнопке.
+    async function callNumber(number) {
+        const text = number === null || number === undefined ? '' : String(number).trim();
+        if (!text || busy) return;
+        // Разово: запомненную свёрнутость не переписываем (ответ 11).
+        if (!win) openWindow(false);
+        const num = win ? win.querySelector('[data-role="tel-num"]') : null;
+        if (!num) return;
+        num.value = text;
+        num.dispatchEvent(new Event('input', { bubbles: true }));
+        await dial();
+    }
+
+    // ⚠ ПРИЗНАК ОТДАЁТСЯ НАРУЖУ ФУНКЦИЕЙ, А НЕ ЗНАЧЕНИЕМ: `busy` меняется
+    // между нажатием и ответом станции, и снимок при подписке врал бы.
+    function isBusy() { return busy; }
+
     function collapse() {
         if (!win) return;
         workState.setMirror(null);
@@ -243,6 +277,8 @@ export function createTelPult({ workState, employeeId, currentLeadId }) {
     return {
         open,
         collapse,
+        callNumber,
+        isBusy,
         destroy() {
             workState.setMirror(null);
             if (floating) { floating.destroy(); floating = null; }

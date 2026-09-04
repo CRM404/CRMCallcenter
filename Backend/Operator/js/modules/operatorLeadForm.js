@@ -428,6 +428,25 @@ export function renderLeadForm(container, lead, statuses, paramLists, onSave, op
     const lists = paramLists || {};
     const savedAt = formatDateTime(lead.updatedAt);
     const attempts = Number(lead.callAttempts) || 0;
+
+    // ЧЕТЫРЕ СЛУЧАЯ ПАСПОРТА `4e8f4c60`, И СТРОИМ ТРИ — ответы куратора 13
+    // и 14. «Звонок идёт» здесь НЕ ПРЕДУСМОТРЕН ВОВСЕ, а не предусмотрен
+    // пустой веткой: признака трубки в проекте нет, он приходит с Е3, и
+    // ветка под него была бы мёртвым именем — тем самым, за которое сняли
+    // К317. Три оставшихся различаются двумя полями лида:
+    //
+    //   номер пуст            → кнопки нет вовсе (ответ 19)
+    //   `hopeless`            → кнопки нет вовсе (паспорт)
+    //   `unresolved` и обычный → кнопка есть и работает
+    //
+    // ⚠ «НЕТ НОМЕРА» — ЭТО ПУСТАЯ СТРОКА, И ТОЛЬКО ОНА (ответ 20). Номер
+    // короче десяти цифр — это `unresolved`, у него кнопка есть: набрать
+    // такой номер оператор вправе, а отобьёт его сервер, если он не в виде.
+    // ⛔ Кнопки НЕТ В РАЗМЕТКЕ, а не серая и не спрятанная: спрятанный узел
+    // ловит Tab и читается с экрана, серый обещает то, чего не будет.
+    const phoneEmpty = String(lead.phone || '').trim() === '';
+    const phoneHopeless = lead.phoneNormalized === false && lead.phoneFixVerdict === 'hopeless';
+    const canCall = !phoneEmpty && !phoneHopeless;
     const opts = options || {};
 
     container.innerHTML = `
@@ -443,6 +462,7 @@ export function renderLeadForm(container, lead, statuses, paramLists, onSave, op
         <div class="op-lead-phone">
             ${icon('phone', 'sm')}
             <input id="op-field-phone" name="phone" type="tel" value="${escapeHtml(lead.phone)}" aria-label="Телефон">
+            ${canCall ? '<button type="button" class="ui-btn op-lead-call" id="opLeadCallBtn">Позвонить</button>' : ''}
             ${attempts ? '<span class="op-attempt" id="opAttemptBadge"></span>' : ''}
         </div>
         ${phoneNote(lead)}
@@ -682,6 +702,29 @@ export function renderLeadForm(container, lead, statuses, paramLists, onSave, op
     // ПРЕДЕЛА НЕТ — НЕТ И «ИЗ N». По статусу без правила система не перезванивает
     // вовсе, и «Попытка 3 из 20» обещала бы то, чего не случится. Остаётся
     // «Попытка 3»: число попыток — факт, он был и остаётся верным.
+    // --- Кнопка «Позвонить» ------------------------------------------------
+    //
+    // ⚠⚠ НАБИРАЕТСЯ ЗНАЧЕНИЕ ПОЛЯ, А НЕ `lead.phone` ИЗ БАЗЫ (ответ 8).
+    // Оператор мог поправить номер прямо в карточке и ждёт, что наберётся
+    // исправленный: звонить надо туда, что человек видит перед собой.
+    //
+    // ⛔ ВТОРОГО ПРИЗНАКА ЗАНЯТОСТИ ЗДЕСЬ НЕТ НАМЕРЕННО (ответ 18). Кнопка
+    // читает признак пульта, а своего не заводит и сама не гасится: второй
+    // способ узнать одно и то же неизбежно разойдётся с первым, и карточка
+    // говорила бы «занято», когда пульт уже свободен. Плашка с ответом
+    // станции тоже одна и живёт в пульте (ответ 15).
+    const callBtn = container.querySelector('#opLeadCallBtn');
+    if (callBtn) {
+        callBtn.addEventListener('click', () => {
+            const pult = opts.telPult;
+            if (!pult || pult.isBusy()) return;
+            const field = container.querySelector('#op-field-phone');
+            const number = field ? field.value.trim() : '';
+            if (!number) return;
+            pult.callNumber(number);
+        });
+    }
+
     const attemptBadge = container.querySelector('#opAttemptBadge');
     const attemptNote = container.querySelector('#opAttemptNote');
 
