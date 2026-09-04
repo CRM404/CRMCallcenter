@@ -184,9 +184,16 @@
 /* ----- Разделы формы ----- */
 .leads-wrap .form-section { margin-bottom: 22px; }
 .leads-wrap .form-section:last-child { margin-bottom: 0; }
-.leads-wrap .form-section h3 { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
-.leads-wrap .form-section-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--line); margin-bottom: 12px; padding-bottom: 7px; }
-.leads-wrap .form-section-head h3 { border: none; margin: 0; padding: 0; }
+/* ⚑ ЗАГОЛОВОК ГРУППЫ ПОЛЕЙ УЕХАЛ В СЛОЙ (К300): три правила отсюда сняты —
+   `.form-section h3`, `.form-section-head` и её `h3`. Разметка переведена на
+   узел `.ui-form-head` с частью `__title` (`Shell/ui/field.css`), обёртка
+   `.form-section-head` не нужна: узел сам несёт и flex, и черту, и отступы.
+   ВИД ИЗМЕНИЛСЯ НАМЕРЕННО И ВЛАДЕЛЬЦЕМ ПРИНЯТ (решение 124): кегль 11 → 10,5,
+   трекинг .06em → .04em. У строки с органом управления справа отбивка снизу
+   7 → 8px (--ui-space-3) — единственное число, которого решение не называло,
+   потому что оно и не расходилось: 7 было своим у одной строки из тринадцати.
+   ЦВЕТ НЕ ИЗМЕНИЛСЯ НИ НА ЕДИНИЦУ: `--ink-faint` этого файла (:36) и есть
+   алиас `--ui-color-ink-faint`. */
 .leads-wrap .form-section--offers { margin-top: 20px; }
 .leads-wrap .section-hint { font-size: 12px; color: var(--ink-faint); margin: -6px 0 12px; }
 .leads-wrap .section-hint--after { margin: 10px 0 0; }

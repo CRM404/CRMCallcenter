@@ -209,7 +209,7 @@
          в окне колонок: увидел признак в списке — нашёл его в фильтрах. -->
     <div data-role="filter-fields" hidden>
         <div class="form-section">
-            <h3>Кто</h3>
+            <div class="ui-form-head"><h3 class="ui-form-head__title">Кто</h3></div>
             <div class="ui-form-grid">
                 <div class="ui-field"><label class="ui-field__label" for="fltFio">ФИО</label><input class="ui-field__control" type="text" id="fltFio" placeholder="Фамилия Имя"></div>
                 <div class="ui-field"><label class="ui-field__label" for="fltPhone">Номер</label><input class="ui-field__control" type="text" id="fltPhone" placeholder="+7 900…"></div>
@@ -224,7 +224,7 @@
             </div>
         </div>
         <div class="form-section">
-            <h3>Что ищет</h3>
+            <div class="ui-form-head"><h3 class="ui-form-head__title">Что ищет</h3></div>
             <div class="ui-form-grid">
                 <div class="ui-field"><label class="ui-field__label" for="fltPropertyType">Тип объекта</label><select class="ui-field__control" id="fltPropertyType"></select></div>
                 <div class="ui-field"><label class="ui-field__label" for="fltPropertyClass">Класс объекта</label><select class="ui-field__control" id="fltPropertyClass"></select></div>
@@ -234,7 +234,7 @@
             </div>
         </div>
         <div class="form-section">
-            <h3>Диапазоны</h3>
+            <div class="ui-form-head"><h3 class="ui-form-head__title">Диапазоны</h3></div>
             <p class="section-hint">Лид подходит, если его диапазон пересекается с заданным: «до 12 млн» находит и того, кто готов на 10–14.</p>
             <div class="ui-form-grid">
             <!-- ⚠ `min="0"` ЗДЕСЬ ПОДСКАЗКА, А НЕ ЗАПРЕТ (решение куратора).
@@ -250,14 +250,14 @@
             </div>
         </div>
         <div class="form-section">
-            <h3>География</h3>
+            <div class="ui-form-head"><h3 class="ui-form-head__title">География</h3></div>
             <div class="ui-form-grid">
                 <div class="ui-field"><label class="ui-field__label" for="fltRegion">Регион</label><input class="ui-field__control" type="text" id="fltRegion" placeholder="Московская область"></div>
                 <div class="ui-field"><label class="ui-field__label" for="fltLocality">Населённый пункт</label><input class="ui-field__control" type="text" id="fltLocality" placeholder="Часть названия"></div>
             </div>
         </div>
         <div class="form-section">
-            <h3>Покупка</h3>
+            <div class="ui-form-head"><h3 class="ui-form-head__title">Покупка</h3></div>
             <div class="ui-form-grid">
                 <div class="ui-field"><label class="ui-field__label" for="fltClientType">Вид клиента</label><select class="ui-field__control" id="fltClientType"></select></div>
                 <div class="ui-field"><label class="ui-field__label" for="fltMortgageType">Вид ипотеки</label><select class="ui-field__control" id="fltMortgageType"></select></div>
@@ -325,7 +325,7 @@
         </div>
 
         <div class="form-section">
-            <h3>Назначение</h3>
+            <div class="ui-form-head"><h3 class="ui-form-head__title">Назначение</h3></div>
             <p class="section-hint">Линия — перед сотрудником: раздача лида идёт только операторам выбранной линии.</p>
             <div class="ui-form-grid">
                 <div class="ui-field"><label class="ui-field__label ui-field__label--required" for="ldSource">Источник</label><select class="ui-field__control" id="ldSource"><option value="">— не выбран —</option></select></div>
@@ -343,8 +343,8 @@
              статусами. Разметка блока строится модулем leadsScriptPairs: он же
              стоит в окне «Загрузить базу» и в окне массового назначения. -->
         <div class="form-section">
-            <div class="form-section-head">
-                <h3>Скрипты звонка</h3>
+            <div class="ui-form-head">
+                <h3 class="ui-form-head__title">Скрипты звонка</h3>
                 <span class="ui-tag" data-role="script-pairs-count">1 из 5</span>
             </div>
             <p class="section-hint">Оператор увидит тот скрипт, среди статусов которого стоит текущий статус лида. Скриптов можно указать до пяти, один обязателен. Один статус принадлежит только одному скрипту.</p>
@@ -352,7 +352,7 @@
         </div>
 
         <div class="form-section">
-            <h3>Контакты</h3>
+            <div class="ui-form-head"><h3 class="ui-form-head__title">Контакты</h3></div>
             <div class="ui-form-grid">
                 <div class="ui-field"><label class="ui-field__label" for="ldLastName">Фамилия</label><input class="ui-field__control" type="text" id="ldLastName"></div>
                 <div class="ui-field"><label class="ui-field__label" for="ldFirstName">Имя</label><input class="ui-field__control" type="text" id="ldFirstName"></div>
@@ -362,7 +362,7 @@
         </div>
 
         <div class="form-section">
-            <h3>Что ищет</h3>
+            <div class="ui-form-head"><h3 class="ui-form-head__title">Что ищет</h3></div>
             <div class="ui-form-grid">
                 <div class="ui-field"><label class="ui-field__label" for="ldCategory">Категория</label><select class="ui-field__control" id="ldCategory"></select></div>
                 <div class="ui-field"><label class="ui-field__label" for="ldPropertyType">Тип объекта</label><select class="ui-field__control" id="ldPropertyType"></select></div>
@@ -378,7 +378,7 @@
         </div>
 
         <div class="form-section">
-            <h3>География</h3>
+            <div class="ui-form-head"><h3 class="ui-form-head__title">География</h3></div>
             <p class="section-hint">Подсказки адреса — тот же сервис (DaData), что уже используется в гео-критериях оффера CPA-сетей: начните вводить, выберите из списка. Два адреса независимы: сужение по региону у каждого своё.</p>
             <div class="geo-block">
                 <div class="geo-block-title"><svg class="ui-ic ui-ic--sm ui-ic--accent" aria-hidden="true"><use href="#ui-ic-pin"></use></svg>Гео объекта</div>
@@ -401,7 +401,7 @@
         </div>
 
         <div class="form-section">
-            <h3>Покупка</h3>
+            <div class="ui-form-head"><h3 class="ui-form-head__title">Покупка</h3></div>
             <div class="ui-form-grid">
                 <div class="ui-field"><label class="ui-field__label" for="ldPurchaseMethod">Способ покупки</label><select class="ui-field__control" id="ldPurchaseMethod"></select></div>
                 <div class="ui-field" data-role="down-payment-wrap"><label class="ui-field__label" for="ldDownPaymentPercent">Первоначальный взнос, %</label><select class="ui-field__control" id="ldDownPaymentPercent"></select></div>
@@ -420,7 +420,7 @@
         </div>
 
         <div class="form-section">
-            <h3>Комментарии</h3>
+            <div class="ui-form-head"><h3 class="ui-form-head__title">Комментарии</h3></div>
             <div class="ui-field"><textarea class="ui-field__control" id="ldNotes" rows="3" aria-label="Комментарии"></textarea></div>
         </div>
 
@@ -540,11 +540,11 @@
                  не часть её, попавшую в текущий отбор. Строится теперь разметкой
                  выдачи (`leadsOffers.js`, `renderResults`), потому что стоит
                  внутри блока, который рисует модуль.
-                 Обёртка `.form-section-head` ОСТАЁТСЯ при одном заголовке: у неё
-                 своя черта и отступы (`leads-light.css:188`), и заголовок без неё
-                 потеряет и то, и другое. -->
-            <div class="form-section-head">
-                <h3>Выбранные офферы (<span data-role="offer-sel-count">0</span>)</h3>
+                 Обёртка была `.form-section-head` и ОСТАВАЛАСЬ при одном
+                 заголовке ради своей черты и отступов. С К300 их несёт сам
+                 `.ui-form-head`, и второго узла под них больше не нужно. -->
+            <div class="ui-form-head">
+                <h3 class="ui-form-head__title">Выбранные офферы (<span data-role="offer-sel-count">0</span>)</h3>
             </div>
             <div class="ui-fchips" data-role="offer-sel-tags"></div>
             <div class="pick-empty" data-role="offer-sel-empty">Пока не выбран ни один оффер — обязателен минимум один.</div>

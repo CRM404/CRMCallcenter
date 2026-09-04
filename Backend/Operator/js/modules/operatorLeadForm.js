@@ -411,7 +411,7 @@ function commentsSection(lead) {
         : '';
     return `
         <div class="op-form-section">
-            <div class="op-section-label">Комментарии</div>
+            <div class="ui-form-head"><span class="ui-form-head__title">Комментарии</span></div>
             <div class="ui-field">
                 <span class="ui-field__label" for="op-field-comment">${FEED.label}</span>
                 <textarea class="ui-field__control" id="op-field-comment" name="comment" rows="3"
@@ -449,7 +449,7 @@ export function renderLeadForm(container, lead, statuses, paramLists, onSave, op
         ${attempts ? '<div class="op-attempt-note" id="opAttemptNote"></div>' : ''}
 
         <div class="op-form-section">
-            <div class="op-section-label">Клиент</div>
+            <div class="ui-form-head"><span class="ui-form-head__title">Клиент</span></div>
             <div class="form-grid cols-3">
                 ${textField('lastName', 'Фамилия', lead)}
                 ${textField('firstName', 'Имя', lead)}
@@ -460,7 +460,7 @@ export function renderLeadForm(container, lead, statuses, paramLists, onSave, op
         </div>
 
         <div class="op-form-section">
-            <div class="op-section-label">География</div>
+            <div class="ui-form-head"><span class="ui-form-head__title">География</span></div>
             <button type="button" class="op-dashed-row" id="opShowGeoBtn">
                 ${icon('pin', 'sm')}
                 Показать географию <span class="count">— гео объекта и гео клиента</span>
@@ -480,7 +480,7 @@ export function renderLeadForm(container, lead, statuses, paramLists, onSave, op
 
         <div id="opParamsBody" hidden>
             <div class="op-form-section">
-                <div class="op-section-label">Бюджет и оплата</div>
+                <div class="ui-form-head"><span class="ui-form-head__title">Бюджет и оплата</span></div>
                 <div class="form-grid cols-3">
                     ${rangePair('Цена, ₽', '— от и до', 'priceFrom', 'priceTo', lead)}
                 </div>
@@ -507,7 +507,7 @@ export function renderLeadForm(container, lead, statuses, paramLists, onSave, op
             </div>
 
             <div class="op-form-section">
-                <div class="op-section-label">Объект</div>
+                <div class="ui-form-head"><span class="ui-form-head__title">Объект</span></div>
                 <div class="form-grid cols-3">
                     ${selectField('category', 'Категория', lists.category, lead)}
                     ${selectField('propertyType', 'Тип объекта', lists.objType, lead, '— не выбран: жилое —')}
@@ -523,7 +523,7 @@ export function renderLeadForm(container, lead, statuses, paramLists, onSave, op
         ${commentsSection(lead)}
 
         <div class="op-form-section">
-            <div class="op-section-label">Статус звонка</div>
+            <div class="ui-form-head"><span class="ui-form-head__title">Статус звонка</span></div>
             <div class="form-group">
                 <select id="op-field-funnelStatusId" name="funnelStatusId">
                     ${buildFunnelStatusOptions(statuses, lead.funnelStatusId)}
