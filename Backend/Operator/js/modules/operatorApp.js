@@ -234,7 +234,11 @@ document.addEventListener('DOMContentLoaded', async function () {
                 return;
             }
             save(lead.id, data, nextCallAt);
-        }, { flash });
+            // ⚠ ПУЛЬТ ЕДЕТ В КАРТОЧКУ ЦЕЛИКОМ, А НЕ ОБРАТНЫМ ВЫЗОВОМ
+            // (ответ 12): кнопке нужны ДВА его имени — `callNumber` и
+            // `isBusy`, — и заворачивать каждое в свою функцию значит
+            // заводить второй список того, что карточке позволено.
+        }, { flash, telPult });
 
         if (flash) {
             if (flashTimer !== null) clearTimeout(flashTimer);
