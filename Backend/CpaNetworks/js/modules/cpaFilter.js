@@ -289,17 +289,27 @@ export function createFilter(root, deps) {
         return true;
     }
 
+    // ⚑ ЗАГОЛОВОК ГРУППЫ — УЗЕЛ СЛОЯ (задача 65). Подпись-пояснение убрана по
+    // слову владельца 148; `group.sub` в перечне полей ОСТАВЛЕН — он держит
+    // единственное описание того, чем группа отличается от соседней, и ещё
+    // рисуется в шапке самого окна.
+    //
+    // ⚠⚠ ИМЯ `cpa-form-sec` ПЕРЕЕХАЛО СО СТРОКИ НА ОБЁРТКУ, и это не
+    // переименование ради порядка: оно несёт отбивку между группами, а нести её
+    // должна группа. Пока имя стояло на строке, `:first-child` гасил отбивку
+    // ВСЕМ ПЯТИ группам — каждый заголовок был первым ребёнком своей обёртки, и
+    // между группами стоял ноль. Теперь первый ребёнок — сама группа, и правило
+    // означает то, что означало.
     function buildGroup(group, draft, lists, statuses) {
         const box = document.createElement('div');
+        box.className = 'cpa-form-sec';
 
         const head = document.createElement('div');
-        head.className = 'cpa-form-sec';
+        head.className = 'ui-form-head';
         const h3 = document.createElement('h3');
+        h3.className = 'ui-form-head__title';
         h3.textContent = group.title;
-        const sub = document.createElement('span');
-        sub.textContent = group.sub;
         head.appendChild(h3);
-        head.appendChild(sub);
         box.appendChild(head);
 
         const grid = document.createElement('div');
