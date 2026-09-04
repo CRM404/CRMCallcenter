@@ -43,6 +43,13 @@ async function request(path, options = {}) {
     if (!response.ok) {
         const err = new Error((body && body.error) || 'Произошла ошибка на сервере');
         err.status = response.status;
+        // ⚠ ДВА ПОЛЯ ОТВЕТА ПЕРЕНОСЯТСЯ В ОШИБКУ ПОИМЁННО, а не всё тело:
+        // `code` — машинная причина отказа, по ней экран различает случаи, не
+        // сравнивая тексты; `station` — своё сообщение АТС, которое решение
+        // владельца 147 требует показать читаемым. Копировать тело целиком
+        // значило бы однажды вынести на экран то, чего мы не читали.
+        if (body && body.code) err.code = body.code;
+        if (body && body.station) err.station = body.station;
         throw err;
     }
     return body;
@@ -63,6 +70,20 @@ export function operatorLogin(email, password) {
     return request('/auth/operator-login', {
         method: 'POST',
         body: JSON.stringify({ email, password })
+    });
+}
+
+// ⛔ ЕДИНСТВЕННЫЙ ЗАПРОС СТРАНИЦЫ, КОТОРЫЙ ДЕЙСТВУЕТ В ЧУЖОМ МИРЕ: после него
+// у живого человека звонит телефон. Повтора здесь нет и быть не может —
+// повторённый набор это второй звонок; кнопку от двойного нажатия держит
+// пульт признаком «запрос идёт» (`operatorTel.js`).
+//
+// ⚠ ОТВЕТ ГОВОРИТ «НАБОР ПРИНЯТ», А НЕ «ПОЗВОНИЛИ»: станция сначала вызывает
+// оператора и только после снятия трубки — клиента.
+export function dialNumber({ employeeId, number, leadId }) {
+    return request('/calls/dial', {
+        method: 'POST',
+        body: JSON.stringify({ employeeId, number, leadId: leadId || null })
     });
 }
 

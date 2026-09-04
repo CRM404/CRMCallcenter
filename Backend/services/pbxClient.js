@@ -254,6 +254,71 @@ async function apiGet(pool, path, { retried = false } = {}) {
     try { return await res.json(); } catch (e) { return null; }
 }
 
+// ---------------------------------------------------------------- пишущий запрос
+//
+// ⛔⛔ ПЕРВЫЙ ВЫЗОВ СЛУЖБЫ, КОТОРЫЙ ЧТО-ТО ДЕЛАЕТ, А НЕ СПРАШИВАЕТ. До Е2 весь
+// обмен со станцией был читающим, и повтор запроса стоил лишь строки в счётчике
+// лимита. Здесь повтор — ВТОРОЙ ЗВОНОК ЖИВОМУ ЧЕЛОВЕКУ, и цена ошибки другая.
+//
+// ⚠⚠ ПОВТОРНАЯ ПОПЫТКА РОВНО ОДНА И ТОЛЬКО НА 401, как у `apiGet`. Это не
+// «столько же, сколько у чтения» — это МЕНЬШЕ, чем позволяет документация: она
+// запрещает бесконечный цикл, а здесь запрещён и конечный. 401 означает, что
+// станция запроса НЕ ПРИНЯЛА (протух токен), то есть звонка не было; всякий
+// другой отказ может означать и «принято, но ответ потерян», и повторять его
+// нельзя.
+//
+// ⚠ ТЕКСТ ОТКАЗА СТАНЦИИ СОХРАНЯЕТСЯ В ОШИБКЕ (`stationMessage`) — решение
+// владельца 147 требует показать его на экране читаемым, а не «ничего не
+// произошло». В журнал по-прежнему уходит КОД, а не текст: это правило про
+// драйвер базы, который кладёт в текст ошибки параметры запроса, и ослаблять
+// его ради телефонии незачем.
+async function apiPost(pool, path, body, { retried = false } = {}) {
+    const token = await getToken(pool);
+    let res;
+    try {
+        res = await fetch(API_BASE + path, {
+            method: 'POST',
+            headers: Object.assign(
+                { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+                BASE_HEADERS),
+            body: JSON.stringify(body || {})
+        });
+    } catch (netErr) {
+        await noteExchange(pool, {
+            ok: false, errorCode: netErr && netErr.code ? String(netErr.code) : 'network'
+        });
+        const err = new Error('Станция недоступна');
+        err.code = 'pbx_unreachable';
+        throw err;
+    }
+
+    const rate = readRate(res);
+
+    if (res.status === 401 && !retried) {
+        cached = null;
+        return apiPost(pool, path, body, { retried: true });
+    }
+
+    if (!res.ok) {
+        await noteExchange(pool, { ok: false, errorCode: 'http_' + res.status, rate });
+        const err = new Error('Станция ответила отказом');
+        err.code = res.status === 429 ? 'pbx_rate_limited' : 'pbx_request_failed';
+        err.status = res.status;
+        // Своё сообщение станции — только строкой и только из поля `message`:
+        // отдавать наружу весь ответ значит однажды отдать то, чего мы не читали.
+        try {
+            const said = await res.json();
+            if (said && typeof said.message === 'string') err.stationMessage = said.message;
+        } catch (e) { /* тела может не быть — это не повод падать */ }
+        throw err;
+    }
+
+    await noteExchange(pool, { ok: true, errorCode: null, rate });
+    reportRate(rate);
+
+    try { return await res.json(); } catch (e) { return null; }
+}
+
 // ---------------------------------------------------------------- состояние наружу
 //
 // ТРИ ПРИЗНАКА, А НЕ ГОТОВЫЙ ТЕКСТ. Что показать человеку — дело экрана и
@@ -462,6 +527,6 @@ async function checkAtStart(pool) {
 }
 
 module.exports = {
-    readKeys, apiGet, getToken, readState, syncExtensionIds, checkAtStart,
+    readKeys, apiGet, apiPost, getToken, readState, syncExtensionIds, checkAtStart,
     TOKEN_URL, API_BASE
 };

@@ -96,7 +96,16 @@ document.addEventListener('DOMContentLoaded', async function () {
     // становится телефонный пульт ниже.
     mountIconSprite();
 
-    const telPult = createTelPult({ workState });
+    // ⚠ ЛИД ПЕРЕДАЁТСЯ ФУНКЦИЕЙ, А НЕ ЗНАЧЕНИЕМ (Е2). Пульт живёт всё время,
+    // пока открыта страница, а карточка сменяется десятки раз за смену:
+    // число, взятое при создании окна, привязало бы звонок к тому, кого
+    // оператор закрыл час назад. ⓘ Лида может не быть вовсе — набор
+    // добавочного коллеги ни к какому лиду не относится.
+    const telPult = createTelPult({
+        workState,
+        employeeId: identity.id,
+        currentLeadId: () => (currentLead ? currentLead.id : null)
+    });
 
     initOperatorNav({
         employeeId: identity.id,

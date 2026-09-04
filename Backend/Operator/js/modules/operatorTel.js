@@ -20,12 +20,22 @@
 // рисуются никак, даже серыми. «Набрать» — про «звонка нет», которое
 // наступает всегда, поэтому оно здесь.
 //
-// ⚠ «НАБРАТЬ» СЕГОДНЯ НЕАКТИВНА ВСЕГДА, И ПРИЧИНА СТОИТ В ОКНЕ СТРОКОЙ, а не
-// всплывает подсказкой на выключенной кнопке (макет `6cd2d954`, состояние
-// «трубки нет»). Ключей Телфина нет, `INSERT INTO calls` в проекте ноль.
-// Целевое правило — состояние 8 паспорта: «неактивна, если номер пуст ИЛИ
-// трубка не подключена». Сегодня верна вторая половина всегда, и ветки под
-// первую здесь НЕТ: она придёт вместе с телефонией и своим потребителем.
+// ⚠⚠ «НАБРАТЬ» ОЖИЛА (Е2, 04.09.2026), И ПРЕЖНИЙ ДОВОД СНЯТ ПО ФАКТУ. Здесь
+// стояло: «неактивна всегда… ключей Телфина нет, `INSERT INTO calls` в проекте
+// ноль». Оба утверждения были верны и оба перестали: ключи живут в настройках
+// с задачи 57, вставок в `calls` теперь ДВЕ — разбор события станции
+// (`services/pbxEventStore.js`) и этот самый набор (`services/pbxDial.js`).
+//
+// ⚠ ПРАВИЛО КНОПКИ ВЗЯТО ПОЛОВИНОЙ, И ЭТО НАРЯД, А НЕ НЕДОДЕЛКА. Состояние 8
+// паспорта: «неактивна, если номер пуст ИЛИ трубка не подключена». Живёт
+// первая половина; вторая придёт с Е3 вместе с признаком трубки. Ветки под
+// неё здесь НЕТ намеренно — узел без потребителя это то же мёртвое имя, за
+// которое сняли К317.
+//
+// ⚠ И ПОСТОЯННАЯ ПЛАШКА «ТЕЛЕФОНИЯ НЕ ПОДКЛЮЧЕНА» УБРАНА. Она говорила про
+// состояние, которого больше нет; её место занял ответ на конкретный набор —
+// плашка появляется по итогу нажатия и исчезает со следующим. Тревога,
+// которая горит всегда, не тревога.
 //
 // ⚠⚠ СПИСОК СОСТОЯНИЙ — ВЫПАДАЮЩЕЕ ПОЛЕ, И ЭТО ПРАВКА ПЕРВОЙ СБОРКИ.
 // Так его называют все три источника: решение владельца 119 — «сверху
@@ -40,7 +50,8 @@
 import { makeFloating } from '/ui/float.js';
 import { icon } from '/ui/icons.js';
 import { readFloatCollapsed, writeFloatCollapsed } from '/viewPrefs.js';
-import { wireRuPhoneMask } from '/phoneMask.js';
+import { wireDialMask } from '/phoneMask.js';
+import { dialNumber } from './operatorStorage.js';
 
 // Имя ячейки памяти места и свёрнутости. Одно на окно.
 const KEY = 'operatorTel';
@@ -59,11 +70,21 @@ const GAP_BOTTOM = 24;
 /**
  * @param {Object} deps
  * @param {Object} deps.workState панель состояний — источник списка
+ * @param {number} deps.employeeId кто звонит — тот же номер, что у всех
+ *        запросов страницы; сервер помечает его «указан браузером»
+ * @param {Function} deps.currentLeadId лид, открытый СЕЙЧАС, или null.
+ *        ⚠ Функцией, а не числом: пульт живёт дольше карточки, и число,
+ *        взятое при открытии окна, к третьему звонку указывало бы на
+ *        позавчерашнего человека.
  */
-export function createTelPult({ workState }) {
+export function createTelPult({ workState, employeeId, currentLeadId }) {
     let win = null;
     let fab = null;
     let floating = null;
+    // ⚠ ПРИЗНАК «ЗАПРОС ИДЁТ», А НЕ «ЗВОНОК ИДЁТ». Второго у нас нет вовсе —
+    // он приходит с Е3 вместе с состоянием трубки. Держит кнопку от двойного
+    // нажатия ровно от нажатия до ответа, и большего не обещает.
+    let busy = false;
 
     function defaultPlace() {
         return {
@@ -90,12 +111,6 @@ export function createTelPult({ workState }) {
                 </button>
             </div>
             <div class="ui-float__body">
-                <div class="ui-note ui-note--warn">
-                    ${icon('warn', 'sm', 'ui-note__icon')}
-                    <div class="ui-note__body">
-                        <span class="ui-note__text">Телефония не подключена — набор не сработает</span>
-                    </div>
-                </div>
                 <div class="ui-field" data-role="tel-state-field"></div>
                 <div class="ui-field">
                     <label class="ui-field__label" for="opTelNum">Номер</label>
@@ -108,14 +123,88 @@ export function createTelPult({ workState }) {
         document.body.appendChild(win);
 
         win.querySelector('[data-role="tel-min"]').addEventListener('click', collapse);
-        // Маска — из общего файла, своей копии у пульта нет (решение 134).
-        wireRuPhoneMask(win.querySelector('[data-role="tel-num"]'));
+
+        // ⚠ МАСКА У ПУЛЬТА СВОЯ, И ЭТО РЕШЕНИЕ ВЛАДЕЛЬЦА 147, А НЕ КОПИЯ.
+        // Общая (`wireRuPhoneMask`) дописывает семёрку всему, и `101` в ней
+        // становится `+7 (101)` — внутренний вызов невозможен. Обе обёртки
+        // лежат в одном файле, довод «почему их две» — там же.
+        const num = win.querySelector('[data-role="tel-num"]');
+        wireDialMask(num);
+        num.addEventListener('input', syncDial);
+        win.querySelector('[data-role="tel-dial"]').addEventListener('click', dial);
+        syncDial();
 
         floating = makeFloating(win, { key: KEY, place: defaultPlace() });
         // Список состояний кладёт сюда сам `operatorWorkState` — своих строк
         // пульт не рисует.
         workState.setMirror(win.querySelector('[data-role="tel-state-field"]'));
         writeFloatCollapsed(KEY, false);
+    }
+
+    // ---------------------------------------------------------------- набор
+    //
+    // Кнопка живёт по половине правила состояния 8: «номер не пуст». Вторая
+    // половина — про трубку, её признак приходит с Е3.
+    function syncDial() {
+        if (!win) return;
+        const num = win.querySelector('[data-role="tel-num"]');
+        const btn = win.querySelector('[data-role="tel-dial"]');
+        if (!num || !btn) return;
+        btn.disabled = busy || num.value.trim() === '';
+    }
+
+    // ⚠⚠ ПЛАШКА ЯВЛЯЕТСЯ УЗЛОМ, А НЕ ПРЯЧЕТСЯ. То же правило, что у свёрнутого
+    // окна выше: спрятанный узел продолжает ловить фокус и читаться с экрана,
+    // а пустой — ещё и занимать зазор колонки (`.ui-float__body`, gap).
+    function setNote(text, kind) {
+        if (!win) return;
+        const body = win.querySelector('.ui-float__body');
+        const old = body.querySelector('[data-role="tel-note"]');
+        if (old) old.remove();
+        if (!text) return;
+        const note = document.createElement('div');
+        note.className = 'ui-note' + (kind === 'warn' ? ' ui-note--warn' : '');
+        note.setAttribute('data-role', 'tel-note');
+        note.setAttribute('role', 'status');
+        note.innerHTML = `${icon(kind === 'warn' ? 'warn' : 'info', 'sm', 'ui-note__icon')}`
+            + `<div class="ui-note__body"><span class="ui-note__text"></span></div>`;
+        // Текст ставится СВОЙСТВОМ, а не разметкой: сюда приезжает ответ
+        // станции, то есть чужая строка, и вклеивать её в HTML нельзя.
+        note.querySelector('.ui-note__text').textContent = text;
+        body.insertBefore(note, body.firstChild);
+    }
+
+    // ⛔ ОТКАЗ ПОКАЗЫВАЕТСЯ ТЕКСТОМ, А НЕ МОЛЧАНИЕМ (решение владельца 147).
+    // Если станция не примет внутренний номер — это факт, который владелец
+    // должен увидеть; обходить его подстановкой префикса мы не будем.
+    //
+    // ⚠ «НАБОР ПРИНЯТ» — НЕ «ПОЗВОНИЛИ». Станция сначала звонит оператору и
+    // только после снятия трубки — клиенту; состоялся ли разговор, покажет
+    // журнал звонков, когда придёт событие.
+    async function dial() {
+        if (!win || busy) return;
+        const num = win.querySelector('[data-role="tel-num"]');
+        const number = num ? num.value.trim() : '';
+        if (!number) return;
+
+        busy = true;
+        syncDial();
+        setNote(null);
+        try {
+            const leadId = typeof currentLeadId === 'function' ? currentLeadId() : null;
+            const answer = await dialNumber({ employeeId, number, leadId });
+            setNote(answer && answer.internal
+                ? 'Набор принят: звоним на добавочный. Сначала трубка зазвонит у вас.'
+                : 'Набор принят. Сначала трубка зазвонит у вас, потом у клиента.');
+        } catch (err) {
+            // Своё сообщение станции приложено отдельным полем — показываем
+            // его следом за нашим, а не вместо: чужие слова остаются чужими.
+            const said = err && err.station ? ` Станция: ${err.station}` : '';
+            setNote(((err && err.message) || 'Не удалось начать звонок') + said, 'warn');
+        } finally {
+            busy = false;
+            syncDial();
+        }
     }
 
     function collapse() {
