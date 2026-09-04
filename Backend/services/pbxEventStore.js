@@ -166,7 +166,7 @@ async function storeRaw(db, body, parsed) {
 // не завести второй.
 async function upsertCall(db, parsed) {
     const found = await db.query(
-        'SELECT id, answered, transferred FROM calls WHERE pbx_call_id = $1 LIMIT 1',
+        'SELECT id, answered, transferred, lead_id FROM calls WHERE pbx_call_id = $1 LIMIT 1',
         [parsed.callId]
     );
 
@@ -195,6 +195,18 @@ async function upsertCall(db, parsed) {
     }
 
     const row = found.rows[0];
+
+    // ⚠⚠ `Tag` — ПРОВЕРКА СОВПАДЕНИЯ, А НЕ ИСТОЧНИК ПРИВЯЗКИ (наряд Е2,
+    // ответ 7). Лид проставляет набор из CRM (`services/pbxDial.js`), потому
+    // что там он ИЗВЕСТЕН; здесь он приезжает обратно тем же значением, и
+    // единственное, чего он стоит, — сказать, если значения РАЗОШЛИСЬ.
+    //
+    // ⛔ РАСХОЖДЕНИЕ НЕ ЧИНИТСЯ МОЛЧА, И ЭТО НЕСУЩЕЕ РЕШЕНИЕ. Переписать
+    // `lead_id` по метке значило бы позволить чужой стороне менять наши связи;
+    // оставить и промолчать — потерять единственный признак того, что склейка
+    // по корню вызова однажды свела два разных звонка. Поэтому: говорим.
+    checkTag(parsed, row);
+
     // ⚠ ВТОРОЕ ПЛЕЧО НЕ ПЕРЕПИСЫВАЕТ ЗВОНОК ЦЕЛИКОМ. Оно может добавить факт
     // (разговор состоялся, был перевод, появилась запись) и обязано продлить
     // конец, но не имеет права стереть уже известное: `COALESCE` держит первое
@@ -219,6 +231,28 @@ async function upsertCall(db, parsed) {
             parsed.eventAt, parsed.talkSeconds, parsed.recordId]
     );
     return { id: row.id, created: false };
+}
+
+// ---------------------------------------------------------------- сверка метки
+//
+// Метка приходит строкой, лид у нас число, и сравниваются они СТРОКАМИ: «12» и
+// 12 должны быть одним и тем же, а «12abc» — разным. Числовое сравнение через
+// Number() приняло бы и « 12 », и «12.0».
+function checkTag(parsed, row) {
+    const tag = parsed.tag === null || parsed.tag === undefined ? '' : String(parsed.tag).trim();
+    if (tag === '') return;
+    const mine = row.lead_id === null || row.lead_id === undefined ? null : String(row.lead_id);
+
+    // Метка есть, привязки нет. Это не ошибка станции: так выглядит звонок,
+    // строку которого набор не сумел записать (`stored: false`). Ставить лид
+    // отсюда мы отказались, и потому просто называем случай.
+    if (mine === null) {
+        console.warn(`Телефония: событие с меткой лида ${tag} пришло к звонку без привязки`);
+        return;
+    }
+    if (mine !== tag) {
+        console.error(`Телефония: ⚠ метка лида ${tag} не совпала с привязкой звонка (${mine})`);
+    }
 }
 
 // Начало вызова: конец минус общая длительность. Ни того, ни другого нет —
